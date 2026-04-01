@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>SpoonexXset · Phase 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=JetBrains+Mono:ital,wght@1,300;1,400;1,700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+body{background:#000;background-image:radial-gradient(circle,#0f0f0f 1px,transparent 1px);background-size:32px 32px;font-family:'Inter',sans-serif;color:#fff;display:flex;flex-direction:column;user-select:none}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
+.logo{display:flex;align-items:baseline;gap:5px}
+.logo-spuk{font-family:'JetBrains Mono',monospace;font-style:italic;font-weight:700;font-size:15px}
+.logo-lab{font-family:'JetBrains Mono',monospace;font-style:italic;font-weight:300;font-size:15px;color:#00ffff}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:rgba(255,255,255,.25);margin-left:10px}
+.status-row{display:flex;align-items:center;gap:10px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.15);transition:all .4s}
+.status-dot.active{background:#00ffff;box-shadow:0 0 10px #00ffff}
+.stage-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:rgba(255,255,255,.3);letter-spacing:.08em}
+#nebula{display:block;width:100%;flex-shrink:0}
+main{flex:1;display:flex;flex-direction:column;padding:16px 24px;gap:14px;overflow:hidden}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.slot{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .2s,background .2s;position:relative;overflow:hidden;min-height:72px}
+.slot.loaded{border-color:rgba(0,255,255,.25)}
+.slot.playing{border-color:#00ffff;background:rgba(0,255,255,.06)}
+.slot-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.slot-name{font-size:11px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot-empty{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:rgba(255,255,255,.2)}
+.waveform{width:100%;height:24px;margin-top:5px;border-radius:3px}
+.synth-row{display:flex;gap:12px;align-items:stretch}
+.sub-block,.noise-block{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.sub-block{min-width:160px}
+.noise-block{flex:1}
+.sub-block.active{border-color:rgba(153,68,255,.4)}
+.noise-block.active{border-color:rgba(255,0,255,.3)}
+.block-title{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.ctrl-row{display:flex;align-items:center;gap:10px}
+.ctrl-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:rgba(255,255,255,.3);min-width:28px}
+.ctrl-val{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:#00ffff;min-width:36px;text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:3px;background:rgba(255,255,255,.1);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#00ffff;cursor:pointer;box-shadow:0 0 6px rgba(0,255,255,.5)}
+.tog{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.4);border-radius:5px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;padding:6px 14px;cursor:pointer;transition:all .2s;letter-spacing:.05em}
+.tog.on{background:rgba(0,255,255,.1);border-color:#00ffff44;color:#00ffff}
+.tog.on.mag{background:rgba(255,0,255,.1);border-color:rgba(255,0,255,.4);color:#ff00ff}
+.tog.on.vio{background:rgba(153,68,255,.12);border-color:rgba(153,68,255,.4);color:#9944ff}
+.kill{background:rgba(255,0,0,.08);border:1px solid rgba(255,0,0,.2);color:rgba(255,100,100,.7);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:11px;padding:10px 24px;cursor:pointer;transition:all .2s;letter-spacing:.08em;margin-left:auto}
+.kill:active{background:rgba(255,0,0,.2)}
+#unlock{position:fixed;inset:0;background:rgba(0,0,0,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;cursor:pointer;gap:20px}
+#unlock .u-title{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:24px;letter-spacing:.06em;background:linear-gradient(90deg,#00ffff,#9944ff,#ff00ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700}
+#unlock .u-sub{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:.12em}
+#unlock .u-btn{padding:16px 48px;border:1px solid #00ffff44;border-radius:8px;background:rgba(0,255,255,.08);color:#00ffff;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:13px;letter-spacing:.1em;margin-top:8px}
+.loading-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,#00ffff,#9944ff);width:0;transition:width .3s}
+</style>
+</head>
+<body>
+
+<div id="unlock">
+  <div class="u-title">SpoonexXset</div>
+  <div class="u-sub">PHASE 1 · ANCLAJE</div>
+  <div class="u-btn">INICIAR SESIÓN</div>
+</div>
+
+<header>
+  <div class="logo">
+    <span class="logo-spuk">SPUK</span>
+    <span class="logo-lab">LAB</span>
+    <span class="logo-sub">SpoonexXset · Phase 1</span>
+  </div>
+  <div class="status-row">
+    <span class="stage-label" id="stageLbl">ANCLAJE</span>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+</header>
+
+<canvas id="nebula" height="100"></canvas>
+
+<main>
+  <div class="slots">
+    <div class="slot" id="slot0" onclick="handleSlot(0)">
+      <input type="file" id="file0" accept="audio/*" style="display:none" onchange="loadSample(0,this)"/>
+      <div class="slot-label">SAMPLE 01</div>
+      <div class="slot-name slot-empty" id="name0">tap to load</div>
+      <canvas class="waveform" id="wave0" height="24"></canvas>
+      <div class="loading-bar" id="bar0"></div>
+    </div>
+    <div class="slot" id="slot1" onclick="handleSlot(1)">
+      <input type="file" id="file1" accept="audio/*" style="display:none" onchange="loadSample(1,this)"/>
+      <div class="slot-label">SAMPLE 02</div>
+      <div class="slot-name slot-empty" id="name1">tap to load</div>
+      <canvas class="waveform" id="wave1" height="24"></canvas>
+      <div class="loading-bar" id="bar1"></div>
+    </div>
+    <div class="slot" id="slot2" onclick="handleSlot(2)">
+      <input type="file" id="file2" accept="audio/*" style="display:none" onchange="loadSample(2,this)"/>
+      <div class="slot-label">SAMPLE 03</div>
+      <div class="slot-name slot-empty" id="name2">tap to load</div>
+      <canvas class="waveform" id="wave2" height="24"></canvas>
+      <div class="loading-bar" id="bar2"></div>
+    </div>
+    <div class="slot" id="slot3" onclick="handleSlot(3)">
+      <input type="file" id="file3" accept="audio/*" style="display:none" onchange="loadSample(3,this)"/>
+      <div class="slot-label">SAMPLE 04</div>
+      <div class="slot-name slot-empty" id="name3">tap to load</div>
+      <canvas class="waveform" id="wave3" height="24"></canvas>
+      <div class="loading-bar" id="bar3"></div>
+    </div>
+  </div>
+
+  <div class="synth-row">
+    <div class="sub-block" id="subBlock">
+      <div class="block-title">SUB OSCILLATOR</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">hz</span>
+        <input type="range" id="subFreq" min="28" max="110" value="55" oninput="updateSub()"/>
+        <span class="ctrl-val" id="subFreqVal">55</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">vol</span>
+        <input type="range" id="subVol" min="0" max="100" value="60" oninput="updateSub()"/>
+        <span class="ctrl-val" id="subVolVal">60</span>
+      </div>
+      <button class="tog vio" id="subTog" onclick="toggleSub()">SUB OFF</button>
+    </div>
+
+    <div class="noise-block" id="noiseBlock">
+      <div class="block-title">STEREO NOISE</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">freq</span>
+        <input type="range" id="noiseFreq" min="50" max="8000" value="800" oninput="updateNoise()"/>
+        <span class="ctrl-val" id="noiseFreqVal">800</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">q</span>
+        <input type="range" id="noiseQ" min="0.5" max="20" step="0.1" value="3" oninput="updateNoise()"/>
+        <span class="ctrl-val" id="noiseQVal">3.0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">vol</span>
+        <input type="range" id="noiseVol" min="0" max="100" value="40" oninput="updateNoise()"/>
+        <span class="ctrl-val" id="noiseVolVal">40</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
+        <button class="tog mag" id="noiseTog" onclick="toggleNoise()">NOISE OFF</button>
+        <button class="kill" onclick="killAll()">■ KILL</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <span style="font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:rgba(255,255,255,.25);letter-spacing:.1em">STAGE</span>
+    <button class="tog on" id="stg0" onclick="setStage(0)">ANCLAJE</button>
+    <button class="tog" id="stg1" onclick="setStage(1)">EXPLORACIÓN</button>
+    <button class="tog" id="stg2" onclick="setStage(2)">DISRUPCIÓN</button>
+    <button class="tog" id="stg3" onclick="setStage(3)">LIBERACIÓN</button>
+    <button class="tog" id="stg4" onclick="setStage(4)">RETORNO</button>
+  </div>
+</main>
+
+<script>
+let ctx, masterGain, limiter;
+let subOsc=null, subGainNode=null, subActive=false;
+let noiseNode=null, noiseGainNode=null, noiseFilter=null, noiseActive=false;
+let buffers=[null,null,null,null];
+let voices=[], rms=0;
+
+const STAGES=[
+  {name:"ANCLAJE",     subHz:40,  nFreq:300,  nQ:4},
+  {name:"EXPLORACIÓN", subHz:55,  nFreq:800,  nQ:3},
+  {name:"DISRUPCIÓN",  subHz:80,  nFreq:2000, nQ:2},
+  {name:"LIBERACIÓN",  subHz:110, nFreq:4000, nQ:1.5},
+  {name:"RETORNO",     subHz:28,  nFreq:200,  nQ:6},
+];
+
+function initAudio(){
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  masterGain = ctx.createGain(); masterGain.gain.value=0.82;
+  limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value=-3; limiter.knee.value=2;
+  limiter.ratio.value=20; limiter.attack.value=0.001; limiter.release.value=0.1;
+  masterGain.connect(limiter); limiter.connect(ctx.destination);
+}
+
+// ─── SAMPLE LOADING — iOS Safari fix ───────────────────────
+function handleSlot(i){
+  if(!buffers[i]){ document.getElementById('file'+i).click(); }
+  else { triggerSlot(i); }
+}
+
+function loadSample(idx, input){
+  const file=input.files[0]; if(!file) return;
+  const nameEl=document.getElementById('name'+idx);
+  nameEl.textContent='loading…';
+  nameEl.classList.remove('slot-empty');
+  const bar=document.getElementById('bar'+idx);
+  bar.style.width='40%';
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    bar.style.width='70%';
+    // iOS Safari requires ArrayBuffer copy before decodeAudioData
+    const arraybuffer=e.target.result;
+    const copy=arraybuffer.slice(0);
+    ctx.decodeAudioData(
+      copy,
+      function(decoded){
+        buffers[idx]=decoded;
+        nameEl.textContent=file.name.replace(/\.[^/.]+$/,'');
+        document.getElementById('slot'+idx).classList.add('loaded');
+        bar.style.width='100%';
+        setTimeout(()=>{ bar.style.width='0'; }, 600);
+        drawWaveform(idx, decoded);
+      },
+      function(err){
+        // fallback: try with original buffer
+        const reader2=new FileReader();
+        reader2.onload=function(e2){
+          ctx.decodeAudioData(e2.target.result, function(decoded){
+            buffers[idx]=decoded;
+            nameEl.textContent=file.name.replace(/\.[^/.]+$/,'');
+            document.getElementById('slot'+idx).classList.add('loaded');
+            bar.style.width='0';
+            drawWaveform(idx, decoded);
+          }, function(){
+            nameEl.textContent='⚠ format error';
+            bar.style.width='0';
+          });
+        };
+        reader2.readAsArrayBuffer(file);
+      }
+    );
+  };
+  reader.onerror=function(){
+    nameEl.textContent='⚠ read error';
+    bar.style.width='0';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function triggerSlot(idx){
+  if(!buffers[idx]) return;
+  if(voices.length>=64){ try{voices.shift().stop()}catch(e){} }
+  const src=ctx.createBufferSource();
+  src.buffer=buffers[idx];
+  const g=ctx.createGain(); g.gain.value=0.8;
+  src.connect(g); g.connect(masterGain);
+  src.start();
+  voices.push(src);
+  const sl=document.getElementById('slot'+idx);
+  sl.classList.add('playing');
+  src.onended=()=>{ sl.classList.remove('playing'); voices=voices.filter(v=>v!==src); };
+  rms=Math.min(1,rms+0.35);
+}
+
+// ─── SUB OSC ───────────────────────────────────────────────
+function makeSub(){
+  if(subOsc){try{subOsc.stop()}catch(e){}}
+  subOsc=ctx.createOscillator();
+  subGainNode=ctx.createGain();
+  subOsc.type='sine';
+  subOsc.frequency.value=parseFloat(document.getElementById('subFreq').value);
+  subGainNode.gain.value=parseFloat(document.getElementById('subVol').value)/100*0.6;
+  subOsc.connect(subGainNode); subGainNode.connect(masterGain);
+  subOsc.start();
+}
+function toggleSub(){
+  subActive=!subActive;
+  const btn=document.getElementById('subTog'), blk=document.getElementById('subBlock');
+  if(subActive){makeSub();btn.textContent='SUB ON';btn.classList.add('on');blk.classList.add('active');}
+  else{if(subOsc){try{subOsc.stop()}catch(e){} subOsc=null;}btn.textContent='SUB OFF';btn.classList.remove('on');blk.classList.remove('active');}
+}
+function updateSub(){
+  const hz=parseFloat(document.getElementById('subFreq').value);
+  const vol=parseFloat(document.getElementById('subVol').value);
+  document.getElementById('subFreqVal').textContent=hz;
+  document.getElementById('subVolVal').textContent=vol;
+  if(subActive&&subOsc){subOsc.frequency.setTargetAtTime(hz,ctx.currentTime,0.05);subGainNode.gain.setTargetAtTime(vol/100*0.6,ctx.currentTime,0.05);}
+}
+
+// ─── NOISE ─────────────────────────────────────────────────
+function makeNoise(){
+  const sz=ctx.sampleRate*2;
+  const buf=ctx.createBuffer(2,sz,ctx.sampleRate);
+  for(let c=0;c<2;c++){const d=buf.getChannelData(c);let l=0;for(let i=0;i<sz;i++){const w=Math.random()*2-1;l=(l+0.02*w)/1.02;d[i]=l*3.5;}}
+  noiseNode=ctx.createBufferSource(); noiseNode.buffer=buf; noiseNode.loop=true;
+  noiseFilter=ctx.createBiquadFilter(); noiseFilter.type='bandpass';
+  noiseFilter.frequency.value=parseFloat(document.getElementById('noiseFreq').value);
+  noiseFilter.Q.value=parseFloat(document.getElementById('noiseQ').value);
+  noiseGainNode=ctx.createGain();
+  noiseGainNode.gain.value=parseFloat(document.getElementById('noiseVol').value)/100*0.5;
+  noiseNode.connect(noiseFilter); noiseFilter.connect(noiseGainNode); noiseGainNode.connect(masterGain);
+  noiseNode.start();
+}
+function toggleNoise(){
+  noiseActive=!noiseActive;
+  const btn=document.getElementById('noiseTog'), blk=document.getElementById('noiseBlock');
+  if(noiseActive){makeNoise();btn.textContent='NOISE ON';btn.classList.add('on');blk.classList.add('active');}
+  else{if(noiseNode){try{noiseNode.stop()}catch(e){} noiseNode=null;}btn.textContent='NOISE OFF';btn.classList.remove('on');blk.classList.remove('active');}
+}
+function updateNoise(){
+  const f=parseFloat(document.getElementById('noiseFreq').value);
+  const q=parseFloat(document.getElementById('noiseQ').value);
+  const v=parseFloat(document.getElementById('noiseVol').value);
+  document.getElementById('noiseFreqVal').textContent=f;
+  document.getElementById('noiseQVal').textContent=q.toFixed(1);
+  document.getElementById('noiseVolVal').textContent=v;
+  if(noiseActive&&noiseFilter){noiseFilter.frequency.setTargetAtTime(f,ctx.currentTime,0.05);noiseFilter.Q.setTargetAtTime(q,ctx.currentTime,0.05);}
+  if(noiseActive&&noiseGainNode){noiseGainNode.gain.setTargetAtTime(v/100*0.5,ctx.currentTime,0.05);}
+}
+
+// ─── KILL ──────────────────────────────────────────────────
+function killAll(){
+  voices.forEach(v=>{try{v.stop()}catch(e){}});voices=[];
+  if(subOsc){try{subOsc.stop()}catch(e){} subOsc=null;subActive=false;document.getElementById('subTog').textContent='SUB OFF';document.getElementById('subTog').classList.remove('on');document.getElementById('subBlock').classList.remove('active');}
+  if(noiseNode){try{noiseNode.stop()}catch(e){} noiseNode=null;noiseActive=false;document.getElementById('noiseTog').textContent='NOISE OFF';document.getElementById('noiseTog').classList.remove('on');document.getElementById('noiseBlock').classList.remove('active');}
+  rms=0;
+}
+
+// ─── STAGES ────────────────────────────────────────────────
+function setStage(i){
+  const s=STAGES[i];
+  document.getElementById('stageLbl').textContent=s.name;
+  document.querySelectorAll('[id^=stg]').forEach((b,j)=>b.classList.toggle('on',j===i));
+  document.getElementById('subFreq').value=s.subHz;
+  document.getElementById('noiseFreq').value=s.nFreq;
+  document.getElementById('noiseQ').value=s.nQ;
+  updateSub(); updateNoise();
+}
+
+// ─── WAVEFORM ──────────────────────────────────────────────
+function drawWaveform(idx, buf){
+  const cv=document.getElementById('wave'+idx);
+  const c=cv.getContext('2d');
+  cv.width=cv.offsetWidth||180;
+  const data=buf.getChannelData(0);
+  const step=Math.floor(data.length/cv.width);
+  const h=cv.height;
+  c.clearRect(0,0,cv.width,h);
+  c.strokeStyle='rgba(0,255,255,.5)';
+  c.lineWidth=1;
+  c.beginPath();
+  for(let x=0;x<cv.width;x++){
+    let mx=0;
+    for(let j=0;j<step;j++){const v=Math.abs(data[x*step+j]||0);if(v>mx)mx=v;}
+    const y=h/2-mx*(h/2)*.9;
+    x===0?c.moveTo(x,y):c.lineTo(x,y);
+  }
+  c.stroke();
+}
+
+// ─── NEBULA CANVAS ─────────────────────────────────────────
+const ncv=document.getElementById('nebula');
+const nc=ncv.getContext('2d');
+const rings=[{r:18,sp:.4,ph:0},{r:36,sp:.25,ph:1.2},{r:56,sp:.15,ph:2.4}];
+
+function resizeCanvas(){ ncv.width=ncv.offsetWidth||window.innerWidth; }
+
+function drawNebula(ts){
+  const W=ncv.width,H=ncv.height,cx=W/2,cy=H/2,t=ts*.001;
+  nc.clearRect(0,0,W,H);
+  const vg=nc.createRadialGradient(cx,cy,0,cx,cy,W*.5);
+  vg.addColorStop(0,'transparent'); vg.addColorStop(1,'rgba(0,0,0,.5)');
+  nc.fillStyle=vg; nc.fillRect(0,0,W,H);
+  const pulse=1+rms*.28;
+  rings.forEach((ring,i)=>{
+    ring.ph+=ring.sp*.016;
+    const alpha=.12+rms*.22;
+    const cols=['rgba(0,255,255,','rgba(153,68,255,','rgba(255,0,255,'];
+    nc.beginPath();
+    nc.arc(cx+Math.sin(ring.ph)*6*rms,cy+Math.cos(ring.ph*.7)*4*rms,ring.r*pulse,0,Math.PI*2);
+    nc.strokeStyle=cols[i]+alpha+')';
+    nc.lineWidth=1+rms*.8;
+    nc.stroke();
+  });
+  const og=nc.createRadialGradient(cx,cy,0,cx,cy,16*pulse);
+  og.addColorStop(0,'rgba(0,255,255,'+(0.1+rms*.25)+')');
+  og.addColorStop(1,'transparent');
+  nc.fillStyle=og; nc.beginPath(); nc.arc(cx,cy,16*pulse,0,Math.PI*2); nc.fill();
+  if(rms>0.01) rms*=.97; else rms=0;
+  document.getElementById('statusDot').classList.toggle('active',rms>.05||subActive||noiseActive);
+  requestAnimationFrame(drawNebula);
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+document.getElementById('unlock').addEventListener('click',function(){
+  initAudio();
+  // resume context explicitly for iOS
+  if(ctx.state==='suspended') ctx.resume();
+  this.style.display='none';
+  resizeCanvas();
+  requestAnimationFrame(drawNebula);
+},{once:true});
+
+window.addEventListener('resize',resizeCanvas);
+</script>
+</body>
+</html>
