@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SpxX_VoxDust</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;600&family=JetBrains+Mono:ital,wght@0,300;0,400;1,300;1,400;1,800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Inter',sans-serif}
+
+:root{
+  --c:#00ffff;--m:#ff00ff;--v:#9944ff;
+  --bg:#000;--bg2:#0a0a0a;--bg3:#111;
+  --border:rgba(255,255,255,.06);
+  --t55:rgba(255,255,255,.55);--t42:rgba(255,255,255,.42);
+  --t25:rgba(255,255,255,.25);--t18:rgba(255,255,255,.18);
+}
+
+body{
+  background: #000;
+  background-image: radial-gradient(circle, #0f0f0f 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* LAYOUT */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;padding:12px;gap:8px;overflow:hidden}
+
+/* HEADER */
+#header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.logo{font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:-.5px}
+.logo span:first-child{font-weight:800;font-style:italic;color:#fff}
+.logo span:last-child{font-weight:300;font-style:italic;color:var(--c)}
+.app-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:300;font-style:italic;
+  background:linear-gradient(90deg,var(--c),var(--v),var(--m));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:.5px}
+.status-pill{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:300;
+  color:var(--t42);padding:4px 10px;border:1px solid var(--border);border-radius:20px}
+.status-pill.active{color:var(--c);border-color:rgba(0,255,255,.2)}
+
+/* PANELS */
+.panel{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;padding:14px}
+.panel-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:300;font-style:italic;
+  color:var(--t25);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+
+/* MAIN GRID */
+#main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;flex:1;min-height:0}
+
+/* CAPTURE PANEL */
+#panel-capture{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:10px}
+.capture-buttons{display:flex;gap:8px;flex:1}
+.cap-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.02);
+  cursor:pointer;transition:all .2s;position:relative;overflow:hidden;min-height:70px}
+.cap-btn:active{transform:scale(.97)}
+.cap-btn.primary{border-color:rgba(0,255,255,.2);background:rgba(0,255,255,.04)}
+.cap-btn.rec-active{border-color:rgba(255,0,80,.4);background:rgba(255,0,80,.06);animation:recPulse 1s ease-in-out infinite}
+@keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,80,.2)}50%{box-shadow:0 0 12px 4px rgba(255,0,80,.15)}}
+.cap-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.cap-icon.load{background:rgba(0,255,255,.15);border:1px solid rgba(0,255,255,.3)}
+.cap-icon.rec{background:rgba(255,0,80,.15);border:1px solid rgba(255,0,80,.3)}
+.cap-icon svg{width:14px;height:14px}
+.cap-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:300;font-style:italic;
+  color:var(--t42);letter-spacing:.5px}
+.cap-btn.primary .cap-label{color:rgba(0,255,255,.7)}
+.rec-timer{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:400;color:rgba(255,80,80,.9)}
+
+/* PROFILES */
+#panel-profiles{grid-column:1;grid-row:2;display:flex;flex-direction:column}
+.profiles-grid{display:flex;gap:8px;flex:1}
+.profile-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.02);
+  cursor:pointer;transition:all .2s}
+.profile-btn:active{transform:scale(.97)}
+.profile-btn.selected{border-color:rgba(153,68,255,.4);background:rgba(153,68,255,.08)}
+.profile-dot{width:8px;height:8px;border-radius:50%}
+.profile-name{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:400;font-style:italic;color:var(--t55)}
+.profile-desc{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:300;color:var(--t25);text-align:center;padding:0 4px}
+
+/* WAVEFORM PANEL */
+#panel-wave{grid-column:2;grid-row:1 / span 2;display:flex;flex-direction:column;gap:10px}
+#waveCanvas{width:100%;flex:1;border-radius:8px;background:rgba(0,0,0,.4);border:1px solid var(--border);min-height:0}
+.wave-meta{display:flex;justify-content:space-between;align-items:center}
+.wave-stat{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:300;color:var(--t25)}
+.wave-stat span{color:var(--t55)}
+
+/* CHAIN PANEL */
+#panel-chain{grid-column:1 / span 2;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.chain-row{display:flex;gap:6px;align-items:center}
+.chain-node{display:flex;align-items:center;gap:6px;flex:1;
+  background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+.chain-node.active{border-color:rgba(0,255,255,.15);background:rgba(0,255,255,.03)}
+.chain-node.active .cn-label{color:rgba(0,255,255,.8)}
+.chain-toggle{width:20px;height:11px;border-radius:6px;background:rgba(255,255,255,.08);
+  border:1px solid var(--border);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.chain-toggle.on{background:rgba(0,255,255,.25);border-color:rgba(0,255,255,.4)}
+.chain-toggle::after{content:'';position:absolute;top:1px;left:1px;width:7px;height:7px;
+  border-radius:50%;background:rgba(255,255,255,.4);transition:transform .2s}
+.chain-toggle.on::after{transform:translateX(9px);background:var(--c)}
+.cn-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:400;font-style:italic;
+  color:var(--t42);letter-spacing:.3px;flex:1}
+.cn-slider{flex:2;-webkit-appearance:none;appearance:none;height:2px;
+  background:rgba(255,255,255,.1);border-radius:1px;outline:none;cursor:pointer}
+.cn-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  border-radius:50%;background:var(--c);border:none;box-shadow:0 0 6px rgba(0,255,255,.4)}
+.cn-val{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:300;color:var(--t25);
+  width:28px;text-align:right}
+.chain-arrow{font-size:10px;color:var(--t18);flex-shrink:0}
+
+/* BOTTOM BAR */
+#bottom{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  padding:6px 0 2px;border-top:1px solid var(--border)}
+.proceed-btn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:400;font-style:italic;
+  color:#000;background:linear-gradient(90deg,var(--c),var(--v));
+  border:none;border-radius:20px;padding:8px 20px;cursor:pointer;letter-spacing:.3px;
+  opacity:.3;transition:opacity .3s;pointer-events:none}
+.proceed-btn.ready{opacity:1;pointer-events:all}
+.bottom-info{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:300;color:var(--t18)}
+
+/* FILE INPUT */
+#fileInput{display:none}
+
+/* TOAST */
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:300;font-style:italic;
+  color:var(--c);background:rgba(0,0,0,.9);border:1px solid rgba(0,255,255,.2);
+  border-radius:20px;padding:8px 16px;opacity:0;transition:all .3s;pointer-events:none;z-index:100}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="logo"><span>SPUK</span><span>LAB</span></div>
+    <div class="app-name">SpxX_VoxDust — INGESTA v0.1</div>
+    <div class="status-pill" id="statusPill">NO SIGNAL</div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div id="main">
+
+    <!-- CAPTURE -->
+    <div class="panel" id="panel-capture">
+      <div class="panel-label">capture</div>
+      <div class="capture-buttons">
+        <div class="cap-btn primary" id="btnLoad" onclick="triggerLoad()">
+          <div class="cap-icon load">
+            <svg viewBox="0 0 24 24" fill="none" stroke="cyan" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+          </div>
+          <div class="cap-label">LOAD FILE</div>
+        </div>
+        <div class="cap-btn" id="btnRec" onclick="toggleRec()">
+          <div class="cap-icon rec">
+            <svg viewBox="0 0 24 24" fill="rgba(255,80,80,.8)" stroke="none">
+              <circle cx="12" cy="12" r="6"/>
+            </svg>
+          </div>
+          <div class="cap-label" id="recLabel">REC TO SAMPLE</div>
+          <div class="rec-timer" id="recTimer" style="display:none">00:00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILES -->
+    <div class="panel" id="panel-profiles">
+      <div class="panel-label">pre-flight profile</div>
+      <div class="profiles-grid">
+        <div class="profile-btn selected" id="prof-field" onclick="selectProfile('field')">
+          <div class="profile-dot" style="background:#00ffff;box-shadow:0 0 6px #00ffff"></div>
+          <div class="profile-name">FIELD</div>
+          <div class="profile-desc">wind / hiss removal</div>
+        </div>
+        <div class="profile-btn" id="prof-studio" onclick="selectProfile('studio')">
+          <div class="profile-dot" style="background:#9944ff;box-shadow:0 0 6px #9944ff"></div>
+          <div class="profile-name">STUDIO</div>
+          <div class="profile-desc">warmth / detail</div>
+        </div>
+        <div class="profile-btn" id="prof-dirty" onclick="selectProfile('dirty')">
+          <div class="profile-dot" style="background:#ff00ff;box-shadow:0 0 6px #ff00ff"></div>
+          <div class="profile-name">DIRTY</div>
+          <div class="profile-desc">noise preserved + crush</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WAVEFORM -->
+    <div class="panel" id="panel-wave">
+      <div class="panel-label">waveform — pre-flight</div>
+      <canvas id="waveCanvas"></canvas>
+      <div class="wave-meta">
+        <div class="wave-stat">dur <span id="statDur">—</span></div>
+        <div class="wave-stat">sr <span id="statSr">—</span></div>
+        <div class="wave-stat">ch <span id="statCh">—</span></div>
+        <div class="wave-stat">rms <span id="statRms">—</span></div>
+        <div class="wave-stat">trim <span id="statTrim" style="color:rgba(0,255,255,.7)">—</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PRE-FLIGHT CHAIN -->
+  <div class="panel" id="panel-chain">
+    <div class="panel-label">pre-flight chain</div>
+    <div class="chain-row">
+
+      <div class="chain-node active" id="node-trim">
+        <div class="chain-toggle on" id="tog-trim" onclick="toggleChain('trim')"></div>
+        <div class="cn-label">AUTO-TRIM</div>
+        <input type="range" class="cn-slider" id="sl-trim" min="0" max="100" value="20"
+          oninput="updateChainVal('trim',this.value)">
+        <div class="cn-val" id="val-trim">-20<span style="font-size:7px">dB</span></div>
+      </div>
+
+      <div class="chain-arrow">›</div>
+
+      <div class="chain-node active" id="node-gate">
+        <div class="chain-toggle on" id="tog-gate" onclick="toggleChain('gate')"></div>
+        <div class="cn-label">MULTIBAND GATE</div>
+        <input type="range" class="cn-slider" id="sl-gate" min="0" max="100" value="40"
+          oninput="updateChainVal('gate',this.value)">
+        <div class="cn-val" id="val-gate">40<span style="font-size:7px">%</span></div>
+      </div>
+
+      <div class="chain-arrow">›</div>
+
+      <div class="chain-node active" id="node-dess">
+        <div class="chain-toggle on" id="tog-dess" onclick="toggleChain('dess')"></div>
+        <div class="cn-label">DE-ESS</div>
+        <input type="range" class="cn-slider" id="sl-dess" min="0" max="100" value="50"
+          oninput="updateChainVal('dess',this.value)">
+        <div class="cn-val" id="val-dess">50<span style="font-size:7px">%</span></div>
+      </div>
+
+      <div class="chain-arrow">›</div>
+
+      <div class="chain-node" id="node-norm">
+        <div class="chain-toggle" id="tog-norm" onclick="toggleChain('norm')"></div>
+        <div class="cn-label">NORMALIZE</div>
+        <input type="range" class="cn-slider" id="sl-norm" min="0" max="100" value="70"
+          oninput="updateChainVal('norm',this.value)">
+        <div class="cn-val" id="val-norm">-6<span style="font-size:7px">dB</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div id="bottom">
+    <div class="bottom-info" id="bottomInfo">— load or record to begin —</div>
+    <button class="proceed-btn" id="proceedBtn" onclick="proceedToOrb()">
+      LAUNCH TO ORB →
+    </button>
+  </div>
+
+</div>
+
+<input type="file" id="fileInput" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*">
+<div id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let AC = null;
+let sourceBuffer = null;
+let recStream = null;
+let recRecorder = null;
+let recChunks = [];
+let recActive = false;
+let recInterval = null;
+let recSeconds = 0;
+let currentProfile = 'field';
+let chainState = {trim:true, gate:true, dess:true, norm:false};
+let audioReady = false;
+
+// ─── AUDIO CONTEXT ───────────────────────────────────────
+function getAC(){
+  if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  return AC;
+}
+
+// ─── FILE LOAD ───────────────────────────────────────────
+function triggerLoad(){
+  // iOS Safari: crear AC en el mismo gesto táctil, luego abrir picker
+  if(!AC){
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // resume no-op si ya running, pero no bloquea el click
+  try{ AC.resume(); } catch(e){}
+  setTimeout(()=> document.getElementById('fileInput').click(), 80);
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  toast('Reading file...');
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const buf = ev.target.result.slice(0);
+    getAC().decodeAudioData(buf, function(decoded){
+      sourceBuffer = decoded;
+      onBufferReady(f.name);
+    }, function(err){
+      toast('Decode error — try WAV or MP3');
+    });
+  };
+  reader.readAsArrayBuffer(f);
+  this.value = '';
+});
+
+// ─── REC TO SAMPLE ───────────────────────────────────────
+function toggleRec(){
+  if(!recActive) startRec();
+  else stopRec();
+}
+
+function startRec(){
+  const ac = getAC();
+  ac.resume().then(()=>{
+    navigator.mediaDevices.getUserMedia({audio:true, video:false})
+      .then(stream=>{
+        recStream = stream;
+        recChunks = [];
+        recRecorder = new MediaRecorder(stream);
+        recRecorder.ondataavailable = e => { if(e.data.size>0) recChunks.push(e.data); };
+        recRecorder.onstop = processRecording;
+        recRecorder.start();
+        recActive = true;
+        recSeconds = 0;
+        document.getElementById('btnRec').classList.add('rec-active');
+        document.getElementById('recLabel').style.display = 'none';
+        document.getElementById('recTimer').style.display = 'block';
+        recInterval = setInterval(()=>{
+          recSeconds++;
+          const m = String(Math.floor(recSeconds/60)).padStart(2,'0');
+          const s = String(recSeconds%60).padStart(2,'0');
+          document.getElementById('recTimer').textContent = m+':'+s;
+        },1000);
+        toast('Recording...');
+      })
+      .catch(()=> toast('Mic access denied — use HTTPS'));
+  });
+}
+
+function stopRec(){
+  if(recRecorder && recRecorder.state !== 'inactive') recRecorder.stop();
+  if(recStream) recStream.getTracks().forEach(t=>t.stop());
+  clearInterval(recInterval);
+  recActive = false;
+  document.getElementById('btnRec').classList.remove('rec-active');
+  document.getElementById('recLabel').style.display = 'block';
+  document.getElementById('recTimer').style.display = 'none';
+  toast('Processing recording...');
+}
+
+function processRecording(){
+  const blob = new Blob(recChunks, {type:'audio/webm'});
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const buf = ev.target.result.slice(0);
+    getAC().decodeAudioData(buf, function(decoded){
+      sourceBuffer = decoded;
+      onBufferReady('rec_sample');
+    }, function(){
+      toast('Could not decode recording');
+    });
+  };
+  reader.readAsArrayBuffer(blob);
+}
+
+// ─── BUFFER READY ────────────────────────────────────────
+function onBufferReady(name){
+  audioReady = true;
+  applyProfile(currentProfile);
+  drawWaveform();
+  updateStats();
+  updateStatus('SIGNAL OK');
+  document.getElementById('proceedBtn').classList.add('ready');
+  const short = name.length > 22 ? name.substring(0,20)+'…' : name;
+  document.getElementById('bottomInfo').textContent = short;
+  toast('Ready — pre-flight applied');
+}
+
+// ─── WAVEFORM ────────────────────────────────────────────
+function drawWaveform(){
+  if(!sourceBuffer) return;
+  const canvas = document.getElementById('waveCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  ctx.clearRect(0,0,W,H);
+
+  // bg gradient
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'rgba(0,255,255,.03)');
+  bg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  const data = sourceBuffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  const mid = H / 2;
+
+  // grid line
+  ctx.strokeStyle = 'rgba(255,255,255,.04)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(W, mid);
+  ctx.stroke();
+
+  // waveform glow
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(0,255,255,.4)';
+  ctx.strokeStyle = 'rgba(0,255,255,.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let x=0; x<W; x++){
+    let min=1, max=-1;
+    for(let j=0; j<step; j++){
+      const v = data[x*step+j] || 0;
+      if(v<min) min=v;
+      if(v>max) max=v;
+    }
+    ctx.moveTo(x, mid + min*(mid*.9));
+    ctx.lineTo(x, mid + max*(mid*.9));
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // trim markers (visual estimate)
+  if(chainState.trim){
+    const trimThresh = parseInt(document.getElementById('sl-trim').value) / 100;
+    ctx.strokeStyle = 'rgba(255,0,255,.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,4]);
+    // find approx start/end
+    const trimStart = findTrimPoint(data, trimThresh, false);
+    const trimEnd = findTrimPoint(data, trimThresh, true);
+    const xS = Math.floor((trimStart/data.length)*W);
+    const xE = Math.floor((trimEnd/data.length)*W);
+    ctx.beginPath(); ctx.moveTo(xS,0); ctx.lineTo(xS,H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xE,0); ctx.lineTo(xE,H); ctx.stroke();
+    ctx.setLineDash([]);
+    // dim zones
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillRect(0,0,xS,H);
+    ctx.fillRect(xE,0,W-xE,H);
+  }
+}
+
+function findTrimPoint(data, thresh, fromEnd){
+  const len = data.length;
+  const silenceLen = Math.floor(AC.sampleRate * 0.05);
+  if(!fromEnd){
+    for(let i=0;i<len-silenceLen;i++){
+      if(Math.abs(data[i]) > thresh * 0.01) return Math.max(0,i-100);
+    }
+    return 0;
+  } else {
+    for(let i=len-1;i>silenceLen;i--){
+      if(Math.abs(data[i]) > thresh * 0.01) return Math.min(len-1,i+100);
+    }
+    return len-1;
+  }
+}
+
+// ─── STATS ───────────────────────────────────────────────
+function updateStats(){
+  if(!sourceBuffer) return;
+  const dur = sourceBuffer.duration;
+  const m = Math.floor(dur/60);
+  const s = (dur%60).toFixed(1);
+  document.getElementById('statDur').textContent = m>0 ? m+'m'+s+'s' : s+'s';
+  document.getElementById('statSr').textContent = (sourceBuffer.sampleRate/1000).toFixed(1)+'k';
+  document.getElementById('statCh').textContent = sourceBuffer.numberOfChannels;
+
+  // RMS
+  const d = sourceBuffer.getChannelData(0);
+  let sum = 0;
+  for(let i=0;i<d.length;i++) sum += d[i]*d[i];
+  const rms = Math.sqrt(sum/d.length);
+  const rmsDb = 20*Math.log10(rms+1e-10);
+  document.getElementById('statRms').textContent = rmsDb.toFixed(1)+'dB';
+
+  // Trim estimate
+  const trimThresh = parseInt(document.getElementById('sl-trim').value) / 100;
+  if(chainState.trim){
+    const ts = findTrimPoint(d, trimThresh, false);
+    const te = findTrimPoint(d, trimThresh, true);
+    const trimmedDur = ((te-ts)/sourceBuffer.sampleRate).toFixed(1);
+    document.getElementById('statTrim').textContent = trimmedDur+'s';
+  } else {
+    document.getElementById('statTrim').textContent = 'off';
+  }
+}
+
+// ─── PROFILES ────────────────────────────────────────────
+const profiles = {
+  field: {trim:true, gate:true, dess:true, norm:false,
+    trimVal:20, gateVal:40, dessVal:60, normVal:70},
+  studio: {trim:true, gate:false, dess:true, norm:true,
+    trimVal:15, gateVal:20, dessVal:40, normVal:80},
+  dirty: {trim:false, gate:false, dess:false, norm:false,
+    trimVal:5, gateVal:10, dessVal:20, normVal:40}
+};
+
+function selectProfile(p){
+  currentProfile = p;
+  ['field','studio','dirty'].forEach(id=>{
+    document.getElementById('prof-'+id).classList.toggle('selected', id===p);
+  });
+  applyProfile(p);
+  if(audioReady){ drawWaveform(); updateStats(); }
+  toast('Profile: '+p.toUpperCase());
+}
+
+function applyProfile(p){
+  const pr = profiles[p];
+  ['trim','gate','dess','norm'].forEach(k=>{
+    chainState[k] = pr[k];
+    const tog = document.getElementById('tog-'+k);
+    const node = document.getElementById('node-'+k);
+    tog.classList.toggle('on', pr[k]);
+    node.classList.toggle('active', pr[k]);
+    document.getElementById('sl-'+k).value = pr[k+'Val'];
+    updateChainVal(k, pr[k+'Val']);
+  });
+}
+
+// ─── CHAIN ───────────────────────────────────────────────
+function toggleChain(k){
+  chainState[k] = !chainState[k];
+  const tog = document.getElementById('tog-'+k);
+  const node = document.getElementById('node-'+k);
+  tog.classList.toggle('on', chainState[k]);
+  node.classList.toggle('active', chainState[k]);
+  if(audioReady){ drawWaveform(); updateStats(); }
+}
+
+function updateChainVal(k, v){
+  v = parseInt(v);
+  let display = '';
+  if(k==='trim') display = -(Math.round(v*0.5)+5)+'<span style="font-size:7px">dB</span>';
+  else if(k==='norm') display = -(Math.round((100-v)*0.12))+'<span style="font-size:7px">dB</span>';
+  else display = v+'<span style="font-size:7px">%</span>';
+  document.getElementById('val-'+k).innerHTML = display;
+  if(audioReady && k==='trim'){ drawWaveform(); updateStats(); }
+}
+
+// ─── STATUS ──────────────────────────────────────────────
+function updateStatus(txt){
+  const pill = document.getElementById('statusPill');
+  pill.textContent = txt;
+  pill.classList.toggle('active', txt !== 'NO SIGNAL');
+}
+
+// ─── PROCEED ─────────────────────────────────────────────
+function proceedToOrb(){
+  if(!audioReady) return;
+  toast('→ Launching to Orb...');
+  // handoff point to ORB module
+}
+
+// ─── TOAST ───────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+// ─── RESIZE ──────────────────────────────────────────────
+window.addEventListener('resize', ()=>{ if(audioReady) drawWaveform(); });
+</script>
+</body>
+</html>
