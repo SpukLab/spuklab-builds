@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>MedRoute · Delivery Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;1,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#050a0e;color:#e8edf2;min-height:100vh}
+:root{
+  --blue:#0a84ff;--teal:#00d4aa;--amber:#ffb340;--red:#ff453a;--green:#30d158;
+  --card:#0d1620;--card2:#111d2b;--border:rgba(255,255,255,.07);
+  --text-dim:rgba(232,237,242,.45);--text-dimmer:rgba(232,237,242,.25)
+}
+
+/* HEADER */
+.app-header{background:linear-gradient(180deg,#0d1f30 0%,#09141e 100%);border-bottom:1px solid var(--border);padding:14px 18px 12px}
+.header-top{display:flex;align-items:center;justify-content:space-between}
+.header-logo{display:flex;flex-direction:column;gap:1px}
+.logo-main{font-family:'JetBrains Mono',monospace;font-weight:700;font-style:italic;font-size:20px;letter-spacing:-.5px;color:#e8edf2}
+.logo-main span{color:var(--teal)}
+.logo-sub{font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--text-dimmer)}
+.header-badge{background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;letter-spacing:1px;color:var(--teal);text-transform:uppercase}
+.header-location{font-size:11px;color:var(--text-dimmer);margin-top:6px;display:flex;align-items:center;gap:5px}
+.header-location::before{content:'📍';font-size:10px}
+
+/* NAV */
+.nav{display:flex;background:#09141e;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.nav button{flex:1;padding:13px 4px 11px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-dimmer);font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif}
+.nav button.active{color:var(--teal);border-bottom-color:var(--teal)}
+
+/* VIEWS */
+.view{display:none;padding:16px;max-width:480px;margin:0 auto}
+.view.active{display:block}
+
+/* SECTION LABELS */
+.section-head{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dimmer);margin:20px 0 8px;display:flex;align-items:center;gap:8px}
+.section-head::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;position:relative}
+.card::before{content:'';position:absolute;top:0;left:16px;right:16px;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,170,.15),transparent)}
+
+/* FORM */
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{display:block;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;background:#0a1520;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;color:#e8edf2;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:.2s}
+.field input:focus,.field textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,212,170,.08)}
+.field textarea{resize:vertical;min-height:68px}
+.req{color:var(--teal);margin-left:2px}
+
+/* PHOTO */
+.photo-box{width:100%;aspect-ratio:16/9;background:#070f18;border:1.5px dashed rgba(255,255,255,.1);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;transition:.2s}
+.photo-box:active{border-color:var(--teal);background:#0a1825}
+.photo-box img{width:100%;height:100%;object-fit:cover}
+.photo-box .ph-icon{font-size:28px;margin-bottom:6px;opacity:.4}
+.photo-box .ph-text{font-size:12px;color:var(--text-dimmer);font-weight:500}
+.photo-box .ph-hint{font-size:10px;color:rgba(232,237,242,.15);margin-top:3px}
+input[type=file]{display:none}
+
+/* GPS */
+.gps-wrap{display:flex;gap:8px;align-items:stretch}
+.gps-display{flex:1;background:#070f18;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-dimmer);line-height:1.4}
+.gps-display.ok{color:var(--teal);border-color:rgba(0,212,170,.25)}
+.gps-display.err{color:var(--red);border-color:rgba(255,69,58,.25)}
+.gps-display.loading{color:var(--amber)}
+
+/* BUTTONS */
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px 16px;border-radius:9px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;font-family:'Inter',sans-serif;letter-spacing:.2px;width:100%;margin-top:8px}
+.btn:active{transform:scale(.97);opacity:.9}
+.btn-primary{background:var(--teal);color:#050a0e}
+.btn-ghost{background:rgba(255,255,255,.05);color:#e8edf2;border:1px solid var(--border)}
+.btn-confirm{background:var(--green);color:#050a0e}
+.btn-danger{background:rgba(255,69,58,.12);color:var(--red);border:1px solid rgba(255,69,58,.2)}
+.btn-gps{padding:9px 12px;width:auto;margin-top:0;font-size:11px;background:rgba(10,132,255,.12);color:var(--blue);border:1px solid rgba(10,132,255,.2);border-radius:8px;white-space:nowrap}
+.btn-sm{padding:7px 12px;font-size:11px;width:auto;margin-top:0}
+
+/* STATUS */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.pill-pending{background:rgba(255,179,64,.1);color:var(--amber);border:1px solid rgba(255,179,64,.2)}
+.pill-delivered{background:rgba(48,209,88,.1);color:var(--green);border:1px solid rgba(48,209,88,.2)}
+
+/* PKG LIST CARDS */
+.pkg-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.pkg-card-top{padding:14px 14px 10px}
+.pkg-card-bar{height:2px;width:100%;background:linear-gradient(90deg,var(--teal),var(--blue))}
+.pkg-card-bar.delivered{background:linear-gradient(90deg,var(--green),var(--teal))}
+.pkg-row1{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.pkg-id{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;font-style:italic;color:var(--teal);letter-spacing:.5px}
+.pkg-name{font-size:15px;font-weight:600;margin-bottom:2px}
+.pkg-type{font-size:11px;color:var(--text-dim);margin-bottom:8px}
+.pkg-meta-row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.pkg-meta-item{font-size:11px;color:var(--text-dimmer);display:flex;align-items:baseline;gap:5px}
+.pkg-meta-item b{font-weight:500;color:rgba(232,237,242,.5)}
+.thumb-row{display:flex;gap:6px;margin-bottom:10px}
+.thumb{width:52px;height:52px;object-fit:cover;border-radius:7px;border:1px solid var(--border)}
+.thumb-label{font-size:9px;color:var(--text-dimmer);margin-top:3px;text-align:center;letter-spacing:.5px;text-transform:uppercase}
+.thumb-wrap{display:flex;flex-direction:column}
+.pkg-actions{padding:10px 14px;background:rgba(0,0,0,.2);display:flex;gap:8px;border-top:1px solid var(--border)}
+
+/* EXPORT */
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border:none}
+.stat-label{font-size:12px;color:var(--text-dim)}
+.stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+
+/* EMPTY */
+.empty{text-align:center;padding:56px 24px;color:var(--text-dimmer)}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.empty-text{font-size:13px}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px}
+.overlay.open{display:flex;align-items:flex-start;justify-content:center}
+.modal{background:#0d1620;border:1px solid rgba(0,212,170,.15);border-radius:16px;width:100%;max-width:480px;margin:auto;overflow:hidden}
+.modal-header{background:linear-gradient(135deg,#0a1e30,#0d2a2a);padding:16px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.modal-title{font-size:14px;font-weight:700;letter-spacing:.3px}
+.modal-subtitle{font-size:11px;color:var(--teal);margin-top:2px;font-family:'JetBrains Mono',monospace;font-style:italic}
+.modal-close{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;color:var(--text-dim);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.modal-body{padding:16px}
+.modal-footer{padding:12px 16px;background:rgba(0,0,0,.2);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+
+/* BYLINE */
+.byline{text-align:center;padding:24px 0 32px;font-size:10px;color:rgba(232,237,242,.12);letter-spacing:1px;font-family:'JetBrains Mono',monospace;font-style:italic}
+
+/* DIVIDER */
+hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div class="header-top">
+    <div class="header-logo">
+      <div class="logo-main">Med<span>Route</span></div>
+      <div class="logo-sub">Delivery Tracker</div>
+    </div>
+    <div class="header-badge">Medical</div>
+  </div>
+  <div class="header-location">Salt Lake City, UT · Medical &amp; Laboratory</div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="active" onclick="showView('collect',this)">New Pickup</button>
+  <button onclick="showView('list',this)">Packages</button>
+  <button onclick="showView('export',this)">Export</button>
+</nav>
+
+<!-- COLLECT VIEW -->
+<div id="view-collect" class="view active">
+
+  <div class="section-head">Package Information</div>
+  <div class="card">
+    <div class="field">
+      <label>Tracking / Package ID <span class="req">*</span></label>
+      <input id="pkg-id" type="text" placeholder="e.g. LAB-2024-001, RX-0042" autocomplete="off" inputmode="text">
+    </div>
+    <div class="field">
+      <label>Recipient Name <span class="req">*</span></label>
+      <input id="pkg-recipient" type="text" placeholder="Full name or facility" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Package Type</label>
+      <select id="pkg-type">
+        <option value="">— Select type —</option>
+        <option>Lab Specimen</option>
+        <option>Pharmaceutical</option>
+        <option>Medical Device</option>
+        <option>Lab Reagent</option>
+        <option>Controlled Substance</option>
+        <option>Frozen / Cold Chain</option>
+        <option>Document / Report</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes / Special Instructions</label>
+      <textarea id="pkg-notes" placeholder="Handling conditions, temperature, priority…"></textarea>
+    </div>
+  </div>
+
+  <div class="section-head">Pickup Documentation</div>
+  <div class="card">
+    <div class="field">
+      <label>Pickup Photo</label>
+      <div class="photo-box" onclick="triggerPhoto('photo-collect')">
+        <img id="preview-collect" style="display:none">
+        <div id="ph-placeholder-collect">
+          <div class="ph-icon">📷</div>
+          <div class="ph-text">Tap to capture</div>
+          <div class="ph-hint">Package condition at pickup</div>
+        </div>
+      </div>
+      <input type="file" id="photo-collect" accept="image/*" capture="environment" onchange="previewPhoto(this,'collect')">
+    </div>
+    <div class="field">
+      <label>Pickup Location</label>
+      <div class="gps-wrap">
+        <div class="gps-display" id="gps-collect-display">No location recorded</div>
+        <button class="btn btn-gps" onclick="getGPS('collect')">📍 Get GPS</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="savePackage()">
+    <span>+</span> Register Pickup
+  </button>
+  <div style="height:24px"></div>
+</div>
+
+<!-- LIST VIEW -->
+<div id="view-list" class="view">
+  <div id="list-empty" class="empty" style="display:none">
+    <div class="empty-icon">🧪</div>
+    <div class="empty-text">No packages registered yet.<br>Start by logging a new pickup.</div>
+  </div>
+  <div id="pkg-list"></div>
+</div>
+
+<!-- EXPORT VIEW -->
+<div id="view-export" class="view">
+
+  <div class="section-head">Summary</div>
+  <div class="card" id="stats-card">
+    <div class="stat-row">
+      <span class="stat-label">Total packages</span>
+      <span class="stat-val" id="stat-total" style="color:#e8edf2">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Delivered</span>
+      <span class="stat-val" id="stat-delivered" style="color:var(--green)">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Pending</span>
+      <span class="stat-val" id="stat-pending" style="color:var(--amber)">—</span>
+    </div>
+  </div>
+
+  <div class="section-head">Download Records</div>
+  <div class="card">
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6">Export all pickup and delivery records. Photos are not included to keep file sizes manageable.</p>
+    <div class="export-grid">
+      <button class="btn btn-ghost" style="margin-top:0" onclick="exportJSON()">⬇ JSON</button>
+      <button class="btn btn-primary" style="margin-top:0" onclick="exportCSV()">⬇ CSV</button>
+    </div>
+  </div>
+
+  <div class="section-head">Data Management</div>
+  <div class="card">
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6">Permanently delete all local records. This cannot be undone.</p>
+    <button class="btn btn-danger" onclick="clearAll()">Delete All Records</button>
+  </div>
+</div>
+
+<!-- DELIVERY MODAL -->
+<div class="overlay" id="delivery-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Register Delivery</div>
+        <div class="modal-subtitle" id="modal-pkg-info">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Delivery Photo</label>
+        <div class="photo-box" onclick="triggerPhoto('photo-deliver')">
+          <img id="preview-deliver" style="display:none">
+          <div id="ph-placeholder-deliver">
+            <div class="ph-icon">📷</div>
+            <div class="ph-text">Tap to capture</div>
+            <div class="ph-hint">Condition at delivery point</div>
+          </div>
+        </div>
+        <input type="file" id="photo-deliver" accept="image/*" capture="environment" onchange="previewPhoto(this,'deliver')">
+      </div>
+      <div class="field">
+        <label>Delivery Location</label>
+        <div class="gps-wrap">
+          <div class="gps-display" id="gps-deliver-display">No location recorded</div>
+          <button class="btn btn-gps" onclick="getGPS('deliver')">📍 Get GPS</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Received by / Delivery notes</label>
+        <textarea id="deliver-notes" placeholder="Name of person who received, remarks…" style="min-height:56px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-confirm" style="margin-top:0" onclick="confirmDelivery()">✓ Confirm Delivery</button>
+      <button class="btn btn-ghost" style="margin-top:0" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="byline">by SpukLab</div>
+
+<script>
+let packages = JSON.parse(localStorage.getItem('medroute_packages') || '[]');
+let gpsData = {collect:null,deliver:null};
+let photoData = {collect:null,deliver:null};
+let activeDeliveryId = null;
+
+function showView(v,btn){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  btn.classList.add('active');
+  if(v==='list') renderList();
+  if(v==='export') renderStats();
+}
+
+function triggerPhoto(id){document.getElementById(id).click();}
+
+function previewPhoto(input,key){
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    photoData[key]=e.target.result;
+    const img=document.getElementById('preview-'+key);
+    const ph=document.getElementById('ph-placeholder-'+key);
+    img.src=e.target.result; img.style.display='block';
+    if(ph) ph.style.display='none';
+  };
+  r.readAsDataURL(file);
+}
+
+function getGPS(key){
+  const el=document.getElementById('gps-'+key+'-display');
+  el.textContent='Locating…'; el.className='gps-display loading';
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      gpsData[key]={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:Math.round(pos.coords.accuracy)};
+      el.textContent=`${gpsData[key].lat.toFixed(5)}, ${gpsData[key].lng.toFixed(5)}\n±${gpsData[key].acc}m`;
+      el.className='gps-display ok';
+    },
+    err=>{
+      el.textContent=err.code===1?'Permission denied':'Location unavailable';
+      el.className='gps-display err'; gpsData[key]=null;
+    },
+    {enableHighAccuracy:true,timeout:12000}
+  );
+}
+
+function savePackage(){
+  const id=document.getElementById('pkg-id').value.trim();
+  const recipient=document.getElementById('pkg-recipient').value.trim();
+  if(!id||!recipient){alert('Package ID and Recipient are required.');return;}
+  packages.push({
+    id, recipient,
+    type: document.getElementById('pkg-type').value,
+    notes: document.getElementById('pkg-notes').value.trim(),
+    collectPhoto: photoData.collect,
+    collectGPS: gpsData.collect,
+    collectTime: new Date().toISOString(),
+    status:'pending',
+    deliverPhoto:null,deliverGPS:null,deliverTime:null,deliverNotes:null
+  });
+  save(); resetCollect();
+  alert('✓ Pickup registered: '+id);
+}
+
+function resetCollect(){
+  ['pkg-id','pkg-recipient','pkg-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pkg-type').value='';
+  photoData.collect=null; gpsData.collect=null;
+  document.getElementById('preview-collect').style.display='none';
+  document.getElementById('ph-placeholder-collect').style.display='';
+  document.getElementById('gps-collect-display').textContent='No location recorded';
+  document.getElementById('gps-collect-display').className='gps-display';
+  document.getElementById('photo-collect').value='';
+}
+
+function renderList(){
+  const el=document.getElementById('pkg-list');
+  const empty=document.getElementById('list-empty');
+  el.innerHTML='';
+  if(!packages.length){empty.style.display='';return;}
+  empty.style.display='none';
+  [...packages].reverse().forEach(pkg=>{
+    const div=document.createElement('div');
+    div.className='pkg-card';
+    const cCoords=pkg.collectGPS?`${pkg.collectGPS.lat.toFixed(5)}, ${pkg.collectGPS.lng.toFixed(5)}`:'Not recorded';
+    const dCoords=pkg.deliverGPS?`${pkg.deliverGPS.lat.toFixed(5)}, ${pkg.deliverGPS.lng.toFixed(5)}`:'—';
+    const bar=pkg.status==='delivered'?'delivered':'';
+    div.innerHTML=`
+      <div class="pkg-card-bar ${bar}"></div>
+      <div class="pkg-card-top">
+        <div class="pkg-row1">
+          <div>
+            <div class="pkg-id">${esc(pkg.id)}</div>
+            <div class="pkg-name">${esc(pkg.recipient)}</div>
+            ${pkg.type?`<div class="pkg-type">${esc(pkg.type)}</div>`:''}
+          </div>
+          <span class="pill ${pkg.status==='delivered'?'pill-delivered':'pill-pending'}">${pkg.status==='delivered'?'Delivered':'In Transit'}</span>
+        </div>
+        ${pkg.notes?`<div style="font-size:12px;color:var(--text-dimmer);margin-bottom:8px;line-height:1.5">${esc(pkg.notes)}</div>`:''}
+        <div class="pkg-meta-row">
+          <div class="pkg-meta-item"><b>Pickup</b>${fmtDate(pkg.collectTime)} · ${cCoords}</div>
+          ${pkg.deliverTime?`<div class="pkg-meta-item"><b>Delivery</b>${fmtDate(pkg.deliverTime)} · ${dCoords}</div>`:''}
+          ${pkg.deliverNotes?`<div class="pkg-meta-item"><b>Received by</b>${esc(pkg.deliverNotes)}</div>`:''}
+        </div>
+        ${(pkg.collectPhoto||pkg.deliverPhoto)?`
+        <div class="thumb-row">
+          ${pkg.collectPhoto?`<div class="thumb-wrap"><img class="thumb" src="${pkg.collectPhoto}"><div class="thumb-label">Pickup</div></div>`:''}
+          ${pkg.deliverPhoto?`<div class="thumb-wrap"><img class="thumb" src="${pkg.deliverPhoto}"><div class="thumb-label">Delivery</div></div>`:''}
+        </div>`:''}
+      </div>
+      <div class="pkg-actions">
+        ${pkg.status==='pending'?`<button class="btn btn-confirm btn-sm" onclick="openDelivery('${esc(pkg.id)}')">Register Delivery</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="deletePackage('${esc(pkg.id)}')">Remove</button>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function openDelivery(pkgId){
+  activeDeliveryId=pkgId;
+  const pkg=packages.find(p=>p.id===pkgId);
+  document.getElementById('modal-pkg-info').textContent=`${pkg.id} · ${pkg.recipient}`;
+  photoData.deliver=null; gpsData.deliver=null;
+  document.getElementById('preview-deliver').style.display='none';
+  document.getElementById('ph-placeholder-deliver').style.display='';
+  document.getElementById('gps-deliver-display').textContent='No location recorded';
+  document.getElementById('gps-deliver-display').className='gps-display';
+  document.getElementById('deliver-notes').value='';
+  document.getElementById('photo-deliver').value='';
+  document.getElementById('delivery-modal').classList.add('open');
+}
+
+function closeModal(){
+  document.getElementById('delivery-modal').classList.remove('open');
+  activeDeliveryId=null;
+}
+
+function confirmDelivery(){
+  if(!activeDeliveryId) return;
+  const pkg=packages.find(p=>p.id===activeDeliveryId);
+  pkg.deliverPhoto=photoData.deliver;
+  pkg.deliverGPS=gpsData.deliver;
+  pkg.deliverTime=new Date().toISOString();
+  pkg.deliverNotes=document.getElementById('deliver-notes').value.trim();
+  pkg.status='delivered';
+  save(); closeModal(); renderList();
+  alert('✓ Delivery confirmed: '+pkg.id);
+}
+
+function deletePackage(pkgId){
+  if(!confirm('Remove this package record?')) return;
+  packages=packages.filter(p=>p.id!==pkgId);
+  save(); renderList();
+}
+
+function clearAll(){
+  if(!confirm('Delete ALL records permanently?')) return;
+  packages=[]; save(); renderStats();
+}
+
+function exportJSON(){
+  if(!packages.length){alert('No records to export.');return;}
+  const data=packages.map(p=>({...p,collectPhoto:p.collectPhoto?'[image_base64]':null,deliverPhoto:p.deliverPhoto?'[image_base64]':null}));
+  dl('MedRoute_'+dStr()+'.json',JSON.stringify(data,null,2),'application/json');
+}
+
+function exportCSV(){
+  if(!packages.length){alert('No records to export.');return;}
+  const rows=[['ID','Recipient','Type','Notes','Pickup_GPS','Pickup_Time','Delivery_GPS','Delivery_Time','Received_By','Status']];
+  packages.forEach(p=>rows.push([
+    p.id,p.recipient,p.type||'',p.notes||'',
+    p.collectGPS?`${p.collectGPS.lat},${p.collectGPS.lng}`:'',p.collectTime||'',
+    p.deliverGPS?`${p.deliverGPS.lat},${p.deliverGPS.lng}`:'',p.deliverTime||'',
+    p.deliverNotes||'',p.status
+  ]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  dl('MedRoute_'+dStr()+'.csv',csv,'text/csv');
+}
+
+function dl(name,content,type){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name; a.click();
+}
+
+function renderStats(){
+  const total=packages.length;
+  const delivered=packages.filter(p=>p.status==='delivered').length;
+  document.getElementById('stat-total').textContent=total;
+  document.getElementById('stat-delivered').textContent=delivered;
+  document.getElementById('stat-pending').textContent=total-delivered;
+}
+
+function save(){localStorage.setItem('medroute_packages',JSON.stringify(packages));}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
+function dStr(){return new Date().toISOString().slice(0,10);}
+</script>
+</body>
+</html>
