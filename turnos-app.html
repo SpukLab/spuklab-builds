@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Consultorio López</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f5f8fa;
+  --white:#fff;
+  --teal:#3AA8C1;
+  --teal2:#2d8fa6;
+  --teal-light:#e8f6f9;
+  --teal-mid:#b0dde6;
+  --ink:#1a3a45;
+  --ink2:#4a6e7a;
+  --ink3:#8aaab5;
+  --ink4:#c8dde3;
+  --s-ok:#3AA8C1;
+  --s-ok-bg:#e8f6f9;
+  --s-wait:#7a9eaa;
+  --s-wait-bg:#f0f6f8;
+  --s-off:#aabcc4;
+  --s-off-bg:#f4f7f8;
+  --line:1px solid #e0ecf0;
+  --r:14px;--r-sm:9px;
+  --sh:0 2px 12px rgba(58,168,193,.09);
+}
+html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;}
+.serif{font-family:'DM Serif Display',serif;}
+.screen{display:none;min-height:100vh;flex-direction:column;}
+.screen.active{display:flex;}
+
+/* LOGIN */
+#screen-login{background:var(--white);align-items:center;justify-content:center;padding:44px 28px;}
+.login-inner{width:100%;max-width:360px;}
+.login-mark{width:54px;height:54px;border-radius:15px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:28px;}
+.login-inner h1{font-family:'DM Serif Display',serif;font-size:2rem;line-height:1.15;color:var(--ink);margin-bottom:6px;}
+.login-inner .address{font-size:.76rem;color:var(--ink3);line-height:1.7;margin-bottom:36px;}
+.seg{display:flex;background:var(--bg);border-radius:var(--r-sm);padding:4px;margin-bottom:28px;}
+.seg-btn{flex:1;padding:9px;border:none;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;background:transparent;color:var(--ink3);transition:all .18s;}
+.seg-btn.on{background:var(--white);color:var(--teal);font-weight:600;box-shadow:0 1px 4px rgba(58,168,193,.15);}
+.lbl{font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px;display:block;}
+.inp{width:100%;background:var(--bg);border:1.5px solid transparent;border-radius:var(--r-sm);padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;margin-bottom:14px;transition:border .18s;}
+.inp:focus{border-color:var(--teal-mid);background:var(--white);}
+.hint{font-size:.68rem;color:var(--ink4);margin-top:-8px;margin-bottom:16px;}
+.btn-main{width:100%;padding:13px;background:var(--teal);color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .18s;}
+.btn-main:hover{opacity:.85;}
+.btn-main.soft{background:var(--teal-light);color:var(--teal2);box-shadow:none;}
+.btn-main.excel{background:#1d6f42;color:#fff;}
+
+/* NAV */
+nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--sh);}
+.nav-brand .nb1{font-size:.9rem;font-weight:600;color:var(--ink);}
+.nav-brand .nb2{font-size:.62rem;color:var(--ink3);display:block;margin-top:1px;}
+.pill{font-size:.6rem;font-weight:700;letter-spacing:.05em;padding:4px 11px;border-radius:20px;background:var(--teal-light);color:var(--teal2);}
+.nav-out{font-size:.74rem;font-weight:500;color:var(--ink3);background:none;border:none;cursor:pointer;}
+
+/* TABS */
+.tabs{background:var(--white);border-bottom:var(--line);display:flex;padding:0 16px;overflow-x:auto;}
+.tab{font-size:.78rem;font-weight:500;padding:14px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink3);cursor:pointer;white-space:nowrap;transition:all .18s;}
+.tab.on{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
+.pane{display:none;padding:22px 20px;flex:1;overflow-y:auto;}
+.pane.on{display:block;}
+
+/* HELPERS */
+.sh{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:22px 0 10px;}
+.sh:first-child{margin-top:0;}
+.eyebrow{font-size:.64rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;}
+
+/* WEEK NAV */
+.week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.wn-lbl{font-size:.84rem;font-weight:600;color:var(--ink2);}
+.wn-btn{width:30px;height:30px;border-radius:8px;border:var(--line);background:var(--white);color:var(--ink3);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;}
+.wn-btn:hover{color:var(--teal);}
+
+/* CALENDAR */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:20px;}
+.cday{text-align:center;padding:7px 2px;border-radius:9px;cursor:pointer;border:1.5px solid transparent;transition:all .15s;}
+.cday:hover{background:var(--teal-light);}
+.cday.sel{background:var(--teal);border-color:var(--teal);}
+.cday.sel .dn,.cday.sel .dd{color:#fff;}
+.cday.tod .dd{color:var(--teal);font-weight:700;}
+.dn{font-size:.55rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);margin-bottom:3px;}
+.dd{font-size:.86rem;font-weight:500;color:var(--ink);}
+.ddot{width:4px;height:4px;border-radius:50%;background:var(--teal);margin:3px auto 0;opacity:.6;}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:22px;}
+.sc{background:var(--white);border-radius:var(--r);padding:14px 10px;text-align:center;border:var(--line);}
+.sv{font-family:'DM Serif Display',serif;font-size:1.9rem;color:var(--teal);}
+.sl{font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:2px;}
+
+/* AGENDA */
+.aitem{background:var(--white);border-radius:var(--r);padding:17px;margin-bottom:10px;border:var(--line);box-shadow:var(--sh);}
+.aitem-time{font-size:.72rem;font-weight:700;color:var(--teal);letter-spacing:.04em;margin-bottom:5px;}
+.aitem-name{font-size:.97rem;font-weight:600;color:var(--ink);margin-bottom:2px;}
+.aitem-motivo{font-size:.77rem;color:var(--ink3);}
+.aitem-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:var(--line);flex-wrap:wrap;gap:6px;}
+.aitem-actions{display:flex;gap:6px;flex-wrap:wrap;}
+
+/* TAGS */
+.tag{font-size:.59rem;font-weight:700;letter-spacing:.04em;padding:3px 10px;border-radius:20px;display:inline-block;}
+.tag.p{background:var(--s-wait-bg);color:var(--s-wait);}
+.tag.c{background:var(--s-ok-bg);color:var(--s-ok);}
+.tag.x{background:var(--s-off-bg);color:var(--s-off);}
+
+/* MICRO BTN */
+.mb{padding:6px 13px;font-size:.71rem;font-weight:600;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid;transition:opacity .15s;}
+.mb:hover{opacity:.75;}
+.mb.confirm{background:var(--s-ok-bg);border-color:var(--teal-mid);color:var(--teal2);}
+.mb.wa{background:#f0fdf8;border-color:#a7dfc4;color:#2a7a52;}
+.mb.cancel{background:var(--s-off-bg);border-color:var(--ink4);color:var(--s-off);}
+.mb.ghost{background:var(--bg);border-color:var(--ink4);color:var(--ink2);}
+.mb.teal{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal2);}
+
+/* SEARCH */
+.search-row{display:flex;align-items:center;gap:8px;background:var(--white);border:var(--line);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;}
+.search-row input{flex:1;background:transparent;border:none;font-family:'DM Sans',sans-serif;font-size:.87rem;color:var(--ink);outline:none;}
+
+/* PATIENT ROW */
+.prow{display:flex;align-items:center;gap:13px;padding:13px 0;border-bottom:var(--line);}
+.prow:last-child{border-bottom:none;}
+.ava{width:38px;height:38px;border-radius:10px;background:var(--teal-light);color:var(--teal2);font-size:.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.prow-info{flex:1;}
+.prow-info .pname{font-size:.9rem;font-weight:600;color:var(--ink);}
+.prow-info .pmeta{font-size:.71rem;color:var(--ink3);margin-top:1px;}
+
+/* FORM */
+.form-card{background:var(--white);border-radius:var(--r);padding:22px;border:var(--line);}
+select.inp{cursor:pointer;}
+textarea.inp{resize:vertical;min-height:72px;}
+
+/* FILE UPLOAD */
+.file-zone{border:2px dashed var(--teal-mid);border-radius:var(--r-sm);padding:20px;text-align:center;cursor:pointer;background:var(--teal-light);transition:all .2s;margin-bottom:12px;}
+.file-zone:hover{border-color:var(--teal);background:#ddf2f6;}
+.file-zone p{font-size:.8rem;color:var(--ink2);margin-top:6px;}
+.file-zone .icon{font-size:1.6rem;}
+.file-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.file-item{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:var(--line);border-radius:8px;padding:9px 12px;}
+.file-item .fname{font-size:.78rem;font-weight:500;color:var(--ink2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-item .fsize{font-size:.66rem;color:var(--ink3);margin:0 8px;}
+.file-item .fdel{font-size:.8rem;color:var(--ink3);cursor:pointer;border:none;background:none;}
+.file-item .fdown{font-size:.7rem;color:var(--teal);cursor:pointer;border:none;background:none;font-weight:600;}
+
+/* TURNO HERO */
+.turno-hero{background:var(--teal);border-radius:18px;padding:26px 22px;color:#fff;margin-bottom:18px;position:relative;overflow:hidden;}
+.turno-hero::after{content:'🦷';position:absolute;right:12px;bottom:-10px;font-size:5rem;opacity:.07;}
+.th-eye{font-size:.62rem;font-weight:700;letter-spacing:.1em;opacity:.6;margin-bottom:12px;}
+.th-fecha{font-family:'DM Serif Display',serif;font-size:1.75rem;line-height:1.1;margin-bottom:5px;}
+.th-hora{font-size:.95rem;font-weight:300;opacity:.85;}
+.th-motivo{font-size:.76rem;opacity:.7;margin-top:8px;}
+.th-status{margin-top:14px;}
+.tag-inv{font-size:.61rem;font-weight:700;letter-spacing:.04em;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.2);color:#fff;}
+
+/* SLOTS */
+.slots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:18px;}
+.spill{padding:11px 6px;border-radius:var(--r-sm);border:1.5px solid var(--ink4);background:var(--white);font-size:.79rem;font-weight:500;text-align:center;cursor:pointer;transition:all .15s;color:var(--ink2);}
+.spill:hover{border-color:var(--teal);}
+.spill.sel{border-color:var(--teal);background:var(--teal);color:#fff;}
+.spill.taken{opacity:.28;cursor:not-allowed;pointer-events:none;text-decoration:line-through;}
+
+/* CONFIRM CARD */
+.confirm-card{background:var(--white);border:2px solid var(--teal);border-radius:var(--r);padding:20px;margin-top:4px;}
+.confirm-card .preview{font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--teal2);margin-bottom:14px;}
+
+/* HIST */
+.hrow{background:var(--white);border-radius:var(--r-sm);padding:13px 15px;margin-bottom:7px;border:var(--line);display:flex;justify-content:space-between;align-items:center;}
+.hf{font-size:.87rem;font-weight:600;color:var(--ink);}
+.hm{font-size:.73rem;color:var(--ink3);margin-top:2px;}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(10,30,38,.4);z-index:200;align-items:flex-end;justify-content:center;}
+.overlay.on{display:flex;}
+.modal{background:var(--white);border-radius:22px 22px 0 0;padding:26px 22px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+.modal-handle{width:30px;height:3px;background:var(--ink4);border-radius:2px;margin:0 auto 20px;}
+.modal h3{font-family:'DM Serif Display',serif;font-size:1.25rem;color:var(--ink);margin-bottom:18px;}
+.divider{border:none;border-top:var(--line);margin:16px 0;}
+
+/* EMPTY */
+.empty{text-align:center;padding:52px 20px;}
+.empty .ei{font-size:2.4rem;margin-bottom:12px;}
+.empty p{font-size:.87rem;font-weight:500;color:var(--ink2);}
+.empty small{font-size:.74rem;color:var(--ink3);}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:.77rem;font-weight:500;padding:10px 22px;border-radius:20px;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;}
+.toast.on{opacity:1;}
+
+/* BYLINE */
+.byline{text-align:center;padding:18px;border-top:var(--line);}
+.byline p{font-size:.61rem;color:var(--ink4);letter-spacing:.04em;}
+.byline span{color:var(--ink3);font-weight:600;}
+
+/* EXCEL BTN */
+.excel-row{display:flex;justify-content:flex-end;margin-bottom:14px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="login-inner">
+    <div class="login-mark">🦷</div>
+    <h1 class="serif">Consultorio<br>Odontológico</h1>
+    <p class="address">Dr. José A. López<br>Boulevar Hipólito Yrigoyen 69, local 8<br>Edificio Gacela</p>
+    <div class="seg">
+      <button class="seg-btn on" id="rb-med">Profesional</button>
+      <button class="seg-btn" id="rb-pac">Paciente</button>
+    </div>
+    <label class="lbl">Nombre completo</label>
+    <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
+    <div id="f-medico">
+      <label class="lbl">Clave</label>
+      <input class="inp" id="l-clave" type="password" placeholder="••••••">
+    <p class="hint">Clave inicial: <b>1234</b></p>
+    </div>
+    <div id="f-pac" style="display:none">
+      <label class="lbl">Teléfono WhatsApp</label>
+      <input class="inp" id="l-tel" type="tel" placeholder="+54 9 11 0000-0000">
+    </div>
+    <button class="btn-main" onclick="doLogin()">Ingresar</button>
+    <div class="byline" style="border:none;margin-top:24px;padding-bottom:0;"><p>by <span>SpukLab</span></p></div>
+  </div>
+</div>
+
+<!-- MÉDICO -->
+<div id="screen-medico" class="screen">
+  <nav>
+    <div class="nav-brand"><span class="nb1">Cons. López</span><span class="nb2">Odontología</span></div>
+    <span class="pill">Profesional</span>
+    <button class="nav-out" onclick="logout()">Salir</button>
+  </nav>
+  <div class="tabs">
+    <button class="tab on"  onclick="tab('medico','agenda',this)">Agenda</button>
+    <button class="tab"     onclick="tab('medico','pacientes',this)">Pacientes</button>
+    <button class="tab"     onclick="tab('medico','nuevo',this)">+ Turno</button>
+    <button class="tab"     onclick="tab('medico','reportes',this)">Reportes</button>
+    <button class="tab"     onclick="tab('medico','config',this)">⚙ Config</button>
+  </div>
+
+  <div id="p-medico-agenda" class="pane on">
+    <div class="week-nav">
+      <button class="wn-btn" onclick="changeWeek(-1)">‹</button>
+      <span class="wn-lbl" id="wk-lbl">—</span>
+      <button class="wn-btn" onclick="changeWeek(1)">›</button>
+    </div>
+    <div class="cal" id="cal-med"></div>
+    <div class="stats" id="stats"></div>
+    <p class="sh">Turnos del día</p>
+    <div id="agenda-list"></div>
+  </div>
+
+  <div id="p-medico-pacientes" class="pane">
+    <div class="search-row">
+      <span style="color:var(--ink3);">⌕</span>
+      <input id="s-pac" placeholder="Buscar paciente..." oninput="renderPacs()">
+    </div>
+    <div id="pacs-wrap" style="background:var(--white);border-radius:var(--r);padding:4px 16px;border:var(--line);"></div>
+  </div>
+
+  <div id="p-medico-nuevo" class="pane">
+    <p class="sh">Crear turno</p>
+    <div class="form-card">
+      <label class="lbl">Paciente</label>
+      <select class="inp" id="nt-pac"></select>
+      <label class="lbl">Fecha</label>
+      <input class="inp" type="date" id="nt-fecha">
+      <label class="lbl">Horario</label>
+      <select class="inp" id="nt-hora"></select>
+      <label class="lbl">Motivo (opcional)</label>
+      <input class="inp" id="nt-motivo" placeholder="Limpieza, ortodoncia, consulta...">
+      <button class="btn-main" style="margin-top:4px;" onclick="crearTurnoMed()">Confirmar turno</button>
+    </div>
+  </div>
+
+  <div id="p-medico-reportes" class="pane">
+    <p class="sh">Exportar datos</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Turnos</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Todos los turnos registrados con paciente, fecha, hora, motivo y estado.</p>
+      <button class="btn-main excel" onclick="exportExcel('turnos')">⬇ Descargar turnos.csv</button>
+    </div>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Pacientes</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Lista de pacientes con nombre, teléfono, observaciones y cantidad de turnos.</p>
+      <button class="btn-main excel" onclick="exportExcel('pacientes')">⬇ Descargar pacientes.csv</button>
+    </div>
+    <div class="form-card">
+      <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Completo</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Un archivo con turnos y pacientes combinados, listo para abrir en Excel.</p>
+      <button class="btn-main excel" onclick="exportExcel('completo')">⬇ Descargar reporte_completo.csv</button>
+    </div>
+  </div>
+
+  <div id="p-medico-config" class="pane">
+    <p class="sh">Datos del consultorio</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <label class="lbl">Nombre del profesional</label>
+      <input class="inp" id="cfg-nombre" placeholder="Dr. José A. López">
+      <label class="lbl">Nombre del consultorio</label>
+      <input class="inp" id="cfg-consultorio" placeholder="Consultorio Odontológico">
+      <label class="lbl">Dirección</label>
+      <input class="inp" id="cfg-dir" placeholder="Boulevar Hipólito Yrigoyen 69, local 8">
+      <label class="lbl">Teléfono / WhatsApp del consultorio</label>
+      <input class="inp" id="cfg-tel" placeholder="+54 9 11 0000-0000">
+      <button class="btn-main" onclick="guardarConfig()">Guardar datos</button>
+    </div>
+    <p class="sh">Seguridad</p>
+    <div class="form-card">
+      <label class="lbl">Clave actual</label>
+      <input class="inp" type="password" id="cfg-clave-actual" placeholder="••••••">
+      <label class="lbl">Nueva clave</label>
+      <input class="inp" type="password" id="cfg-clave-nueva" placeholder="••••••">
+      <label class="lbl">Repetir nueva clave</label>
+      <input class="inp" type="password" id="cfg-clave-rep" placeholder="••••••">
+      <button class="btn-main" onclick="cambiarClave()">Cambiar clave</button>
+      <p style="font-size:.68rem;color:var(--ink3);margin-top:12px;line-height:1.6;">Si olvidás la clave podés restablecerla borrando los datos del sitio desde la configuración de tu navegador (Configuración → Privacidad → Borrar datos de navegación, o similar según el navegador que uses).</p>
+    </div>
+  </div>
+
+  <div class="byline"><p>by <span>SpukLab</span></p></div>
+</div>
+
+<!-- PACIENTE -->
+<div id="screen-paciente" class="screen">
+  <nav>
+    <div class="nav-brand"><span class="nb1">Cons. López</span><span class="nb2">Odontología</span></div>
+    <span class="pill" id="pac-pill">Paciente</span>
+    <button class="nav-out" onclick="logout()">Salir</button>
+  </nav>
+  <div class="tabs">
+    <button class="tab on" onclick="tab('paciente','miturno',this)">Mi turno</button>
+    <button class="tab"    onclick="tab('paciente','sacar',this)">Sacar turno</button>
+    <button class="tab"    onclick="tab('paciente','historial',this)">Historial</button>
+  </div>
+  <div id="p-paciente-miturno" class="pane on"><div id="mt-view"></div></div>
+  <div id="p-paciente-sacar" class="pane">
+    <p class="sh">Elegí un día</p>
+    <div class="cal" id="cal-pac"></div>
+    <p class="sh">Horarios disponibles</p>
+    <div class="slots-grid" id="slots"></div>
+    <div id="confirm-wrap" style="display:none;">
+      <div class="confirm-card">
+        <p class="eyebrow">Turno seleccionado</p>
+        <p class="preview" id="tp-preview">—</p>
+        <label class="lbl">Motivo</label>
+        <input class="inp" id="pac-motivo" placeholder="Dolor, revisión, blanqueamiento...">
+        <button class="btn-main" onclick="confirmarPac()">Confirmar turno →</button>
+      </div>
+    </div>
+  </div>
+  <div id="p-paciente-historial" class="pane">
+    <p class="sh">Consultas anteriores</p>
+    <div id="hist-list"></div>
+  </div>
+  <div class="byline"><p>by <span>SpukLab</span></p></div>
+</div>
+
+<!-- MODAL FICHA -->
+<div class="overlay" id="m-ficha" onclick="closeM('m-ficha')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <h3>Ficha del paciente</h3>
+    <div id="m-ficha-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let role='medico', me={}, wkOff=0, selDate=null, selSlot=null;
+const PASS='1234';
+const HORAS=['08:30','09:00','09:30','10:00','10:30','11:00','11:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+const CONSULT='Consultorio Odontológico Dr. José A. López\nBv. H. Yrigoyen 69, local 8 — Edif. Gacela';
+
+const DB={
+  t:()=>{try{return JSON.parse(localStorage.getItem('cl_t'))||[]}catch{return[]}},
+  p:()=>{try{return JSON.parse(localStorage.getItem('cl_p'))||[]}catch{return[]}},
+  st:v=>localStorage.setItem('cl_t',JSON.stringify(v)),
+  sp:v=>localStorage.setItem('cl_p',JSON.stringify(v)),
+};
+
+const $=id=>document.getElementById(id);
+function toast(msg,d=2400){const t=$('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),d);}
+function dk(d){return d.toISOString().slice(0,10);}
+function today(){return dk(new Date());}
+function dp(s){return new Date(s+'T12:00:00');}
+const DN=['L','M','M','J','V','S','D'];
+const MO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const ML=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function fmt(d){return`${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;}
+function fmtL(d){return`${d.getDate()} de ${ML[d.getMonth()]} ${d.getFullYear()}`;}
+function ini(n){return n.split(' ').slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('');}
+function weekDays(off=0){const t=new Date();const dow=t.getDay();const mon=new Date(t);mon.setDate(t.getDate()-(dow===0?6:dow-1)+off*7);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});}
+function openM(id){$(id).classList.add('on');}
+function closeM(id){$(id).classList.remove('on');}
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('rb-med').addEventListener('click', function(){ setRole('medico'); });
+  document.getElementById('rb-pac').addEventListener('click', function(){ setRole('paciente'); });
+  document.getElementById('l-nombre').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+  document.getElementById('l-clave').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+});
+
+function setRole(r){
+  role=r;
+  $('rb-med').classList.toggle('on',r==='medico');
+  $('rb-pac').classList.toggle('on',r==='paciente');
+  $('f-medico').style.display=r==='medico'?'block':'none';
+  $('f-pac').style.display=r==='paciente'?'block':'none';
+}
+
+function doLogin(){
+  const nom=$('l-nombre').value.trim();
+  const claveActual=getCfg().clave||PASS;
+  if(role==='medico'){
+    if($('l-clave').value!==claveActual){toast('Clave incorrecta');return;}
+    me={role:'medico',nombre:nom||'Dr. López'};goMed();
+  } else {
+    const tel=$('l-tel').value.trim();
+    if(!tel){toast('Ingresá tu teléfono');return;}
+    let ps=DB.p();let p=ps.find(x=>x.tel===tel);
+    if(!p){p={id:Date.now(),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
+    else{p.nombre=nom;}
+    DB.sp(ps);me={role:'paciente',...p};
+    $('pac-pill').textContent=nom.split(' ')[0];
+    goPac();
+  }
+}
+
+function logout(){me={};scr('login');}
+function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
+function goMed(){scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
+function goPac(){scr('paciente');renderMT();renderCalPac();renderHist();}
+
+function tab(sc,id,btn){
+  const pfx=`p-${sc}-`;
+  document.querySelectorAll(`[id^="${pfx}"]`).forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll(`#screen-${sc} .tab`).forEach(e=>e.classList.remove('on'));
+  $(`${pfx}${id}`).classList.add('on');btn.classList.add('on');
+  if(sc==='medico'&&id==='pacientes')renderPacs();
+  if(sc==='medico'&&id==='agenda'){renderCal('med');renderStats();renderAgenda();}
+  if(sc==='medico'&&id==='nuevo')fillNT();
+  if(sc==='medico'&&id==='config')cargarConfig();
+  if(sc==='paciente'&&id==='historial')renderHist();
+  if(sc==='paciente'&&id==='miturno')renderMT();
+  if(sc==='paciente'&&id==='sacar')renderCalPac();
+}
+
+function renderCal(who){
+  const days=weekDays(wkOff);const tod=today();
+  const id=who==='med'?'cal-med':'cal-pac';
+  if(who==='med')$('wk-lbl').textContent=`${fmt(days[0])} — ${fmt(days[6])}`;
+  $(id).innerHTML=days.map((d,i)=>{
+    const key=dk(d);
+    const dot=DB.t().some(t=>t.fecha===key&&t.estado!=='cancelado');
+    const sel=selDate===key;
+    return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" onclick="pickDay('${key}','${who}')">
+      <div class="dn">${DN[i]}</div><div class="dd">${d.getDate()}</div>
+      ${dot&&!sel?'<div class="ddot"></div>':'<div style="height:7px"></div>'}
+    </div>`;
+  }).join('');
+}
+function pickDay(key,who){selDate=key;if(who==='med'){renderCal('med');renderAgenda();}else{renderCal('pac');renderSlots();}}
+function changeWeek(d){wkOff+=d;selDate=null;renderCal('med');renderStats();renderAgenda();}
+
+function renderStats(){
+  const keys=weekDays(wkOff).map(d=>dk(d));
+  const ts=DB.t().filter(t=>keys.includes(t.fecha));
+  const c=ts.filter(t=>t.estado==='confirmado').length;
+  const p=ts.filter(t=>t.estado==='pendiente').length;
+  $('stats').innerHTML=`
+    <div class="sc"><div class="sv">${ts.length}</div><div class="sl">Semana</div></div>
+    <div class="sc"><div class="sv">${c}</div><div class="sl">Confirm.</div></div>
+    <div class="sc"><div class="sv">${p}</div><div class="sl">Pendientes</div></div>`;
+}
+
+function renderAgenda(){
+  const key=selDate||today();
+  const pacs=DB.p();
+  const ts=DB.t().filter(t=>t.fecha===key).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const el=$('agenda-list');
+  if(!ts.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div><p>Sin turnos este día</p><small>Seleccioná otro día o creá un turno</small></div>`;return;}
+  el.innerHTML=ts.map(t=>{
+    const pac=pacs.find(p=>p.id===t.pacienteId)||{nombre:'—',tel:''};
+    const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
+    const tl={c:'Confirmado',p:'Pendiente',x:'Cancelado'}[tc];
+    const waN=(pac.tel||'').replace(/\D/g,'');
+    const waM=encodeURIComponent(`Hola ${pac.nombre} 👋\n\nLe recordamos su turno en:\n*${CONSULT}*\n\n📅 ${fmtL(dp(t.fecha))}\n🕐 ${t.hora} hs${t.motivo?'\n📋 '+t.motivo:''}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!`);
+    return`<div class="aitem">
+      <div class="aitem-time">${t.hora} hs</div>
+      <div class="aitem-name">${pac.nombre}</div>
+      ${t.motivo?`<div class="aitem-motivo">${t.motivo}</div>`:''}
+      <div class="aitem-foot">
+        <span class="tag ${tc}">${tl}</span>
+        <div class="aitem-actions">
+          ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
+          ${waN?`<button class="mb wa" onclick="window.open('https://wa.me/${waN}?text=${waM}','_blank')">📲 WA</button>`:''}
+          ${t.estado!=='cancelado'?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setEstado(id,e){DB.st(DB.t().map(t=>t.id===id?{...t,estado:e}:t));renderAgenda();renderStats();toast('Actualizado');}
+function cancelTurno(id){DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));renderAgenda();renderStats();renderCal('med');toast('Cancelado');}
+
+// ── PACIENTES ──
+function renderPacs(){
+  const q=($('s-pac')?.value||'').toLowerCase();
+  const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q));
+  const el=$('pacs-wrap');
+  if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin pacientes.</p>`;return;}
+  el.innerHTML=ps.map(p=>{
+    const n=DB.t().filter(t=>t.pacienteId===p.id).length;
+    return`<div class="prow">
+      <div class="ava">${ini(p.nombre)}</div>
+      <div class="prow-info"><div class="pname">${p.nombre}</div><div class="pmeta">${p.tel||'—'} · ${n} turno${n!==1?'s':''}</div></div>
+      <button class="mb ghost" onclick="verFicha(${p.id})">Ver</button>
+    </div>`;
+  }).join('');
+}
+
+// ── FICHA CON ARCHIVOS Y OBSERVACIONES ──
+function verFicha(id){
+  const p=DB.p().find(x=>x.id===id);if(!p)return;
+  const ts=DB.t().filter(t=>t.pacienteId===id).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const waN=(p.tel||'').replace(/\D/g,'');
+  const waM=encodeURIComponent(`Hola ${p.nombre}, le contactamos desde el *${CONSULT}*.`);
+  const archivos=p.archivos||[];
+
+  $('m-ficha-body').innerHTML=`
+    <div style="display:flex;gap:13px;align-items:center;margin-bottom:18px;">
+      <div class="ava" style="width:46px;height:46px;border-radius:12px;font-size:.95rem;">${ini(p.nombre)}</div>
+      <div>
+        <div style="font-size:.98rem;font-weight:600;color:var(--ink);">${p.nombre}</div>
+        <div style="font-size:.77rem;color:var(--ink3);margin-top:2px;">${p.tel||'—'}</div>
+        <div style="font-size:.66rem;color:var(--ink4);margin-top:2px;">desde ${new Date(p.creado).toLocaleDateString()}</div>
+      </div>
+    </div>
+    ${waN?`<button class="mb wa" style="margin-bottom:14px;padding:8px 16px;" onclick="window.open('https://wa.me/${waN}?text=${waM}','_blank')">📲 Enviar WhatsApp</button>`:''}
+    <hr class="divider">
+
+    <p class="sh" style="margin-top:0;">Ficha clínica</p>
+    <label class="lbl">Alergias / medicamentos</label>
+    <input class="inp" id="f-alergias" value="${escHtml(p.alergias||'')}" placeholder="Penicilina, ibuprofeno...">
+    <label class="lbl">Observaciones clínicas</label>
+    <textarea class="inp" id="f-obs" placeholder="Notas, diagnósticos, tratamientos...">${escHtml(p.obs||'')}</textarea>
+    <button class="mb teal" style="margin-bottom:14px;" onclick="guardarFicha(${p.id})">Guardar ficha</button>
+
+    <hr class="divider">
+    <p class="sh">Archivos adjuntos (${archivos.length})</p>
+    <div class="file-zone" onclick="document.getElementById('file-input-${p.id}').click()">
+      <div class="icon">📎</div>
+      <p>Tocar para adjuntar radiografía, foto o documento</p>
+      <input type="file" id="file-input-${p.id}" style="display:none" accept="image/*,.pdf,.doc,.docx" multiple onchange="handleFiles(${p.id},this)">
+    </div>
+    <div class="file-list" id="file-list-${p.id}">
+      ${archivos.map((f,i)=>`<div class="file-item">
+        <span class="fname">${escHtml(f.name)}</span>
+        <span class="fsize">${fmtSize(f.size)}</span>
+        <button class="fdown" onclick="downloadFile(${p.id},${i})">⬇</button>
+        <button class="fdel" onclick="deleteFile(${p.id},${i})">✕</button>
+      </div>`).join('')}
+    </div>
+
+    <hr class="divider">
+    <p class="sh">Turnos (${ts.length})</p>
+    ${ts.length?ts.slice(0,6).map(t=>{
+      const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:var(--line);font-size:.79rem;">
+        <span style="color:var(--ink2);">${t.fecha} · ${t.hora}${t.motivo?' — '+t.motivo:''}</span>
+        <span class="tag ${tc}">${t.estado}</span>
+      </div>`;
+    }).join(''):`<p style="font-size:.79rem;color:var(--ink3);">Sin turnos aún.</p>`}
+    <button class="btn-main soft" style="margin-top:20px;" onclick="closeM('m-ficha')">Cerrar</button>`;
+  openM('m-ficha');
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtSize(b){return b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(0)+'KB':b+'B';}
+
+function guardarFicha(id){
+  const ps=DB.p();const i=ps.findIndex(p=>p.id===id);if(i<0)return;
+  ps[i].alergias=$('f-alergias').value.trim();
+  ps[i].obs=$('f-obs').value.trim();
+  DB.sp(ps);toast('Ficha guardada ✓');
+}
+
+function handleFiles(id,input){
+  const files=Array.from(input.files);if(!files.length)return;
+  const ps=DB.p();const i=ps.findIndex(p=>p.id===id);if(i<0)return;
+  if(!ps[i].archivos)ps[i].archivos=[];
+  let pending=files.length;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      ps[i].archivos.push({name:file.name,size:file.size,type:file.type,data:e.target.result,fecha:new Date().toISOString()});
+      pending--;
+      if(pending===0){DB.sp(ps);toast(`${files.length} archivo${files.length>1?'s':''} adjunto${files.length>1?'s':''} ✓`);refreshFileList(id,ps[i].archivos);}
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value='';
+}
+
+function refreshFileList(id,archivos){
+  const el=$(`file-list-${id}`);if(!el)return;
+  el.innerHTML=archivos.map((f,i)=>`<div class="file-item">
+    <span class="fname">${escHtml(f.name)}</span>
+    <span class="fsize">${fmtSize(f.size)}</span>
+    <button class="fdown" onclick="downloadFile(${id},${i})">⬇</button>
+    <button class="fdel" onclick="deleteFile(${id},${i})">✕</button>
+  </div>`).join('');
+}
+
+function downloadFile(id,idx){
+  const p=DB.p().find(x=>x.id===id);if(!p||!p.archivos[idx])return;
+  const f=p.archivos[idx];
+  const a=document.createElement('a');a.href=f.data;a.download=f.name;a.click();
+}
+
+function deleteFile(id,idx){
+  const ps=DB.p();const i=ps.findIndex(p=>p.id===id);if(i<0)return;
+  ps[i].archivos.splice(idx,1);DB.sp(ps);
+  refreshFileList(id,ps[i].archivos);toast('Archivo eliminado');
+}
+
+// ── NUEVO TURNO MED ──
+function fillNT(){
+  $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  $('nt-hora').innerHTML=HORAS.map(h=>`<option value="${h}">${h}</option>`).join('');
+  if(!$('nt-fecha').value)$('nt-fecha').value=today();
+}
+function crearTurnoMed(){
+  const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
+  const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();
+  if(!pacId){toast('Seleccioná un paciente');return;}
+  if(!fecha){toast('Elegí una fecha');return;}
+  if(DB.t().find(t=>t.fecha===fecha&&t.hora===hora&&t.estado!=='cancelado')){toast('Horario ya ocupado');return;}
+  DB.st([...DB.t(),{id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,estado:'pendiente',creado:new Date().toISOString()}]);
+  toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
+  document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
+  $('p-medico-agenda').classList.add('on');
+  document.querySelector('#screen-medico .tab').classList.add('on');
+  renderCal('med');renderStats();renderAgenda();
+}
+
+// ── CONFIG ──
+function getCfg(){try{return JSON.parse(localStorage.getItem('cl_cfg'))||{}}catch{return{};}}
+function saveCfg(v){localStorage.setItem('cl_cfg',JSON.stringify(v));}
+
+function cargarConfig(){
+  const c=getCfg();
+  $('cfg-nombre').value=c.nombre||'Dr. José A. López';
+  $('cfg-consultorio').value=c.consultorio||'Consultorio Odontológico';
+  $('cfg-dir').value=c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela';
+  $('cfg-tel').value=c.tel||'';
+}
+
+function guardarConfig(){
+  const c=getCfg();
+  c.nombre=$('cfg-nombre').value.trim()||c.nombre;
+  c.consultorio=$('cfg-consultorio').value.trim()||c.consultorio;
+  c.dir=$('cfg-dir').value.trim()||c.dir;
+  c.tel=$('cfg-tel').value.trim();
+  saveCfg(c);
+  toast('Datos guardados ✓');
+}
+
+function cambiarClave(){
+  const actual=$('cfg-clave-actual').value;
+  const nueva=$('cfg-clave-nueva').value;
+  const rep=$('cfg-clave-rep').value;
+  const claveSaved=getCfg().clave||PASS;
+  if(actual!==claveSaved){toast('La clave actual no es correcta');return;}
+  if(nueva.length<4){toast('La nueva clave debe tener al menos 4 caracteres');return;}
+  if(nueva!==rep){toast('Las claves nuevas no coinciden');return;}
+  const c=getCfg();c.clave=nueva;saveCfg(c);
+  $('cfg-clave-actual').value='';$('cfg-clave-nueva').value='';$('cfg-clave-rep').value='';
+  toast('Clave actualizada ✓');
+}
+
+// ── CONFIG ──
+function csvEsc(v){const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;}
+function downloadCSV(filename,rows){
+  const csv=rows.map(r=>r.map(csvEsc).join(',')).join('\n');
+  const bom='\uFEFF';
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+
+function exportExcel(tipo){
+  const ts=DB.t();const ps=DB.p();
+  const getNombre=id=>(ps.find(p=>p.id===id)||{nombre:'—'}).nombre;
+  const getTel=id=>(ps.find(p=>p.id===id)||{tel:'—'}).tel||'—';
+
+  if(tipo==='turnos'){
+    const rows=[['ID','Paciente','Teléfono','Fecha','Hora','Motivo','Estado','Creado']];
+    ts.forEach(t=>rows.push([t.id,getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,t.motivo||'',t.estado,t.creado?.slice(0,10)||'']));
+    downloadCSV('turnos.csv',rows);
+  } else if(tipo==='pacientes'){
+    const rows=[['ID','Nombre','Teléfono','Alergias','Observaciones','Turnos','Registrado']];
+    ps.forEach(p=>{
+      const n=ts.filter(t=>t.pacienteId===p.id).length;
+      rows.push([p.id,p.nombre,p.tel||'',p.alergias||'',p.obs||'',n,p.creado?.slice(0,10)||'']);
+    });
+    downloadCSV('pacientes.csv',rows);
+  } else {
+    const rows=[['Tipo','Paciente','Teléfono','Fecha','Hora','Motivo / Obs','Estado / Alergias']];
+    ps.forEach(p=>rows.push(['PACIENTE',p.nombre,p.tel||'',p.creado?.slice(0,10)||'','',p.obs||'',p.alergias||'']));
+    ts.forEach(t=>rows.push(['TURNO',getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,t.motivo||'',t.estado]));
+    downloadCSV('reporte_completo.csv',rows);
+  }
+  toast('Descarga iniciada ✓');
+}
+
+// ── PACIENTE: MI TURNO ──
+function renderMT(){
+  const hoy=today();
+  const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&t.estado!=='cancelado').sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+  const el=$('mt-view');
+  if(!prox.length){el.innerHTML=`<div class="empty"><div class="ei">🦷</div><p>Sin turnos próximos</p><small>Sacá un turno desde "Sacar turno"</small></div>`;return;}
+  const t=prox[0];const d=dp(t.fecha);
+  el.innerHTML=`
+    <div class="turno-hero">
+      <div class="th-eye">PRÓXIMO TURNO</div>
+      <div class="th-fecha">${fmt(d)}</div>
+      <div class="th-hora">${t.hora} hs</div>
+      ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''}
+      <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div>
+    </div>
+    <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;">
+      <p class="sh" style="margin:0 0 6px;">Dirección</p>
+      <p style="font-size:.88rem;font-weight:500;color:var(--ink);">Boulevar Hipólito Yrigoyen 69</p>
+      <p style="font-size:.8rem;color:var(--ink3);">Local 8 — Edificio Gacela</p>
+    </div>
+    ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''}
+    <button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar este turno</button>`;
+}
+function cancelarPropioT(id){if(!confirm('¿Cancelar?'))return;DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));renderMT();toast('Turno cancelado');}
+
+function renderCalPac(){renderCal('pac');renderSlots();}
+function renderSlots(){
+  const key=selDate||today();
+  const taken=DB.t().filter(t=>t.fecha===key&&t.estado!=='cancelado').map(t=>t.hora);
+  $('slots').innerHTML=HORAS.map(h=>{
+    const tk=taken.includes(h);const sl=selSlot===h;
+    return`<div class="spill${tk?' taken':''}${sl?' sel':''}" onclick="pickSlot('${h}')">${h}</div>`;
+  }).join('');
+}
+function pickSlot(h){
+  selSlot=h;renderSlots();
+  const key=selDate||today();
+  $('tp-preview').textContent=`${fmt(dp(key))} · ${h} hs`;
+  $('confirm-wrap').style.display='block';
+}
+function confirmarPac(){
+  const key=selDate||today();
+  if(!selSlot){toast('Elegí un horario');return;}
+  DB.st([...DB.t(),{id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),estado:'pendiente',creado:new Date().toISOString()}]);
+  selSlot=null;$('confirm-wrap').style.display='none';$('pac-motivo').value='';
+  toast('Turno solicitado ✓');renderMT();renderHist();
+  document.querySelectorAll('#screen-paciente .tab').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('[id^="p-paciente-"]').forEach(e=>e.classList.remove('on'));
+  $('p-paciente-miturno').classList.add('on');
+  document.querySelector('#screen-paciente .tab').classList.add('on');
+}
+
+function renderHist(){
+  const hoy=today();
+  const ps=DB.t().filter(t=>t.pacienteId===me.id&&(t.fecha<hoy||t.estado==='cancelado')).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const el=$('hist-list');
+  if(!ps.length){el.innerHTML=`<div class="empty"><div class="ei">📂</div><p>Sin historial aún</p></div>`;return;}
+  el.innerHTML=ps.map(t=>{
+    const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
+    return`<div class="hrow">
+      <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora}</div>${t.motivo?`<div class="hm">${t.motivo}</div>`:''}</div>
+      <span class="tag ${tc}">${t.estado}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── SEED ──
+(function(){
+  if(DB.p().length)return;
+  DB.sp([
+    {id:1001,nombre:'Ana García',tel:'+5491112345678',alergias:'Penicilina',obs:'Tratamiento de ortodoncia en curso',archivos:[],creado:new Date().toISOString()},
+    {id:1002,nombre:'Carlos Pérez',tel:'+5491198765432',alergias:'',obs:'',archivos:[],creado:new Date().toISOString()},
+    {id:1003,nombre:'Lucía Romero',tel:'+5491165432198',alergias:'Ibuprofeno',obs:'Muela del juicio pendiente de extracción',archivos:[],creado:new Date().toISOString()},
+  ]);
+  const hoy=today();const man=dk(new Date(Date.now()+86400000));
+  DB.st([
+    {id:'T001',pacienteId:1001,fecha:hoy,hora:'10:00',motivo:'Limpieza dental',estado:'pendiente',creado:new Date().toISOString()},
+    {id:'T002',pacienteId:1002,fecha:hoy,hora:'11:30',motivo:'Dolor muela del juicio',estado:'confirmado',creado:new Date().toISOString()},
+    {id:'T003',pacienteId:1003,fecha:man,hora:'09:00',motivo:'Ortodoncia — seguimiento',estado:'pendiente',creado:new Date().toISOString()},
+  ]);
+})();
+</script>
+</body>
+</html>
