@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPUKLAB // Experimental Audio Division</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,200;0,300;0,400;0,600;1,200;1,300&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;0,800;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c:#00ffff; --m:#ff00ff; --bk:#000;
+  --border:rgba(255,255,255,0.06);
+  --mid:rgba(255,255,255,0.55);
+  --dim:rgba(255,255,255,0.28);
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter',sans-serif;
+  background:#000;color:#fff;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  background-image:radial-gradient(circle at 1.5px 1.5px,#0f0f0f 1px,transparent 0);
+  background-size:32px 32px;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+.grad{
+  background:linear-gradient(90deg,var(--c) 0%,#9944ff 50%,var(--m) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+
+/* ── NAV ─────────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:1.35rem 2.5rem;
+  display:flex;justify-content:space-between;align-items:center;
+  background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.logo{font-family:'JetBrains Mono',monospace;font-weight:800;font-style:italic;font-size:1.05rem;letter-spacing:-.03em;cursor:pointer}
+.logo span{color:var(--c);font-weight:300}
+.nav-r{display:flex;gap:.75rem;align-items:center}
+.stag{font-family:'JetBrains Mono',monospace;font-size:.5rem;padding:3px 8px;border:1px solid;letter-spacing:.12em;text-transform:uppercase}
+.stag-c{color:var(--c);border-color:rgba(0,255,255,.22)}
+.stag-d{color:rgba(255,255,255,.25);border-color:rgba(255,255,255,.1)}
+
+/* ── HERO ────────────────────────────────────── */
+#hero{
+  position:relative;min-height:100vh;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 2.5rem 5rem;overflow:hidden;
+}
+#hero-canvas{position:absolute;inset:0;z-index:0}
+.hero-inner{position:relative;z-index:2;max-width:880px}
+.hlabel{
+  font-family:'JetBrains Mono',monospace;font-size:.58rem;
+  letter-spacing:.55em;text-transform:uppercase;color:var(--c);
+  margin-bottom:1.75rem;font-weight:700;
+  opacity:0;transform:translateY(10px);
+  animation:fadeUp .8s ease forwards .3s;
+}
+.htitle{
+  font-size:clamp(3.2rem,8.5vw,7rem);
+  font-weight:200;line-height:.92;letter-spacing:-.04em;margin-bottom:2rem;
+  opacity:0;transform:translateY(20px);
+  animation:fadeUp 1s ease forwards .5s;
+}
+.htitle .acc{font-weight:800;font-style:italic;display:block}
+.hsub{
+  font-size:1rem;font-weight:300;color:var(--mid);
+  line-height:1.75;max-width:500px;margin-bottom:2.5rem;
+  opacity:0;transform:translateY(15px);
+  animation:fadeUp .9s ease forwards .75s;
+}
+.hcta{display:flex;gap:1rem;flex-wrap:wrap;opacity:0;animation:fadeUp .9s ease forwards 1s}
+.btn-w{
+  font-family:'JetBrains Mono',monospace;font-size:.62rem;font-weight:700;
+  letter-spacing:.4em;text-transform:uppercase;padding:1rem 2.25rem;
+  background:#fff;color:#000;border:none;cursor:pointer;
+  transition:background .3s,transform .3s;text-decoration:none;display:inline-block;
+}
+.btn-w:hover{background:var(--c);transform:translateY(-2px)}
+.btn-o{
+  font-family:'JetBrains Mono',monospace;font-size:.62rem;font-weight:700;
+  letter-spacing:.4em;text-transform:uppercase;padding:1rem 2.25rem;
+  background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);
+  cursor:pointer;transition:border-color .3s,transform .3s;text-decoration:none;display:inline-block;
+}
+.btn-o:hover{border-color:var(--m);background:rgba(255,0,255,.04);transform:translateY(-2px)}
+.scroll-hint{
+  position:absolute;bottom:2rem;right:2.5rem;z-index:2;
+  display:flex;flex-direction:column;align-items:center;gap:.5rem;
+  opacity:0;animation:fadeIn 1s ease forwards 1.6s;
+}
+.scroll-hint span{
+  font-family:'JetBrains Mono',monospace;font-size:.46rem;
+  letter-spacing:.3em;color:rgba(255,255,255,.18);
+  text-transform:uppercase;writing-mode:vertical-rl;
+}
+.sline{width:1px;height:44px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.1))}
+
+/* ── SECTION BASE ────────────────────────────── */
+section{padding:7rem 2.5rem}
+.inn{max-width:1120px;margin:0 auto}
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:.54rem;
+  letter-spacing:.5em;text-transform:uppercase;color:rgba(255,255,255,.18);
+  margin-bottom:3.5rem;
+}
+
+/* ── MANIFIESTO ──────────────────────────────── */
+#manifesto{border-top:1px solid var(--border)}
+.mf-grid{display:grid;grid-template-columns:180px 1fr;gap:4rem;align-items:start}
+.mf-num{font-family:'JetBrains Mono',monospace;font-size:5.5rem;font-weight:800;color:rgba(255,255,255,.04);line-height:1}
+.mf-body{font-size:clamp(1.25rem,2vw,1.75rem);font-weight:200;line-height:1.55;letter-spacing:-.02em;color:rgba(255,255,255,.82)}
+.mf-body strong{font-weight:500;color:#fff}
+.mf-body em{font-style:italic;background:linear-gradient(90deg,var(--c),var(--m));-webkit-background-clip:text;background-clip:text;color:transparent}
+.mf-tags{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:2.5rem}
+.mtag{font-family:'JetBrains Mono',monospace;font-size:.52rem;letter-spacing:.18em;text-transform:uppercase;padding:.35rem .9rem;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.32)}
+
+/* ── BINAURAL SPRAY ──────────────────────────── */
+#spray{border-top:1px solid var(--border);padding-bottom:6rem}
+
+.spray-head{margin-bottom:3.5rem}
+.spray-idx{font-family:'JetBrains Mono',monospace;font-size:.54rem;font-weight:700;letter-spacing:.3em;color:var(--c);margin-bottom:1.25rem}
+.spray-category{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.45em;text-transform:uppercase;color:rgba(255,255,255,.22);margin-bottom:.9rem}
+.spray-title{font-size:clamp(3rem,6vw,5.5rem);font-weight:200;letter-spacing:-.04em;line-height:.93;margin-bottom:1.5rem}
+.spray-title .acc{font-weight:800;font-style:italic}
+.spray-tagline{font-size:1rem;font-weight:300;color:var(--mid);max-width:560px;line-height:1.75}
+
+/* Canvas + controls */
+.spray-visual-wrap{
+  position:relative;margin:3.5rem 0 0;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.012);
+  overflow:hidden;
+}
+#spray-canvas{display:block;width:100%;height:460px;cursor:crosshair}
+.canvas-label-l{
+  position:absolute;top:1.2rem;left:1.5rem;
+  font-family:'JetBrains Mono',monospace;font-size:.48rem;
+  letter-spacing:.35em;text-transform:uppercase;color:rgba(0,255,255,.3);
+}
+.canvas-label-r{
+  position:absolute;top:1.2rem;right:1.5rem;
+  font-family:'JetBrains Mono',monospace;font-size:.48rem;
+  letter-spacing:.35em;text-transform:uppercase;color:rgba(255,0,255,.3);
+}
+.canvas-hint{
+  position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);
+  font-family:'JetBrains Mono',monospace;font-size:.44rem;
+  letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.15);
+  white-space:nowrap;
+}
+
+/* Params */
+.params-row{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  gap:1px;background:var(--border);
+  border:1px solid var(--border);border-top:none;
+  margin-bottom:4rem;
+}
+.param-cell{
+  background:#000;padding:1.5rem 1.25rem 1.25rem;
+  transition:background .3s;
+}
+.param-cell:hover{background:rgba(255,255,255,.015)}
+.param-name{
+  font-family:'JetBrains Mono',monospace;font-size:.46rem;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.3);margin-bottom:.6rem;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.param-val{color:var(--c);font-size:.5rem}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:1px;background:rgba(255,255,255,.12);
+  outline:none;cursor:pointer;margin-top:.5rem;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:10px;height:10px;border-radius:50%;
+  background:var(--c);cursor:pointer;
+  box-shadow:0 0 8px rgba(0,255,255,.5);
+  border:none;
+}
+input[type=range].mg::-webkit-slider-thumb{background:var(--m);box-shadow:0 0 8px rgba(255,0,255,.5)}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--c);border:none}
+
+/* Params descriptions */
+.params-desc{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  gap:2rem;margin-bottom:4rem;
+}
+.pd{padding-top:1.5rem;border-top:1px solid rgba(255,255,255,.07)}
+.pd-name{
+  font-family:'JetBrains Mono',monospace;font-size:.48rem;
+  letter-spacing:.22em;text-transform:uppercase;margin-bottom:.75rem;
+}
+.pd-name.c{color:var(--c)}.pd-name.m{color:var(--m)}
+.pd-desc{font-size:.82rem;font-weight:300;color:rgba(255,255,255,.42);line-height:1.7}
+
+/* Specs */
+.specs-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border)}
+.spec-b{
+  background:#000;padding:2rem 2rem 2rem 2rem;
+  border-left:2px solid transparent;
+  transition:border-color .3s,background .3s;
+}
+.spec-b:hover{border-left-color:var(--c);background:rgba(255,255,255,.012)}
+.spec-b.mg:hover{border-left-color:var(--m)}
+.spec-bk{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.2em;text-transform:uppercase;color:var(--c);margin-bottom:.75rem}
+.spec-b.mg .spec-bk{color:var(--m)}
+.spec-bv{font-size:.9rem;font-weight:300;color:rgba(255,255,255,.5);line-height:1.7}
+
+/* CTA strip */
+.spray-cta{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:2.5rem 0 0;border-top:1px solid var(--border);
+  margin-top:3rem;flex-wrap:wrap;gap:2rem;
+}
+.cta-status{display:flex;align-items:center;gap:.7rem}
+.sdot{width:5px;height:5px;border-radius:50%;background:var(--c);animation:pulse 2s ease-in-out infinite}
+.stxt{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.2em;text-transform:uppercase;color:var(--c)}
+.cta-actions{display:flex;gap:1rem;flex-wrap:wrap}
+
+/* ── EN DESARROLLO ───────────────────────────── */
+#dev{border-top:1px solid var(--border)}
+.dev-card{
+  border:1px solid var(--border);padding:3rem;
+  display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:center;
+  position:relative;overflow:hidden;
+  transition:border-color .4s,background .4s;
+}
+.dev-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,0,255,.12),transparent);
+}
+.dev-card:hover{border-color:rgba(255,0,255,.14);background:rgba(255,255,255,.01)}
+.dev-idx{font-family:'JetBrains Mono',monospace;font-size:.52rem;font-weight:700;letter-spacing:.3em;color:var(--m);margin-bottom:1rem}
+.dev-title{font-size:clamp(1.8rem,3vw,2.5rem);font-weight:200;letter-spacing:-.03em;margin-bottom:.75rem}
+.dev-title span{font-weight:800;font-style:italic;background:linear-gradient(90deg,#8855ff,var(--m));-webkit-background-clip:text;background-clip:text;color:transparent}
+.dev-desc{font-size:.88rem;font-weight:300;color:rgba(255,255,255,.38);line-height:1.7;max-width:540px}
+.dev-badge{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.2em;text-transform:uppercase;padding:.5rem 1rem;border:1px solid rgba(255,0,255,.22);color:rgba(255,0,255,.45);white-space:nowrap}
+
+/* ── DEMO ────────────────────────────────────── */
+#demo{border-top:1px solid var(--border)}
+.demo-title{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:200;letter-spacing:-.03em;margin-top:.5rem;margin-bottom:2.5rem}
+.vbox{
+  position:relative;width:100%;aspect-ratio:16/9;
+  background:rgba(255,255,255,.012);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.scanlines{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.007) 2px,rgba(255,255,255,.007) 4px)}
+.play-ring{width:72px;height:72px;border-radius:50%;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;position:relative}
+.play-ring::before{content:'';position:absolute;inset:-7px;border-radius:50%;border:1px solid rgba(0,255,255,.1);animation:spinSlow 9s linear infinite}
+.play-ring::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px solid rgba(255,0,255,.06);animation:spinSlow 16s linear infinite reverse}
+.play-tri{width:0;height:0;border-style:solid;border-width:9px 0 9px 15px;border-color:transparent transparent transparent rgba(255,255,255,.4);margin-left:4px}
+.vbox-inner{display:flex;flex-direction:column;align-items:center;gap:1.25rem}
+.vlabel{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.4em;text-transform:uppercase;color:rgba(255,255,255,.18)}
+
+/* ── FOOTER ──────────────────────────────────── */
+footer{
+  padding:3rem 2.5rem;border-top:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem;
+}
+.flogo{font-family:'JetBrains Mono',monospace;font-weight:800;font-style:italic;font-size:1rem;letter-spacing:-.03em}
+.flogo span{color:var(--c);font-weight:300}
+.fmeta{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.4em;text-transform:uppercase;color:rgba(255,255,255,.18)}
+.fmail{font-family:'JetBrains Mono',monospace;font-size:.54rem;letter-spacing:.1em;color:rgba(255,255,255,.28);text-decoration:none;transition:color .3s}
+.fmail:hover{color:var(--c)}
+
+/* ── ANIMATIONS ──────────────────────────────── */
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .85s ease,transform .85s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.d1{transition-delay:.1s}.d2{transition-delay:.22s}.d3{transition-delay:.36s}.d4{transition-delay:.5s}
+
+/* ── MOBILE ──────────────────────────────────── */
+@media(max-width:768px){
+  nav{padding:1.2rem 1.5rem}
+  section{padding:5rem 1.5rem}
+  #hero{padding:0 1.5rem 4rem}
+  .mf-grid{grid-template-columns:1fr;gap:2rem}
+  .mf-num{display:none}
+  .params-row{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto}
+  .params-row .param-cell:last-child{grid-column:1/-1}
+  .params-desc{grid-template-columns:1fr 1fr}
+  .params-desc .pd:last-child{grid-column:1/-1}
+  .specs-grid{grid-template-columns:1fr}
+  .dev-card{grid-template-columns:1fr;gap:1.5rem}
+  .spray-cta{flex-direction:column;align-items:flex-start}
+  footer{flex-direction:column;text-align:center}
+  .scroll-hint{display:none}
+  #spray-canvas{height:300px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo mono" onclick="scrollTo({top:0,behavior:'smooth'})">SPUK<span>LAB</span></div>
+  <div class="nav-r">
+    <span class="stag stag-c">AUv3_DEV</span>
+    <span class="stag stag-d">System_v1.0</span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-inner">
+    <div class="hlabel">Experimental Audio Division</div>
+    <h1 class="htitle">
+      Sonido para la<br>
+      <span class="acc grad">Sinapsis</span>
+    </h1>
+    <p class="hsub">
+      Instrumentos de síntesis avanzada para performance en vivo. Diseño boutique para ecosistemas <strong style="color:#fff;font-weight:400">AUv3</strong> e iOS.
+    </p>
+    <div class="hcta">
+      <a href="#spray" class="btn-w">Ver BinauralSpray</a>
+      <a href="#manifesto" class="btn-o">Manifiesto</a>
+    </div>
+  </div>
+  <div class="scroll-hint"><span>Scroll</span><div class="sline"></div></div>
+</section>
+
+<!-- MANIFIESTO -->
+<section id="manifesto">
+  <div class="inn">
+    <div class="mf-grid">
+      <div>
+        <div class="eyebrow reveal">// 00 — Identidad</div>
+        <div class="mf-num reveal d1">01</div>
+      </div>
+      <div>
+        <p class="mf-body reveal d1">
+          No construimos sintetizadores.<br>
+          Construimos <em>portales neuroacústicos</em>.<br><br>
+          Cada instrumento es una arquitectura diseñada para alterar la percepción del tiempo, el espacio y el cuerpo en performance. <strong>El sonido como forma táctil.</strong> El espacio como instrumento.
+        </p>
+        <div class="mf-tags reveal d2">
+          <span class="mtag">Sub-bass</span>
+          <span class="mtag">Granular</span>
+          <span class="mtag">Binaural</span>
+          <span class="mtag">Noise Synthesis</span>
+          <span class="mtag">Live Performance</span>
+          <span class="mtag">AUv3</span>
+          <span class="mtag">iOS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BINAURAL SPRAY -->
+<section id="spray">
+  <div class="inn">
+
+    <div class="spray-head reveal">
+      <div class="spray-idx">PROJECT_01 // SPATIAL PROCESSING</div>
+      <div class="spray-category">AUv3 Plugin — iOS</div>
+      <h2 class="spray-title">Binaural<span class="acc grad">Spray</span></h2>
+      <p class="spray-tagline">Procesador granular binaural diseñado para performance en vivo y exploración sonora inmersiva. Una interfaz táctil donde el espacio es el instrumento.</p>
+    </div>
+
+    <!-- Visualización interactiva -->
+    <div class="spray-visual-wrap reveal d1">
+      <canvas id="spray-canvas"></canvas>
+      <div class="canvas-label-l mono">← L Channel</div>
+      <div class="canvas-label-r mono">R Channel →</div>
+      <div class="canvas-hint mono">Mover cursor sobre el canvas para controlar la fuente</div>
+      <div style="position:absolute;top:1.1rem;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:.46rem;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.2);white-space:nowrap;border:1px solid rgba(255,255,255,.08);padding:3px 12px;background:rgba(0,0,0,.6);">Demo gráfico — representación conceptual · No es la app</div>
+    </div>
+
+    <!-- 5 Parámetros -->
+    <div class="params-row reveal d2">
+      <div class="param-cell">
+        <div class="param-name mono">Densidad <span class="param-val" id="v-density">50</span></div>
+        <input type="range" id="p-density" min="0" max="100" value="50">
+      </div>
+      <div class="param-cell">
+        <div class="param-name mono">Dispersión <span class="param-val" id="v-dispersion">40</span></div>
+        <input type="range" id="p-dispersion" min="0" max="100" value="40">
+      </div>
+      <div class="param-cell">
+        <div class="param-name mono">Glitch <span class="param-val" id="v-glitch">20</span></div>
+        <input type="range" class="mg" id="p-glitch" min="0" max="100" value="20">
+      </div>
+      <div class="param-cell">
+        <div class="param-name mono">Feedback <span class="param-val" id="v-feedback">30</span></div>
+        <input type="range" class="mg" id="p-feedback" min="0" max="100" value="30">
+      </div>
+      <div class="param-cell">
+        <div class="param-name mono">Velocidad <span class="param-val" id="v-velocity">60</span></div>
+        <input type="range" id="p-velocity" min="0" max="100" value="60">
+      </div>
+    </div>
+
+    <!-- Params descriptions -->
+    <div class="eyebrow reveal d1" style="margin-top:3.5rem">// Parámetros</div>
+    <div class="params-desc reveal d2">
+      <div class="pd">
+        <div class="pd-name c mono">Densidad</div>
+        <p class="pd-desc">Controla la cantidad de micropartículas emitidas por ciclo. A valores altos genera texturas densas y continuas; a valores bajos, eventos granulares aislados.</p>
+      </div>
+      <div class="pd">
+        <div class="pd-name c mono">Dispersión</div>
+        <p class="pd-desc">Define el ángulo de apertura del campo binaural. Valores bajos concentran el spray en el centro estéreo; valores altos lo expanden hacia los extremos L/R.</p>
+      </div>
+      <div class="pd">
+        <div class="pd-name m mono">Glitch</div>
+        <p class="pd-desc">Probabilidad de micro-eventos disruptivos en la cadena granular. Genera saltos de posición aleatorios y ráfagas de partículas — de sutil a caótico.</p>
+      </div>
+      <div class="pd">
+        <div class="pd-name m mono">Feedback</div>
+        <p class="pd-desc">Tensión de retorno al punto de origen. Crea bucles de partículas orbitales alrededor de la fuente. Hard cap al 78% — el sistema nunca se desestabiliza.</p>
+      </div>
+      <div class="pd">
+        <div class="pd-name c mono">Velocidad</div>
+        <p class="pd-desc">Velocidad inicial de cada partícula granular al ser emitida. Controla el alcance espacial del spray y la energía cinética del campo sonoro.</p>
+      </div>
+    </div>
+
+    <!-- Specs -->
+    <div class="specs-grid reveal d2">
+      <div class="spec-b">
+        <div class="spec-bk">// Motor Granular</div>
+        <div class="spec-bv">Fragmentación de audio en micropartículas por segundo. Control total sobre densidad, velocidad y distribución temporal. Genera desde texturas densas hasta nubes rítmicas.</div>
+      </div>
+      <div class="spec-b">
+        <div class="spec-bk">// Espacialización Binaural</div>
+        <div class="spec-bv">Dispersión binaural con glitch events controlados. El eje horizontal es el campo estéreo completo — la posición del toque modula directamente la capa granular.</div>
+      </div>
+      <div class="spec-b mg">
+        <div class="spec-bk">// Signal Protection</div>
+        <div class="spec-bv">Feedback controlado con hard cap al 78%. Compresor brick-wall a −1 dBFS. Waveshaper de seguridad en la cadena de salida. El output nunca clipea.</div>
+      </div>
+      <div class="spec-b mg">
+        <div class="spec-bk">// Workflow</div>
+        <div class="spec-bv">5 parámetros de control directo. Entrada de micrófono en vivo con buffer circular para granularización en tiempo real. Diseñado para ecosistema AUv3.</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="spray-cta reveal d3">
+      <div class="cta-status">
+        <div class="sdot"></div>
+        <span class="stxt mono">En desarrollo — App Store próximamente</span>
+      </div>
+      <div class="cta-actions">
+        <a href="/cdn-cgi/l/email-protection#b2c1c2c7d9ded3d0f2d5dfd3dbde9cd1dddf" class="btn-w">Contactar</a>
+        <a href="#demo" class="btn-o">Ver Demo</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- EN DESARROLLO -->
+<section id="dev">
+  <div class="inn">
+    <div class="eyebrow reveal">// 02 — En desarrollo</div>
+    <div class="dev-card reveal d1">
+      <div>
+        <div class="dev-idx">PROJECT_02 // AUDIOVISUAL SEQUENCER</div>
+        <h3 class="dev-title">Spoonex<span>Xset</span></h3>
+        <p class="dev-desc">Instrumento audiovisual de performance para iPad. Motor de secuenciación polirítmica con física de colisiones, síntesis sub-bass binaural, 128 voces y visualización nebular generativa en tiempo real.</p>
+      </div>
+      <div class="dev-badge mono">Phase 1 // Complete</div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+  <div class="inn">
+    <div class="eyebrow reveal">// 03 — En acción</div>
+    <div class="demo-title reveal d1">Performance / Demo</div>
+    <div class="vbox reveal d2">
+      <div class="scanlines"></div>
+      <div class="vbox-inner">
+        <div class="play-ring"><div class="play-tri"></div></div>
+        <div class="vlabel mono">Demo reel — Próximamente</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="flogo mono">SPUK<span>LAB</span></div>
+  <div class="fmeta">Experimental Audio Division // 2026</div>
+  <a href="/cdn-cgi/l/email-protection#255655504e494447654248444c490b464a48" class="fmail"><span class="__cf_email__" data-cfemail="3f4c4f4a54535e5d7f58525e5653115c5052">[email&#160;protected]</span></a>
+</footer>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ═══════════════════════════════════════════════
+// HERO CANVAS — Neural filaments
+// ═══════════════════════════════════════════════
+(function(){
+  const cv = document.getElementById('hero-canvas');
+  const cx = cv.getContext('2d');
+  let W, H, pts;
+  const M = {x:-9999,y:-9999};
+  const N=65, MD=155, MR=110;
+
+  function resize(){ W=cv.width=cv.offsetWidth; H=cv.height=cv.offsetHeight; }
+  function mk(){ return {x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.32,vy:(Math.random()-.5)*.22,sz:.8+Math.random()*1.6,a:.15+Math.random()*.35,col:Math.random()>.5?'0,255,255':'170,50,255',ph:Math.random()*Math.PI*2,ps:.006+Math.random()*.016}; }
+
+  function frame(){
+    cx.clearRect(0,0,W,H);
+    const g=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.72);
+    g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.9)');
+    cx.fillStyle=g;cx.fillRect(0,0,W,H);
+    pts.forEach((p,i)=>{
+      p.ph+=p.ps;
+      const al=p.a*(.65+.35*Math.sin(p.ph));
+      const dx=p.x-M.x,dy=p.y-M.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<MR&&d>0){const f=(MR-d)/MR*.45;p.vx+=dx/d*f;p.vy+=dy/d*f;}
+      p.vx*=.994;p.vy*=.994;p.x+=p.vx;p.y+=p.vy;
+      if(p.x<-20)p.x=W+20;if(p.x>W+20)p.x=-20;
+      if(p.y<-20)p.y=H+20;if(p.y>H+20)p.y=-20;
+      cx.beginPath();cx.arc(p.x,p.y,p.sz,0,Math.PI*2);
+      cx.fillStyle=`rgba(${p.col},${al})`;cx.fill();
+      for(let j=i+1;j<pts.length;j++){
+        const q=pts[j],ex=p.x-q.x,ey=p.y-q.y,dd=Math.sqrt(ex*ex+ey*ey);
+        if(dd<MD){cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(q.x,q.y);cx.strokeStyle=`rgba(${p.col},${(1-dd/MD)*.1})`;cx.lineWidth=.4;cx.stroke();}
+      }
+    });
+    requestAnimationFrame(frame);
+  }
+
+  resize();pts=Array.from({length:N},mk);frame();
+  window.addEventListener('resize',resize);
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();M.x=e.clientX-r.left;M.y=e.clientY-r.top});
+  cv.addEventListener('mouseleave',()=>{M.x=-9999;M.y=-9999});
+})();
+
+
+// ═══════════════════════════════════════════════
+// SPRAY CANVAS — BinauralSpray visualization
+// ═══════════════════════════════════════════════
+(function(){
+  const cv = document.getElementById('spray-canvas');
+  const ctx = cv.getContext('2d');
+  let W, H, particles=[], t=0;
+  let srcX, srcY; // source point (follows cursor)
+  let targetX, targetY;
+
+  // Params (0-1)
+  const P = { density:.5, dispersion:.4, glitch:.2, feedback:.3, velocity:.6 };
+
+  function resize(){
+    W = cv.width = cv.offsetWidth;
+    H = cv.height = cv.offsetHeight;
+    srcX = targetX = W/2;
+    srcY = targetY = H/2;
+  }
+
+  // Wire sliders
+  const sliders = [
+    {id:'p-density', key:'density', vid:'v-density'},
+    {id:'p-dispersion', key:'dispersion', vid:'v-dispersion'},
+    {id:'p-glitch', key:'glitch', vid:'v-glitch'},
+    {id:'p-feedback', key:'feedback', vid:'v-feedback'},
+    {id:'p-velocity', key:'velocity', vid:'v-velocity'},
+  ];
+  sliders.forEach(s=>{
+    const el = document.getElementById(s.id);
+    el.addEventListener('input',()=>{
+      P[s.key] = el.value/100;
+      document.getElementById(s.vid).textContent = el.value;
+    });
+  });
+
+  // Cursor tracking
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    targetX=e.clientX-r.left;
+    targetY=e.clientY-r.top;
+  });
+  cv.addEventListener('mouseleave',()=>{ targetX=W/2; targetY=H/2; });
+  cv.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect(),t=e.touches[0];
+    targetX=t.clientX-r.left; targetY=t.clientY-r.top;
+  },{passive:false});
+
+  function emit(){
+    const count = Math.ceil(P.density * 5 + 1);
+    for(let i=0;i<count;i++){
+      const side = Math.random()>.5 ? 1 : -1;
+      const baseAngle = side===1 ? 0 : Math.PI;
+      const spread = P.dispersion * Math.PI * 0.85;
+      const angle = baseAngle + (Math.random()-.5)*spread;
+      const spd = (.4 + Math.random()*.9) * (.5 + P.velocity*1.8);
+      particles.push({
+        x: srcX+(Math.random()-.5)*6,
+        y: srcY+(Math.random()-.5)*6,
+        vx: Math.cos(angle)*spd,
+        vy: Math.sin(angle)*spd,
+        life: 1,
+        decay: .007+Math.random()*.013,
+        sz: .8+Math.random()*2.2,
+        side: side,
+        cx: srcX, cy: srcY // birth center for feedback
+      });
+    }
+  }
+
+  function drawFrame(){
+    t++;
+
+    // Smooth source follow
+    srcX += (targetX - srcX) * .08;
+    srcY += (targetY - srcY) * .08;
+
+    // Fade trail
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.fillRect(0,0,W,H);
+
+    // Binaural field glow — L
+    const gl=ctx.createRadialGradient(W*.22,H/2,0,W*.22,H/2,W*.3);
+    gl.addColorStop(0,'rgba(0,255,255,.04)');gl.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gl;ctx.fillRect(0,0,W,H);
+
+    // Binaural field glow — R
+    const gr=ctx.createRadialGradient(W*.78,H/2,0,W*.78,H/2,W*.3);
+    gr.addColorStop(0,'rgba(200,0,255,.04)');gr.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
+
+    // Horizon line — spatial center
+    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);
+    ctx.strokeStyle='rgba(255,255,255,.025)';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);
+    ctx.strokeStyle='rgba(255,255,255,.018)';ctx.lineWidth=1;ctx.stroke();
+
+    // Emit particles
+    if(t%2===0) emit();
+
+    // Glitch burst event
+    if(P.glitch > .05 && Math.random() < P.glitch * .015){
+      for(let i=0;i<8;i++){
+        const a=Math.random()*Math.PI*2;
+        const spd=2+Math.random()*4;
+        particles.push({
+          x:srcX,y:srcY,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
+          life:1,decay:.08,sz:1.5+Math.random()*1.5,
+          side:Math.random()>.5?1:-1,cx:srcX,cy:srcY
+        });
+      }
+    }
+
+    // Update + draw
+    particles = particles.filter(p=>{
+      if(p.life<=0) return false;
+
+      // Feedback pull toward birth center
+      if(P.feedback>.05){
+        const dx=p.cx-p.x, dy=p.cy-p.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const threshold = W * (.15 + .35*(1-P.feedback));
+        if(dist>threshold){
+          const f=P.feedback*.04;
+          p.vx+=dx/dist*f; p.vy+=dy/dist*f;
+        }
+      }
+
+      // Glitch micro-jump
+      if(P.glitch>.02 && Math.random()<P.glitch*.008){
+        p.x+=(Math.random()-.5)*28;
+        p.y+=(Math.random()-.5)*12;
+      }
+
+      p.vx*=.97; p.vy*=.97;
+      p.x+=p.vx; p.y+=p.vy;
+      p.life-=p.decay;
+
+      // Out of bounds
+      if(p.x<-60||p.x>W+60||p.y<-60||p.y>H+60) return false;
+
+      const a = p.life*.75;
+      // L=cyan, R=magenta
+      const col = p.side===-1 ? `rgba(0,230,255,${a})` : `rgba(210,0,255,${a})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.sz*(.3+p.life*.7), 0, Math.PI*2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      return true;
+    });
+
+    // Source orb
+    const orbPulse = 14 + Math.sin(t*.05)*3 + P.density*8;
+    const og=ctx.createRadialGradient(srcX,srcY,0,srcX,srcY,orbPulse*2.5);
+    og.addColorStop(0,'rgba(255,255,255,.9)');
+    og.addColorStop(.25,'rgba(120,220,255,.35)');
+    og.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=og;
+    ctx.beginPath();ctx.arc(srcX,srcY,orbPulse*2.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.95)';
+    ctx.beginPath();ctx.arc(srcX,srcY,orbPulse*.35,0,Math.PI*2);ctx.fill();
+
+    // Pulse rings
+    const ring = (t%80)/80;
+    ctx.beginPath();ctx.arc(srcX,srcY,orbPulse+ring*80,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,255,255,${.15*(1-ring)})`;ctx.lineWidth=.8;ctx.stroke();
+
+    requestAnimationFrame(drawFrame);
+  }
+
+  resize();
+  window.addEventListener('resize',()=>{ resize(); });
+  drawFrame();
+})();
+
+
+// ═══════════════════════════════════════════════
+// SCROLL REVEAL
+// ═══════════════════════════════════════════════
+const obs = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('visible'); });
+},{threshold:.08,rootMargin:'0px 0px -30px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el)
