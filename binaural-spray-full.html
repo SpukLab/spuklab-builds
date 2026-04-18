@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BinauralSpray // Spuklab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,200;0,300;0,400;0,600;1,200;1,300&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;0,800;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;background:#000}
+:root{
+  --c:#00ffff;--m:#ff00ff;--v:#9944ff;
+  --border:rgba(255,255,255,.06);
+  --mid:rgba(255,255,255,.55);
+  --dim:rgba(255,255,255,.28);
+  --faint:rgba(255,255,255,.15);
+}
+body{
+  font-family:'Inter',sans-serif;
+  background:#000;color:#fff;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  background-image:radial-gradient(circle at 1.5px 1.5px,#0f0f0f 1px,transparent 0);
+  background-size:32px 32px;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+.grad{background:linear-gradient(90deg,var(--c),var(--v),var(--m));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:1.25rem 2.5rem;
+  display:flex;justify-content:space-between;align-items:center;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{font-family:'JetBrains Mono',monospace;font-weight:800;font-style:italic;font-size:1rem;letter-spacing:-.03em;text-decoration:none;color:#fff}
+.nav-logo span{color:var(--c);font-weight:300}
+.nav-r{display:flex;gap:1.5rem;align-items:center}
+.nav-link{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.35);text-decoration:none;transition:color .2s}
+.nav-link:hover{color:#fff}
+.nav-cta{font-family:'JetBrains Mono',monospace;font-size:.5rem;font-weight:700;letter-spacing:.25em;text-transform:uppercase;padding:.5rem 1.25rem;background:var(--c);color:#000;text-decoration:none;transition:background .2s,transform .2s}
+.nav-cta:hover{background:#fff;transform:translateY(-1px)}
+
+/* ── HERO ── */
+#hero{
+  position:relative;min-height:100vh;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 2.5rem 5rem;overflow:hidden;
+}
+#hero-cv{position:absolute;inset:0;z-index:0}
+.hero-inner{position:relative;z-index:2;max-width:900px}
+.h-eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:.56rem;
+  letter-spacing:.55em;text-transform:uppercase;color:var(--c);
+  margin-bottom:1.5rem;font-weight:700;
+  opacity:0;transform:translateY(10px);animation:fadeUp .8s ease forwards .3s;
+}
+.h-title{
+  font-size:clamp(3.5rem,9vw,7.5rem);
+  font-weight:200;line-height:.9;letter-spacing:-.045em;margin-bottom:1.75rem;
+  opacity:0;transform:translateY(20px);animation:fadeUp 1s ease forwards .5s;
+}
+.h-title .acc{font-weight:800;font-style:italic;display:block}
+.h-sub{
+  font-size:1.05rem;font-weight:300;color:var(--mid);
+  line-height:1.8;max-width:520px;margin-bottom:2.5rem;
+  opacity:0;transform:translateY(15px);animation:fadeUp .9s ease forwards .75s;
+}
+.h-cta{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;opacity:0;animation:fadeUp .9s ease forwards 1s}
+.btn-buy{
+  font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:700;
+  letter-spacing:.35em;text-transform:uppercase;padding:1.1rem 2.5rem;
+  background:linear-gradient(90deg,var(--c),var(--v));color:#000;
+  border:none;cursor:pointer;text-decoration:none;display:inline-block;
+  transition:opacity .25s,transform .25s;
+}
+.btn-buy:hover{opacity:.85;transform:translateY(-2px)}
+.btn-ghost{
+  font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:700;
+  letter-spacing:.35em;text-transform:uppercase;padding:1.1rem 2.5rem;
+  background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);
+  cursor:pointer;text-decoration:none;display:inline-block;
+  transition:border-color .25s,transform .25s;
+}
+.btn-ghost:hover{border-color:var(--m);background:rgba(255,0,255,.04);transform:translateY(-2px)}
+.h-price{
+  font-family:'JetBrains Mono',monospace;font-size:.55rem;
+  color:rgba(255,255,255,.3);letter-spacing:.2em;
+}
+.scroll-hint{
+  position:absolute;bottom:2rem;right:2.5rem;z-index:2;
+  display:flex;flex-direction:column;align-items:center;gap:.5rem;
+  opacity:0;animation:fadeIn 1s ease forwards 1.6s;
+}
+.scroll-hint span{font-family:'JetBrains Mono',monospace;font-size:.44rem;letter-spacing:.3em;color:rgba(255,255,255,.18);text-transform:uppercase;writing-mode:vertical-rl}
+.sline{width:1px;height:44px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.1))}
+
+/* ── SECTIONS ── */
+section{padding:7rem 2.5rem}
+.inn{max-width:1120px;margin:0 auto}
+.sec-eyebrow{font-family:'JetBrains Mono',monospace;font-size:.52rem;letter-spacing:.5em;text-transform:uppercase;color:rgba(255,255,255,.18);margin-bottom:1rem}
+.sec-title{font-size:clamp(2rem,3.5vw,2.8rem);font-weight:200;letter-spacing:-.03em;margin-bottom:3.5rem}
+
+/* ── DEMO CANVAS ── */
+#demo{border-top:1px solid var(--border)}
+.canvas-wrap{position:relative;border:1px solid var(--border);background:rgba(255,255,255,.01);overflow:hidden}
+#spray-cv{display:block;width:100%;height:480px;cursor:crosshair}
+.cv-tag{position:absolute;font-family:'JetBrains Mono',monospace;font-size:.44rem;letter-spacing:.32em;text-transform:uppercase;top:1.2rem;padding:2px 10px;border:1px solid;background:rgba(0,0,0,.6)}
+.cv-l{left:1.5rem;color:rgba(0,255,255,.4);border-color:rgba(0,255,255,.15)}
+.cv-r{right:1.5rem;color:rgba(255,0,255,.4);border-color:rgba(255,0,255,.15)}
+.cv-badge{position:absolute;top:1.1rem;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:.42rem;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,.22);white-space:nowrap;border:1px solid rgba(255,255,255,.08);padding:3px 12px;background:rgba(0,0,0,.65)}
+.cv-hint{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:.4rem;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.15);white-space:nowrap}
+
+/* Params */
+.params-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-top:none;margin-bottom:4rem}
+.param{background:#000;padding:1.4rem 1.25rem 1.25rem;transition:background .3s}
+.param:hover{background:rgba(255,255,255,.015)}
+.param-head{font-family:'JetBrains Mono',monospace;font-size:.44rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center}
+.vc{color:var(--c)}.vm{color:var(--m)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1px;background:rgba(255,255,255,.12);outline:none;cursor:pointer;margin-top:.4rem}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--c);border:none;box-shadow:0 0 8px rgba(0,255,255,.5);cursor:pointer}
+input[type=range].mg::-webkit-slider-thumb{background:var(--m);box-shadow:0 0 8px rgba(255,0,255,.5)}
+
+/* Param descriptions */
+.params-desc{display:grid;grid-template-columns:repeat(5,1fr);gap:2rem;margin-bottom:5rem}
+.pd{padding-top:1.5rem;border-top:1px solid rgba(255,255,255,.07)}
+.pd-name{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:.7rem}
+.pd-name.c{color:var(--c)}.pd-name.m{color:var(--m)}
+.pd-desc{font-size:.82rem;font-weight:300;color:rgba(255,255,255,.4);line-height:1.7}
+
+/* ── CÓMO USAR ── */
+#howto{border-top:1px solid var(--border)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:2rem}
+.step{background:#000;padding:2.5rem 2rem;position:relative;transition:background .3s;overflow:hidden}
+.step:hover{background:rgba(255,255,255,.015)}
+.step::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:transparent;transition:background .4s}
+.step:hover::before{background:linear-gradient(90deg,var(--c),var(--v))}
+.step-num{font-family:'JetBrains Mono',monospace;font-size:3.5rem;font-weight:800;color:rgba(255,255,255,.04);line-height:1;margin-bottom:1rem;letter-spacing:-.05em}
+.step-title{font-family:'JetBrains Mono',monospace;font-size:.54rem;font-weight:700;letter-spacing:.25em;text-transform:uppercase;color:var(--c);margin-bottom:.85rem}
+.step-desc{font-size:.9rem;font-weight:300;color:rgba(255,255,255,.45);line-height:1.75}
+.step-desc strong{color:rgba(255,255,255,.7);font-weight:400}
+
+/* ── CASOS DE USO ── */
+#uso{border-top:1px solid var(--border)}
+.uso-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.uso-card{background:#000;padding:3rem 2.5rem;transition:background .4s;position:relative;overflow:hidden}
+.uso-card:hover{background:rgba(255,255,255,.015)}
+.uso-icon{font-size:1.5rem;margin-bottom:1.5rem;opacity:.6}
+.uso-title{font-size:1.2rem;font-weight:200;letter-spacing:-.02em;margin-bottom:.85rem}
+.uso-desc{font-size:.88rem;font-weight:300;color:rgba(255,255,255,.42);line-height:1.75}
+.uso-tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem}
+.uso-tag{font-family:'JetBrains Mono',monospace;font-size:.44rem;letter-spacing:.15em;text-transform:uppercase;padding:.3rem .7rem;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.3)}
+
+/* ── SPECS ── */
+#specs{border-top:1px solid var(--border)}
+.specs-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border)}
+.spec{background:#000;padding:2.25rem;border-left:2px solid transparent;transition:border-color .3s,background .3s}
+.spec:hover{border-left-color:var(--c);background:rgba(255,255,255,.012)}
+.spec.mg:hover{border-left-color:var(--m)}
+.spec-k{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.22em;text-transform:uppercase;color:var(--c);margin-bottom:.85rem}
+.spec.mg .spec-k{color:var(--m)}
+.spec-v{font-size:.9rem;font-weight:300;color:rgba(255,255,255,.48);line-height:1.75}
+.spec-v strong{color:rgba(255,255,255,.75);font-weight:400}
+
+/* ── VIDEO ── */
+#video-sec{border-top:1px solid var(--border)}
+.video-box{
+  position:relative;width:100%;aspect-ratio:16/9;
+  background:rgba(255,255,255,.012);border:1px solid var(--border);
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+}
+/* ← reemplazar este bloque con <iframe> cuando tengas el video */
+.video-placeholder{display:flex;flex-direction:column;align-items:center;gap:1.5rem;z-index:1}
+.play-ring{width:80px;height:80px;border-radius:50%;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;position:relative}
+.play-ring::before{content:'';position:absolute;inset:-7px;border-radius:50%;border:1px solid rgba(0,255,255,.12);animation:spin 9s linear infinite}
+.play-ring::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px solid rgba(255,0,255,.07);animation:spin 16s linear infinite reverse}
+.play-tri{width:0;height:0;border-style:solid;border-width:10px 0 10px 17px;border-color:transparent transparent transparent rgba(255,255,255,.45);margin-left:4px}
+.video-label{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.4em;text-transform:uppercase;color:rgba(255,255,255,.2)}
+.scanlines{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.007) 2px,rgba(255,255,255,.007) 4px)}
+.video-note{font-family:'JetBrains Mono',monospace;font-size:.46rem;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,.12);text-align:right;margin-top:.75rem}
+
+/* ── DISTRIBUCIÓN ── */
+#get{border-top:1px solid var(--border)}
+.get-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:4rem}
+.get-card{background:#000;padding:2.5rem 2rem;transition:background .3s}
+.get-card:hover{background:rgba(255,255,255,.015)}
+.get-badge{font-family:'JetBrains Mono',monospace;font-size:.46rem;letter-spacing:.2em;text-transform:uppercase;padding:.3rem .8rem;border:1px solid;margin-bottom:1.5rem;display:inline-block}
+.get-badge.now{color:var(--c);border-color:rgba(0,255,255,.25)}
+.get-badge.soon{color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.12)}
+.get-badge.later{color:rgba(255,255,255,.2);border-color:rgba(255,255,255,.08)}
+.get-title{font-size:1.1rem;font-weight:300;letter-spacing:-.02em;margin-bottom:.75rem}
+.get-desc{font-size:.85rem;font-weight:300;color:rgba(255,255,255,.38);line-height:1.7;margin-bottom:1.5rem}
+.get-link{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.3);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:2px;transition:color .2s,border-color .2s}
+.get-link:hover{color:var(--c);border-color:var(--c)}
+.get-link.disabled{pointer-events:none;opacity:.3}
+
+/* ── BUY CTA ── */
+#buy{border-top:1px solid var(--border);background:rgba(255,255,255,.012)}
+.buy-inner{display:grid;grid-template-columns:1fr auto;gap:4rem;align-items:center}
+.buy-label{font-family:'JetBrains Mono',monospace;font-size:.52rem;letter-spacing:.4em;text-transform:uppercase;color:rgba(255,255,255,.2);margin-bottom:.75rem}
+.buy-title{font-size:clamp(2rem,4vw,3.2rem);font-weight:200;letter-spacing:-.035em;margin-bottom:.75rem}
+.buy-title .acc{font-weight:800;font-style:italic}
+.buy-sub{font-size:.95rem;font-weight:300;color:rgba(255,255,255,.42);line-height:1.7;max-width:480px}
+.buy-right{display:flex;flex-direction:column;align-items:flex-end;gap:1.5rem}
+.price-block{text-align:right}
+.price-val{font-size:3.5rem;font-weight:200;letter-spacing:-.04em;line-height:1}
+.price-note{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,.25);margin-top:.25rem}
+.buy-actions{display:flex;flex-direction:column;gap:.75rem;align-items:flex-end}
+.btn-main{font-family:'JetBrains Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:.35em;text-transform:uppercase;padding:1rem 2.5rem;background:linear-gradient(90deg,var(--c),var(--v));color:#000;border:none;cursor:pointer;text-decoration:none;display:inline-block;transition:opacity .25s,transform .2s;white-space:nowrap}
+.btn-main:hover{opacity:.85;transform:translateY(-2px)}
+.btn-sec{font-family:'JetBrains Mono',monospace;font-size:.55rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.3);text-decoration:none;transition:color .2s}
+.btn-sec:hover{color:var(--c)}
+
+/* ── FOOTER ── */
+footer{padding:3rem 2.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem}
+.flogo{font-family:'JetBrains Mono',monospace;font-weight:800;font-style:italic;font-size:1rem;letter-spacing:-.03em}
+.flogo span{color:var(--c);font-weight:300}
+.fmeta{font-family:'JetBrains Mono',monospace;font-size:.48rem;letter-spacing:.4em;text-transform:uppercase;color:rgba(255,255,255,.18)}
+.fmail{font-family:'JetBrains Mono',monospace;font-size:.54rem;letter-spacing:.1em;color:rgba(255,255,255,.28);text-decoration:none;transition:color .2s}
+.fmail:hover{color:var(--c)}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .85s ease,transform .85s ease}
+.reveal.on{opacity:1;transform:translateY(0)}
+.d1{transition-delay:.1s}.d2{transition-delay:.22s}.d3{transition-delay:.36s}.d4{transition-delay:.5s}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  nav{padding:1.1rem 1.5rem}
+  .nav-r .nav-link{display:none}
+  section{padding:5rem 1.5rem}
+  #hero{padding:0 1.5rem 4rem}
+  #spray-cv{height:300px}
+  .params-row,.params-desc{grid-template-columns:1fr 1fr}
+  .params-row .param:last-child,.params-desc .pd:last-child{grid-column:1/-1}
+  .steps,.uso-grid,.get-grid{grid-template-columns:1fr}
+  .specs-grid{grid-template-columns:1fr}
+  .buy-inner{grid-template-columns:1fr;gap:2.5rem}
+  .buy-right{align-items:flex-start}
+  .buy-actions{align-items:flex-start}
+  footer{flex-direction:column;text-align:center}
+  .scroll-hint{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo mono">SPUK<span>LAB</span></a>
+  <div class="nav-r">
+    <a href="#demo" class="nav-link">Demo</a>
+    <a href="#howto" class="nav-link">Cómo usar</a>
+    <a href="#specs" class="nav-link">Specs</a>
+    <a href="#get" class="nav-link">Obtener</a>
+    <a href="https://gumroad.com" target="_blank" class="nav-cta">$7.99 — Comprar</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-cv"></canvas>
+  <div class="hero-inner">
+    <div class="h-eyebrow">Project_01 // Spatial Processing</div>
+    <h1 class="h-title">
+      Binaural<span class="acc grad">Spray</span>
+    </h1>
+    <p class="h-sub">
+      Procesador granular binaural diseñado para performance en vivo y exploración sonora inmersiva. Una interfaz táctil donde el espacio es el instrumento y cada toque reescribe el campo sonoro.
+    </p>
+    <div class="h-cta">
+      <a href="https://gumroad.com" target="_blank" class="btn-buy">Obtener — $7.99</a>
+      <a href="#demo" class="btn-ghost">Ver Demo</a>
+      <span class="h-price mono">AUv3 · iOS · Web App</span>
+    </div>
+  </div>
+  <div class="scroll-hint"><span>Scroll</span><div class="sline"></div></div>
+</section>
+
+<!-- DEMO INTERACTIVO -->
+<section id="demo">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 01 — Demo interactivo</div>
+    <div class="sec-title reveal d1">Explorá el instrumento</div>
+    <div class="canvas-wrap reveal d2">
+      <canvas id="spray-cv"></canvas>
+      <div class="cv-tag cv-l mono">← L Channel</div>
+      <div class="cv-badge mono">Demo gráfico — representación conceptual · No es la app</div>
+      <div class="cv-tag cv-r mono">R Channel →</div>
+      <div class="cv-hint mono">Mover cursor · Ajustar parámetros</div>
+    </div>
+    <div class="params-row reveal d3">
+      <div class="param">
+        <div class="param-head mono">Densidad<span class="vc" id="vd">50</span></div>
+        <input type="range" id="pd" min="0" max="100" value="50">
+      </div>
+      <div class="param">
+        <div class="param-head mono">Dispersión<span class="vc" id="vdi">40</span></div>
+        <input type="range" id="pdi" min="0" max="100" value="40">
+      </div>
+      <div class="param">
+        <div class="param-head mono">Glitch<span class="vm" id="vg">20</span></div>
+        <input type="range" class="mg" id="pg" min="0" max="100" value="20">
+      </div>
+      <div class="param">
+        <div class="param-head mono">Feedback<span class="vm" id="vf">30</span></div>
+        <input type="range" class="mg" id="pf" min="0" max="100" value="30">
+      </div>
+      <div class="param">
+        <div class="param-head mono">Velocidad<span class="vc" id="vv">60</span></div>
+        <input type="range" id="pv" min="0" max="100" value="60">
+      </div>
+    </div>
+    <div class="params-desc reveal d3">
+      <div class="pd"><div class="pd-name c mono">Densidad</div><p class="pd-desc">Cantidad de micropartículas por ciclo. Alto = texturas densas. Bajo = granos aislados.</p></div>
+      <div class="pd"><div class="pd-name c mono">Dispersión</div><p class="pd-desc">Ángulo de apertura binaural. Concentra o expande el campo L/R.</p></div>
+      <div class="pd"><div class="pd-name m mono">Glitch</div><p class="pd-desc">Micro-eventos disruptivos en la cadena granular. De sutil a caótico.</p></div>
+      <div class="pd"><div class="pd-name m mono">Feedback</div><p class="pd-desc">Bucles orbitales alrededor de la fuente. Hard cap al 78% — nunca se desestabiliza.</p></div>
+      <div class="pd"><div class="pd-name c mono">Velocidad</div><p class="pd-desc">Velocidad inicial de cada grano. Controla el alcance espacial del spray.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CÓMO USAR -->
+<section id="howto">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 02 — Workflow</div>
+    <div class="sec-title reveal d1">Cómo usar BinauralSpray</div>
+    <div class="steps reveal d2">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-title">Cargá tu audio</div>
+        <p class="step-desc">Importá cualquier archivo de audio desde tu biblioteca o conectá el <strong>micrófono en vivo</strong>. El buffer circular captura hasta 5 segundos para granularización en tiempo real.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-title">Posicioná en el espacio</div>
+        <p class="step-desc">El <strong>eje horizontal</strong> es el campo estéreo completo. Mové el toque para desplazar la fuente granular entre el canal L (cyan) y el canal R (magenta).</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-title">Modulá en tiempo real</div>
+        <p class="step-desc">Ajustá los 5 parámetros mientras tocás. <strong>Densidad</strong> construye la textura. <strong>Glitch</strong> la rompe. <strong>Feedback</strong> crea bucles orbitales. Todo simultáneo.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-title">Grabá el output</div>
+        <p class="step-desc">Capturá el resultado directamente desde la app en <strong>formato WAV</strong>. O integrá via AUv3 en tu host favorito — AUM, GarageBand, Cubasis, Logic Pro.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CASOS DE USO -->
+<section id="uso">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 03 — Contextos</div>
+    <div class="sec-title reveal d1">¿Para qué sirve?</div>
+    <div class="uso-grid reveal d2">
+      <div class="uso-card">
+        <div class="uso-icon">◈</div>
+        <div class="uso-title">Performance en vivo</div>
+        <p class="uso-desc">Control táctil directo sobre el campo binaural. La interfaz responde al toque sin latencia perceptible. Diseñada para no interrumpir el flujo de performance.</p>
+        <div class="uso-tags">
+          <span class="uso-tag">Live</span>
+          <span class="uso-tag">AUv3</span>
+          <span class="uso-tag">iPad</span>
+        </div>
+      </div>
+      <div class="uso-card">
+        <div class="uso-icon">◬</div>
+        <div class="uso-title">Diseño sonoro</div>
+        <p class="uso-desc">Transformá cualquier sample en una textura binaural compleja. Capas de granularización sobre percusiones, voces, field recordings. El material de partida no importa.</p>
+        <div class="uso-tags">
+          <span class="uso-tag">Studio</span>
+          <span class="uso-tag">WAV Export</span>
+          <span class="uso-tag">Granular</span>
+        </div>
+      </div>
+      <div class="uso-card">
+        <div class="uso-icon">◯</div>
+        <div class="uso-title">Exploración ambient</div>
+        <p class="uso-desc">Sesiones de escucha con auriculares. El procesamiento binaural genera profundidad espacial genuina — el sonido aparece fuera del plano de la cabeza.</p>
+        <div class="uso-tags">
+          <span class="uso-tag">Binaural</span>
+          <span class="uso-tag">Headphones</span>
+          <span class="uso-tag">Ambient</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VIDEO -->
+<section id="video-sec">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 04 — En acción</div>
+    <div class="sec-title reveal d1">Demo de performance</div>
+    <div class="video-box reveal d2">
+      <div class="scanlines"></div>
+      <div class="video-placeholder">
+        <div class="play-ring"><div class="play-tri"></div></div>
+        <div class="video-label mono">Demo reel — Próximamente</div>
+      </div>
+    </div>
+    <!-- PARA INSERTAR VIDEO: reemplazá el bloque .video-box con:
+    <div style="position:relative;width:100%;aspect-ratio:16/9">
+      <iframe src="https://www.youtube.com/embed/TU_ID" style="position:absolute;inset:0;width:100%;height:100%;border:none" allowfullscreen></iframe>
+    </div>
+    -->
+    <p class="video-note mono reveal">Para insertar: reemplazar .video-box con iframe de YouTube / Vimeo</p>
+  </div>
+</section>
+
+<!-- SPECS -->
+<section id="specs">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 05 — Especificaciones</div>
+    <div class="sec-title reveal d1">Arquitectura técnica</div>
+    <div class="specs-grid reveal d2">
+      <div class="spec">
+        <div class="spec-k">// Motor Granular</div>
+        <div class="spec-v">Fragmentación de audio en micropartículas por segundo. <strong>6 parámetros</strong>: Chop Density, Binaural Dispersion, Glitch Probability, Feedback, Particle Velocity y Pitch. Control total sobre densidad, velocidad, distribución temporal y tono global.</div>
+      </div>
+      <div class="spec">
+        <div class="spec-k">// Espacialización Binaural</div>
+        <div class="spec-v">HRTF binaural via Web Audio <strong>PannerNode</strong>. Cadena Dual Dry/Wet — señal directa y capa granular procesadas en paralelo. El eje táctil horizontal modula ambas capas simultáneamente en tiempo real.</div>
+      </div>
+      <div class="spec">
+        <div class="spec-k">// Pitch Global</div>
+        <div class="spec-v">Knob PITCH controla el <strong>playbackRate global</strong> sobre el dry source y los granos. Centrado en 0, rango ±2 octavas. Cambia el tono del material sin afectar la arquitectura granular.</div>
+      </div>
+      <div class="spec mg">
+        <div class="spec-k">// Signal Protection</div>
+        <div class="spec-v">Feedback remapeado internamente — el knob muestra 0–100% pero el gain real escala con <strong>hard cap</strong> para evitar inestabilidad. Brick-wall compressor (DynamicsCompressorNode) + WaveShaper safety net. Clipping indicator en header. El output nunca clipea.</div>
+      </div>
+      <div class="spec mg">
+        <div class="spec-k">// Library & Grabación</div>
+        <div class="spec-v"><strong>Library sheet</strong> con todos los takes grabados — nombre, duración y fecha. Cuatro acciones por take: preview directo, cargar como fuente de audio, exportar WAV vía share sheet iOS, o borrar. Los takes se guardan en <strong>IndexedDB</strong> (base BinauralSprayLib) y sobreviven cierres de Safari. El flujo REC ya no descarga automático — el botón Library flashea cyan al terminar.</div>
+      </div>
+      <div class="spec mg">
+        <div class="spec-k">// Skin & Plataforma</div>
+        <div class="spec-v">Skin canónica <strong>"Frío Violeta"</strong> — bg linear-gradient(155deg, #13111f, #1b1726). Knobs glassmorphism con arcos tornasolados cyan→violeta→magenta. Tipografía Inter + JetBrains Mono italic. Optimizado para <strong>iPad iOS en Safari</strong>.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CÓMO OBTENERLA -->
+<section id="get">
+  <div class="inn">
+    <div class="sec-eyebrow reveal">// 06 — Distribución</div>
+    <div class="sec-title reveal d1">Cómo obtenerla</div>
+    <div class="get-grid reveal d2">
+      <div class="get-card">
+        <div class="get-badge now mono">Disponible ahora</div>
+        <div class="get-title">Web App + Gumroad</div>
+        <p class="get-desc">Acceso inmediato a la versión web. Funciona en Safari iOS sin instalación. Pago único vía Gumroad — recibís el link de acceso al instante.</p>
+        <a href="https://gumroad.com" target="_blank" class="get-link mono">Obtener en Gumroad →</a>
+      </div>
+      <div class="get-card">
+        <div class="get-badge soon mono">Próximamente</div>
+        <div class="get-title">App Store — AUv3</div>
+        <p class="get-desc">Versión nativa para iOS con integración completa en el ecosistema AUv3. Usable como plugin dentro de AUM, GarageBand, Cubasis y Logic Pro para iPad.</p>
+        <span class="get-link disabled mono">En desarrollo</span>
+      </div>
+      <div class="get-card">
+        <div class="get-badge later mono">Futuro</div>
+        <div class="get-title">Audio.com / Comunidad</div>
+        <p class="get-desc">Distribución en plataformas de la comunidad creativa. Presencia en ecosistemas donde conviven diseñadores de sonido, performers y exploradores experimentales.</p>
+        <span class="get-link disabled mono">Próximamente</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUY CTA FINAL -->
+<section id="buy">
+  <div class="inn">
+    <div class="buy-inner reveal">
+      <div>
+        <div class="buy-label mono">BinauralSpray — Spuklab</div>
+        <div class="buy-title">Binaural<span class="acc grad">Spray</span></div>
+        <p class="buy-sub">Procesador granular binaural para performance en vivo. Diseñado para iPad, construido para explorar los límites del espacio sonoro táctil.</p>
+      </div>
+      <div class="buy-right">
+        <div class="price-block">
+          <div class="price-val">$7.99</div>
+          <div class="price-note mono">Pago único · Acceso inmediato</div>
+        </div>
+        <div class="buy-actions">
+          <a href="https://gumroad.com" target="_blank" class="btn-main">Obtener en Gumroad</a>
+          <a href="mailto:spuklab@gmail.com" class="btn-sec mono">spuklab@gmail.com</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="flogo mono">SPUK<span>LAB</span></div>
+  <div class="fmeta">Experimental Audio Division // 2026</div>
+  <a href="mailto:spuklab@gmail.com" class="fmail">spuklab@gmail.com</a>
+</footer>
+
+<script>
+// ═══ HERO CANVAS — Neural filaments ══════════════════════════
+(function(){
+  const cv=document.getElementById('hero-cv');
+  const cx=cv.getContext('2d');
+  let W,H,pts;
+  const M={x:-9999,y:-9999},N=70,MD=150,MR=110;
+  function resize(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight}
+  function mk(){return{x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.2,sz:.8+Math.random()*1.5,a:.15+Math.random()*.35,col:Math.random()>.5?'0,255,255':'160,40,255',ph:Math.random()*Math.PI*2,ps:.006+Math.random()*.016}}
+  function frame(){
+    cx.clearRect(0,0,W,H);
+    const g=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.72);
+    g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.9)');
+    cx.fillStyle=g;cx.fillRect(0,0,W,H);
+    pts.forEach((p,i)=>{
+      p.ph+=p.ps;
+      const al=p.a*(.65+.35*Math.sin(p.ph));
+      const dx=p.x-M.x,dy=p.y-M.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<MR&&d>0){const f=(MR-d)/MR*.4;p.vx+=dx/d*f;p.vy+=dy/d*f}
+      p.vx*=.994;p.vy*=.994;p.x+=p.vx;p.y+=p.vy;
+      if(p.x<-20)p.x=W+20;if(p.x>W+20)p.x=-20;
+      if(p.y<-20)p.y=H+20;if(p.y>H+20)p.y=-20;
+      cx.beginPath();cx.arc(p.x,p.y,p.sz,0,Math.PI*2);
+      cx.fillStyle=`rgba(${p.col},${al})`;cx.fill();
+      for(let j=i+1;j<pts.length;j++){
+        const q=pts[j],ex=p.x-q.x,ey=p.y-q.y,dd=Math.sqrt(ex*ex+ey*ey);
+        if(dd<MD){cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(q.x,q.y);cx.strokeStyle=`rgba(${p.col},${(1-dd/MD)*.1})`;cx.lineWidth=.4;cx.stroke()}
+      }
+    });
+    requestAnimationFrame(frame);
+  }
+  resize();pts=Array.from({length:N},mk);frame();
+  window.addEventListener('resize',resize);
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();M.x=e.clientX-r.left;M.y=e.clientY-r.top});
+  cv.addEventListener('mouseleave',()=>{M.x=-9999;M.y=-9999});
+})();
+
+// ═══ SPRAY CANVAS ════════════════════════════════════════════
+(function(){
+  const cv=document.getElementById('spray-cv');
+  const ctx=cv.getContext('2d');
+  let W,H,parts=[],t=0,srcX,srcY,tX,tY;
+  const P={density:.5,dispersion:.4,glitch:.2,feedback:.3,velocity:.6};
+  function resize(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;srcX=tX=W/2;srcY=tY=H/2}
+  [['pd','density','vd'],['pdi','dispersion','vdi'],['pg','glitch','vg'],['pf','feedback','vf'],['pv','velocity','vv']].forEach(([s,k,v])=>{
+    const el=document.getElementById(s);
+    el.addEventListener('input',()=>{P[k]=el.value/100;document.getElementById(v).textContent=el.value});
+  });
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();tX=e.clientX-r.left;tY=e.clientY-r.top});
+  cv.addEventListener('mouseleave',()=>{tX=W/2;tY=H/2});
+  cv.addEventListener('touchmove',e=>{e.preventDefault();const r=cv.getBoundingClientRect(),t=e.touches[0];tX=t.clientX-r.left;tY=t.clientY-r.top},{passive:false});
+  function emit(){
+    const count=Math.ceil(P.density*5+1);
+    for(let i=0;i<count;i++){
+      const side=Math.random()>.5?1:-1;
+      const ang=(side===1?0:Math.PI)+(Math.random()-.5)*P.dispersion*Math.PI*.9;
+      const spd=(.4+Math.random()*.9)*(.5+P.velocity*1.8);
+      parts.push({x:srcX+(Math.random()-.5)*5,y:srcY+(Math.random()-.5)*5,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,decay:.007+Math.random()*.013,sz:.7+Math.random()*2.4,side,cx:srcX,cy:srcY});
+    }
+  }
+  function frame(){
+    t++;
+    srcX+=(tX-srcX)*.08;srcY+=(tY-srcY)*.08;
+    ctx.fillStyle='rgba(0,0,0,0.16)';ctx.fillRect(0,0,W,H);
+    const gl=ctx.createRadialGradient(W*.18,H/2,0,W*.18,H/2,W*.32);
+    gl.addColorStop(0,'rgba(0,255,255,.05)');gl.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gl;ctx.fillRect(0,0,W,H);
+    const gr=ctx.createRadialGradient(W*.82,H/2,0,W*.82,H/2,W*.32);
+    gr.addColorStop(0,'rgba(200,0,255,.05)');gr.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
+    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.strokeStyle='rgba(255,255,255,.02)';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.strokeStyle='rgba(255,255,255,.018)';ctx.lineWidth=1;ctx.stroke();
+    if(t%2===0)emit();
+    if(P.glitch>.05&&Math.random()<P.glitch*.015)for(let i=0;i<8;i++){const a=Math.random()*Math.PI*2,s=2+Math.random()*4;parts.push({x:srcX,y:srcY,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,decay:.08,sz:1.5+Math.random()*1.5,side:Math.random()>.5?1:-1,cx:srcX,cy:srcY})}
+    parts=parts.filter(p=>{
+      if(p.life<=0)return false;
+      if(P.feedback>.05){const dx=p.cx-p.x,dy=p.cy-p.y,dist=Math.sqrt(dx*dx+dy*dy),thr=W*(.15+.35*(1-P.feedback));if(dist>thr){const f=P.feedback*.04;p.vx+=dx/dist*f;p.vy+=dy/dist*f}}
+      if(P.glitch>.02&&Math.random()<P.glitch*.008){p.x+=(Math.random()-.5)*28;p.y+=(Math.random()-.5)*12}
+      p.vx*=.97;p.vy*=.97;p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;
+      if(p.x<-60||p.x>W+60||p.y<-60||p.y>H+60)return false;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.sz*(.3+p.life*.7),0,Math.PI*2);
+      ctx.fillStyle=p.side===-1?`rgba(0,230,255,${p.life*.78})`:`rgba(210,0,255,${p.life*.78})`;ctx.fill();
+      return true;
+    });
+    const pulse=14+Math.sin(t*.05)*3+P.density*8;
+    const og=ctx.createRadialGradient(srcX,srcY,0,srcX,srcY,pulse*2.8);
+    og.addColorStop(0,'rgba(255,255,255,.92)');og.addColorStop(.2,'rgba(140,230,255,.4)');og.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=og;ctx.beginPath();ctx.arc(srcX,srcY,pulse*2.8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.96)';ctx.beginPath();ctx.arc(srcX,srcY,pulse*.32,0,Math.PI*2);ctx.fill();
+    const ring=(t%80)/80;
+    ctx.beginPath();ctx.arc(srcX,srcY,pulse+ring*90,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,255,255,${.18*(1-ring)})`;ctx.lineWidth=.8;ctx.stroke();
+    requestAnimationFrame(frame);
+  }
+  resize();window.addEventListener('resize',resize);frame();
+})();
+
+// ═══ SCROLL REVEAL ════════════════════════════════════════════
+const obs=new IntersectionObserver(e=>{e.forEach(i=>{if(i.isIntersecting)i.target.classList.add('on')})},{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+// ═══ SMOOTH SCROLL ════════════════════════════════════════════
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    e.preventDefault();
+    const t=document.querySelector(a.getAttribute('href'));
+    if(t)t.scrollIntoView({behavior:'smooth'});
+  });
+});
+</script>
+</body>
+</html>
