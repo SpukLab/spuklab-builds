@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoxEsculp - Voice Instrument</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a0033 100%);
+            color: #00ff88;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 0 0 20px #00ff88;
+            letter-spacing: 3px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #00ff88;
+            opacity: 0.7;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .control-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .pad-container {
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+
+        .xy-pad {
+            width: 100%;
+            height: 300px;
+            max-width: 400px;
+            margin: 0 auto;
+            background: radial-gradient(circle, rgba(0,255,136,0.1), rgba(0,0,0,0.5));
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            position: relative;
+            cursor: crosshair;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.2);
+        }
+
+        .xy-cursor {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #00ff88, transparent);
+            border: 2px solid #00ff88;
+            border-radius: 50%;
+            position: absolute;
+            pointer-events: none;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .xy-axis-h, .xy-axis-v {
+            position: absolute;
+            background: rgba(0, 255, 136, 0.2);
+        }
+
+        .xy-axis-h {
+            width: 100%;
+            height: 1px;
+            left: 0;
+            top: 50%;
+        }
+
+        .xy-axis-v {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+            top: 0;
+        }
+
+        .xy-label {
+            position: absolute;
+            font-size: 0.7em;
+            color: #00ff88;
+            opacity: 0.5;
+        }
+
+        .xy-label-x {
+            bottom: -25px;
+            right: 10px;
+        }
+
+        .xy-label-y {
+            top: 10px;
+            left: -60px;
+        }
+
+        .param-group {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .param {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .param-value {
+            color: #00ff88;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(90deg, rgba(0,255,136,0.2), rgba(0,255,136,0.4));
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff88;
+            border: 2px solid #0f0f1e;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff88;
+            border: 2px solid #0f0f1e;
+        }
+
+        .mode-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .mode-btn {
+            padding: 12px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+        }
+
+        .mode-btn.active {
+            background: #00ff88;
+            color: #0f0f1e;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #0f0f1e;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+
+        .btn:active {
+            transform: translateY(0px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff3366, #cc2255);
+        }
+
+        .visualization {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .band {
+            padding: 15px;
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .band-label {
+            font-size: 0.85em;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 10px;
+        }
+
+        .band-bar {
+            width: 100%;
+            height: 30px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .band-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00cc6a);
+            width: 0%;
+            transition: width 0.05s linear;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .band-value {
+            font-size: 0.9em;
+            margin-top: 8px;
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .info-panel {
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .info-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            color: #00ff88;
+        }
+
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status.on {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .status.off {
+            background: #333;
+        }
+
+        @media (max-width: 768px) {
+            .control-section {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .xy-pad {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VoxEsculp</h1>
+        <div class="subtitle">Voice-Based Experimental Instrument</div>
+
+        <!-- XY PAD SECTION -->
+        <div class="pad-container">
+            <label style="font-size: 0.9em; text-transform: uppercase; opacity: 0.7; display: block; margin-bottom: 10px;">Control XY (Chaos × Texture)</label>
+            <div class="xy-pad" id="xyPad">
+                <div class="xy-axis-h"></div>
+                <div class="xy-axis-v"></div>
+                <div class="xy-cursor" id="xyCursor"></div>
+                <div class="xy-label xy-label-x">TEXTURE →</div>
+                <div class="xy-label xy-label-y">← CHAOS</div>
+            </div>
+        </div>
+
+        <!-- PARAMETER CONTROLS -->
+        <div class="control-section">
+            <div class="param-group">
+                <div class="param">
+                    <div class="param-label">
+                        <span>Identity (Dry → Wet)</span>
+                        <span class="param-value" id="identityValue">50%</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="slider" id="identitySlider">
+                </div>
+
+                <div class="param">
+                    <div class="param-label">
+                        <span>Density (Grain Activity)</span>
+                        <span class="param-value" id="densityValue">50%</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="slider" id="densitySlider">
+                </div>
+
+                <div class="param">
+                    <div class="param-label">
+                        <span>Space (Spectral Width)</span>
+                        <span class="param-value" id="spaceValue">50%</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="slider" id="spaceSlider">
+                </div>
+            </div>
+
+            <div class="param-group">
+                <div style="margin-bottom: 10px;">
+                    <div class="param-label" style="margin-bottom: 12px;">
+                        <span>Synthesis Mode</span>
+                    </div>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-mode="organic">Organic</button>
+                        <button class="mode-btn" data-mode="abstract">Abstract</button>
+                        <button class="mode-btn" data-mode="textural">Textural</button>
+                        <button class="mode-btn" data-mode="inharmonic">Inharmonic</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISUALIZATION -->
+        <div class="visualization">
+            <div class="band">
+                <div class="band-label">Body</div>
+                <div class="band-bar">
+                    <div class="band-fill" id="bodyBar"></div>
+                </div>
+                <div class="band-value" id="bodyValue">0 dB</div>
+            </div>
+            <div class="band">
+                <div class="band-label">Formants</div>
+                <div class="band-bar">
+                    <div class="band-fill" id="formantBar"></div>
+                </div>
+                <div class="band-value" id="formantValue">0 dB</div>
+            </div>
+            <div class="band">
+                <div class="band-label">Air</div>
+                <div class="band-bar">
+                    <div class="band-fill" id="airBar"></div>
+                </div>
+                <div class="band-value" id="airValue">0 dB</div>
+            </div>
+        </div>
+
+        <!-- CONTROL BUTTONS -->
+        <div class="controls-row">
+            <button class="btn" id="startBtn">🎤 Start Mic</button>
+            <button class="btn btn-danger" id="stopBtn" disabled>⏹ Stop</button>
+        </div>
+
+        <!-- INFO PANEL -->
+        <div class="info-panel">
+            <div class="info-title">
+                <span class="status" id="micStatus"></span>System Status
+            </div>
+            <div id="statusText">Waiting for microphone activation...</div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // VOXESCULP - VOICE INSTRUMENT
+        // Real-time spectral analysis and reconstruction
+        // ============================================================
+
+        class VoxEsculp {
+            constructor() {
+                // Audio Context
+                this.audioContext = null;
+                this.analyser = null;
+                this.microphone = null;
+                this.scriptProcessor = null;
+                this.isRunning = false;
+
+                // Analysis data
+                this.spectralData = {
+                    body: 0,
+                    formants: 0,
+                    air: 0,
+                    noise: 0
+                };
+
+                this.behavior = {
+                    intensity: 0,
+                    tension: 0,
+                    aggression: 0,
+                    organicity: 0,
+                    air: 0
+                };
+
+                // Grain synthesis
+                this.grains = [];
+                this.grainGain = null;
+
+                // Parameters
+                this.params = {
+                    identity: 0.5,
+                    chaos: 0.3,
+                    density: 0.5,
+                    texture: 0.4,
+                    space: 0.5,
+                    mode: 'organic'
+                };
+
+                // Buffers
+                this.fftSize = 2048;
+                this.freqBins = null;
+                this.prevFreqBins = null;
+
+                // UI
+                this.initUI();
+            }
+
+            // ========== INITIALIZATION ==========
+            async initialize() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: { 
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        } 
+                    });
+
+                    this.microphone = this.audioContext.createMediaStreamSource(stream);
+                    
+                    // Analyser for spectral analysis
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = this.fftSize;
+                    this.analyser.smoothingTimeConstant = 0.3;
+
+                    // Grain synthesis output
+                    this.grainGain = this.audioContext.createGain();
+                    this.grainGain.gain.value = 0.5;
+
+                    // Dry signal path
+                    this.dryGain = this.audioContext.createGain();
+                    this.dryGain.gain.value = 0.5;
+
+                    // Wet signal (reconstructed)
+                    this.wetGain = this.audioContext.createGain();
+                    this.wetGain.gain.value = 0;
+
+                    // Script processor for real-time analysis
+                    this.scriptProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+                    this.scriptProcessor.onaudioprocess = (e) => this.processAudio(e);
+
+                    // Connections
+                    this.microphone.connect(this.analyser);
+                    this.microphone.connect(this.scriptProcessor);
+                    this.microphone.connect(this.dryGain);
+                    
+                    this.dryGain.connect(this.audioContext.destination);
+                    this.grainGain.connect(this.audioContext.destination);
+                    this.wetGain.connect(this.audioContext.destination);
+                    
+                    this.scriptProcessor.connect(this.audioContext.destination);
+
+                    // Initialize buffers
+                    this.freqBins = new Uint8Array(this.analyser.frequencyBinCount);
+                    this.prevFreqBins = new Uint8Array(this.analyser.frequencyBinCount);
+
+                    this.isRunning = true;
+                    this.updateStatus('Microphone active', true);
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+
+                    // Start analysis loop
+                    this.analysisLoop();
+
+                } catch (error) {
+                    console.error('Microphone error:', error);
+                    this.updateStatus('Microphone access denied', false);
+                }
+            }
+
+            // ========== SPECTRAL DECOMPOSITION ENGINE ==========
+            performSpectralAnalysis() {
+                this.analyser.getByteFrequencyData(this.freqBins);
+                const binCount = this.freqBins.length;
+
+                // Frequency bin to Hz conversion
+                const nyquist = this.audioContext.sampleRate / 2;
+                const binHz = nyquist / binCount;
+
+                // Band definitions (Hz)
+                const bodyMax = 200;    // 0-200Hz
+                const formantMax = 2000; // 200-2000Hz
+                const airMax = 8000;    // 2000-8000Hz
+
+                // Energy accumulation
+                let bodyEnergy = 0;
+                let formantEnergy = 0;
+                let airEnergy = 0;
+                let totalEnergy = 0;
+
+                for (let i = 0; i < binCount; i++) {
+                    const freq = i * binHz;
+                    const mag = this.freqBins[i] / 255.0;
+                    totalEnergy += mag * mag;
+
+                    if (freq < bodyMax) {
+                        bodyEnergy += mag * mag;
+                    } else if (freq < formantMax) {
+                        formantEnergy += mag * mag;
+                    } else if (freq < airMax) {
+                        airEnergy += mag * mag;
+                    }
+                }
+
+                // Normalize
+                const norm = Math.max(totalEnergy, 0.001);
+                this.spectralData.body = Math.sqrt(bodyEnergy / norm);
+                this.spectralData.formants = Math.sqrt(formantEnergy / norm);
+                this.spectralData.air = Math.sqrt(airEnergy / norm);
+
+                // Calculate spectral metrics
+                return this.calculateBehavior();
+            }
+
+            // ========== BEHAVIOR ANALYSIS ENGINE ==========
+            calculateBehavior() {
+                // RMS energy
+                let rms = 0;
+                for (let i = 0; i < this.freqBins.length; i++) {
+                    const val = this.freqBins[i] / 255.0;
+                    rms += val * val;
+                }
+                rms = Math.sqrt(rms / this.freqBins.length);
+
+                // Spectral flux (change frame to frame)
+                let flux = 0;
+                for (let i = 0; i < this.freqBins.length; i++) {
+                    const diff = this.freqBins[i] - this.prevFreqBins[i];
+                    flux += diff * diff;
+                }
+                flux = Math.sqrt(flux / this.freqBins.length) / 255.0;
+
+                // Update previous
+                this.prevFreqBins.set(this.freqBins);
+
+                // Spectral centroid (brightness)
+                let weighted = 0;
+                let total = 0;
+                const nyquist = this.audioContext.sampleRate / 2;
+                for (let i = 0; i < this.freqBins.length; i++) {
+                    const freq = (i / this.freqBins.length) * nyquist;
+                    const mag = this.freqBins[i] / 255.0;
+                    weighted += freq * mag;
+                    total += mag;
+                }
+                const centroid = total > 0 ? weighted / total / nyquist : 0;
+
+                // Derive behavioral parameters
+                this.behavior.intensity = Math.min(1, rms * 2 + flux * 0.3);
+                this.behavior.tension = flux;
+                this.behavior.aggression = centroid * 0.6 + flux * 0.4;
+                this.behavior.organicity = 1 - Math.abs(flux - 0.3) / 0.7; // Optimal mid-range
+                this.behavior.air = this.spectralData.air;
+
+                return {
+                    rms,
+                    flux,
+                    centroid,
+                    behavior: this.behavior
+                };
+            }
+
+            // ========== IDENTITY RECONSTRUCTION ENGINE ==========
+            synthesizeGrains() {
+                const now = this.audioContext.currentTime;
+
+                // Clean dead grains
+                this.grains = this.grains.filter(g => g.endTime > now);
+
+                // Grain parameters based on behavior
+                const grainDensity = Math.pow(this.params.density, 1.5) * 40 + 5; // 5-45 grains/sec
+                const grainDuration = 0.03 + this.params.density * 0.05; // 30-80ms
+
+                // Decide if we create new grain
+                if (Math.random() < (grainDensity / 60)) { // 60fps target
+                    this.createGrain(now, grainDuration);
+                }
+
+                // Process active grains
+                for (let grain of this.grains) {
+                    grain.update(now);
+                }
+            }
+
+            createGrain(startTime, duration) {
+                const freq = this.generateGrainFrequency();
+                const env = this.generateGrainEnvelope(duration);
+
+                const osc = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+
+                // Frequency based on mode and behavior
+                osc.frequency.value = freq;
+                osc.type = this.params.texture > 0.5 ? 'triangle' : 'sine';
+
+                // Envelope
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, startTime + duration * 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+                osc.connect(gainNode);
+                gainNode.connect(this.grainGain);
+
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+
+                this.grains.push({
+                    osc,
+                    gainNode,
+                    endTime: startTime + duration,
+                    update: () => {} // Placeholder
+                });
+            }
+
+            generateGrainFrequency() {
+                const baseFreq = 100 + this.spectralData.body * 300; // 100-400Hz base
+                let freq = baseFreq;
+
+                if (this.params.mode === 'abstract') {
+                    // Random frequencies
+                    freq = Math.random() * 5000 + 100;
+                } else if (this.params.mode === 'organic') {
+                    // Harmonic relationships
+                    const harmonic = Math.floor(Math.random() * 6) + 1;
+                    freq = baseFreq * harmonic;
+                } else if (this.params.mode === 'inharmonic') {
+                    // Irrational ratios
+                    const ratio = Math.PI / 2 + Math.random() * 2;
+                    freq = baseFreq * ratio;
+                }
+
+                // Apply chaos modulation
+                const chaosAmount = this.params.chaos * 0.5;
+                freq *= (1 + (Math.random() - 0.5) * chaosAmount);
+
+                return Math.max(30, Math.min(8000, freq));
+            }
+
+            generateGrainEnvelope(duration) {
+                return {
+                    attack: duration * 0.1,
+                    decay: duration * 0.9
+                };
+            }
+
+            // ========== MAIN AUDIO PROCESSING ==========
+            processAudio(event) {
+                // This runs at sample rate for low-latency processing
+            }
+
+            analysisLoop() {
+                if (!this.isRunning) return;
+
+                // Spectral analysis
+                this.performSpectralAnalysis();
+
+                // Synthesize grains
+                this.synthesizeGrains();
+
+                // Update mix (dry/wet)
+                this.dryGain.gain.value = (1 - this.params.identity) * 0.5;
+                this.wetGain.gain.value = this.params.identity * 0.3;
+
+                // Update visualization
+                this.updateVisualization();
+
+                requestAnimationFrame(() => this.analysisLoop());
+            }
+
+            // ========== VISUALIZATION ==========
+            updateVisualization() {
+                // Body band
+                const bodyPercent = this.spectralData.body * 100;
+                document.getElementById('bodyBar').style.width = bodyPercent + '%';
+                document.getElementById('bodyValue').textContent = 
+                    (20 * Math.log10(this.spectralData.body + 0.001)).toFixed(1) + ' dB';
+
+                // Formant band
+                const formantPercent = this.spectralData.formants * 100;
+                document.getElementById('formantBar').style.width = formantPercent + '%';
+                document.getElementById('formantValue').textContent = 
+                    (20 * Math.log10(this.spectralData.formants + 0.001)).toFixed(1) + ' dB';
+
+                // Air band
+                const airPercent = this.spectralData.air * 100;
+                document.getElementById('airBar').style.width = airPercent + '%';
+                document.getElementById('airValue').textContent = 
+                    (20 * Math.log10(this.spectralData.air + 0.001)).toFixed(1) + ' dB';
+            }
+
+            // ========== UI INITIALIZATION ==========
+            initUI() {
+                // Identity slider
+                document.getElementById('identitySlider').addEventListener('input', (e) => {
+                    this.params.identity = e.target.value / 100;
+                    document.getElementById('identityValue').textContent = e.target.value + '%';
+                });
+
+                // Density slider
+                document.getElementById('densitySlider').addEventListener('input', (e) => {
+                    this.params.density = e.target.value / 100;
+                    document.getElementById('densityValue').textContent = e.target.value + '%';
+                });
+
+                // Space slider
+                document.getElementById('spaceSlider').addEventListener('input', (e) => {
+                    this.params.space = e.target.value / 100;
+                    document.getElementById('spaceValue').textContent = e.target.value + '%';
+                });
+
+                // Mode buttons
+                document.querySelectorAll('.mode-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.params.mode = e.target.dataset.mode;
+                    });
+                });
+
+                // XY Pad
+                const xyPad = document.getElementById('xyPad');
+                const xyCursor = document.getElementById('xyCursor');
+
+                const updateXY = (e) => {
+                    const rect = xyPad.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width;
+                    const y = (e.clientY - rect.top) / rect.height;
+
+                    this.params.chaos = Math.max(0, Math.min(1, y));
+                    this.params.texture = Math.max(0, Math.min(1, x));
+
+                    xyCursor.style.left = (x * 100) + '%';
+                    xyCursor.style.top = (y * 100) + '%';
+                };
+
+                xyPad.addEventListener('mousemove', updateXY);
+                xyPad.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = xyPad.getBoundingClientRect();
+                    const x = (touch.clientX - rect.left) / rect.width;
+                    const y = (touch.clientY - rect.top) / rect.height;
+
+                    this.params.chaos = Math.max(0, Math.min(1, y));
+                    this.params.texture = Math.max(0, Math.min(1, x));
+
+                    xyCursor.style.left = (x * 100) + '%';
+                    xyCursor.style.top = (y * 100) + '%';
+                });
+
+                // Control buttons
+                document.getElementById('startBtn').addEventListener('click', () => this.initialize());
+                document.getElementById('stopBtn').addEventListener('click', () => this.stop());
+            }
+
+            // ========== CONTROL METHODS ==========
+            stop() {
+                this.isRunning = false;
+                if (this.microphone) {
+                    this.microphone.disconnect();
+                }
+                this.audioContext.close();
+                this.updateStatus('Stopped', false);
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+
+            updateStatus(message, active) {
+                document.getElementById('statusText').textContent = message;
+                document.getElementById('micStatus').className = active ? 'status on' : 'status off';
+            }
+        }
+
+        // ============================================================
+        // Initialize on page load
+        // ============================================================
+        let voxesculp;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            voxesculp = new VoxEsculp();
+        });
+    </script>
+</body>
+</html>
