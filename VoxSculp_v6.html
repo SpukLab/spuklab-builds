@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>VoxSculp v6 — Voice Spectral Reconstruction</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(155deg, #13111f, #1b1726);
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+            font-size: 12px;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 12px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 8px 0;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #fff;
+        }
+        
+        .header .subtitle {
+            font-size: 11px;
+            color: rgba(153, 68, 255, 0.6);
+            margin-top: 2px;
+        }
+        
+        .main {
+            display: flex;
+            gap: 12px;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        #canvas {
+            width: 100%;
+            flex: 1;
+            background: rgba(153, 68, 255, 0.03);
+            border: 1px solid rgba(153, 68, 255, 0.18);
+            border-radius: 6px;
+        }
+        
+        .right {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        
+        .box {
+            background: rgba(153, 68, 255, 0.08);
+            border: 1px solid rgba(153, 68, 255, 0.18);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .label {
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(153, 68, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        button {
+            padding: 8px 10px;
+            background: rgba(153, 68, 255, 0.12);
+            border: 1px solid rgba(153, 68, 255, 0.3);
+            color: #fff;
+            font-size: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-weight: 600;
+            text-transform: uppercase;
+            -webkit-appearance: none;
+            -webkit-user-select: none;
+        }
+        
+        button:active, button.active {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.6);
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+            color: #00ffff;
+        }
+        
+        button.recording {
+            background: rgba(255, 100, 100, 0.3);
+            border-color: rgba(255, 100, 100, 0.6);
+            color: #ff6464;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .info {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.4);
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+        
+        .info.ok { color: rgba(0, 255, 255, 0.7); }
+        .info.live { color: rgba(0, 255, 200, 0.9); animation: blink 1s infinite; }
+        .info.error { color: rgba(255, 100, 100, 0.7); }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .meter-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 8px;
+            background: rgba(153, 68, 255, 0.04);
+            border: 1px solid rgba(153, 68, 255, 0.12);
+            border-radius: 4px;
+        }
+        
+        .meter {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .meter-label {
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+        }
+        
+        .meter-bar {
+            width: 24px;
+            height: 30px;
+            background: rgba(153, 68, 255, 0.1);
+            border: 1px solid rgba(153, 68, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .meter-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, #00ffff, #9944ff);
+            height: 0%;
+            transition: height 0.05s;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: rgba(153, 68, 255, 0.2);
+            border: none;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #00ffff, #9944ff);
+            border: 1px solid #fff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #00ffff, #9944ff);
+            border: 1px solid #fff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .slider-val {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .time-display {
+            text-align: center;
+            font-size: 11px;
+            color: rgba(0, 255, 200, 0.8);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>VOXSCULP v6</h1>
+            <div class="subtitle">Spectral Voice Reconstruction + Recording</div>
+        </div>
+        
+        <div class="main">
+            <div class="left">
+                <canvas id="canvas"></canvas>
+                <div class="meter-grid">
+                    <div class="meter">
+                        <div class="meter-label">BODY</div>
+                        <div class="meter-bar"><div class="meter-fill" id="mBody"></div></div>
+                    </div>
+                    <div class="meter">
+                        <div class="meter-label">FORM</div>
+                        <div class="meter-bar"><div class="meter-fill" id="mForm"></div></div>
+                    </div>
+                    <div class="meter">
+                        <div class="meter-label">AIR</div>
+                        <div class="meter-bar"><div class="meter-fill" id="mAir"></div></div>
+                    </div>
+                    <div class="meter">
+                        <div class="meter-label">NOISE</div>
+                        <div class="meter-bar"><div class="meter-fill" id="mNoise"></div></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right">
+                <div class="box">
+                    <div class="label">Input</div>
+                    <button id="btnLoad">▸ Load Audio</button>
+                    <button id="btnMic">◆ Mic</button>
+                    <div class="info" id="infoInput">Ready</div>
+                </div>
+                
+                <div class="box">
+                    <div class="label">Recording</div>
+                    <button id="btnRec">● REC</button>
+                    <button id="btnPlay">▶ PLAY</button>
+                    <button id="btnExport">↓ EXPORT</button>
+                    <div class="time-display" id="timeDisplay">00:00</div>
+                </div>
+                
+                <div class="box">
+                    <div class="label">Mode</div>
+                    <button id="btnAbs">Abstract</button>
+                    <button id="btnOrg">Organic</button>
+                    <button id="btnTex">Textural</button>
+                    <button id="btnInh">Inharmonic</button>
+                </div>
+                
+                <div class="box">
+                    <div class="slider-row">
+                        <div class="label">Mutation</div>
+                        <div class="slider-val"><span>0</span><span id="v1">50</span></div>
+                        <input type="range" id="s1" min="0" max="100" value="50">
+                    </div>
+                </div>
+                
+                <div class="box">
+                    <div class="slider-row">
+                        <div class="label">Density</div>
+                        <div class="slider-val"><span>Low</span><span id="v2">40</span></div>
+                        <input type="range" id="s2" min="10" max="80" value="40" step="2">
+                    </div>
+                </div>
+                
+                <div class="box">
+                    <div class="slider-row">
+                        <div class="label">Texture</div>
+                        <div class="slider-val"><span>Tonal</span><span id="v3">50</span></div>
+                        <input type="range" id="s3" min="0" max="100" value="50">
+                    </div>
+                </div>
+                
+                <div class="box">
+                    <div class="slider-row">
+                        <div class="label">Space</div>
+                        <div class="slider-val"><span>Mono</span><span id="v4">50</span></div>
+                        <input type="range" id="s4" min="0" max="100" value="50">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*">
+
+    <script>
+        // ═════════════════════════════════════════════════════════════
+        // VOXSCULP v6 — Complete BinauralSpray Pattern
+        // Recording, playback, file loading, export
+        // ═════════════════════════════════════════════════════════════
+
+        let AC = null;
+        let micStream = null;
+        let srcNode = null;
+        let procNode = null;
+        let analyser = null;
+        let canvas = null;
+        let ctx = null;
+        let running = false;
+        let isPlaying = false;
+
+        // Recording (BinauralSpray pattern)
+        let recordingEnabled = false;
+        let recordedChunksL = [];
+        let recordedChunksR = [];
+        let recordingSampleRate = 0;
+        let playbackSource = null;
+        let recordStartTime = 0;
+        let recordUpdateInterval = null;
+
+        // State
+        let mode = 'organic';
+        let mutation = 0.5;
+        let density = 40;
+        let texture = 0.5;
+        let space = 0.5;
+
+        // Spectral
+        let spectral = { body: 0, form: 0, air: 0, noise: 0 };
+        let behavior = { intensity: 0, tension: 0, aggression: 0, air: 0 };
+        let prevSpectral = { body: 0, form: 0, air: 0, noise: 0 };
+
+        // Grain buffer
+        let grainBuf = new Float32Array(16384);
+        let grainPos = 0;
+
+        function init() {
+            try {
+                const AC_Class = window.AudioContext || window.webkitAudioContext;
+                AC = new AC_Class();
+                recordingSampleRate = AC.sampleRate;
+                
+                procNode = AC.createScriptProcessor(2048, 2, 2);
+                procNode.onaudioprocess = onAudio;
+                
+                analyser = AC.createAnalyser();
+                analyser.fftSize = 2048;
+                
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                resizeCanvas();
+                
+                setInfo('Ready', 'ok');
+                setupUI();
+                animate();
+                
+            } catch (e) {
+                console.error('Init:', e);
+                setInfo('Init error: ' + e.message, 'error');
+            }
+        }
+
+        function setupUI() {
+            document.getElementById('btnLoad').addEventListener('click', () => {
+                AC.resume();
+                document.getElementById('fileInput').click();
+            });
+            
+            document.getElementById('fileInput').addEventListener('change', loadFile);
+            document.getElementById('btnMic').addEventListener('click', startMic);
+            document.getElementById('btnRec').addEventListener('click', toggleRecording);
+            document.getElementById('btnPlay').addEventListener('click', playRecording);
+            document.getElementById('btnExport').addEventListener('click', exportWAV);
+            
+            ['btnAbs', 'btnOrg', 'btnTex', 'btnInh'].forEach(id => {
+                document.getElementById(id).addEventListener('click', (e) => {
+                    document.querySelectorAll('#btnAbs, #btnOrg, #btnTex, #btnInh').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    mode = { btnAbs: 'abstract', btnOrg: 'organic', btnTex: 'textural', btnInh: 'inharmonic' }[id];
+                });
+            });
+            
+            document.getElementById('s1').addEventListener('input', (e) => {
+                mutation = parseInt(e.target.value) / 100;
+                document.getElementById('v1').textContent = e.target.value;
+            });
+            
+            document.getElementById('s2').addEventListener('input', (e) => {
+                density = parseInt(e.target.value);
+                document.getElementById('v2').textContent = e.target.value;
+            });
+            
+            document.getElementById('s3').addEventListener('input', (e) => {
+                texture = parseInt(e.target.value) / 100;
+                document.getElementById('v3').textContent = e.target.value;
+            });
+            
+            document.getElementById('s4').addEventListener('input', (e) => {
+                space = parseInt(e.target.value) / 100;
+                document.getElementById('v4').textContent = e.target.value;
+            });
+            
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        async function loadFile(e) {
+            try {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                setInfo(`Loading ${file.name.slice(0, 20)}...`, 'ok');
+                
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const arrayBuffer = evt.target.result;
+                    const bufferCopy = arrayBuffer.slice(0);
+                    
+                    AC.decodeAudioData(
+                        bufferCopy,
+                        (audioBuffer) => {
+                            playAudioBuffer(audioBuffer);
+                            setInfo(file.name.slice(0, 20) + ' · ' + audioBuffer.duration.toFixed(1) + 's', 'ok');
+                        },
+                        (err) => {
+                            setInfo('Decode error', 'error');
+                            console.error(err);
+                        }
+                    );
+                };
+                reader.readAsArrayBuffer(file);
+            } catch (e) {
+                setInfo('File error: ' + e.message, 'error');
+            }
+        }
+
+        function playAudioBuffer(audioBuffer) {
+            if (playbackSource) playbackSource.stop();
+            
+            playbackSource = AC.createBufferSource();
+            playbackSource.buffer = audioBuffer;
+            playbackSource.connect(procNode);
+            playbackSource.start(0);
+            
+            isPlaying = true;
+            document.getElementById('btnPlay').textContent = '◾ STOP';
+            document.getElementById('btnPlay').classList.add('active');
+            
+            playbackSource.onended = () => {
+                isPlaying = false;
+                document.getElementById('btnPlay').textContent = '▶ PLAY';
+                document.getElementById('btnPlay').classList.remove('active');
+            };
+        }
+
+        async function startMic() {
+            try {
+                if (AC.state === 'suspended') {
+                    await AC.resume();
+                }
+                
+                const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
+                const silentSrc = AC.createBufferSource();
+                silentSrc.buffer = silentBuf;
+                silentSrc.connect(AC.destination);
+                silentSrc.start();
+                
+                await new Promise(r => setTimeout(r, 80));
+                
+                setInfo('Requesting mic...', 'ok');
+                
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    },
+                    video: false
+                });
+                
+                srcNode = AC.createMediaStreamSource(micStream);
+                srcNode.connect(procNode);
+                procNode.connect(AC.destination);
+                procNode.connect(analyser);
+                
+                running = true;
+                setInfo('MIC LIVE', 'live');
+                
+            } catch (e) {
+                console.error('Mic error:', e);
+                setInfo('Mic error: ' + e.message, 'error');
+            }
+        }
+
+        function toggleRecording() {
+            const btn = document.getElementById('btnRec');
+            
+            if (!recordingEnabled) {
+                recordedChunksL = [];
+                recordedChunksR = [];
+                recordingEnabled = true;
+                recordStartTime = Date.now();
+                
+                btn.classList.add('recording');
+                setInfo('Recording...', 'ok');
+                
+                recordUpdateInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+                    const mins = Math.floor(elapsed / 60);
+                    const secs = (elapsed % 60).toString().padStart(2, '0');
+                    document.getElementById('timeDisplay').textContent = `${mins}:${secs}`;
+                }, 100);
+            } else {
+                recordingEnabled = false;
+                btn.classList.remove('recording');
+                clearInterval(recordUpdateInterval);
+                setInfo('Recorded: ' + recordedChunksL.length * 2048 / AC.sampleRate | 0 + 's', 'ok');
+            }
+        }
+
+        function playRecording() {
+            if (isPlaying) {
+                if (playbackSource) playbackSource.stop();
+                isPlaying = false;
+                document.getElementById('btnPlay').textContent = '▶ PLAY';
+                document.getElementById('btnPlay').classList.remove('active');
+                return;
+            }
+            
+            if (recordedChunksL.length === 0) {
+                setInfo('No recording yet', 'error');
+                return;
+            }
+            
+            // Create AudioBuffer from recorded chunks
+            const totalSamples = recordedChunksL.length * recordedChunksL[0].length;
+            const audioBuffer = AC.createBuffer(2, totalSamples, recordingSampleRate);
+            
+            const outL = audioBuffer.getChannelData(0);
+            const outR = audioBuffer.getChannelData(1);
+            
+            let offset = 0;
+            for (let i = 0; i < recordedChunksL.length; i++) {
+                outL.set(recordedChunksL[i], offset);
+                outR.set(recordedChunksR[i], offset);
+                offset += recordedChunksL[i].length;
+            }
+            
+            playAudioBuffer(audioBuffer);
+        }
+
+        function exportWAV() {
+            if (recordedChunksL.length === 0) {
+                setInfo('No recording to export', 'error');
+                return;
+            }
+            
+            const totalSamples = recordedChunksL.length * recordedChunksL[0].length;
+            const wav = encodeWAV(recordedChunksL, recordedChunksR, recordingSampleRate, totalSamples);
+            
+            const blob = new Blob([wav], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+            a.download = `VoxSculp_${timeStr}.wav`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            setInfo('Exported WAV', 'ok');
+        }
+
+        function encodeWAV(chunksL, chunksR, sampleRate, totalSamples) {
+            const buf = new ArrayBuffer(44 + totalSamples * 4);
+            const view = new DataView(buf);
+            
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            // RIFF header
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + totalSamples * 4, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);  // PCM
+            view.setUint16(22, 2, true);  // 2 channels
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 4, true);
+            view.setUint16(32, 4, true);  // 4 bytes per frame
+            view.setUint16(34, 16, true); // 16-bit
+            writeString(36, 'data');
+            view.setUint32(40, totalSamples * 4, true);
+            
+            // Interleave and write samples
+            let index = 44;
+            for (let i = 0; i < chunksL.length; i++) {
+                const chL = chunksL[i];
+                const chR = chunksR[i] || chL;
+                for (let j = 0; j < chL.length; j++) {
+                    const sL = Math.max(-1, Math.min(1, chL[j]));
+                    const sR = Math.max(-1, Math.min(1, chR[j]));
+                    view.setInt16(index, sL < 0 ? sL * 0x8000 : sL * 0x7FFF, true);
+                    index += 2;
+                    view.setInt16(index, sR < 0 ? sR * 0x8000 : sR * 0x7FFF, true);
+                    index += 2;
+                }
+            }
+            
+            return buf;
+        }
+
+        function onAudio(e) {
+            if (!running && !isPlaying) return;
+            
+            const inL = e.inputBuffer.getChannelData(0);
+            const inR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inL;
+            const outL = e.outputBuffer.getChannelData(0);
+            const outR = e.outputBuffer.getChannelData(1);
+            
+            // Record if enabled
+            if (recordingEnabled) {
+                recordedChunksL.push(new Float32Array(inL));
+                recordedChunksR.push(new Float32Array(inR));
+            }
+            
+            // FFT analysis
+            const fft = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(fft);
+            analyzeSpectral(fft);
+            
+            // Granular processing
+            const grainLen = Math.floor((density / 100) * (AC.sampleRate * 0.08));
+            grainBuf.set(inL, grainPos);
+            grainPos = (grainPos + inL.length) % grainBuf.length;
+            
+            for (let i = 0; i < inL.length; i++) {
+                const dry = inL[i];
+                
+                const rPos = (grainPos + Math.random() * grainLen) % grainBuf.length | 0;
+                let wet = grainBuf[rPos];
+                
+                if (mode === 'abstract') {
+                    wet *= (1 + Math.sin(i * 0.05 + Math.random() * 2) * 0.4);
+                } else if (mode === 'organic') {
+                    wet *= (1 + Math.sin(i * 0.02) * 0.2);
+                } else if (mode === 'textural') {
+                    wet = wet * 0.6 + (Math.random() - 0.5) * 0.4 * texture;
+                } else if (mode === 'inharmonic') {
+                    wet *= Math.cos(i * (0.03 + Math.random() * 0.02));
+                }
+                
+                const mix = dry * (1 - mutation) + wet * mutation;
+                outL[i] = mix * (1 - space * 0.3);
+                outR[i] = mix * (1 + space * 0.2);
+            }
+        }
+
+        function analyzeSpectral(fft) {
+            const nyquist = AC.sampleRate / 2;
+            const freqRes = nyquist / fft.length;
+            
+            let body = 0, form = 0, air = 0, noise = 0, total = 0;
+            
+            const bodyBins = Math.ceil(300 / freqRes);
+            const formBins = Math.ceil(2500 / freqRes);
+            const airBins = Math.ceil(8000 / freqRes);
+            
+            for (let i = 0; i < fft.length; i++) {
+                const v = fft[i];
+                total += v;
+                if (i < bodyBins) body += v;
+                else if (i < formBins) form += v;
+                else if (i < airBins) air += v;
+                else noise += v;
+            }
+            
+            const norm = total > 0 ? total : 1;
+            spectral = {
+                body: body / norm,
+                form: form / norm,
+                air: air / norm,
+                noise: noise / norm
+            };
+            
+            const dBody = Math.abs(spectral.body - prevSpectral.body);
+            const dForm = Math.abs(spectral.form - prevSpectral.form);
+            const dAir = Math.abs(spectral.air - prevSpectral.air);
+            
+            behavior = {
+                intensity: Math.min(1, (total / 255 / fft.length) * 2),
+                tension: Math.min(1, (dBody + dForm + dAir) * 5),
+                aggression: Math.min(1, (spectral.air + dAir) * 1.5),
+                air: spectral.noise
+            };
+            
+            prevSpectral = spectral;
+            
+            document.getElementById('mBody').style.height = (spectral.body * 100) + '%';
+            document.getElementById('mForm').style.height = (spectral.form * 100) + '%';
+            document.getElementById('mAir').style.height = (spectral.air * 100) + '%';
+            document.getElementById('mNoise').style.height = (spectral.noise * 100) + '%';
+        }
+
+        function animate() {
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        function draw() {
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+            
+            ctx.fillStyle = 'rgba(19, 17, 31, 0.1)';
+            ctx.fillRect(0, 0, w, h);
+            
+            const cx = w / 2;
+            const cy = h / 2;
+            const r = Math.min(w, h) * 0.3;
+            
+            ctx.strokeStyle = `rgba(153, 68, 255, ${behavior.intensity * 0.6})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * behavior.intensity, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.strokeStyle = `rgba(0, 255, 255, ${behavior.tension * 0.6})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.7 + behavior.tension * 10, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.strokeStyle = `rgba(255, 0, 255, ${behavior.aggression * 0.6})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.5 + behavior.aggression * 15, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.fillStyle = `rgba(100, 255, 200, ${behavior.air * 0.8})`;
+            for (let i = 0; i < Math.floor(behavior.air * 50); i++) {
+                const a = (i / 50) * Math.PI * 2 + Date.now() * 0.0005;
+                const rad = r * 0.3 + Math.random() * 20;
+                const x = cx + Math.cos(a) * rad;
+                const y = cy + Math.sin(a) * rad;
+                ctx.fillRect(x - 1, y - 1, 2, 2);
+            }
+            
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 15);
+            g.addColorStop(0, `rgba(255, 255, 255, ${0.3 + behavior.intensity * 0.4})`);
+            g.addColorStop(1, 'rgba(153, 68, 255, 0.1)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 15 + behavior.tension * 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+
+        function setInfo(msg, type) {
+            const el = document.getElementById('infoInput');
+            el.textContent = msg;
+            el.className = 'info ' + type;
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
