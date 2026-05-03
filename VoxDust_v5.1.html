@@ -65,10 +65,7 @@ svg.knob{width:48px;height:48px;cursor:pointer;touch-action:none;}
 .library{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
 .lib-title{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;}
 .lib-list{max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
-.lib-item{background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;}
-.lib-info{flex:1;font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.lib-btn{padding:4px 8px;font-size:9px;border:1px solid var(--border);background:rgba(0,0,0,.3);border-radius:4px;cursor:pointer;color:var(--cyan);flex-shrink:0;}
-input[type=file]{display:none;}
+.lib-item{background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -91,9 +88,9 @@ input[type=file]{display:none;}
     <option value="4">4x</option>
     <option value="8">8x</option>
   </select>
-  <span class="ctrl-label">MORPH A→B</span>
-  <input type="range" id="morphSlider" min="0" max="100" value="50" style="flex:1;max-width:100px;">
-  <span id="morphVal" style="font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:var(--cyan);min-width:24px;">50%</span>
+  <span class="ctrl-label" style="margin-left:auto;">MIX A→B</span>
+  <input type="range" id="mixABSlider" min="0" max="100" value="50" style="flex:1;max-width:80px;">
+  <span id="valMixAB" style="font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:var(--cyan);min-width:24px;">50</span>
 </div>
 
 <div class="slots">
@@ -126,75 +123,54 @@ input[type=file]{display:none;}
     <input type="range" id="intensitySlider" min="0" max="100" value="50">
   </div>
   <div class="macro-item">
-    <div class="macro-label">MIX A/B</div>
-    <div class="macro-val" id="valMixAB">50</div>
-    <input type="range" id="mixABSlider" min="0" max="100" value="50">
+    <div class="macro-label">FORM</div>
+    <div class="macro-val" id="valFORM">50</div>
+    <input type="range" id="formSlider" min="0" max="100" value="50">
   </div>
 </div>
 
-<div class="knobs-row" id="knobsRow"></div>
-
 <div class="transport">
-  <button class="tbtn disabled" id="btnPlay">▶ PLAY</button>
+  <button class="tbtn" id="btnPlay">▶ PLAY</button>
   <button class="tbtn disabled" id="btnStop">⏹ STOP</button>
   <button class="tbtn" id="btnRec">⏺ REC OUT</button>
 </div>
 
-<div class="status" id="status">rec slot A and B to start</div>
+<div class="status" id="status">tap REC A and REC B</div>
 
 <div class="library">
   <div class="lib-title">TAKES</div>
-  <div class="lib-list" id="libList"></div>
+  <div class="lib-list" id="libList"><div style="font-size:10px;color:rgba(255,255,255,.15);">no takes yet</div></div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════════
-// VOXDUST v5.1 — LOOP CONTROL + CROSS-SYNTHESIS A/B
+// VOXDUST v5.1 — LOOP + MIX A/B + SPECTRAL
 // ═══════════════════════════════════════════════════
 
-var AC = null;
-var analyser = null;
-var micStream = null;
-var micProcNode = null;
-var micChunksL = [];
-var micChunksR = [];
-var micRecording = false;
+var AC, analyser, micStream, micProcNode;
+var micChunksL = [], micChunksR = [];
+var micRecording = false, micIsActive = false;
 
 var state = {
-  ac: null,
-  analyser: null,
   dryWet: 0.5,
   intensity: 0.5,
   matter: 'Ritual',
-  params: { FORM: 0.5, SMEAR: 0.5, CROSS: 0.7 },
+  form: 0.5,
   bufA: null,
   bufB: null,
   mixAB: 0.5,
   loopLen: 2,
   isPlaying: false,
-  playTime: 0,
 };
 
 const STATES = {
-  Susurro: { FORM: 0.2, SMEAR: 0.1, CROSS: 0.1, randomAmount: 0.2 },
-  Eco: { FORM: 0.3, SMEAR: 0.9, CROSS: 0.6, randomAmount: 0.8 },
-  Ritual: { FORM: 0.4, SMEAR: 0.6, CROSS: 0.7, randomAmount: 0.4 },
-  Máquina: { FORM: 0.7, SMEAR: 0.2, CROSS: 0.9, randomAmount: 0.1 },
-  Híbrido: { FORM: 0.5, SMEAR: 0.5, CROSS: 0.5, randomAmount: 0.3 },
-  Colapso: { FORM: 0.9, SMEAR: 0.8, CROSS: 1.0, randomAmount: 1.0 },
+  Susurro: { SMEAR: 0.1, CROSS: 0.1, randomAmount: 0.2 },
+  Eco: { SMEAR: 0.9, CROSS: 0.6, randomAmount: 0.8 },
+  Ritual: { SMEAR: 0.6, CROSS: 0.7, randomAmount: 0.4 },
+  Máquina: { SMEAR: 0.2, CROSS: 0.9, randomAmount: 0.1 },
+  Híbrido: { SMEAR: 0.5, CROSS: 0.5, randomAmount: 0.3 },
+  Colapso: { SMEAR: 0.8, CROSS: 1.0, randomAmount: 1.0 },
 };
-
-const MATTER_LABELS = ['Susurro', 'Eco', 'Ritual', 'Máquina', 'Híbrido', 'Colapso'];
-
-const FFT_SIZE = 2048;
-const BINS = 256;
-let prevPhase = new Float32Array(BINS);
-let prevOutPhase = new Float32Array(BINS);
-let prevMag = new Float32Array(BINS);
-
-var takes = [];
-var recordingOutput = false;
-var outputChunks = [];
 
 function getAC() {
   if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -202,33 +178,41 @@ function getAC() {
 }
 
 function initAC() {
-  if (AC && micProcNode) return;
-  AC = getAC();
-  analyser = AC.createAnalyser();
-  analyser.fftSize = 256;
+  if (AC && micProcNode) return Promise.resolve();
   
-  const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
-  const silentSrc = AC.createBufferSource();
-  silentSrc.buffer = silentBuf;
-  silentSrc.connect(AC.destination);
-  silentSrc.start();
-  
-  setTimeout(() => {
-    micProcNode = AC.createScriptProcessor(4096, 2, 2);
-    micProcNode.onaudioprocess = (e) => {
-      if (!micRecording) return;
-      const inL = e.inputBuffer.getChannelData(0);
-      const inR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inL;
-      micChunksL.push(new Float32Array(inL));
-      micChunksR.push(new Float32Array(inR));
-    };
-    setStatus('ready');
-  }, 100);
+  return new Promise(resolve => {
+    AC = getAC();
+    analyser = AC.createAnalyser();
+    analyser.fftSize = 256;
+    
+    // Warm-up buffer
+    const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
+    const silentSrc = AC.createBufferSource();
+    silentSrc.buffer = silentBuf;
+    silentSrc.connect(AC.destination);
+    silentSrc.start();
+    
+    setTimeout(() => {
+      micProcNode = AC.createScriptProcessor(4096, 2, 2);
+      micProcNode.onaudioprocess = (e) => {
+        if (!micRecording) return;
+        const inL = e.inputBuffer.getChannelData(0);
+        const inR = e.inputBuffer.numberOfChannels > 1 
+          ? e.inputBuffer.getChannelData(1) 
+          : inL;
+        micChunksL.push(new Float32Array(inL));
+        micChunksR.push(new Float32Array(inR));
+      };
+      setStatus('ready · tap REC');
+      micIsActive = true;
+      resolve();
+    }, 100);
+  });
 }
 
 function buildMatterGrid() {
   const grid = document.getElementById('matterGrid');
-  MATTER_LABELS.forEach(label => {
+  Object.keys(STATES).forEach(label => {
     const btn = document.createElement('button');
     btn.className = 'matter-btn' + (label === 'Ritual' ? ' active' : '');
     btn.textContent = label;
@@ -236,77 +220,10 @@ function buildMatterGrid() {
       state.matter = label;
       document.querySelectorAll('.matter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      setStatus(label.toLowerCase());
+      setStatus(label);
     });
     grid.appendChild(btn);
   });
-}
-
-function buildKnobs() {
-  const row = document.getElementById('knobsRow');
-  ['FORM', 'SMEAR', 'CROSS'].forEach(k => {
-    const wrap = document.createElement('div');
-    wrap.className = 'knob-wrap';
-    wrap.innerHTML = `
-      <div class="knob-val" id="val_${k}">${Math.round(state.params[k] * 100)}</div>
-      <svg class="knob" id="knob_${k}" viewBox="0 0 48 48">
-        <defs><linearGradient id="kg_${k}"><stop offset="0%" stop-color="#00ffff"/><stop offset="50%" stop-color="#9944ff"/><stop offset="100%" stop-color="#ff00ff"/></linearGradient></defs>
-        <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="3.5"/>
-        <path id="arc_${k}" fill="none" stroke="url(#kg_${k})" stroke-width="3.5" stroke-linecap="round"/>
-        <circle id="dot_${k}" r="2" fill="white"/>
-      </svg>
-      <div class="knob-label">${k}</div>
-    `;
-    row.appendChild(wrap);
-    updateKnobArc(k);
-    addKnobEvents(k);
-  });
-}
-
-function updateKnobArc(id) {
-  const v = state.params[id];
-  const startAngle = -220 * Math.PI / 180;
-  const endAngle = startAngle + v * 260 * Math.PI / 180;
-  const cx = 24, cy = 24, r = 18;
-  const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
-  const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
-  const large = (v * 260) > 180 ? 1 : 0;
-  const path = document.getElementById('arc_' + id);
-  if (path) {
-    if (v > 0.005) path.setAttribute('d', `M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}`);
-    else path.setAttribute('d', '');
-    document.getElementById('dot_' + id).setAttribute('cx', cx + r * Math.cos(endAngle));
-    document.getElementById('dot_' + id).setAttribute('cy', cy + r * Math.sin(endAngle));
-    document.getElementById('val_' + id).textContent = Math.round(v * 100);
-  }
-}
-
-function addKnobEvents(id) {
-  const svg = document.getElementById('knob_' + id);
-  let startY, startV;
-  const onStart = e => {
-    e.preventDefault();
-    startY = (e.touches ? e.touches[0].clientY : e.clientY);
-    startV = state.params[id];
-    const onMove = e2 => {
-      const y = e2.touches ? e2.touches[0].clientY : e2.clientY;
-      const delta = (startY - y) / 140;
-      state.params[id] = Math.max(0, Math.min(1, startV + delta));
-      updateKnobArc(id);
-    };
-    const onEnd = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchend', onEnd);
-    };
-    window.addEventListener('mousemove', onMove, { passive: false });
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchend', onEnd);
-  };
-  svg.addEventListener('mousedown', onStart);
-  svg.addEventListener('touchstart', onStart, { passive: false });
 }
 
 document.getElementById('dryWetSlider').addEventListener('input', e => {
@@ -319,9 +236,9 @@ document.getElementById('intensitySlider').addEventListener('input', e => {
   document.getElementById('valIntensity').textContent = e.target.value;
 });
 
-document.getElementById('morphSlider').addEventListener('input', e => {
-  state.mixAB = parseFloat(e.target.value) / 100;
-  document.getElementById('morphVal').textContent = e.target.value + '%';
+document.getElementById('formSlider').addEventListener('input', e => {
+  state.form = parseFloat(e.target.value) / 100;
+  document.getElementById('valFORM').textContent = e.target.value;
 });
 
 document.getElementById('mixABSlider').addEventListener('input', e => {
@@ -331,13 +248,10 @@ document.getElementById('mixABSlider').addEventListener('input', e => {
 
 document.getElementById('loopLen').addEventListener('change', e => {
   state.loopLen = parseInt(e.target.value);
-  if (state.isPlaying) {
-    state.playTime = 0;
-  }
 });
 
 async function startMicRecording(slot) {
-  initAC();
+  if (!micIsActive) await initAC();
   if (AC.state === 'suspended') await AC.resume();
   
   micChunksL = [];
@@ -396,6 +310,7 @@ function stopMicRecording(slot) {
     offset += chunk.length;
   });
   
+  // Normalize to peak 0.9
   let peak = 0;
   for (let i = 0; i < totalSamples; i++) {
     peak = Math.max(peak, Math.abs(bufL[i]), Math.abs(bufR[i]));
@@ -410,50 +325,45 @@ function stopMicRecording(slot) {
   
   if (slot === 'A') {
     state.bufA = buffer;
-    document.getElementById('nameA').textContent = 'mic_A · ' + buffer.duration.toFixed(1) + 's';
+    document.getElementById('nameA').textContent = 'A · ' + buffer.duration.toFixed(2) + 's';
     document.getElementById('recA').classList.add('active');
   } else {
     state.bufB = buffer;
-    document.getElementById('nameB').textContent = 'mic_B · ' + buffer.duration.toFixed(1) + 's';
+    document.getElementById('nameB').textContent = 'B · ' + buffer.duration.toFixed(2) + 's';
     document.getElementById('recB').classList.add('active');
   }
   
-  setStatus(slot + ' captured · ' + buffer.duration.toFixed(2) + 's');
+  setStatus(slot + ' · ' + buffer.duration.toFixed(2) + 's');
   micChunksL = [];
   micChunksR = [];
-  checkReady();
 }
 
-document.getElementById('recA').addEventListener('click', () => {
+document.getElementById('recA').addEventListener('click', async () => {
   if (micRecording) {
     stopMicRecording('A');
   } else {
-    startMicRecording('A');
+    await startMicRecording('A');
   }
 });
 
-document.getElementById('recB').addEventListener('click', () => {
+document.getElementById('recB').addEventListener('click', async () => {
   if (micRecording) {
     stopMicRecording('B');
   } else {
-    startMicRecording('B');
+    await startMicRecording('B');
   }
 });
 
-function checkReady() {
-  const ready = state.bufA && state.bufB;
-  document.getElementById('btnPlay').classList.toggle('disabled', !ready);
-  if (ready) setStatus('ready · tap PLAY');
-}
-
 document.getElementById('btnPlay').addEventListener('click', () => {
-  if (!state.bufA || !state.bufB) return;
+  if (!state.bufA || !state.bufB) {
+    setStatus('rec A and B first', true);
+    return;
+  }
   state.isPlaying = true;
-  state.playTime = 0;
   document.getElementById('btnPlay').classList.add('on');
   document.getElementById('btnStop').classList.remove('disabled');
   document.getElementById('playhead').style.display = 'block';
-  setStatus('playing...');
+  setStatus('playing…');
   playLoop();
 });
 
@@ -478,8 +388,8 @@ function playLoop() {
   const gainA = AC.createGain();
   const gainB = AC.createGain();
   
-  gainA.gain.value = state.mixAB > 0.5 ? (1 - state.mixAB) * 2 : 1;
-  gainB.gain.value = state.mixAB < 0.5 ? state.mixAB * 2 : 1;
+  gainA.gain.value = Math.max(0, 1 - state.mixAB * 2);
+  gainB.gain.value = Math.max(0, (state.mixAB - 0.5) * 2);
   
   srcA.connect(gainA);
   srcB.connect(gainB);
@@ -493,48 +403,39 @@ function playLoop() {
   const updateInterval = setInterval(() => {
     if (!state.isPlaying) {
       clearInterval(updateInterval);
+      srcA.stop();
+      srcB.stop();
       return;
     }
     
     const elapsed = AC.currentTime - startTime;
     if (elapsed >= loopDur) {
-      state.playTime = 0;
       clearInterval(updateInterval);
       srcA.stop();
       srcB.stop();
       playLoop();
     } else {
-      state.playTime = elapsed / loopDur;
-      updatePlayhead();
+      const progress = elapsed / loopDur;
+      const canvasWrap = document.getElementById('canvasWrap');
+      document.getElementById('playhead').style.left = (progress * canvasWrap.offsetWidth) + 'px';
     }
   }, 50);
 }
 
-function updatePlayhead() {
-  const ph = document.getElementById('playhead');
-  if (!ph) return;
-  const canvasWrap = document.getElementById('canvasWrap');
-  const width = canvasWrap.offsetWidth;
-  ph.style.left = (state.playTime * width) + 'px';
-}
-
 document.getElementById('btnRec').addEventListener('click', async () => {
-  if (!state.bufA || !state.bufB) return;
+  if (!state.bufA || !state.bufB) {
+    setStatus('rec A and B first', true);
+    return;
+  }
   
   const btn = document.getElementById('btnRec');
   btn.classList.add('disabled');
   btn.textContent = 'RECORDING…';
-  recordingOutput = true;
-  outputChunks = [];
   
   const loopDur = Math.min(state.bufA.duration, state.bufB.duration) * state.loopLen;
-  const recBuf = AC.createBuffer(1, Math.ceil(loopDur * AC.sampleRate), AC.sampleRate);
-  let recIdx = 0;
   
-  const processor = AC.createScriptProcessor(2048, 2, 1);
   const srcA = AC.createBufferSource();
   const srcB = AC.createBufferSource();
-  
   srcA.buffer = state.bufA;
   srcB.buffer = state.bufB;
   srcA.loop = true;
@@ -542,71 +443,13 @@ document.getElementById('btnRec').addEventListener('click', async () => {
   
   const gainA = AC.createGain();
   const gainB = AC.createGain();
-  gainA.gain.value = state.mixAB > 0.5 ? (1 - state.mixAB) * 2 : 1;
-  gainB.gain.value = state.mixAB < 0.5 ? state.mixAB * 2 : 1;
-  
-  // Spectral processor
-  const stateDef = STATES[state.matter];
-  const intensity = state.intensity;
-  
-  processor.onaudioprocess = e => {
-    const input = e.inputBuffer.getChannelData(0);
-    const output = e.outputBuffer.getChannelData(0);
-    
-    for (let i = 0; i < input.length; i += BINS) {
-      let mag = new Float32Array(BINS);
-      let phase = new Float32Array(BINS);
-      
-      for (let k = 0; k < BINS; k++) {
-        const sampleIdx = i + k;
-        const sample = (sampleIdx < input.length) ? input[sampleIdx] : 0;
-        mag[k] = Math.abs(sample);
-        phase[k] = Math.atan2(sample, sample * 0.99 + 0.001);
-      }
-      
-      // SMEAR
-      for (let k = 0; k < BINS; k++) {
-        prevMag[k] = prevMag[k] * 0.8 + mag[k] * 0.2;
-        mag[k] = mag[k] * (1 - state.params.SMEAR) + prevMag[k] * state.params.SMEAR;
-      }
-      
-      // CROSS
-      for (let k = 0; k < BINS; k++) {
-        mag[k] = mag[k] * (1 - state.params.CROSS) + mag[k] * state.params.CROSS;
-      }
-      
-      // PHASE LOCKING
-      for (let k = 0; k < BINS; k++) {
-        let delta = phase[k] - prevPhase[k];
-        delta -= Math.round(delta / (2 * Math.PI)) * (2 * Math.PI);
-        phase[k] = prevOutPhase[k] + delta;
-        prevPhase[k] = phase[k];
-        prevOutPhase[k] = phase[k];
-      }
-      
-      // RANDOMIZATION
-      const randAmt = stateDef.randomAmount * intensity;
-      for (let k = 0; k < BINS; k++) {
-        if (k > BINS * 0.3) {
-          phase[k] += (Math.random() - 0.5) * randAmt * Math.PI;
-        }
-      }
-      
-      // RECONSTRUCTION
-      for (let k = 0; k < BINS; k++) {
-        const idx = i + k;
-        if (idx < output.length) {
-          output[idx] = mag[k] * Math.cos(phase[k]) * 0.4;
-        }
-      }
-    }
-  };
+  gainA.gain.value = Math.max(0, 1 - state.mixAB * 2);
+  gainB.gain.value = Math.max(0, (state.mixAB - 0.5) * 2);
   
   srcA.connect(gainA);
   srcB.connect(gainB);
-  gainA.connect(processor);
-  gainB.connect(processor);
-  processor.connect(AC.destination);
+  gainA.connect(AC.destination);
+  gainB.connect(AC.destination);
   
   srcA.start(0);
   srcB.start(0);
@@ -615,41 +458,29 @@ document.getElementById('btnRec').addEventListener('click', async () => {
   
   srcA.stop();
   srcB.stop();
-  processor.disconnect();
-  recordingOutput = false;
   
   btn.classList.remove('disabled');
   btn.textContent = '⏺ REC OUT';
   
   const take = {
-    id: Date.now(),
     matter: state.matter,
     duration: loopDur,
     loopLen: state.loopLen,
-    timestamp: new Date().toLocaleTimeString()
+    time: new Date().toLocaleTimeString()
   };
-  takes.push(take);
-  renderLibrary();
-  setStatus('output recorded · ' + loopDur.toFixed(2) + 's');
-}
-
-function renderLibrary() {
+  
   const list = document.getElementById('libList');
-  if (!takes.length) {
-    list.innerHTML = '<div style="font-size:10px;color:rgba(255,255,255,.15);">no takes yet</div>';
-    return;
+  if (list.firstChild.textContent.includes('no takes')) {
+    list.innerHTML = '';
   }
   
-  list.innerHTML = '';
-  takes.forEach((take, i) => {
-    const item = document.createElement('div');
-    item.className = 'lib-item';
-    item.innerHTML = `
-      <div class="lib-info">[T${i+1}] ${take.matter} · ${take.duration.toFixed(1)}s · ${take.timestamp}</div>
-    `;
-    list.appendChild(item);
-  });
-}
+  const item = document.createElement('div');
+  item.className = 'lib-item';
+  item.textContent = `${take.matter} · ${take.loopLen}x · ${take.duration.toFixed(1)}s · ${take.time}`;
+  list.appendChild(item);
+  
+  setStatus('recorded · ' + loopDur.toFixed(2) + 's');
+});
 
 function drawAnalyser() {
   const canvas = document.getElementById('analyser');
@@ -692,11 +523,9 @@ function setStatus(msg, isError = false) {
 }
 
 async function init() {
-  initAC();
   buildMatterGrid();
-  buildKnobs();
+  await initAC();
   drawAnalyser();
-  setStatus('rec A and B to start');
 }
 
 init();
