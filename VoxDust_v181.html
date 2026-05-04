@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VoxDust v18</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@1,300;1,400;1,700;1,800&family=Inter:wght@400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --bg1:#13111f; --bg2:#1b1726;
+  --border:rgba(153,68,255,.18); --cyan:#00ffff; --mag:#ff00ff;
+  --vio:#9944ff; --violt:#b580ff;
+  --btn:rgba(153,68,255,.07); --active:rgba(153,68,255,.18);
+  --w:rgba(255,255,255,.92); --dim:rgba(255,255,255,.38);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;min-height:100%;background:linear-gradient(155deg,var(--bg1),var(--bg2));color:var(--w);font-family:Inter,sans-serif;font-size:13px}
+.app{max-width:480px;margin:0 auto;padding:16px 12px;display:flex;flex-direction:column;gap:10px}
+
+/* Header */
+header{display:flex;align-items:baseline;gap:4px;margin-bottom:2px}
+.logo{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:22px;letter-spacing:-1px}
+.logo .s{font-weight:800;color:var(--w)}.logo .l{font-weight:300;color:var(--cyan)}
+.ver{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);margin-left:6px;align-self:flex-end}
+
+/* Canvas */
+#ac{width:100%;height:100px;background:rgba(153,68,255,.06);border:1px solid var(--border);border-radius:6px;display:block}
+
+/* Section */
+.sec{background:rgba(153,68,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.slbl{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violt);text-transform:uppercase;letter-spacing:1px}
+
+/* Row */
+.row{display:flex;align-items:center;gap:8px}
+.row label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);min-width:52px;flex-shrink:0}
+.val{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--cyan);min-width:38px;text-align:right;flex-shrink:0}
+
+/* Slider */
+input[type=range]{-webkit-appearance:none;flex:1;height:4px;background:rgba(255,255,255,.08);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer}
+input[type=range]:disabled{opacity:.5;cursor:default}
+
+/* Button */
+button{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;font-weight:bold;color:var(--w);background:var(--btn);border:1px solid var(--border);border-radius:5px;padding:6px 10px;cursor:pointer;user-select:none;transition:background .1s,color .1s}
+button.on{background:var(--active);color:var(--mag)}
+button.act{background:var(--active);color:var(--cyan)}
+button.play{background:rgba(0,255,255,.1);color:var(--cyan);box-shadow:0 0 8px rgba(0,255,255,.2)}
+button.rec-live{background:rgba(255,0,0,.15);color:#ff4444;border-color:rgba(255,68,68,.4)}
+
+/* Evolution grid */
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+
+/* Spectrum bar */
+.spbar{position:relative;height:20px;border-radius:4px;overflow:hidden;background:linear-gradient(90deg,#003399,#0099ff,#00ff99,#ffaa00,#ff3300)}
+#cur{position:absolute;top:0;bottom:0;width:3px;background:white;border-radius:2px;box-shadow:0 0 6px white;left:30%}
+
+/* Spectral grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+
+/* DSP chips */
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;padding:2px 7px;border-radius:3px;border:1px solid var(--border);background:var(--btn);color:var(--dim);transition:all .3s}
+.chip.on{color:var(--cyan);border-color:rgba(0,255,255,.35);background:rgba(0,255,255,.07)}
+.chip.form-on{color:var(--mag);border-color:rgba(255,0,255,.35);background:rgba(255,0,255,.07)}
+.chip.rev-on{color:var(--violt);border-color:rgba(153,68,255,.5);background:rgba(153,68,255,.12)}
+
+/* Transport */
+.transport{display:flex;gap:8px;justify-content:center}
+.transport button{padding:10px 22px;font-size:11px}
+
+/* Status */
+#st{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);text-align:center;min-height:14px;transition:color .2s}
+#st.a{color:var(--cyan)}
+
+/* Two-col */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* Library */
+.titem{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--btn);border:1px solid var(--border);border-radius:5px}
+.tname{flex:1;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--w)}
+.tdur{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim)}
+.titem button{padding:3px 7px;font-size:8px}
+
+/* Slot status */
+.sstat{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim)}
+
+/* Silence controls */
+#silCtrl{display:flex;flex-direction:column;gap:6px}
+
+/* Presets row */
+#pGrid{display:flex;gap:6px;flex-wrap:wrap}
+#pGrid button{padding:7px 16px}
+#pGrid button.saved{border-color:rgba(0,255,255,.3);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><span class="s">SPUK</span><span class="l">LAB</span></div>
+    <span class="ver">VoxDust v18.1 — Cohesion</span>
+  </header>
+
+  <canvas id="ac" width="480" height="100"></canvas>
+
+  <!-- PLAYBACK -->
+  <div class="sec">
+    <div class="slbl">Playback</div>
+    <div class="row">
+      <label>STRETCH</label>
+      <input type="range" id="stretch" min="50" max="200" value="100">
+      <span class="val" id="stretchV">1.0x</span>
+    </div>
+    <div class="row">
+      <label>A &lt;-&gt; B</label>
+      <input type="range" id="mix" min="0" max="100" value="50">
+      <span class="val" id="mixV">50</span>
+    </div>
+    <div class="row" style="gap:8px">
+      <button id="lfoBtn">LFO OFF</button>
+      <div class="row" style="flex:1">
+        <label>FREQ</label>
+        <input type="range" id="lfoFreq" min="10" max="500" value="50">
+        <span class="val" id="lfoFreqV">0.5Hz</span>
+      </div>
+    </div>
+    <div class="row">
+      <label>DEPTH</label>
+      <input type="range" id="lfoDepth" min="0" max="100" value="30">
+      <span class="val" id="lfoDepthV">30%</span>
+    </div>
+    <div class="row">
+      <button id="loopBtn">LOOP ON</button>
+    </div>
+    <div id="silCtrl">
+      <div class="row">
+        <label>CHANCE</label>
+        <input type="range" id="chance" min="0" max="100" value="40">
+        <span class="val" id="chanceV">40%</span>
+      </div>
+      <div class="row">
+        <label>MIN</label>
+        <input type="range" id="silMin" min="0" max="1000" value="150" step="10">
+        <span class="val" id="silMinV">150ms</span>
+      </div>
+      <div class="row">
+        <label>MAX</label>
+        <input type="range" id="silMax" min="100" max="3000" value="600" step="10">
+        <span class="val" id="silMaxV">600ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLOTS -->
+  <div class="sec twocol">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="slbl">MIC A</div>
+      <div class="sstat" id="statA">ready</div>
+      <button id="recA">REC A</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="slbl">MIC B</div>
+      <div class="sstat" id="statB">ready</div>
+      <button id="recB">REC B</button>
+    </div>
+  </div>
+
+  <!-- EVOLUTION -->
+  <div class="sec">
+    <div class="slbl">Evolution</div>
+    <div class="spbar"><div id="cur"></div></div>
+    <div class="mgrid" id="mgrid"></div>
+  </div>
+
+  <!-- ENTROPY -->
+  <div class="sec">
+    <div class="slbl">Entropy — chaos control</div>
+    <div class="row">
+      <label>ENTROPY</label>
+      <input type="range" id="entropy" min="0" max="100" value="30">
+      <span class="val" id="entropyV">30%</span>
+    </div>
+  </div>
+
+  <!-- SPECTRAL v18 DSP -->
+  <div class="sec">
+    <div class="slbl">Spectral — v18 DSP Active</div>
+    <div class="chips">
+      <span class="chip" id="chipSmear">SMEAR grain</span>
+      <span class="chip" id="chipForm">FORM formant</span>
+      <span class="chip" id="chipRev">REVERB conv</span>
+    </div>
+    <div class="sgrid">
+      <div class="row"><label>FORM</label><input type="range" id="sForm" min="0" max="100" value="50" disabled><span class="val" id="sFormV">50</span></div>
+      <div class="row"><label>SMEAR</label><input type="range" id="sSmear" min="0" max="100" value="0" disabled><span class="val" id="sSmearV">0</span></div>
+      <div class="row"><label>INTENS</label><input type="range" id="sIntens" min="0" max="100" value="80" disabled><span class="val" id="sIntensV">80</span></div>
+      <div class="row"><label>REVERB</label><input type="range" id="sRev" min="0" max="100" value="30" disabled><span class="val" id="sRevV">30</span></div>
+      <div class="row"><label>DRY/WET</label><input type="range" id="sDW" min="0" max="100" value="0" disabled><span class="val" id="sDWV">0</span></div>
+    </div>
+  </div>
+
+  <!-- TRANSPORT -->
+  <div class="transport">
+    <button id="playBtn">PLAY</button>
+    <button id="stopBtn">STOP</button>
+    <button id="recBtn">REC</button>
+  </div>
+
+  <div id="st">v18 loading...</div>
+
+  <!-- LIBRARY -->
+  <div class="sec">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="slbl">Library</div>
+      <button id="packBtn">PACK</button>
+    </div>
+    <div id="tlist"></div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="sec">
+    <div class="slbl">Presets — tap load / hold save</div>
+    <div id="pGrid"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// VoxDust v18 — Spectral DSP Real
+// SMEAR: grain blur scheduler | FORM: formant filter bank | REVERB: convolver IR
+// Behavior engine from v17.2 (matter physics + entropy + transients + silence)
+// ================================================================
+
+// ── STATE ────────────────────────────────────────────────────────
+var S = {
+  matter:0.3, targetMatter:0.3, matterVel:0.0,
+  entropy:0.3,
+  mixAB:0.5, stretch:1.0,
+  playing:false, looping:true,
+  silChance:40, silMin:150, silMax:600,
+  lfoOn:false, lfoFreq:0.5, lfoDepth:0.3,
+  bufA:null, bufB:null,
+  rms:0.0, energyFac:0.1,
+  fastT:0.0, slowT:0.0,
+  // v18 live DSP targets
+  dsmear:0.0, dform:1.0, dreverb:0.0, ddw:0.0
+};
+
+// ── CONSTANTS ────────────────────────────────────────────────────
+var ANCHORS = {Susurro:0.1,'Maquina':0.2,Ritual:0.3,Hibrido:0.4,Eco:0.8,Colapso:0.9};
+// Display names with special chars
+var ANCHOR_LABELS = {Susurro:'Susurro',Maquina:'Máquina',Ritual:'Ritual',Hibrido:'Híbrido',Eco:'Eco',Colapso:'Colapso'};
+var FORMANT_FREQS = [720, 1200, 2400, 3300];  // F1-F4 approximate vocal formants
+
+// ── AUDIO NODES ──────────────────────────────────────────────────
+var AC, analyser;
+var gainA, gainB, gainSum;
+// Formant bank
+var fFilters=[], fGains=[], fBus, fDry;
+// Convolver section
+var convolver, convWet, convDry, masterOut;
+// Sources
+var srcA=null, srcB=null;
+var playTimer=null, playStart=0, lastCycle=-1, lastTickT=0;
+// SMEAR v2 engine
+var smearEngine=null;
+// IR update throttle
+var lastIRUpdate=0, lastIRVal=-1;
+
+// ── INDEXEDDB ────────────────────────────────────────────────────
+var db=null, takes={};
+
+function initDB(){
+  return new Promise((res,rej)=>{
+    var r=indexedDB.open('VoxDust',1);
+    r.onupgradeneeded=e=>e.target.result.createObjectStore('takes',{keyPath:'id'});
+    r.onsuccess=e=>{db=e.target.result;res();};
+    r.onerror=rej;
+  });
+}
+function saveTake(t){
+  return new Promise((res,rej)=>{
+    var tx=db.transaction('takes','readwrite');
+    tx.objectStore('takes').put(t);
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
+function loadAllTakes(){
+  return new Promise(res=>{
+    var tx=db.transaction('takes','readonly');
+    var req=tx.objectStore('takes').getAll();
+    req.onsuccess=e=>{
+      takes={};
+      e.target.result.forEach(t=>takes[t.id]=t);
+      res();
+    };
+  });
+}
+function deleteTakeDB(id){
+  return new Promise(res=>{
+    var tx=db.transaction('takes','readwrite');
+    tx.objectStore('takes').delete(id);
+    tx.oncomplete=res;
+  });
+}
+
+// ── AUDIO INIT ───────────────────────────────────────────────────
+async function initAC(){
+  AC=new(window.AudioContext||window.webkitAudioContext)();
+  analyser=AC.createAnalyser(); analyser.fftSize=256;
+  masterOut=AC.createGain(); masterOut.gain.value=1.0;
+  masterOut.connect(analyser); analyser.connect(AC.destination);
+  gainA=AC.createGain(); gainA.gain.value=0.5;
+  gainB=AC.createGain(); gainB.gain.value=0.5;
+  gainSum=AC.createGain(); gainSum.gain.value=1.0;
+  gainA.connect(gainSum); gainB.connect(gainSum);
+  buildFormantBank();
+  buildConvolver();
+  // SMEAR v2 engine — pool output → gainSum (goes through formant+convolver chain)
+  smearEngine=createSmearEngineV2(AC,{
+    outputNode: gainSum,
+    getBuffer:  function(){ return S.mixAB<0.5?(S.bufA||S.bufB):(S.bufB||S.bufA); },
+    getBufA:    function(){ return S.bufA; },
+    getBufB:    function(){ return S.bufB; },
+    getPlayStart: function(){ return playStart; }
+  });
+}
+
+// ── v18 DSP: FORMANT BANK (FORM) ─────────────────────────────────
+// 4 parallel bandpass filters at vocal formant freqs
+// FORM=1 → tight resonances, vocal structure clear
+// FORM=0 → filters muted, spectral form dissolved
+function buildFormantBank(){
+  fBus=AC.createGain(); fBus.gain.value=1.0;
+  fDry=AC.createGain(); fDry.gain.value=1.0;
+  gainSum.connect(fDry); fDry.connect(fBus);
+  FORMANT_FREQS.forEach(function(freq,i){
+    var f=AC.createBiquadFilter();
+    f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.0;
+    var g=AC.createGain(); g.gain.value=0.0;
+    gainSum.connect(f); f.connect(g); g.connect(fBus);
+    fFilters.push(f); fGains.push(g);
+  });
+}
+
+// ── v18 DSP: CONVOLVER (REVERB) ──────────────────────────────────
+function buildConvolver(){
+  convolver=AC.createConvolver();
+  convWet=AC.createGain(); convWet.gain.value=0.0;
+  convDry=AC.createGain(); convDry.gain.value=1.0;
+  fBus.connect(convDry); fBus.connect(convolver);
+  convolver.connect(convWet);
+  convDry.connect(masterOut); convWet.connect(masterOut);
+  buildIR(0.0);
+}
+
+function buildIR(revParam){
+  var dur=0.5+revParam*1.8;    // 0.5 → 2.3s
+  var decay=5.0-revParam*3.2;  // 5.0 → 1.8 (slower decay as rev increases)
+  var len=Math.floor(AC.sampleRate*dur);
+  var buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(var ch=0;ch<2;ch++){
+    var d=buf.getChannelData(ch);
+    for(var i=0;i<len;i++){
+      var t=i/len;
+      d[i]=(Math.random()*2-1)*Math.pow(1-t,decay);
+    }
+  }
+  convolver.buffer=buf;
+  lastIRVal=revParam;
+}
+
+// Same IR generator for OfflineAudioContext
+function buildIROffline(ctx,revParam){
+  var dur=0.5+revParam*1.8;
+  var decay=5.0-revParam*3.2;
+  var len=Math.floor(ctx.sampleRate*dur);
+  var buf=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(var ch=0;ch<2;ch++){
+    var d=buf.getChannelData(ch);
+    for(var i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  }
+  return buf;
+}
+
+// ── v18 SMEAR v2 — Pool-based grain engine ────────────────────────
+// Drop-in replacement for v1 grain scheduler.
+// Key improvements: pre-allocated GainNode pool (no hot-path alloc),
+// FORM cross-modulates grain duration + detune, RMS-aware density,
+// accumulative burst clock (driven by playTick, not setTimeout),
+// position-aware offset (FORM=high → near playhead, FORM=low → diffuse).
+function createSmearEngineV2(ctx, cfg){
+  var MAX_GRAINS=24;
+  var burstClock=0;
+  var lastGrainPos=0;   // pseudo phase-lock: position memory across bursts
+  var r2=function(){return Math.random()*2-1;};
+
+  // Pre-allocate GainNode pool — never created again after init
+  var pool=[];
+  for(var i=0;i<MAX_GRAINS;i++){
+    var g=ctx.createGain(); g.gain.value=0;
+    g.connect(cfg.outputNode);
+    pool.push({gain:g,src:null});
+  }
+
+  // Linear envelope — cleaner blending between grains, no micro-clicks
+  function applyEnv(gainNode,t0,dur,amp){
+    var g=gainNode.gain;
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(0.0001,t0);
+    g.linearRampToValueAtTime(amp,t0+dur*0.5);
+    g.linearRampToValueAtTime(0.0001,t0+dur);
+  }
+
+  function spawnGrain(p,now,buf,params){
+    var src=ctx.createBufferSource();
+    src.buffer=buf;
+    src.playbackRate.value=params.rate;
+    src.detune.value=params.detune;
+    src.connect(p.gain);
+    applyEnv(p.gain,now,params.dur,params.amp);
+    var safeOff=Math.max(0,Math.min(buf.duration-0.01,params.offset));
+    src.start(now,safeOff,params.dur+0.01);
+    src.stop(now+params.dur+0.015);
+    if(p.src){try{p.src.disconnect();}catch(e){}}
+    p.src=src;
+    src.onended=function(){try{src.disconnect();}catch(e){}};
+  }
+
+  function scheduleBurst(now,sm,f,e,en,buf){
+    // Density: base count × RMS factor (more energy = more grains)
+    var base=Math.floor(1+sm*5);
+    var count=Math.min(8,Math.floor(base*(0.6+en*0.8)));
+    // TASK 2: energy clamp — avoid granular noise on low-energy signals
+    if(en<0.08) count=Math.max(1,Math.floor(count*0.4));
+    // Duration: FORM=high → shorter/more defined; FORM=low → longer/smeared
+    var dur=0.05+(1-f)*0.11;                   // 50–160ms
+    // Detune: FORM=high suppresses pitch chaos
+    var maxDetune=280*(1-f);                    // 0–280 cents
+    var rateJitter=0.02+e*0.03;
+    // Amplitude: tied to smear intensity
+    var amp=0.18+0.22*sm;
+    // TASK 4: position memory — pseudo phase-lock
+    // Current playhead position (normalized [0-1])
+    var playPos=0;
+    if(buf.duration>0){
+      var elapsed=ctx.currentTime-cfg.getPlayStart();
+      playPos=(elapsed%buf.duration)/buf.duration;
+    }
+    var spread=(1-f)*0.1;                       // up to 10% at FORM=0
+    // targetPos = playhead + random spread; lerp toward it based on FORM
+    // FORM=1 → lerp factor=0 → grains lock to lastGrainPos (coherent)
+    // FORM=0 → lerp factor=1 → grains go to target (chaotic)
+    var targetPos=playPos+(Math.random()-0.5)*spread;
+    lastGrainPos=lastGrainPos+(targetPos-lastGrainPos)*(1-f);
+    lastGrainPos=Math.max(0,Math.min(1,lastGrainPos));
+
+    for(var i=0;i<count;i++){
+      var pi=Math.floor(Math.random()*MAX_GRAINS);
+      var p=pool[pi];
+      // Pick buffer (alternate A/B for stereo texture)
+      var gbuf=(i%2===0&&cfg.getBufA&&cfg.getBufA())?cfg.getBufA():(cfg.getBufB&&cfg.getBufB()||buf);
+      // Per-grain micro-variation around the locked position
+      var grainSpread=spread*0.3;
+      var offset=lastGrainPos*gbuf.duration+(Math.random()-0.5)*grainSpread*gbuf.duration;
+      spawnGrain(p,now,gbuf,{
+        dur:dur,
+        offset:offset,
+        detune:r2()*maxDetune,
+        amp:amp/count,
+        rate:1+r2()*rateJitter
+      });
+    }
+  }
+
+  function update(params){
+    if(!params.playing||params.smear<0.05) return;
+    var buf=cfg.getBuffer();
+    if(!buf) return;
+    // Accumulative clock — driven by playTick dt, no setTimeout
+    var intervalMax=0.075, intervalMin=0.018;
+    var interval=intervalMax-params.smear*(intervalMax-intervalMin);
+    var jitter=interval*params.entropy*0.5;
+    burstClock+=params.dt/1000;
+    if(burstClock>=interval+r2()*jitter){
+      scheduleBurst(ctx.currentTime,params.smear,params.form,
+        params.entropy,params.energy,buf);
+      burstClock=0;
+    }
+  }
+
+  return{update:update};
+}
+
+// ── UPDATE DSP PARAMS ─────────────────────────────────────────────
+function applyDSP(spec){
+  if(!AC) return;
+  S.dsmear=spec.smear; S.dform=spec.form;
+  S.dreverb=spec.reverb; S.ddw=spec.dryWet;
+
+  var now=AC.currentTime;
+
+  // FORM: formant filter gains + Q
+  var fgv=spec.form*0.38;  // max 38% blend (subtle, additive)
+  for(var i=0;i<fGains.length;i++){
+    fGains[i].gain.setTargetAtTime(fgv,now,0.06);
+    fFilters[i].Q.setTargetAtTime(1.0+spec.form*9.0,now,0.08);
+  }
+
+  // REVERB: wet/dry — coupled with SMEAR (space integrates with texture)
+  var wetAmt=spec.dryWet*(spec.reverb*(0.4+spec.smear*0.6));
+  convWet.gain.setTargetAtTime(wetAmt*0.8,now,0.12);
+  convDry.gain.setTargetAtTime(1.0-wetAmt*0.4,now,0.12);
+
+  // Re-generate IR if reverb changed significantly + throttle to 2s
+  var now2=Date.now();
+  if(Math.abs(spec.reverb-lastIRVal)>0.1&&(now2-lastIRUpdate)>2000){
+    buildIR(spec.reverb);
+    lastIRUpdate=now2;
+  }
+
+  // SMEAR: handled in playTick via smearEngine.update() — no separate timer
+  // DSP chip indicators
+  document.getElementById('chipSmear').className='chip'+(spec.smear>0.05?' on':'');
+  document.getElementById('chipForm').className='chip'+(spec.form>0.25?' form-on':'');
+  document.getElementById('chipRev').className='chip'+(spec.reverb>0.12?' rev-on':'');
+}
+
+// ── MATH HELPERS ─────────────────────────────────────────────────
+function smoothstep(e0,e1,x){
+  var t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));
+  return t*t*(3-2*t);
+}
+function clamp(v,lo,hi){ lo=lo===undefined?0:lo; hi=hi===undefined?1:hi; return Math.max(lo,Math.min(hi,v)); }
+function seededRnd(seed){
+  var s=seed;
+  return function(){s=((s*1664525+1013904223)>>>0); return s/4294967295;};
+}
+
+// ── MATTER PHYSICS ────────────────────────────────────────────────
+function updatePhysics(dt){
+  var diff=S.targetMatter-S.matter;
+  if(Math.abs(diff)<0.02) return;
+  var friction=0.96+(1-S.entropy)*0.03;
+  var sign=diff>0?1:-1;
+  var acc=Math.pow(Math.abs(diff),1.2)*0.002*sign;
+  S.matterVel+=acc;
+  S.matterVel*=friction;
+  S.matter=clamp(S.matter+S.matterVel);
+}
+
+function decayTransients(dt){
+  S.fastT*=Math.pow(0.95,dt/16.67);
+  S.slowT*=Math.pow(0.985,dt/16.67);
+  if(S.fastT<0.01) S.fastT=0;
+  if(S.slowT<0.01) S.slowT=0;
+}
+
+// ── SPECTRAL COMPUTATION ──────────────────────────────────────────
+function computeSpec(m,ent,fast,slow){
+  var micro=ent*0.5;
+  var vari=0.1+S.energyFac*0.1;
+  var smear=Math.pow(m,2.2)+micro*0.05+fast*vari*0.12+slow*vari*0.05;
+  var form=1-Math.pow(m,1.5);
+  var intensity=0.8+Math.sin(m*Math.PI)*0.2;
+  var reverb=smoothstep(0.2,0.9,m)+fast*0.1;
+  var dw=Math.pow(m,1.8);
+  // Neutral zones
+  if(m>=0.25&&m<=0.35){smear*=0.5;reverb*=0.7;}   // Ritual plateau
+  if(m>=0.75&&m<=0.85){reverb*=1.2;}               // Eco plateau
+  // Polarity (rare transient)
+  form*=(1-(fast*0.05+ent*0.05+slow*0.02));
+  return{form:clamp(form),smear:clamp(smear),intensity:clamp(intensity),reverb:clamp(reverb),dryWet:clamp(dw)};
+}
+
+function updateSpectralUI(){
+  var spec=computeSpec(S.matter,S.entropy,S.fastT,S.slowT);
+  var ids=['sForm','sSmear','sIntens','sRev','sDW'];
+  var vids=['sFormV','sSmearV','sIntensV','sRevV','sDWV'];
+  var vals=[spec.form,spec.smear,spec.intensity,spec.reverb,spec.dryWet];
+  for(var i=0;i<ids.length;i++){
+    var v=Math.round(vals[i]*100);
+    document.getElementById(ids[i]).value=v;
+    document.getElementById(vids[i]).textContent=v;
+  }
+  applyDSP(spec);
+  // Spectrum cursor
+  var glow=Math.abs(S.matterVel)*80;
+  var cur=document.getElementById('cur');
+  cur.style.left=(S.matter*100)+'%';
+  cur.style.boxShadow='0 0 '+(4+glow)+'px '+(1+glow/2)+'px white';
+}
+
+// ── CYCLE TRANSITION (silence driver) ────────────────────────────
+function onCycleTransition(silenceOccurred){
+  S.energyFac=Math.pow(Math.max(0.05,S.rms),0.6);
+  if(silenceOccurred){
+    var delta=1.0*S.energyFac*S.entropy*0.02;
+    if(Math.random()<0.3){
+      S.targetMatter=clamp(S.targetMatter-delta*0.5);
+      setStatus('[inverted] silence polarity',true);
+    } else {
+      S.targetMatter=clamp(S.targetMatter+delta);
+    }
+    S.fastT=1.0; S.slowT=0.8;
+  } else {
+    S.targetMatter=clamp(S.targetMatter+(-0.3*S.energyFac*S.entropy*0.02));
+  }
+}
+
+// ── PLAYBACK ──────────────────────────────────────────────────────
+function startPlayback(){
+  if(!S.bufA&&!S.bufB){setStatus('load samples first',false);return;}
+  if(S.playing) stopPlayback();
+  AC.resume();
+  S.playing=true;
+  var bA=S.bufA||S.bufB, bB=S.bufB||S.bufA;
+  srcA=AC.createBufferSource(); srcA.buffer=bA; srcA.loop=S.looping;
+  srcA.playbackRate.value=S.stretch; srcA.connect(gainA);
+  srcB=AC.createBufferSource(); srcB.buffer=bB; srcB.loop=S.looping;
+  srcB.playbackRate.value=S.stretch; srcB.connect(gainB);
+  gainA.gain.setValueAtTime(1-S.mixAB,AC.currentTime);
+  gainB.gain.setValueAtTime(S.mixAB,AC.currentTime);
+  playStart=AC.currentTime; lastCycle=-1;
+  srcA.start(); srcB.start();
+  lastTickT=Date.now();
+  playTimer=setInterval(playTick,30);
+  document.getElementById('playBtn').className='play';
+  setStatus('playing',true);
+}
+
+function playTick(){
+  var now=Date.now();
+  var dt=now-(lastTickT||now);
+  lastTickT=now;
+  updatePhysics(dt);
+  decayTransients(dt);
+  // RMS proxy
+  var fd=new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(fd);
+  var sum=0; fd.forEach(function(v){sum+=v*v;});
+  S.rms=Math.sqrt(sum/fd.length)/255;
+  // LFO
+  if(S.lfoOn){
+    var lv=Math.sin((Date.now()/1000)*S.lfoFreq*Math.PI*2)*S.lfoDepth*0.5;
+    gainA.gain.setTargetAtTime(clamp(1-S.mixAB-lv),AC.currentTime,0.01);
+    gainB.gain.setTargetAtTime(clamp(S.mixAB+lv),AC.currentTime,0.01);
+  } else {
+    gainA.gain.setTargetAtTime(1-S.mixAB,AC.currentTime,0.01);
+    gainB.gain.setTargetAtTime(S.mixAB,AC.currentTime,0.01);
+  }
+  // Cycle / silence
+  var buf=S.bufA||S.bufB;
+  if(buf&&S.looping){
+    var elapsed=AC.currentTime-playStart;
+    var ld=buf.duration;
+    var cn=Math.floor(elapsed/ld);
+    if(cn!==lastCycle){
+      lastCycle=cn;
+      var chance=(S.silChance+S.entropy*20)/100;
+      var doSil=Math.random()<chance;
+      onCycleTransition(doSil);
+      if(doSil&&gainSum){
+        var sd=S.silMin+Math.random()*(S.silMax-S.silMin);
+        var t0=AC.currentTime;
+        gainSum.gain.cancelScheduledValues(t0);
+        gainSum.gain.setValueAtTime(1,t0);
+        gainSum.gain.linearRampToValueAtTime(0,t0+0.01);
+        gainSum.gain.setValueAtTime(0,t0+0.01);
+        gainSum.gain.linearRampToValueAtTime(1,t0+0.01+sd/1000);
+        setStatus('silence '+Math.round(sd)+'ms',true);
+      }
+    }
+  }
+  updateSpectralUI();
+  // SMEAR v2 — accumulative clock update (no setTimeout, driven by tick)
+  if(smearEngine){
+    smearEngine.update({
+      playing: S.playing,
+      smear:   S.dsmear,
+      form:    S.dform,
+      entropy: S.entropy,
+      energy:  S.energyFac,
+      dt:      dt
+    });
+  }
+}
+
+function stopPlayback(){
+  S.playing=false;
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  try{srcA&&srcA.stop();}catch(e){}
+  try{srcB&&srcB.stop();}catch(e){}
+  srcA=null; srcB=null;
+  if(gainSum){gainSum.gain.cancelScheduledValues(AC.currentTime);gainSum.gain.setValueAtTime(1,AC.currentTime);}
+  document.getElementById('playBtn').className='';
+  setStatus('stopped',false);
+}
+
+// ── MIC RECORDING ─────────────────────────────────────────────────
+var micStream=null, micProc=null, micChunks=[], micSlot='A', micOn=false;
+
+async function toggleMic(slot){
+  if(micOn&&micSlot===slot){stopMic();return;}
+  if(micOn) stopMic();
+  micSlot=slot;
+  await startMic(slot);
+}
+
+async function startMic(slot){
+  try{
+    AC.resume();
+    micStream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+    });
+    var src=AC.createMediaStreamSource(micStream);
+    micProc=AC.createScriptProcessor(4096,1,1);
+    micChunks=[];
+    src.connect(micProc); micProc.connect(AC.destination);
+    micProc.onaudioprocess=function(e){
+      if(!micOn) return;
+      micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    setTimeout(function(){
+      micOn=true;
+      var btn=slot==='A'?'recA':'recB';
+      document.getElementById(btn).className='rec-live';
+      document.getElementById('stat'+slot).textContent='REC live';
+      setStatus('recording '+slot+'...',true);
+    },200);
+  } catch(e){setStatus('mic error: '+e.message,false);}
+}
+
+function stopMic(){
+  if(!micOn) return;
+  micOn=false;
+  var slot=micSlot;
+  try{micProc.disconnect();}catch(e){}
+  try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
+  document.getElementById(slot==='A'?'recA':'recB').className='';
+  document.getElementById('stat'+slot).textContent='processing...';
+  if(micChunks.length===0){setStatus('no audio captured',false);return;}
+  var len=0; micChunks.forEach(function(c){len+=c.length;});
+  var flat=new Float32Array(len), off=0;
+  micChunks.forEach(function(c){flat.set(c,off);off+=c.length;});
+  var peak=0; flat.forEach(function(v){if(Math.abs(v)>peak)peak=Math.abs(v);});
+  if(peak>0) for(var i=0;i<flat.length;i++) flat[i]=flat[i]/peak*0.9;
+  var ab=AC.createBuffer(1,len,AC.sampleRate);
+  ab.getChannelData(0).set(flat);
+  if(slot==='A') S.bufA=ab; else S.bufB=ab;
+  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s';
+  setStatus('slot '+slot+' ready',true);
+  micChunks=[];
+}
+
+// ── REC TAKE (v18 with real DSP) ──────────────────────────────────
+async function recTake(){
+  if(!S.bufA&&!S.bufB){setStatus('no audio to record',false);return;}
+  setStatus('rendering v18 DSP...',true);
+  var buf=S.bufA||S.bufB;
+  var dur=buf.duration, sr=AC.sampleRate;
+  var spec=computeSpec(S.matter,S.entropy,S.fastT,S.slowT);
+  var offline=new OfflineAudioContext(2,Math.floor(dur*sr),sr);
+
+  // Sources
+  var oA=offline.createBufferSource(); oA.buffer=S.bufA||S.bufB;
+  var oB=offline.createBufferSource(); oB.buffer=S.bufB||S.bufA;
+  var ogA=offline.createGain(); ogA.gain.value=1-S.mixAB;
+  var ogB=offline.createGain(); ogB.gain.value=S.mixAB;
+  var ogSum=offline.createGain(); ogSum.gain.value=1.0;
+  oA.connect(ogA); oB.connect(ogB);
+  ogA.connect(ogSum); ogB.connect(ogSum);
+
+  // Formant bank offline
+  var ofBus=offline.createGain();
+  var ofDry=offline.createGain(); ofDry.gain.value=1.0;
+  ogSum.connect(ofDry); ofDry.connect(ofBus);
+  FORMANT_FREQS.forEach(function(freq){
+    var f=offline.createBiquadFilter();
+    f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.0+spec.form*9.0;
+    var g=offline.createGain(); g.gain.value=spec.form*0.38;
+    ogSum.connect(f); f.connect(g); g.connect(ofBus);
+  });
+
+  // Convolver offline
+  var oConv=offline.createConvolver();
+  oConv.buffer=buildIROffline(offline,spec.reverb);
+  var wetAmt=spec.dryWet*spec.reverb;
+  var oWet=offline.createGain(); oWet.gain.value=wetAmt*0.8;
+  var oDry=offline.createGain(); oDry.gain.value=1.0-wetAmt*0.4;
+  ofBus.connect(oConv); oConv.connect(oWet);
+  ofBus.connect(oDry);
+  oWet.connect(offline.destination); oDry.connect(offline.destination);
+
+  oA.start(0); oB.start(0);
+  var rendered=await offline.startRendering();
+
+  // Normalize
+  var ch0=rendered.getChannelData(0);
+  var pk=0; for(var i=0;i<ch0.length;i++) if(Math.abs(ch0[i])>pk) pk=Math.abs(ch0[i]);
+  if(pk>0.001) for(var i=0;i<ch0.length;i++) ch0[i]=ch0[i]/pk*0.9;
+
+  var id=Date.now().toString();
+  var take={
+    id:id, name:'take_'+(Object.keys(takes).length+1),
+    audioData:new Float32Array(ch0),
+    sampleRate:sr, matter:S.matter, entropy:S.entropy,
+    duration:dur, date:new Date().toISOString().slice(0,10), timestamp:Date.now()
+  };
+  takes[id]=take;
+  await saveTake(take);
+  updateTakeList();
+  setStatus('take saved ('+dur.toFixed(1)+'s) v18 DSP',true);
+}
+
+// ── PRESETS ───────────────────────────────────────────────────────
+var presets={};
+
+function buildPresets(){
+  try{presets=JSON.parse(localStorage.getItem('voxdustPresetsV172')||'{}');}catch(e){presets={};}
+  var grid=document.getElementById('pGrid');
+  grid.innerHTML='';
+  ['P1','P2','P3','P4','P5'].forEach(function(p){
+    var btn=document.createElement('button');
+    btn.id='pr_'+p; btn.textContent=p;
+    if(presets[p]) btn.classList.add('saved');
+    var holdT=null;
+    btn.addEventListener('pointerdown',function(){
+      holdT=setTimeout(function(){
+        holdT=null;
+        presets[p]={center:S.matter,range:0.1,entropy:S.entropy,seed:Math.floor(Math.random()*99999)};
+        localStorage.setItem('voxdustPresetsV172',JSON.stringify(presets));
+        btn.classList.add('saved');
+        setStatus(p+' saved',true);
+      },600);
+    });
+    btn.addEventListener('pointerup',function(){
+      if(holdT){clearTimeout(holdT);holdT=null;loadPreset(p);}
+    });
+    btn.addEventListener('pointercancel',function(){if(holdT)clearTimeout(holdT);});
+    grid.appendChild(btn);
+  });
+}
+
+function loadPreset(p){
+  if(!presets[p]){setStatus(p+' empty — hold to save',false);return;}
+  var pr=presets[p];
+  var rnd=seededRnd(pr.seed);
+  S.entropy=pr.entropy;
+  document.getElementById('entropy').value=Math.round(pr.entropy*100);
+  document.getElementById('entropyV').textContent=Math.round(pr.entropy*100)+'%';
+  S.targetMatter=clamp(pr.center+(rnd()-0.5)*pr.range);
+  setStatus(p+' loaded',true);
+}
+
+// ── LIBRARY ───────────────────────────────────────────────────────
+function updateTakeList(){
+  var list=document.getElementById('tlist');
+  var sorted=Object.values(takes).sort(function(a,b){return b.timestamp-a.timestamp;});
+  if(sorted.length===0){
+    list.innerHTML='<div style="font-family:\'JetBrains Mono\',monospace;font-style:italic;font-size:9px;color:var(--dim);padding:4px">no takes</div>';
+    return;
+  }
+  list.innerHTML='';
+  sorted.forEach(function(t){
+    var el=document.createElement('div'); el.className='titem';
+    el.innerHTML='<span class="tname">'+t.name+'</span>'
+      +'<span class="tdur">'+t.duration.toFixed(1)+'s</span>'
+      +'<button onclick="loadTake(\''+t.id+'\',\'A\')">up A</button>'
+      +'<button onclick="loadTake(\''+t.id+'\',\'B\')">up B</button>'
+      +'<button onclick="deleteTake(\''+t.id+'\')" style="color:var(--mag)">del</button>';
+    list.appendChild(el);
+  });
+}
+
+function loadTake(id,slot){
+  var t=takes[id]; if(!t) return;
+  var buf=AC.createBuffer(1,t.audioData.length,t.sampleRate);
+  buf.getChannelData(0).set(t.audioData);
+  if(slot==='A'){S.bufA=buf;document.getElementById('statA').textContent=t.duration.toFixed(1)+'s';}
+  else{S.bufB=buf;document.getElementById('statB').textContent=t.duration.toFixed(1)+'s';}
+  setStatus('take -> slot '+slot,true);
+}
+
+async function deleteTake(id){
+  delete takes[id]; await deleteTakeDB(id); updateTakeList();
+}
+
+// ── PACK EXPORT ───────────────────────────────────────────────────
+async function downloadPack(){
+  var arr=Object.values(takes);
+  if(!arr.length){setStatus('no takes to export',false);return;}
+  setStatus('packing...',true);
+  var zip=new JSZip();
+  arr.forEach(function(t){zip.file(t.name+'.wav',encodeWAV(t.audioData,t.sampleRate));});
+  var blob=await zip.generateAsync({type:'blob'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download='VoxDust_'+Date.now()+'.zip'; a.click();
+  setStatus('pack exported',true);
+}
+
+function encodeWAV(samples,sr){
+  var len=samples.length;
+  var buf=new ArrayBuffer(44+len*2);
+  var v=new DataView(buf);
+  var w=function(o,s){for(var i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+len*2,true);w(8,'WAVEfmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);
+  v.setUint16(34,16,true);w(36,'data');v.setUint32(40,len*2,true);
+  for(var i=0;i<len;i++){
+    var s=Math.max(-1,Math.min(1,samples[i]));
+    v.setInt16(44+i*2,s<0?s*0x8000:s*0x7FFF,true);
+  }
+  return buf;
+}
+
+// ── MATTER GRID ───────────────────────────────────────────────────
+function buildMatterGrid(){
+  var grid=document.getElementById('mgrid');
+  Object.entries(ANCHORS).forEach(function(kv){
+    var key=kv[0], val=kv[1];
+    var btn=document.createElement('button');
+    btn.textContent=ANCHOR_LABELS[key]||key;
+    btn.dataset.v=val;
+    if(Math.abs(val-S.matter)<0.05) btn.classList.add('act');
+    btn.addEventListener('click',function(){
+      S.targetMatter=val;
+      grid.querySelectorAll('button').forEach(function(b){b.classList.remove('act');});
+      btn.classList.add('act');
+    });
+    grid.appendChild(btn);
+  });
+}
+
+// ── ANALYSER CANVAS ───────────────────────────────────────────────
+function drawAnalyser(){
+  var canvas=document.getElementById('ac');
+  canvas.width=canvas.offsetWidth||480;
+  var ctx=canvas.getContext('2d');
+  var W=canvas.width, H=canvas.height;
+  (function loop(){
+    requestAnimationFrame(loop);
+    ctx.clearRect(0,0,W,H);
+    if(!analyser) return;
+    var d=new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(d);
+    ctx.beginPath();
+    ctx.strokeStyle='#9944ff'; ctx.lineWidth=2;
+    var step=W/d.length;
+    d.forEach(function(v,i){
+      var x=i*step, y=H-(v/255)*H;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // DSP activity overlays
+    if(S.dsmear>0.04){
+      ctx.fillStyle='rgba(0,255,255,'+(S.dsmear*0.05)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    if(S.dreverb>0.1){
+      ctx.fillStyle='rgba(153,68,255,'+(S.dreverb*0.04)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    if(S.dform>0.5){
+      ctx.fillStyle='rgba(255,0,255,'+(S.dform*0.025)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+  })();
+}
+
+// ── STATUS ────────────────────────────────────────────────────────
+function setStatus(msg,active){
+  var el=document.getElementById('st');
+  el.textContent=msg; el.className=active?'a':'';
+}
+
+// ── UI EVENTS ─────────────────────────────────────────────────────
+function initUI(){
+  document.getElementById('stretch').addEventListener('input',function(e){
+    S.stretch=e.target.value/100;
+    document.getElementById('stretchV').textContent=S.stretch.toFixed(1)+'x';
+    if(srcA) srcA.playbackRate.value=S.stretch;
+    if(srcB) srcB.playbackRate.value=S.stretch;
+  });
+  document.getElementById('mix').addEventListener('input',function(e){
+    S.mixAB=e.target.value/100;
+    document.getElementById('mixV').textContent=e.target.value;
+  });
+  document.getElementById('lfoBtn').addEventListener('click',function(e){
+    S.lfoOn=!S.lfoOn;
+    e.target.textContent='LFO '+(S.lfoOn?'ON':'OFF');
+    e.target.className=S.lfoOn?'on':'';
+  });
+  document.getElementById('lfoFreq').addEventListener('input',function(e){
+    S.lfoFreq=e.target.value/100;
+    document.getElementById('lfoFreqV').textContent=S.lfoFreq.toFixed(1)+'Hz';
+  });
+  document.getElementById('lfoDepth').addEventListener('input',function(e){
+    S.lfoDepth=e.target.value/100;
+    document.getElementById('lfoDepthV').textContent=e.target.value+'%';
+  });
+  document.getElementById('loopBtn').addEventListener('click',function(e){
+    S.looping=!S.looping;
+    e.target.textContent='LOOP '+(S.looping?'ON':'OFF');
+    e.target.className=S.looping?'':'on';
+    document.getElementById('silCtrl').style.display=S.looping?'':'none';
+    if(srcA) srcA.loop=S.looping;
+    if(srcB) srcB.loop=S.looping;
+  });
+  document.getElementById('chance').addEventListener('input',function(e){
+    S.silChance=parseInt(e.target.value);
+    document.getElementById('chanceV').textContent=e.target.value+'%';
+  });
+  document.getElementById('silMin').addEventListener('input',function(e){
+    S.silMin=parseInt(e.target.value);
+    document.getElementById('silMinV').textContent=e.target.value+'ms';
+  });
+  document.getElementById('silMax').addEventListener('input',function(e){
+    S.silMax=parseInt(e.target.value);
+    document.getElementById('silMaxV').textContent=e.target.value+'ms';
+  });
+  document.getElementById('entropy').addEventListener('input',function(e){
+    S.entropy=e.target.value/100;
+    document.getElementById('entropyV').textContent=e.target.value+'%';
+  });
+  // Mic REC — iOS canonical fix: resume + setTimeout before getUserMedia
+  document.getElementById('recA').addEventListener('click',function(){
+    AC.resume(); setTimeout(function(){toggleMic('A');},50);
+  });
+  document.getElementById('recB').addEventListener('click',function(){
+    AC.resume(); setTimeout(function(){toggleMic('B');},50);
+  });
+  // Transport
+  document.getElementById('playBtn').addEventListener('click',function(){
+    AC.resume();
+    if(S.playing) stopPlayback(); else startPlayback();
+  });
+  document.getElementById('stopBtn').addEventListener('click',stopPlayback);
+  document.getElementById('recBtn').addEventListener('click',recTake);
+  document.getElementById('packBtn').addEventListener('click',downloadPack);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+async function init(){
+  await initDB();
+  buildMatterGrid();
+  buildPresets();
+  await initAC();
+  await loadAllTakes();
+  updateTakeList();
+  initUI();
+  drawAnalyser();
+  updateSpectralUI();
+  setStatus('v18.1 cohesion ready',false);
+}
+
+init();
+</script>
+</body>
+</html>
