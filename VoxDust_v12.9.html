@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>VoxDust v12.9</title>
+<title>VoxDust v12.9 FIXED</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
@@ -106,7 +106,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;bac
 
 <header>
   <div class="logo"><span class="spuk">SPUK</span><span class="lab">LAB</span></div>
-  <div class="version">VoxDust v12.9</div>
+  <div class="version">VoxDust v12.9 FIXED</div>
 </header>
 
 <div class="canvas-wrap" id="canvasWrap">
@@ -176,8 +176,8 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;bac
 
 <div class="transport">
   <button class="tbtn" id="btnPlay">▶ PLAY</button>
-  <button class="tbtn disabled" id="btnStop">⏹ STOP</button>
   <button class="tbtn" id="btnLoop">⟲ LOOP</button>
+  <button class="tbtn disabled" id="btnStop">⏹ STOP</button>
   <button class="tbtn" id="btnRec">⏺ REC</button>
 </div>
 
@@ -252,7 +252,7 @@ var state = {
   form: 0.5, smear: 0.5, intensity: 0.5, reverb: 0.3, dryWet: 0.5,
   matter: 'Ritual', mixAB: 0.5, timeStretch: 1,
   bufA: null, bufB: null, isPlaying: false,
-  loopEnabled: false, loopCycles: 2, cyclesCompleted: 0,
+  loopEnabled: false, loopCycles: 2,
   silenceEnabled: false, silenceChance: 30, silenceDuration: 100, silencePattern: 'RANDOM',
   silenceMarkovChance: 30,
   lfoEnabled: false, lfoFreq: 0.5, lfoDepth: 0.3,
@@ -261,7 +261,7 @@ var state = {
 var micRecordingState = { recording: false, processor: null, chunksA: [], chunksB: [] };
 var takes = {};
 var presets = JSON.parse(localStorage.getItem('voxdustPresets')) || {};
-var playEngine = { srcA: null, srcB: null, gainA: null, gainB: null, gainSum: null, startTime: 0, cycleStartTime: 0, loopDur: 0, interval: null };
+var playEngine = { srcA: null, srcB: null, gainA: null, gainB: null, gainSum: null, startTime: 0, loopDur: 0, interval: null, lastCycleNum: -1 };
 
 const STATES = { Susurro:0.1, Eco:0.8, Ritual:0.3, Máquina:0.2, Híbrido:0.4, Colapso:0.9 };
 
@@ -272,9 +272,7 @@ function initDB() {
     req.onsuccess = () => { db = req.result; resolve(); };
     req.onupgradeneeded = (e) => {
       const dbx = e.target.result;
-      if (!dbx.objectStoreNames.contains('takes')) {
-        dbx.createObjectStore('takes', { keyPath: 'id' });
-      }
+      if (!dbx.objectStoreNames.contains('takes')) dbx.createObjectStore('takes', { keyPath: 'id' });
     };
   });
 }
@@ -363,10 +361,7 @@ function buildPresets() {
 }
 
 function savePreset(name) {
-  presets[name] = {
-    form: state.form, smear: state.smear, intensity: state.intensity,
-    reverb: state.reverb, dryWet: state.dryWet, matter: state.matter,
-  };
+  presets[name] = { form: state.form, smear: state.smear, intensity: state.intensity, reverb: state.reverb, dryWet: state.dryWet, matter: state.matter };
   localStorage.setItem('voxdustPresets', JSON.stringify(presets));
   setStatus(name + ' saved', false);
 }
@@ -395,15 +390,14 @@ document.getElementById('btnLoop').addEventListener('click', () => {
   state.loopEnabled = !state.loopEnabled;
   const btn = document.getElementById('btnLoop');
   const control = document.getElementById('loopControl');
-  
   if (state.loopEnabled) {
     btn.classList.add('on');
     control.style.display = 'flex';
-    setStatus('loop ON', false);
+    setStatus('LOOP ON (' + state.loopCycles + ' cycles)', false);
   } else {
     btn.classList.remove('on');
     control.style.display = 'none';
-    setStatus('loop OFF', false);
+    setStatus('LOOP OFF (free play)', false);
   }
 });
 
@@ -496,9 +490,7 @@ async function toggleMicRecording(slot) {
   } else {
     await getAC().resume();
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-      });
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       micRecordingState.chunksA = [];
       micRecordingState.chunksB = [];
       micRecordingState.recording = true;
@@ -571,7 +563,6 @@ function handlePlayTap() {
     if (!state.isPlaying) startPlayback();
   } else {
     stopPlayback();
-    state.cyclesCompleted = 0;
     startPlayback();
   }
 }
@@ -586,7 +577,7 @@ function startPlayback() {
   }
   
   state.isPlaying = true;
-  state.cyclesCompleted = 0;
+  playEngine.lastCycleNum = -1;
   document.getElementById('btnPlay').classList.add('on');
   document.getElementById('btnStop').classList.remove('disabled');
   document.getElementById('playhead').style.display = 'block';
@@ -621,7 +612,6 @@ function startPlayback() {
   playEngine.gainB = gainB;
   playEngine.gainSum = gainSum;
   playEngine.startTime = AC.currentTime;
-  playEngine.cycleStartTime = AC.currentTime;
   playEngine.loopDur = loopDur / state.timeStretch;
   
   playEngine.interval = setInterval(() => {
@@ -631,20 +621,21 @@ function startPlayback() {
     }
     
     const elapsed = AC.currentTime - playEngine.startTime;
-    const cycleElapsed = AC.currentTime - playEngine.cycleStartTime;
+    const currentCycleNum = Math.floor(elapsed / playEngine.loopDur);
     
-    // LOOP: si cycleElapsed >= loopDur, nuevo ciclo
-    if (cycleElapsed >= playEngine.loopDur) {
-      state.cyclesCompleted++;
-      playEngine.cycleStartTime = AC.currentTime;
+    // DETECTAR NUEVA REPETICIÓN
+    if (currentCycleNum > playEngine.lastCycleNum) {
+      playEngine.lastCycleNum = currentCycleNum;
       
-      if (state.loopEnabled && state.cyclesCompleted >= state.loopCycles) {
+      // Si LOOP está ON y alcanzamos N ciclos, parar
+      if (state.loopEnabled && currentCycleNum >= state.loopCycles) {
         stopPlayback();
+        setStatus('LOOP: ' + currentCycleNum + ' ciclos completados', false);
         return;
       }
       
       // SILENCE entre ciclos
-      if (state.silenceEnabled && state.cyclesCompleted > 0) {
+      if (state.silenceEnabled && currentCycleNum > 0) {
         const roll = Math.random() * 100;
         const hasSilence = roll < state.silenceMarkovChance;
         if (hasSilence) {
@@ -655,11 +646,13 @@ function startPlayback() {
           gainSum.gain.setValueAtTime(0, now + 0.01);
           gainSum.gain.linearRampToValueAtTime(1, now + state.silenceDuration / 1000);
           if (state.silencePattern === 'MARKOV') state.silenceMarkovChance = Math.min(state.silenceMarkovChance + 10, 95);
-          setStatus('Ciclo ' + state.cyclesCompleted + ' - SILENCIO', false);
+          setStatus('Ciclo ' + currentCycleNum + ' - SILENCE', false);
         } else {
           if (state.silencePattern === 'MARKOV') state.silenceMarkovChance = Math.max(state.silenceMarkovChance - 5, state.silenceChance);
-          setStatus('Ciclo ' + state.cyclesCompleted, false);
+          setStatus('Ciclo ' + currentCycleNum, false);
         }
+      } else if (!state.silenceEnabled) {
+        setStatus('Ciclo ' + currentCycleNum, false);
       }
     }
     
@@ -674,7 +667,7 @@ function startPlayback() {
     playEngine.gainA.gain.value = 1 - mixVal;
     playEngine.gainB.gain.value = mixVal;
     
-    const cycleProgress = (cycleElapsed % playEngine.loopDur) / playEngine.loopDur;
+    const cycleProgress = (elapsed % playEngine.loopDur) / playEngine.loopDur;
     document.getElementById('playhead').style.left = (cycleProgress * document.getElementById('canvasWrap').offsetWidth) + 'px';
   }, 30);
 }
@@ -774,7 +767,6 @@ document.getElementById('btnRec').addEventListener('click', async () => {
 function loadCarrier(takeId, slot) {
   const take = takes[takeId];
   if (!take) { setStatus('take not found', true); return; }
-  
   const buf = audioDataToBuffer(take.audioData, take.sampleRate);
   if (slot === 'A') {
     state.bufA = buf;
@@ -792,7 +784,6 @@ async function downloadPack() {
   btn.textContent = 'PACKING…';
   btn.disabled = true;
   const zip = new JSZip();
-  
   Object.values(takes).forEach(take => {
     const audioData = take.audioData;
     const len = audioData.length;
@@ -817,7 +808,6 @@ async function downloadPack() {
     }
     zip.file(`${take.matter}_${take.id.slice(-4)}.wav`, ab);
   });
-  
   const blob = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -857,17 +847,14 @@ function updateTakeList() {
     info.appendChild(meta);
     const btns = document.createElement('div');
     btns.className = 'lib-btns';
-    
     const carrierABtn = document.createElement('button');
     carrierABtn.className = 'lib-btn';
     carrierABtn.textContent = '↑A';
     carrierABtn.addEventListener('click', () => loadCarrier(t.id, 'A'));
-    
     const carrierBBtn = document.createElement('button');
     carrierBBtn.className = 'lib-btn';
     carrierBBtn.textContent = '↑B';
     carrierBBtn.addEventListener('click', () => loadCarrier(t.id, 'B'));
-    
     const delBtn = document.createElement('button');
     delBtn.className = 'lib-btn';
     delBtn.style.color = 'var(--magenta)';
@@ -881,7 +868,6 @@ function updateTakeList() {
       updateTakeList();
       setStatus('deleted: ' + t.name, false);
     });
-    
     btns.appendChild(carrierABtn);
     btns.appendChild(carrierBBtn);
     btns.appendChild(delBtn);
@@ -931,7 +917,7 @@ async function init() {
   await loadTakesFromIDB();
   updateTakeList();
   drawAnalyser();
-  setStatus('ready v12.9', false);
+  setStatus('ready v12.9 FIXED', false);
 }
 
 init();
