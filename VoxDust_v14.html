@@ -302,9 +302,91 @@ function handlePlayTap(){const e=Date.now()-playTouchStart;if(e<300){if(!state.i
 document.getElementById('btnPlay').addEventListener('mouseup',handlePlayTap);
 document.getElementById('btnPlay').addEventListener('touchend',handlePlayTap);
 
-function startPlayback(){if(!state.bufA||!state.bufB){setStatus('rec A + B first',true);return;}state.isPlaying=true;playEngine.lastCycleNum=-1;document.getElementById('btnPlay').classList.add('on');document.getElementById('btnStop').classList.remove('disabled');document.getElementById('playhead').style.display='block';const ld=Math.min(state.bufA.duration,state.bufB.duration);const sA=AC.createBufferSource();const sB=AC.createBufferSource();sA.buffer=state.bufA;sB.buffer=state.bufB;sA.loop=true;sB.loop=true;const gA=AC.createGain();const gB=AC.createGain();const gS=AC.createGain();gS.gain.value=1;sA.connect(gA);sB.connect(gB);gA.connect(gS);gB.connect(gS);gS.connect(AC.destination);analyser.connect(AC.destination);sA.start(0);sB.start(0);playEngine.srcA=sA;playEngine.srcB=sB;playEngine.gainA=gA;playEngine.gainB=gB;playEngine.gainSum=gS;playEngine.startTime=AC.currentTime;playEngine.loopDur=ld/state.timeStretch;playEngine.interval=setInterval(()=>{if(!state.isPlaying){clearInterval(playEngine.interval);return;}const e=AC.currentTime-playEngine.startTime;const cn=Math.floor(e/playEngine.loopDur);if(cn>playEngine.lastCycleNum&&state.loopEnabled&&cn>0){playEngine.lastCycleNum=cn;const r=Math.random()*100;const hs=r<state.silenceMarkovChance;if(hs){const sd=Math.random()*(state.silenceMax-state.silenceMin)+state.silenceMin;const n=AC.currentTime;gS.gain.cancelScheduledValues(n);gS.gain.setValueAtTime(1,n);gS.gain.linearRampToValueAtTime(0,n+0.01);gS.gain.setValueAtTime(0,n+0.01);gS.gain.linearRampToValueAtTime(1,n+sd/1000);if(state.silencePattern==='MARKOV'){state.silenceMarkovChance=Math.min(state.silenceMarkovChance+10,95);}setStatus('Ciclo '+cn+' - SILENCE '+sd.toFixed(0)+'ms',false);}else{if(state.silencePattern==='MARKOV'){state.silenceMarkovChance=Math.max(state.silenceMarkovChance-5,state.silenceChance);}setStatus('Ciclo '+cn,false);}}else if(cn>playEngine.lastCycleNum){playEngine.lastCycleNum=cn;}let mv=state.mixAB;if(state.lfoEnabled){const lp=((AC.currentTime-playEngine.startTime)*state.lfoFreq*2*Math.PI)%(2*Math.PI);const ls=Math.sin(lp);mv=Math.max(0,Math.min(1,state.mixAB+ls*state.lfoDepth));}playEngine.gainA.gain.value=1-mv;playEngine.gainB.gain.value=mv;const cp=(e%playEngine.loopDur)/playEngine.loopDur;document.getElementById('playhead').style.left=(cp*document.getElementById('canvasWrap').offsetWidth)+'px';},30);}
-
-function stopPlayback(){state.isPlaying=false;try{if(playEngine.srcA)playEngine.srcA.stop();if(playEngine.srcB)playEngine.srcB.stop();}catch(e){}if(playEngine.interval)clearInterval(playEngine.interval);document.getElementById('btnPlay').classList.remove('on');document.getElementById('btnStop').classList.add('disabled');document.getElementById('playhead').style.display='none';setStatus('stopped',false);}
+function startPlayback(){
+  if(!state.bufA||!state.bufB){setStatus("rec A + B first",true);return;}
+  state.isPlaying=true;
+  playEngine.lastCycleNum=-1;
+  document.getElementById("btnPlay").classList.add("on");
+  document.getElementById("btnStop").classList.remove("disabled");
+  document.getElementById("playhead").style.display="block";
+  const loopDur=Math.min(state.bufA.duration,state.bufB.duration);
+  const srcA=AC.createBufferSource();
+  const srcB=AC.createBufferSource();
+  srcA.buffer=state.bufA;
+  srcB.buffer=state.bufB;
+  srcA.loop=true;
+  srcB.loop=true;
+  const gainA=AC.createGain();
+  const gainB=AC.createGain();
+  const gainSum=AC.createGain();
+  gainSum.gain.value=1;
+  srcA.connect(gainA);
+  srcB.connect(gainB);
+  gainA.connect(gainSum);
+  gainB.connect(gainSum);
+  gainSum.connect(AC.destination);
+  analyser.connect(AC.destination);
+  srcA.start(0);
+  srcB.start(0);
+  playEngine.srcA=srcA;
+  playEngine.srcB=srcB;
+  playEngine.gainA=gainA;
+  playEngine.gainB=gainB;
+  playEngine.gainSum=gainSum;
+  playEngine.startTime=AC.currentTime;
+  playEngine.loopDur=loopDur/state.timeStretch;
+  playEngine.interval=setInterval(()=>{
+    if(!state.isPlaying){clearInterval(playEngine.interval);return;}
+    const elapsed=AC.currentTime-playEngine.startTime;
+    const currentCycleNum=Math.floor(elapsed/playEngine.loopDur);
+    if(currentCycleNum>playEngine.lastCycleNum){
+      playEngine.lastCycleNum=currentCycleNum;
+      if(state.loopEnabled&&currentCycleNum>0){
+        const roll=Math.random()*100;
+        const hasSilence=roll<state.silenceMarkovChance;
+        if(hasSilence){
+          const silenceDur=Math.random()*(state.silenceMax-state.silenceMin)+state.silenceMin;
+          const now=AC.currentTime;
+          gainSum.gain.cancelScheduledValues(now);
+          gainSum.gain.setValueAtTime(1,now);
+          gainSum.gain.linearRampToValueAtTime(0.02,now+0.005);
+          gainSum.gain.setValueAtTime(0,now+0.005);
+          gainSum.gain.linearRampToValueAtTime(1,now+silenceDur/1000+0.01);
+          if(state.silencePattern==="MARKOV"){state.silenceMarkovChance=Math.min(state.silenceMarkovChance+10,95);}
+          setStatus("Ciclo "+currentCycleNum+" - SILENCE "+silenceDur.toFixed(0)+"ms",false);
+        }else{
+          if(state.silencePattern==="MARKOV"){state.silenceMarkovChance=Math.max(state.silenceMarkovChance-5,state.silenceChance);}
+          setStatus("Ciclo "+currentCycleNum,false);
+        }
+      }else if(!state.loopEnabled&&currentCycleNum>0){
+        const now=AC.currentTime;
+        gainSum.gain.cancelScheduledValues(now);
+        gainSum.gain.setValueAtTime(1,now);
+        gainSum.gain.linearRampToValueAtTime(0.98,now+0.005);
+        gainSum.gain.linearRampToValueAtTime(1,now+0.01);
+      }
+    }
+    let mixVal=state.mixAB;
+    if(state.lfoEnabled){
+      const lfoPhase=((AC.currentTime-playEngine.startTime)*state.lfoFreq*2*Math.PI)%(2*Math.PI);
+      const lfoSine=Math.sin(lfoPhase);
+      mixVal=Math.max(0,Math.min(1,state.mixAB+lfoSine*state.lfoDepth));
+    }
+    playEngine.gainA.gain.value=1-mixVal;
+    playEngine.gainB.gain.value=mixVal;
+    const cycleProgress=(elapsed%playEngine.loopDur)/playEngine.loopDur;
+    document.getElementById("playhead").style.left=(cycleProgress*document.getElementById("canvasWrap").offsetWidth)+"px";
+  },30);
+}
+function stopPlayback(){
+  state.isPlaying=false;
+  try{if(playEngine.srcA)playEngine.srcA.stop();if(playEngine.srcB)playEngine.srcB.stop();}catch(e){}
+  if(playEngine.interval)clearInterval(playEngine.interval);
+  document.getElementById("btnPlay").classList.remove("on");
+  document.getElementById("btnStop").classList.add("disabled");
+  document.getElementById("playhead").style.display="none";
+  setStatus("stopped",false);
+}
 
 document.getElementById('btnStop').addEventListener('click',stopPlayback);
 
