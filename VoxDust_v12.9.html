@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VoxDust v12.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg1:#13111f;--bg2:#1b1726;
+  --border:rgba(153,68,255,.18);--glow:rgba(153,68,255,.08);
+  --canvas-bg:rgba(153,68,255,.06);
+  --cyan:#00ffff;--magenta:#ff00ff;--violet:#9944ff;--violetlt:#b580ff;
+  --btn:rgba(153,68,255,.07);--active:rgba(153,68,255,.18);
+  --white:rgba(255,255,255,.92);--dim:rgba(255,255,255,.38);
+}
+body{background:linear-gradient(155deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--white);font-family:'Inter',sans-serif;font-size:13px;display:flex;flex-direction:column;align-items:center;padding:16px 12px 32px;gap:12px;overflow-x:hidden;}
+.logo{font-family:'JetBrains Mono',monospace;font-style:italic;letter-spacing:.04em;}
+.logo .spuk{font-weight:800;color:var(--white);font-size:22px;}
+.logo .lab{font-weight:300;color:var(--cyan);font-size:22px;}
+header{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:flex-start;}
+.version{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:var(--dim);}
+.canvas-wrap{width:100%;max-width:480px;background:var(--canvas-bg);border:1px solid var(--border);border-radius:12px;height:100px;position:relative;overflow:hidden;}
+canvas#analyser{width:100%;height:100%;display:block;}
+.playhead{position:absolute;top:0;left:0;width:2px;height:100%;background:var(--cyan);opacity:.8;pointer-events:none;z-index:10;}
+.controls-row{width:100%;max-width:480px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.ctrl-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:var(--dim);flex-shrink:0;}
+.slots{width:100%;max-width:480px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.slot{background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;}
+.slot-header{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:11px;color:var(--violetlt);letter-spacing:.08em;}
+.slot-name{font-size:9px;color:var(--dim);min-height:12px;overflow:hidden;text-overflow:ellipsis;}
+.slot-btn{width:100%;padding:6px;border:1px solid var(--border);background:var(--btn);border-radius:6px;color:var(--white);font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;cursor:pointer;transition:all .15s;}
+.slot-btn:active{background:var(--active);color:var(--cyan);}
+.slot-btn.active{border-color:var(--violet);}
+.slot-btn.recording{border-color:#ff3030;color:#ff3030;animation:rb .6s infinite;}
+@keyframes rb{0%,100%{opacity:1;}50%{opacity:.3;}}
+.matter-section{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.matter-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;}
+.matter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.matter-btn{padding:6px 0;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim);cursor:pointer;transition:all .15s;}
+.matter-btn.active{background:var(--active);color:var(--cyan);border-color:var(--violet);}
+.spectral-section{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.spectral-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;margin-bottom:2px;}
+.spectral-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.spectral-item{display:flex;flex-direction:column;gap:4px;}
+.spectral-val{font-size:9px;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-style:italic;}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.06);border-radius:2px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer;}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer;border:none;}
+.transport{width:100%;max-width:480px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;}
+.tbtn{padding:8px 0;border:1px solid var(--border);background:var(--btn);border-radius:8px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--white);cursor:pointer;text-align:center;transition:all .15s;letter-spacing:.04em;}
+.tbtn:active{background:var(--active);color:var(--cyan);}
+.tbtn.disabled{opacity:.35;pointer-events:none;}
+.tbtn.on{border-color:var(--cyan);color:var(--cyan);background:rgba(0,255,255,.08);}
+.status{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);text-align:center;min-height:12px;max-width:480px;}
+.status.active{color:var(--cyan);}
+.status.error{color:var(--magenta);}
+.loop-control{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.loop-control-title{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;}
+.loop-cycles{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;}
+.loop-cycle-btn{padding:6px 0;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim);cursor:pointer;}
+.loop-cycle-btn.active{background:var(--active);color:var(--cyan);border-color:var(--cyan);}
+.lfo-section{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.lfo-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;}
+.lfo-toggle{padding:8px;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);cursor:pointer;text-align:center;font-weight:bold;}
+.lfo-toggle.on{background:var(--active);color:var(--magenta);border-color:var(--magenta);}
+.lfo-controls{display:none;flex-direction:column;gap:6px;}
+.lfo-controls.show{display:flex;}
+.lfo-row{display:flex;gap:6px;align-items:center;}
+.lfo-label-small{font-size:8px;color:var(--dim);min-width:50px;}
+.silence-section{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.silence-toggle{padding:8px;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);cursor:pointer;text-align:center;font-weight:bold;}
+.silence-toggle.on{background:var(--active);color:var(--magenta);border-color:var(--magenta);}
+.silence-controls{display:none;flex-direction:column;gap:6px;}
+.silence-controls.show{display:flex;}
+.silence-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.silence-label{font-size:8px;color:var(--dim);min-width:50px;}
+.silence-val{font-size:9px;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-style:italic;}
+.dur-btn{padding:4px 8px;border:1px solid var(--border);background:rgba(0,0,0,.3);border-radius:4px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:7px;color:var(--dim);cursor:pointer;flex-shrink:0;}
+.dur-btn.active{background:var(--active);color:var(--cyan);border-color:var(--cyan);}
+.pattern-btn{padding:6px 12px;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim);cursor:pointer;flex:1;}
+.pattern-btn.active{background:var(--active);color:var(--cyan);border-color:var(--cyan);}
+.library{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.lib-title{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center;}
+.lib-pack-btn{padding:4px 8px;border:1px solid var(--border);background:rgba(0,0,0,.3);border-radius:4px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--cyan);cursor:pointer;}
+.lib-list{max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+.lib-item{background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:8px;color:var(--dim);font-family:'JetBrains Mono',monospace;font-style:italic;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center;}
+.lib-info{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+.lib-info-name{color:var(--white);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lib-info-meta{color:var(--dim);font-size:7px;}
+.lib-btns{display:flex;gap:2px;flex-wrap:wrap;}
+.lib-btn{padding:4px 6px;font-size:7px;border:1px solid var(--border);background:rgba(0,0,0,.3);border-radius:3px;cursor:pointer;color:var(--cyan);flex-shrink:0;}
+.lib-btn:active{background:var(--active);}
+.lib-btn.down{color:var(--magenta);}
+.presets{width:100%;max-width:480px;background:var(--btn);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.preset-label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violetlt);letter-spacing:.08em;}
+.preset-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;}
+.preset-btn{padding:10px;border:1px solid var(--border);background:var(--btn);border-radius:6px;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);cursor:pointer;text-align:center;transition:all .15s;font-weight:bold;}
+.preset-btn:active{background:var(--active);color:var(--cyan);}
+.preset-btn.saved{border-color:var(--cyan);color:var(--cyan);background:rgba(0,255,255,.08);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="spuk">SPUK</span><span class="lab">LAB</span></div>
+  <div class="version">VoxDust v12.9</div>
+</header>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <canvas id="analyser"></canvas>
+  <div class="playhead" id="playhead" style="display:none;"></div>
+</div>
+
+<div class="controls-row">
+  <span class="ctrl-label">STRETCH</span>
+  <input type="range" id="stretchSlider" min="0.5" max="2" step="0.1" value="1" style="flex:1;max-width:70px;">
+  <span id="valStretch" style="font-size:9px;color:var(--cyan);min-width:28px;">1.0x</span>
+  <span class="ctrl-label" style="margin-left:auto;">A↔B</span>
+  <input type="range" id="mixSlider" min="0" max="100" value="50" style="flex:1;max-width:70px;">
+  <span id="valMix" style="font-size:9px;color:var(--cyan);min-width:20px;">50</span>
+</div>
+
+<div class="slots">
+  <div class="slot">
+    <div class="slot-header">MIC A</div>
+    <div class="slot-name" id="nameA">ready</div>
+    <button class="slot-btn" id="recA">● REC</button>
+  </div>
+  <div class="slot">
+    <div class="slot-header">MIC B</div>
+    <div class="slot-name" id="nameB">ready</div>
+    <button class="slot-btn" id="recB">● REC</button>
+  </div>
+</div>
+
+<div class="matter-section">
+  <div class="matter-label">STATE</div>
+  <div class="matter-grid" id="matterGrid"></div>
+</div>
+
+<div class="spectral-section">
+  <div class="spectral-label">SPECTRAL</div>
+  <div class="spectral-row">
+    <div class="spectral-item">
+      <div class="spectral-val" id="valForm">50</div>
+      <div style="font-size:8px;color:var(--dim);">FORM</div>
+      <input type="range" id="formSlider" min="0" max="100" value="50">
+    </div>
+    <div class="spectral-item">
+      <div class="spectral-val" id="valSmear">50</div>
+      <div style="font-size:8px;color:var(--dim);">SMEAR</div>
+      <input type="range" id="smearSlider" min="0" max="100" value="50">
+    </div>
+    <div class="spectral-item">
+      <div class="spectral-val" id="valIntensity">50</div>
+      <div style="font-size:8px;color:var(--dim);">INTENSITY</div>
+      <input type="range" id="intensitySlider" min="0" max="100" value="50">
+    </div>
+  </div>
+  <div class="spectral-row" style="margin-top:8px;">
+    <div class="spectral-item">
+      <div class="spectral-val" id="valReverb">30</div>
+      <div style="font-size:8px;color:var(--dim);">REVERB</div>
+      <input type="range" id="reverbSlider" min="0" max="100" value="30">
+    </div>
+    <div class="spectral-item">
+      <div class="spectral-val" id="valDryWet">50</div>
+      <div style="font-size:8px;color:var(--dim);">DRY/WET</div>
+      <input type="range" id="dryWetSlider" min="0" max="100" value="50">
+    </div>
+  </div>
+</div>
+
+<div class="transport">
+  <button class="tbtn" id="btnPlay">▶ PLAY</button>
+  <button class="tbtn disabled" id="btnStop">⏹ STOP</button>
+  <button class="tbtn" id="btnLoop">⟲ LOOP</button>
+  <button class="tbtn" id="btnRec">⏺ REC</button>
+</div>
+
+<div class="status" id="status">tap REC A / REC B</div>
+
+<div class="loop-control" id="loopControl" style="display:none;">
+  <div class="loop-control-title">CYCLES</div>
+  <div class="loop-cycles">
+    <button class="loop-cycle-btn active" data-cycles="2">2</button>
+    <button class="loop-cycle-btn" data-cycles="4">4</button>
+    <button class="loop-cycle-btn" data-cycles="8">8</button>
+    <button class="loop-cycle-btn" data-cycles="16">16</button>
+  </div>
+</div>
+
+<div class="lfo-section">
+  <button class="lfo-toggle" id="lfoToggle">↝ LFO A↔B OFF</button>
+  <div class="lfo-controls" id="lfoControls">
+    <div class="lfo-row">
+      <div class="lfo-label-small">FREQ</div>
+      <input type="range" id="lfoFreq" min="0.1" max="5" step="0.1" value="0.5" style="flex:1;">
+      <div style="font-size:9px;color:var(--cyan);min-width:30px;" id="valLfoFreq">0.5Hz</div>
+    </div>
+    <div class="lfo-row">
+      <div class="lfo-label-small">DEPTH</div>
+      <input type="range" id="lfoDepth" min="0" max="100" value="30" style="flex:1;">
+      <div style="font-size:9px;color:var(--cyan);min-width:30px;" id="valLfoDepth">30%</div>
+    </div>
+  </div>
+</div>
+
+<div class="silence-section">
+  <button class="silence-toggle" id="silenceToggle">🔇 SILENCE OFF</button>
+  <div class="silence-controls" id="silenceControls">
+    <div class="silence-row">
+      <div class="silence-label">CHANCE</div>
+      <input type="range" id="silenceChance" min="0" max="100" value="30" style="flex:1;">
+      <div class="silence-val" id="valChance">30%</div>
+    </div>
+    <div class="silence-row">
+      <div class="silence-label">DURATION</div>
+      <button class="dur-btn active" data-duration="100">100ms</button>
+      <button class="dur-btn" data-duration="250">250ms</button>
+      <button class="dur-btn" data-duration="500">500ms</button>
+      <button class="dur-btn" data-duration="1000">1s</button>
+      <button class="dur-btn" data-duration="2000">2s</button>
+    </div>
+    <div class="silence-row">
+      <div class="silence-label">PATTERN</div>
+      <button class="pattern-btn active" data-pattern="RANDOM">RANDOM</button>
+      <button class="pattern-btn" data-pattern="MARKOV">MARKOV</button>
+    </div>
+  </div>
+</div>
+
+<div class="library">
+  <div class="lib-title">
+    <span>LIBRARY</span>
+    <button class="lib-pack-btn" id="btnPackDownload">📦 PACK</button>
+  </div>
+  <div class="lib-list" id="takeList"><div style="font-size:9px;color:rgba(255,255,255,.15);padding:4px;">no takes</div></div>
+</div>
+
+<div class="presets">
+  <div class="preset-label">PRESETS (tap: load / hold: save)</div>
+  <div class="preset-grid" id="presetGrid"></div>
+</div>
+
+<script>
+var AC, analyser, micStream, db;
+var state = {
+  form: 0.5, smear: 0.5, intensity: 0.5, reverb: 0.3, dryWet: 0.5,
+  matter: 'Ritual', mixAB: 0.5, timeStretch: 1,
+  bufA: null, bufB: null, isPlaying: false,
+  loopEnabled: false, loopCycles: 2, cyclesCompleted: 0,
+  silenceEnabled: false, silenceChance: 30, silenceDuration: 100, silencePattern: 'RANDOM',
+  silenceMarkovChance: 30,
+  lfoEnabled: false, lfoFreq: 0.5, lfoDepth: 0.3,
+};
+
+var micRecordingState = { recording: false, processor: null, chunksA: [], chunksB: [] };
+var takes = {};
+var presets = JSON.parse(localStorage.getItem('voxdustPresets')) || {};
+var playEngine = { srcA: null, srcB: null, gainA: null, gainB: null, gainSum: null, startTime: 0, cycleStartTime: 0, loopDur: 0, interval: null };
+
+const STATES = { Susurro:0.1, Eco:0.8, Ritual:0.3, Máquina:0.2, Híbrido:0.4, Colapso:0.9 };
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('VoxDust', 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { db = req.result; resolve(); };
+    req.onupgradeneeded = (e) => {
+      const dbx = e.target.result;
+      if (!dbx.objectStoreNames.contains('takes')) {
+        dbx.createObjectStore('takes', { keyPath: 'id' });
+      }
+    };
+  });
+}
+
+function saveTakeToIDB(take) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['takes'], 'readwrite');
+    const store = tx.objectStore('takes');
+    store.put(take);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function loadTakesFromIDB() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['takes'], 'readonly');
+    const store = tx.objectStore('takes');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      takes = {};
+      req.result.forEach(t => { takes[t.id] = t; });
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function audioDataToBuffer(audioData, sampleRate) {
+  const buf = AC.createBuffer(1, audioData.length, sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = audioData[i];
+  return buf;
+}
+
+function getAC() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); return AC; }
+
+async function initAC() {
+  if (AC && analyser) return;
+  AC = getAC();
+  analyser = AC.createAnalyser();
+  analyser.fftSize = 256;
+  const buf = AC.createBuffer(1, 1, AC.sampleRate);
+  const src = AC.createBufferSource();
+  src.buffer = buf;
+  src.connect(AC.destination);
+  src.start();
+}
+
+function buildMatterGrid() {
+  const grid = document.getElementById('matterGrid');
+  Object.keys(STATES).forEach(label => {
+    const btn = document.createElement('button');
+    btn.className = 'matter-btn' + (label === 'Ritual' ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      state.matter = label;
+      document.querySelectorAll('.matter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function buildPresets() {
+  const grid = document.getElementById('presetGrid');
+  for (let i = 1; i <= 5; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (presets['P' + i] ? ' saved' : '');
+    btn.textContent = 'P' + i;
+    let touchStartTime = 0;
+    btn.addEventListener('mousedown', () => { touchStartTime = Date.now(); });
+    btn.addEventListener('mouseup', () => {
+      const elapsed = Date.now() - touchStartTime;
+      if (elapsed < 300) loadPreset('P' + i);
+      else { savePreset('P' + i); btn.classList.add('saved'); }
+    });
+    btn.addEventListener('touchstart', () => { touchStartTime = Date.now(); });
+    btn.addEventListener('touchend', () => {
+      const elapsed = Date.now() - touchStartTime;
+      if (elapsed < 300) loadPreset('P' + i);
+      else { savePreset('P' + i); btn.classList.add('saved'); }
+    });
+    grid.appendChild(btn);
+  }
+}
+
+function savePreset(name) {
+  presets[name] = {
+    form: state.form, smear: state.smear, intensity: state.intensity,
+    reverb: state.reverb, dryWet: state.dryWet, matter: state.matter,
+  };
+  localStorage.setItem('voxdustPresets', JSON.stringify(presets));
+  setStatus(name + ' saved', false);
+}
+
+function loadPreset(name) {
+  if (!presets[name]) { setStatus(name + ' empty', true); return; }
+  const p = presets[name];
+  state.form = p.form; state.smear = p.smear; state.intensity = p.intensity;
+  state.reverb = p.reverb; state.dryWet = p.dryWet; state.matter = p.matter;
+  document.getElementById('formSlider').value = p.form * 100;
+  document.getElementById('valForm').textContent = Math.round(p.form * 100);
+  document.getElementById('smearSlider').value = p.smear * 100;
+  document.getElementById('valSmear').textContent = Math.round(p.smear * 100);
+  document.getElementById('intensitySlider').value = p.intensity * 100;
+  document.getElementById('valIntensity').textContent = Math.round(p.intensity * 100);
+  document.getElementById('reverbSlider').value = p.reverb * 100;
+  document.getElementById('valReverb').textContent = Math.round(p.reverb * 100);
+  document.getElementById('dryWetSlider').value = p.dryWet * 100;
+  document.getElementById('valDryWet').textContent = Math.round(p.dryWet * 100);
+  document.querySelectorAll('.matter-btn').forEach(b => b.classList.remove('active'));
+  Array.from(document.querySelectorAll('.matter-btn')).find(b => b.textContent === p.matter)?.classList.add('active');
+  setStatus(name + ' loaded', false);
+}
+
+document.getElementById('btnLoop').addEventListener('click', () => {
+  state.loopEnabled = !state.loopEnabled;
+  const btn = document.getElementById('btnLoop');
+  const control = document.getElementById('loopControl');
+  
+  if (state.loopEnabled) {
+    btn.classList.add('on');
+    control.style.display = 'flex';
+    setStatus('loop ON', false);
+  } else {
+    btn.classList.remove('on');
+    control.style.display = 'none';
+    setStatus('loop OFF', false);
+  }
+});
+
+document.querySelectorAll('.loop-cycle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.loop-cycle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.loopCycles = parseInt(btn.dataset.cycles);
+    setStatus('cycles: ' + state.loopCycles, false);
+  });
+});
+
+document.getElementById('lfoToggle').addEventListener('click', () => {
+  state.lfoEnabled = !state.lfoEnabled;
+  const toggle = document.getElementById('lfoToggle');
+  const controls = document.getElementById('lfoControls');
+  toggle.textContent = state.lfoEnabled ? '↝ LFO A↔B ON' : '↝ LFO A↔B OFF';
+  toggle.classList.toggle('on');
+  controls.classList.toggle('show');
+});
+
+document.getElementById('lfoFreq').addEventListener('input', e => {
+  state.lfoFreq = parseFloat(e.target.value);
+  document.getElementById('valLfoFreq').textContent = state.lfoFreq.toFixed(1) + 'Hz';
+});
+
+document.getElementById('lfoDepth').addEventListener('input', e => {
+  state.lfoDepth = parseFloat(e.target.value) / 100;
+  document.getElementById('valLfoDepth').textContent = e.target.value + '%';
+});
+
+document.getElementById('silenceToggle').addEventListener('click', () => {
+  state.silenceEnabled = !state.silenceEnabled;
+  const toggle = document.getElementById('silenceToggle');
+  const controls = document.getElementById('silenceControls');
+  toggle.textContent = state.silenceEnabled ? '🔇 SILENCE ON' : '🔇 SILENCE OFF';
+  toggle.classList.toggle('on');
+  controls.classList.toggle('show');
+});
+
+document.getElementById('silenceChance').addEventListener('input', e => {
+  state.silenceChance = parseInt(e.target.value);
+  state.silenceMarkovChance = state.silenceChance;
+  document.getElementById('valChance').textContent = state.silenceChance + '%';
+});
+
+document.querySelectorAll('.dur-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.silenceDuration = parseInt(btn.dataset.duration);
+  });
+});
+
+document.querySelectorAll('.pattern-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pattern-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.silencePattern = btn.dataset.pattern;
+  });
+});
+
+async function toggleMicRecording(slot) {
+  if (micRecordingState.recording) {
+    micRecordingState.recording = false;
+    if (micRecordingState.processor) micRecordingState.processor.disconnect();
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    document.getElementById('rec' + slot).classList.remove('recording');
+    document.getElementById('rec' + slot).textContent = '● REC';
+    const chunks = slot === 'A' ? micRecordingState.chunksA : micRecordingState.chunksB;
+    const totalSamples = chunks.reduce((s, c) => s + c.length, 0);
+    const buf = AC.createBuffer(1, totalSamples, AC.sampleRate);
+    const data = buf.getChannelData(0);
+    let offset = 0;
+    chunks.forEach(c => { data.set(c, offset); offset += c.length; });
+    let peak = 0;
+    for (let i = 0; i < totalSamples; i++) peak = Math.max(peak, Math.abs(data[i]));
+    const gain = peak > 0 ? 0.9 / peak : 1;
+    for (let i = 0; i < totalSamples; i++) data[i] *= gain;
+    if (slot === 'A') {
+      state.bufA = buf;
+      document.getElementById('nameA').textContent = 'A ' + buf.duration.toFixed(1) + 's';
+      document.getElementById('recA').classList.add('active');
+    } else {
+      state.bufB = buf;
+      document.getElementById('nameB').textContent = 'B ' + buf.duration.toFixed(1) + 's';
+      document.getElementById('recB').classList.add('active');
+    }
+    setStatus(slot + ' saved', false);
+  } else {
+    await getAC().resume();
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      micRecordingState.chunksA = [];
+      micRecordingState.chunksB = [];
+      micRecordingState.recording = true;
+      const src = AC.createMediaStreamSource(micStream);
+      const proc = AC.createScriptProcessor(4096, 1, 1);
+      micRecordingState.processor = proc;
+      src.connect(proc);
+      proc.connect(AC.destination);
+      proc.onaudioprocess = e => {
+        const input = e.inputBuffer.getChannelData(0);
+        const out = new Float32Array(input.length);
+        for (let i = 0; i < input.length; i++) out[i] = input[i];
+        if (slot === 'A') micRecordingState.chunksA.push(new Float32Array(out));
+        else micRecordingState.chunksB.push(new Float32Array(out));
+      };
+      document.getElementById('rec' + slot).classList.add('recording');
+      document.getElementById('rec' + slot).textContent = '■ STOP';
+      setStatus('recording ' + slot, false);
+    } catch (e) {
+      setStatus('error: ' + e.message, true);
+    }
+  }
+}
+
+document.getElementById('stretchSlider').addEventListener('input', e => {
+  state.timeStretch = parseFloat(e.target.value);
+  document.getElementById('valStretch').textContent = state.timeStretch.toFixed(1) + 'x';
+});
+
+document.getElementById('mixSlider').addEventListener('input', e => {
+  state.mixAB = parseFloat(e.target.value) / 100;
+  document.getElementById('valMix').textContent = e.target.value;
+});
+
+document.getElementById('formSlider').addEventListener('input', e => {
+  state.form = parseFloat(e.target.value) / 100;
+  document.getElementById('valForm').textContent = e.target.value;
+});
+
+document.getElementById('smearSlider').addEventListener('input', e => {
+  state.smear = parseFloat(e.target.value) / 100;
+  document.getElementById('valSmear').textContent = e.target.value;
+});
+
+document.getElementById('intensitySlider').addEventListener('input', e => {
+  state.intensity = parseFloat(e.target.value) / 100;
+  document.getElementById('valIntensity').textContent = e.target.value;
+});
+
+document.getElementById('reverbSlider').addEventListener('input', e => {
+  state.reverb = parseFloat(e.target.value) / 100;
+  document.getElementById('valReverb').textContent = e.target.value;
+});
+
+document.getElementById('dryWetSlider').addEventListener('input', e => {
+  state.dryWet = parseFloat(e.target.value) / 100;
+  document.getElementById('valDryWet').textContent = e.target.value;
+});
+
+document.getElementById('recA').addEventListener('click', () => toggleMicRecording('A'));
+document.getElementById('recB').addEventListener('click', () => toggleMicRecording('B'));
+
+let playTouchStart = 0;
+document.getElementById('btnPlay').addEventListener('mousedown', () => { playTouchStart = Date.now(); });
+document.getElementById('btnPlay').addEventListener('touchstart', () => { playTouchStart = Date.now(); });
+
+function handlePlayTap() {
+  const elapsed = Date.now() - playTouchStart;
+  if (elapsed < 300) {
+    if (!state.isPlaying) startPlayback();
+  } else {
+    stopPlayback();
+    state.cyclesCompleted = 0;
+    startPlayback();
+  }
+}
+
+document.getElementById('btnPlay').addEventListener('mouseup', handlePlayTap);
+document.getElementById('btnPlay').addEventListener('touchend', handlePlayTap);
+
+function startPlayback() {
+  if (!state.bufA || !state.bufB) {
+    setStatus('rec A + B first', true);
+    return;
+  }
+  
+  state.isPlaying = true;
+  state.cyclesCompleted = 0;
+  document.getElementById('btnPlay').classList.add('on');
+  document.getElementById('btnStop').classList.remove('disabled');
+  document.getElementById('playhead').style.display = 'block';
+  
+  const loopDur = Math.min(state.bufA.duration, state.bufB.duration);
+  const srcA = AC.createBufferSource();
+  const srcB = AC.createBufferSource();
+  
+  srcA.buffer = state.bufA;
+  srcB.buffer = state.bufB;
+  srcA.loop = true;
+  srcB.loop = true;
+  
+  const gainA = AC.createGain();
+  const gainB = AC.createGain();
+  const gainSum = AC.createGain();
+  gainSum.gain.value = 1;
+  
+  srcA.connect(gainA);
+  srcB.connect(gainB);
+  gainA.connect(gainSum);
+  gainB.connect(gainSum);
+  gainSum.connect(AC.destination);
+  analyser.connect(AC.destination);
+  
+  srcA.start(0);
+  srcB.start(0);
+  
+  playEngine.srcA = srcA;
+  playEngine.srcB = srcB;
+  playEngine.gainA = gainA;
+  playEngine.gainB = gainB;
+  playEngine.gainSum = gainSum;
+  playEngine.startTime = AC.currentTime;
+  playEngine.cycleStartTime = AC.currentTime;
+  playEngine.loopDur = loopDur / state.timeStretch;
+  
+  playEngine.interval = setInterval(() => {
+    if (!state.isPlaying) {
+      clearInterval(playEngine.interval);
+      return;
+    }
+    
+    const elapsed = AC.currentTime - playEngine.startTime;
+    const cycleElapsed = AC.currentTime - playEngine.cycleStartTime;
+    
+    // LOOP: si cycleElapsed >= loopDur, nuevo ciclo
+    if (cycleElapsed >= playEngine.loopDur) {
+      state.cyclesCompleted++;
+      playEngine.cycleStartTime = AC.currentTime;
+      
+      if (state.loopEnabled && state.cyclesCompleted >= state.loopCycles) {
+        stopPlayback();
+        return;
+      }
+      
+      // SILENCE entre ciclos
+      if (state.silenceEnabled && state.cyclesCompleted > 0) {
+        const roll = Math.random() * 100;
+        const hasSilence = roll < state.silenceMarkovChance;
+        if (hasSilence) {
+          const now = AC.currentTime;
+          gainSum.gain.cancelScheduledValues(now);
+          gainSum.gain.setValueAtTime(1, now);
+          gainSum.gain.linearRampToValueAtTime(0, now + 0.01);
+          gainSum.gain.setValueAtTime(0, now + 0.01);
+          gainSum.gain.linearRampToValueAtTime(1, now + state.silenceDuration / 1000);
+          if (state.silencePattern === 'MARKOV') state.silenceMarkovChance = Math.min(state.silenceMarkovChance + 10, 95);
+          setStatus('Ciclo ' + state.cyclesCompleted + ' - SILENCIO', false);
+        } else {
+          if (state.silencePattern === 'MARKOV') state.silenceMarkovChance = Math.max(state.silenceMarkovChance - 5, state.silenceChance);
+          setStatus('Ciclo ' + state.cyclesCompleted, false);
+        }
+      }
+    }
+    
+    // LFO MOD
+    let mixVal = state.mixAB;
+    if (state.lfoEnabled) {
+      const lfoPhase = ((AC.currentTime - playEngine.startTime) * state.lfoFreq * 2 * Math.PI) % (2 * Math.PI);
+      const lfoSine = Math.sin(lfoPhase);
+      mixVal = Math.max(0, Math.min(1, state.mixAB + lfoSine * state.lfoDepth));
+    }
+    
+    playEngine.gainA.gain.value = 1 - mixVal;
+    playEngine.gainB.gain.value = mixVal;
+    
+    const cycleProgress = (cycleElapsed % playEngine.loopDur) / playEngine.loopDur;
+    document.getElementById('playhead').style.left = (cycleProgress * document.getElementById('canvasWrap').offsetWidth) + 'px';
+  }, 30);
+}
+
+function stopPlayback() {
+  state.isPlaying = false;
+  try {
+    if (playEngine.srcA) playEngine.srcA.stop();
+    if (playEngine.srcB) playEngine.srcB.stop();
+  } catch(e) {}
+  if (playEngine.interval) clearInterval(playEngine.interval);
+  document.getElementById('btnPlay').classList.remove('on');
+  document.getElementById('btnStop').classList.add('disabled');
+  document.getElementById('playhead').style.display = 'none';
+  setStatus('stopped', false);
+}
+
+document.getElementById('btnStop').addEventListener('click', stopPlayback);
+
+document.getElementById('btnRec').addEventListener('click', async () => {
+  if (!state.bufA || !state.bufB) {
+    setStatus('rec A + B first', true);
+    return;
+  }
+  
+  const btn = document.getElementById('btnRec');
+  btn.classList.add('disabled');
+  btn.textContent = 'PROCESSING…';
+  
+  const loopDur = Math.min(state.bufA.duration, state.bufB.duration);
+  const outBuf = AC.createBuffer(1, Math.ceil(loopDur * AC.sampleRate * state.timeStretch), AC.sampleRate);
+  const outData = outBuf.getChannelData(0);
+  let outIdx = 0;
+  
+  const srcA = AC.createBufferSource();
+  const srcB = AC.createBufferSource();
+  srcA.buffer = state.bufA;
+  srcB.buffer = state.bufB;
+  
+  const gainA = AC.createGain();
+  const gainB = AC.createGain();
+  gainA.gain.value = 1 - state.mixAB;
+  gainB.gain.value = state.mixAB;
+  
+  const proc = AC.createScriptProcessor(256, 2, 1);
+  let reverbBuf = new Float32Array(8192);
+  let reverbIdx = 0;
+  
+  proc.onaudioprocess = e => {
+    const inL = e.inputBuffer.getChannelData(0);
+    const inR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inL;
+    for (let i = 0; i < inL.length && outIdx < outData.length; i++) {
+      let sample = (inL[i] + inR[i]) * 0.5;
+      const wet = reverbBuf[reverbIdx % 8192] || 0;
+      reverbBuf[reverbIdx % 8192] = sample * 0.6;
+      reverbIdx++;
+      sample = sample * (1 - state.reverb) + wet * state.reverb;
+      sample = sample * (1 - state.dryWet) + sample * state.dryWet;
+      sample *= (0.5 + state.intensity * 0.5);
+      outData[outIdx++] = Math.max(-1, Math.min(1, sample));
+    }
+  };
+  
+  srcA.connect(gainA);
+  srcB.connect(gainB);
+  gainA.connect(proc);
+  gainB.connect(proc);
+  proc.connect(AC.destination);
+  srcA.start(0);
+  srcB.start(0);
+  
+  await new Promise(r => setTimeout(r, Math.ceil(loopDur * 1000 * state.timeStretch) + 200));
+  
+  try { srcA.stop(); srcB.stop(); } catch(e) {}
+  proc.disconnect();
+  
+  btn.classList.remove('disabled');
+  btn.textContent = '⏺ REC';
+  
+  const take = {
+    id: 'take_' + Date.now(),
+    name: state.matter + '_' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+    audioData: outData,
+    sampleRate: AC.sampleRate,
+    matter: state.matter,
+    duration: loopDur * state.timeStretch,
+    date: new Date().toLocaleDateString('es-ES'),
+    timestamp: Date.now()
+  };
+  
+  await saveTakeToIDB(take);
+  await loadTakesFromIDB();
+  updateTakeList();
+  setStatus('recorded', false);
+});
+
+function loadCarrier(takeId, slot) {
+  const take = takes[takeId];
+  if (!take) { setStatus('take not found', true); return; }
+  
+  const buf = audioDataToBuffer(take.audioData, take.sampleRate);
+  if (slot === 'A') {
+    state.bufA = buf;
+    document.getElementById('nameA').textContent = '◆ ' + take.name;
+  } else {
+    state.bufB = buf;
+    document.getElementById('nameB').textContent = '◆ ' + take.name;
+  }
+  setStatus('carrier ' + slot + ': ' + take.name, false);
+}
+
+async function downloadPack() {
+  if (Object.keys(takes).length === 0) { setStatus('no takes to pack', true); return; }
+  const btn = document.getElementById('btnPackDownload');
+  btn.textContent = 'PACKING…';
+  btn.disabled = true;
+  const zip = new JSZip();
+  
+  Object.values(takes).forEach(take => {
+    const audioData = take.audioData;
+    const len = audioData.length;
+    const sr = take.sampleRate;
+    const ch = 1;
+    const bps = 2;
+    const ba = ch * bps;
+    const br = sr * ba;
+    const ds = len * ba;
+    const ab = new ArrayBuffer(44 + ds);
+    const v = new DataView(ab);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0, 'RIFF'); v.setUint32(4, 36 + ds, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+    v.setUint32(24, sr, true); v.setUint32(28, br, true); v.setUint16(32, ba, true);
+    v.setUint16(34, 16, true); ws(36, 'data'); v.setUint32(40, ds, true);
+    let offset = 44;
+    for (let i = 0; i < len; i++) {
+      const s = Math.max(-1, Math.min(1, audioData[i]));
+      v.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+    zip.file(`${take.matter}_${take.id.slice(-4)}.wav`, ab);
+  });
+  
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'VoxDust_pack_' + Date.now() + '.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  btn.textContent = '📦 PACK';
+  btn.disabled = false;
+  setStatus('pack downloaded', false);
+}
+
+document.getElementById('btnPackDownload').addEventListener('click', downloadPack);
+
+function updateTakeList() {
+  const list = document.getElementById('takeList');
+  list.innerHTML = '';
+  const sortedTakes = Object.values(takes).sort((a, b) => b.timestamp - a.timestamp);
+  if (sortedTakes.length === 0) {
+    list.innerHTML = '<div style="font-size:9px;color:rgba(255,255,255,.15);padding:4px;">no takes</div>';
+    return;
+  }
+  sortedTakes.forEach(t => {
+    const item = document.createElement('div');
+    item.className = 'lib-item';
+    const info = document.createElement('div');
+    info.className = 'lib-info';
+    const name = document.createElement('div');
+    name.className = 'lib-info-name';
+    name.textContent = t.name;
+    const meta = document.createElement('div');
+    meta.className = 'lib-info-meta';
+    meta.textContent = t.duration.toFixed(1) + 's · ' + t.date;
+    info.appendChild(name);
+    info.appendChild(meta);
+    const btns = document.createElement('div');
+    btns.className = 'lib-btns';
+    
+    const carrierABtn = document.createElement('button');
+    carrierABtn.className = 'lib-btn';
+    carrierABtn.textContent = '↑A';
+    carrierABtn.addEventListener('click', () => loadCarrier(t.id, 'A'));
+    
+    const carrierBBtn = document.createElement('button');
+    carrierBBtn.className = 'lib-btn';
+    carrierBBtn.textContent = '↑B';
+    carrierBBtn.addEventListener('click', () => loadCarrier(t.id, 'B'));
+    
+    const delBtn = document.createElement('button');
+    delBtn.className = 'lib-btn';
+    delBtn.style.color = 'var(--magenta)';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', async () => {
+      const tx = db.transaction(['takes'], 'readwrite');
+      const store = tx.objectStore('takes');
+      store.delete(t.id);
+      await new Promise(r => { tx.oncomplete = r; });
+      delete takes[t.id];
+      updateTakeList();
+      setStatus('deleted: ' + t.name, false);
+    });
+    
+    btns.appendChild(carrierABtn);
+    btns.appendChild(carrierBBtn);
+    btns.appendChild(delBtn);
+    item.appendChild(info);
+    item.appendChild(btns);
+    list.appendChild(item);
+  });
+}
+
+function drawAnalyser() {
+  const canvas = document.getElementById('analyser');
+  if (!canvas || !analyser) { requestAnimationFrame(drawAnalyser); return; }
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx.fillStyle = 'rgba(19,17,31,1)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  ctx.strokeStyle = '#9944ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const sw = canvas.width / data.length;
+  let x = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 256;
+    const y = canvas.height - (v * canvas.height);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+    x += sw;
+  }
+  ctx.stroke();
+  requestAnimationFrame(drawAnalyser);
+}
+
+function setStatus(msg, isError = false) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (isError ? ' error' : ' active');
+}
+
+async function init() {
+  await initDB();
+  buildMatterGrid();
+  buildPresets();
+  await initAC();
+  await loadTakesFromIDB();
+  updateTakeList();
+  drawAnalyser();
+  setStatus('ready v12.9', false);
+}
+
+init();
+</script>
+</body>
+</html>
