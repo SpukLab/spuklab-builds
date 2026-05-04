@@ -263,8 +263,8 @@ var convolver, convWet, convDry, masterOut;
 // Sources
 var srcA=null, srcB=null;
 var playTimer=null, playStart=0, lastCycle=-1, lastTickT=0;
-// Grain scheduler
-var grainTimer=null;
+// SMEAR v2 engine
+var smearEngine=null;
 // IR update throttle
 var lastIRUpdate=0, lastIRVal=-1;
 
@@ -317,6 +317,14 @@ async function initAC(){
   gainA.connect(gainSum); gainB.connect(gainSum);
   buildFormantBank();
   buildConvolver();
+  // SMEAR v2 engine — pool output → gainSum (goes through formant+convolver chain)
+  smearEngine=createSmearEngineV2(AC,{
+    outputNode: gainSum,
+    getBuffer:  function(){ return S.mixAB<0.5?(S.bufA||S.bufB):(S.bufB||S.bufA); },
+    getBufA:    function(){ return S.bufA; },
+    getBufB:    function(){ return S.bufB; },
+    getPlayStart: function(){ return playStart; }
+  });
 }
 
 // ── v18 DSP: FORMANT BANK (FORM) ─────────────────────────────────
@@ -376,55 +384,102 @@ function buildIROffline(ctx,revParam){
   return buf;
 }
 
-// ── v18 DSP: GRAIN SCHEDULER (SMEAR) ─────────────────────────────
-// Overlapping grain bursts from bufA/bufB with position spread + pitch detune
-// Creates temporal blur / phase-vocoder-like smear effect
-function startGrains(){ if(!grainTimer) scheduleGrains(); }
-function stopGrains(){ if(grainTimer){clearTimeout(grainTimer);grainTimer=null;} }
+// ── v18 SMEAR v2 — Pool-based grain engine ────────────────────────
+// Drop-in replacement for v1 grain scheduler.
+// Key improvements: pre-allocated GainNode pool (no hot-path alloc),
+// FORM cross-modulates grain duration + detune, RMS-aware density,
+// accumulative burst clock (driven by playTick, not setTimeout),
+// position-aware offset (FORM=high → near playhead, FORM=low → diffuse).
+function createSmearEngineV2(ctx, cfg){
+  var MAX_GRAINS=24;
+  var burstClock=0;
+  var r2=function(){return Math.random()*2-1;};
 
-function scheduleGrains(){
-  if(!S.playing||S.dsmear<0.02){ grainTimer=null; return; }
-  var sm=S.dsmear;
-  var buf=S.mixAB<0.5?(S.bufA||S.bufB):(S.bufB||S.bufA);
-  if(!buf){ grainTimer=setTimeout(scheduleGrains,80); return; }
-
-  var numG=Math.floor(1+sm*5);           // 1–6 grains per burst
-  var gDur=0.05+(1-sm)*0.11;             // 50–160ms grain duration
-  var spread=sm*0.07;                    // up to 7% position spread
-  var pitchSprd=sm*280;                  // 0–280 cents detune
-  var interval=Math.max(18,75-sm*57);   // 18–75ms between bursts
-
-  // Estimate current playback position
-  var elapsed=AC.currentTime-playStart;
-  var pos=buf.duration>0?(elapsed%buf.duration)/buf.duration:0;
-
-  for(var i=0;i<numG;i++){
-    var gbuf=((i%2===0)&&S.bufA)?S.bufA:(S.bufB||S.bufA);
-    if(!gbuf) continue;
-
-    var gs=AC.createBufferSource();
-    gs.buffer=gbuf;
-    gs.detune.value=(Math.random()-0.5)*pitchSprd;
-
-    var gg=AC.createGain(); gg.gain.value=0;
-    var startT=AC.currentTime+(i*gDur*0.28);
-    var attT=startT+gDur*0.12;
-    var relT=startT+gDur*0.85;
-    var endT=startT+gDur+0.015;
-    var peakG=0.18/numG;
-
-    gg.gain.setValueAtTime(0,startT);
-    gg.gain.linearRampToValueAtTime(peakG,attT);
-    gg.gain.setValueAtTime(peakG,relT);
-    gg.gain.linearRampToValueAtTime(0,endT);
-
-    var gOff=Math.max(0,Math.min(gbuf.duration-gDur,
-      pos*gbuf.duration+(Math.random()-0.5)*spread*gbuf.duration));
-    gs.connect(gg); gg.connect(gainSum);
-    gs.start(startT,gOff,gDur+0.02);
-    gs.onended=function(){try{gs.disconnect();gg.disconnect();}catch(e){}};
+  // Pre-allocate GainNode pool — never created again after init
+  var pool=[];
+  for(var i=0;i<MAX_GRAINS;i++){
+    var g=ctx.createGain(); g.gain.value=0;
+    g.connect(cfg.outputNode);
+    pool.push({gain:g,src:null});
   }
-  grainTimer=setTimeout(scheduleGrains,interval);
+
+  // Hann-approximated envelope via exponential ramps
+  function applyEnv(gainNode,t0,dur,amp){
+    var g=gainNode.gain;
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(0.0001,t0);
+    g.exponentialRampToValueAtTime(Math.max(0.0001,amp),t0+dur*0.5);
+    g.exponentialRampToValueAtTime(0.0001,t0+dur);
+  }
+
+  function spawnGrain(p,now,buf,params){
+    var src=ctx.createBufferSource();
+    src.buffer=buf;
+    src.playbackRate.value=params.rate;
+    src.detune.value=params.detune;
+    src.connect(p.gain);
+    applyEnv(p.gain,now,params.dur,params.amp);
+    var safeOff=Math.max(0,Math.min(buf.duration-0.01,params.offset));
+    src.start(now,safeOff,params.dur+0.01);
+    src.stop(now+params.dur+0.015);
+    if(p.src){try{p.src.disconnect();}catch(e){}}
+    p.src=src;
+    src.onended=function(){try{src.disconnect();}catch(e){}};
+  }
+
+  function scheduleBurst(now,sm,f,e,en,buf){
+    // Density: base count × RMS factor (more energy = more grains)
+    var base=Math.floor(1+sm*5);
+    var count=Math.min(8,Math.floor(base*(0.6+en*0.8)));
+    // Duration: FORM=high → shorter/more defined; FORM=low → longer/smeared
+    var dur=0.05+(1-f)*0.11;                   // 50–160ms
+    // Detune: FORM=high suppresses pitch chaos
+    var maxDetune=280*(1-f);                    // 0–280 cents
+    var rateJitter=0.02+e*0.03;
+    // Amplitude: tied to smear intensity
+    var amp=0.18+0.22*sm;
+    // Position: current playback + FORM-controlled spread
+    // FORM=high → grains hug playhead (coherent); FORM=low → free diffusion
+    var pos=0;
+    if(buf.duration>0){
+      var elapsed=ctx.currentTime-cfg.getPlayStart();
+      pos=(elapsed%buf.duration)/buf.duration;
+    }
+    var spread=(1-f)*0.1;                       // up to 10% at FORM=0
+
+    for(var i=0;i<count;i++){
+      var pi=Math.floor(Math.random()*MAX_GRAINS);
+      var p=pool[pi];
+      // Pick buffer (alternate A/B for stereo texture)
+      var gbuf=(i%2===0&&cfg.getBufA&&cfg.getBufA())?cfg.getBufA():(cfg.getBufB&&cfg.getBufB()||buf);
+      var offset=pos*gbuf.duration+(Math.random()-0.5)*spread*gbuf.duration;
+      spawnGrain(p,now,gbuf,{
+        dur:dur,
+        offset:offset,
+        detune:r2()*maxDetune,
+        amp:amp/count,
+        rate:1+r2()*rateJitter
+      });
+    }
+  }
+
+  function update(params){
+    if(!params.playing||params.smear<0.05) return;
+    var buf=cfg.getBuffer();
+    if(!buf) return;
+    // Accumulative clock — driven by playTick dt, no setTimeout
+    var intervalMax=0.075, intervalMin=0.018;
+    var interval=intervalMax-params.smear*(intervalMax-intervalMin);
+    var jitter=interval*params.entropy*0.5;
+    burstClock+=params.dt/1000;
+    if(burstClock>=interval+r2()*jitter){
+      scheduleBurst(ctx.currentTime,params.smear,params.form,
+        params.entropy,params.energy,buf);
+      burstClock=0;
+    }
+  }
+
+  return{update:update};
 }
 
 // ── UPDATE DSP PARAMS ─────────────────────────────────────────────
@@ -454,10 +509,7 @@ function applyDSP(spec){
     lastIRUpdate=now2;
   }
 
-  // SMEAR: grain scheduler on/off
-  if(spec.smear>0.02&&S.playing) startGrains();
-  else stopGrains();
-
+  // SMEAR: handled in playTick via smearEngine.update() — no separate timer
   // DSP chip indicators
   document.getElementById('chipSmear').className='chip'+(spec.smear>0.05?' on':'');
   document.getElementById('chipForm').className='chip'+(spec.form>0.25?' form-on':'');
@@ -561,7 +613,6 @@ function startPlayback(){
   gainB.gain.setValueAtTime(S.mixAB,AC.currentTime);
   playStart=AC.currentTime; lastCycle=-1;
   srcA.start(); srcB.start();
-  if(S.dsmear>0.02) startGrains();
   lastTickT=Date.now();
   playTimer=setInterval(playTick,30);
   document.getElementById('playBtn').className='play';
@@ -612,12 +663,22 @@ function playTick(){
     }
   }
   updateSpectralUI();
+  // SMEAR v2 — accumulative clock update (no setTimeout, driven by tick)
+  if(smearEngine){
+    smearEngine.update({
+      playing: S.playing,
+      smear:   S.dsmear,
+      form:    S.dform,
+      entropy: S.entropy,
+      energy:  S.energyFac,
+      dt:      dt
+    });
+  }
 }
 
 function stopPlayback(){
   S.playing=false;
   if(playTimer){clearInterval(playTimer);playTimer=null;}
-  stopGrains();
   try{srcA&&srcA.stop();}catch(e){}
   try{srcB&&srcB.stop();}catch(e){}
   srcA=null; srcB=null;
