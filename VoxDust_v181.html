@@ -404,13 +404,16 @@ function createSmearEngineV2(ctx, cfg){
     pool.push({gain:g,src:null});
   }
 
-  // Linear envelope — cleaner blending between grains, no micro-clicks
+  // Linear envelope + micro fade-out — clean profile, no edge clicks on non-zero-crossing buffers
   function applyEnv(gainNode,t0,dur,amp){
     var g=gainNode.gain;
+    var EPS=0.0001;
+    var fade=Math.min(0.008,dur*0.25);   // 8ms max fade-out window
     g.cancelScheduledValues(t0);
-    g.setValueAtTime(0.0001,t0);
+    g.setValueAtTime(EPS,t0);
     g.linearRampToValueAtTime(amp,t0+dur*0.5);
-    g.linearRampToValueAtTime(0.0001,t0+dur);
+    g.linearRampToValueAtTime(EPS,t0+dur-fade);
+    g.setValueAtTime(EPS,t0+dur);
   }
 
   function spawnGrain(p,now,buf,params){
@@ -449,11 +452,13 @@ function createSmearEngineV2(ctx, cfg){
       playPos=(elapsed%buf.duration)/buf.duration;
     }
     var spread=(1-f)*0.1;                       // up to 10% at FORM=0
-    // targetPos = playhead + random spread; lerp toward it based on FORM
-    // FORM=1 → lerp factor=0 → grains lock to lastGrainPos (coherent)
-    // FORM=0 → lerp factor=1 → grains go to target (chaotic)
     var targetPos=playPos+(Math.random()-0.5)*spread;
-    lastGrainPos=lastGrainPos+(targetPos-lastGrainPos)*(1-f);
+    // Position memory — pseudo phase-lock con inercia leve
+    // mezcla ponderada (no acumulación) → evita deriva en FORM medio [0.4-0.7]
+    // FORM=1 → coherence=1 → posición estable; FORM=0 → caos intacto
+    var coherence=f;
+    var lerpedPos=targetPos*(1-coherence)+lastGrainPos*coherence;
+    lastGrainPos=lerpedPos*0.7+lastGrainPos*0.3;   // inercia leve, no lock total
     lastGrainPos=Math.max(0,Math.min(1,lastGrainPos));
 
     for(var i=0;i<count;i++){
