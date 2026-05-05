@@ -1237,11 +1237,16 @@ function updatePhysics(dt){
     var imp=S.semZone==='HARD'?0.015:S.semZone==='MID'?0.010:0.006;
     S.targetMatter=clamp(S.targetMatter+imp*S.semEnv*S.energyFac);
   }
-  // TASK 1: clamp targetMatter within maxDev of base (anti-drift)
+  // Fix bar 1: wider maxDev — bar was only moving ±9% of its width
   var base=S.targetMatterBase;
-  var maxDev=0.08+(S.entropyEff||S.entropy)*0.05;
+  var maxDev=0.18+(S.entropyEff||S.entropy)*0.08;
   S.targetMatter=Math.max(base-maxDev,Math.min(base+maxDev,S.targetMatter));
-  // T3: matter relaxation — pulls toward base in low-energy moments (silence = return to center)
+  // Fix bar 2: auto-advance base on significant semZone events (not only on anchor click)
+  if(S.semZone&&S.semEnv>0.3&&S.energyFac>0.2){
+    S.targetMatterBase+=(S.targetMatter-S.targetMatterBase)*0.03;
+    S.targetMatterBase=clamp(S.targetMatterBase);
+  }
+  // T3: matter relaxation
   var relax=0.002*(1-S.energyFac);
   S.targetMatter+=(S.targetMatterBase-S.targetMatter)*relax;
 }
@@ -2174,6 +2179,13 @@ function drawAnalyser(){
     var fb=new Float32Array(d.length);
     for(var fi=0;fi<d.length;fi++) fb[fi]=d[fi]/255;
     window.fftBins=fb;
+    // Fix bar 3: update spectrum bar cursor in RAF (not only in playTick)
+    var curEl=document.getElementById('cur');
+    if(curEl){
+      curEl.style.left=(S.matter*100)+'%';
+      var glow=Math.abs(S.matterVel||0)*80;
+      curEl.style.boxShadow='0 0 '+(4+glow)+'px '+(1+glow/2)+'px white';
+    }
     ctx.beginPath();
     ctx.strokeStyle='#9944ff'; ctx.lineWidth=2;
     var step=W/d.length;
