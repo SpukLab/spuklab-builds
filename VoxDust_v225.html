@@ -107,6 +107,7 @@ button.rec-live{background:rgba(255,0,0,.15);color:#ff4444;border-color:rgba(255
   <!-- Visual Engine Canvas (full visual layer) -->
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
     <button id="visBtn" style="font-size:8px;padding:4px 8px">VIS OFF</button>
+    <button id="projBtn" style="font-size:8px;padding:4px 8px">PROYECTAR</button>
     <span style="font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim)">visual engine</span>
   </div>
   <canvas id="vc" width="480" height="260" style="display:none;width:100%;border-radius:6px;border:1px solid var(--border)"></canvas>
@@ -2163,6 +2164,8 @@ function buildMatterGrid(){
 }
 
 // ── ANALYSER CANVAS ───────────────────────────────────────────────
+var projWin = null;
+
 function drawAnalyser(){
   var canvas=document.getElementById('ac');
   canvas.width=canvas.offsetWidth||480;
@@ -2179,6 +2182,16 @@ function drawAnalyser(){
     var fb=new Float32Array(d.length);
     for(var fi=0;fi<d.length;fi++) fb[fi]=d[fi]/255;
     window.fftBins=fb;
+    // Send state to projection viewer if open
+    if(projWin&&!projWin.closed){
+      try{projWin.postMessage({
+        visual:S.visualState, fftBins:Array.from(fb.slice(0,128)),
+        aDom:S._aDom||0, bDom:S._bDom||0,
+        phraseDom:S.phraseDom||0, voiceMix:S.voiceMix||0,
+        turnState:S.turnState||0, intent:S.intent||0,
+        convMode:S.convMode||0, rms:S.rms||0
+      },'*');}catch(e){}
+    }
     // Fix bar 3: update spectrum bar cursor in RAF (not only in playTick)
     var curEl=document.getElementById('cur');
     if(curEl){
@@ -3326,9 +3339,11 @@ function veDrawDominance(ctx, W, H, pDom){
   var rms=(S&&S.rms)||0;
   // Fix 5: large field from center — "installation" scale aura
   var inner=50*sc, outer=(200+pDom*200)*sc*(1+rms*0.15);
+  var auraAlpha = Math.min(0.25, pDom*0.3);   // Fix 2: never saturates
+  var auraAlpha2= Math.min(0.08, pDom*0.09);
   var g=ctx.createRadialGradient(cx,cy,inner, cx,cy,outer);
-  g.addColorStop(0,'rgba(255,180,80,'+(pDom*0.22)+')');
-  g.addColorStop(0.7,'rgba(255,150,40,'+(pDom*0.06)+')');
+  g.addColorStop(0,'rgba(255,180,80,'+auraAlpha+')');
+  g.addColorStop(0.7,'rgba(255,150,40,'+auraAlpha2+')');
   g.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=g;
   ctx.fillRect(0,0,W,H);
@@ -3353,6 +3368,10 @@ function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   var sizeA = BASE_R + aDom*50*sc + pDom*30*sc;
   var sizeB = BASE_R + bDom*50*sc + pDom*30*sc;
 
+  // Fix 1: focus hierarchy — dominant element gets full alpha, rest recedes
+  var focus = Math.max(aDom, bDom, pDom);
+  var focusAlpha = 0.6 + focus*0.4;
+
   var aAlpha = (1-vMix)*0.9 + 0.1;
   var bAlpha = vMix*0.9 + 0.1;
 
@@ -3366,24 +3385,27 @@ function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   var cy = H*0.5;
 
   // Voice A — cyan
-  ctx.globalAlpha = aAlpha;
+  ctx.globalAlpha = aAlpha * focusAlpha;
   ctx.beginPath();
   ctx.arc(xA + _ve.aOff, cy, sizeA, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(120,220,255,0.8)';
   ctx.fill();
 
   // Voice B — magenta
-  ctx.globalAlpha = bAlpha * ghost;
+  ctx.globalAlpha = bAlpha * ghost * focusAlpha;
   ctx.beginPath();
   ctx.arc(xB - _ve.bOff, cy, sizeB, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(255,120,220,0.8)';
   ctx.fill();
 
-  // DELAY: temporal echo ghost
+  // DELAY: temporal echo ghost with oscillating position (cognitive latency feel)
   if(conv===3){
+    var gT=performance.now();
+    var gOx=18*sc+Math.sin(gT*0.002)*6;
+    var gOy=4+Math.cos(gT*0.0015)*4;
     ctx.globalAlpha = bAlpha*0.2;
     ctx.beginPath();
-    ctx.arc(xB - _ve.bOff + 18*sc, cy + 4, sizeB*0.85, 0, Math.PI*2);
+    ctx.arc(xB - _ve.bOff + gOx, cy + gOy, sizeB*0.85, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(153,68,255,0.7)';
     ctx.fill();
   }
@@ -3439,6 +3461,11 @@ function veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix){
   var scale = 1 + pDom*0.3;
   if(conv===2) scale *= 0.88;  // OPPOSE: more compressed
   ctx.font = 'italic '+Math.round(baseSize*scale)+'px "JetBrains Mono",monospace';
+  // Fix 4: shadow — text legible over any background in projection
+  var sc4=_ve.scale||1;
+  ctx.shadowColor='rgba(0,0,0,0.65)';
+  ctx.shadowBlur=8*sc4;
+  ctx.shadowOffsetY=1;
 
   // Active word color — interpolates A (cyan) to B (magenta) by voiceMix
   var wR=Math.round(120+(255-120)*vMix), wG=Math.round(220+(120-220)*vMix), wB=Math.round(255+(220-255)*vMix);
@@ -3468,6 +3495,7 @@ function veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix){
     curX += widths[i];
   });
   ctx.globalAlpha = 1;
+  ctx.shadowBlur=0; ctx.shadowColor='transparent';  // reset shadow
 
   // Progress bar — full width, bottom
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -3579,6 +3607,12 @@ function initUI(){
   document.getElementById('recBtn').addEventListener('click',recTake);
   document.getElementById('packBtn').addEventListener('click',downloadPack);
   document.getElementById('pvBtn').addEventListener('click',togglePV);
+  document.getElementById('projBtn').addEventListener('click',function(){
+    projWin=window.open('https://spuklab.github.io/spuklab-builds/VoxDust_projection.html','_blank',
+      'noopener,width=1280,height=720');
+    document.getElementById('projBtn').className='act';
+    document.getElementById('projBtn').textContent='PROJ ON';
+  });
   // Visual engine toggle
   document.getElementById('visBtn').addEventListener('click',function(){
     var vc = document.getElementById('vc');
