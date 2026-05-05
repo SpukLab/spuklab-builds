@@ -3226,8 +3226,9 @@ function initClipSystem(){
 }
 
 // ================================================================
-// VISUAL ENGINE v2 — dialogue-centric, cognitive-state driven
-// Text is primary. Audio is texture. Voices are spatial entities.
+// VISUAL ENGINE v3 — dialogue > audio
+// Text primary. A/B visible. Turn-taking without labels.
+// convMode modifies behavior. FFT is background only.
 // ================================================================
 
 var _ve = {
@@ -3235,16 +3236,11 @@ var _ve = {
   last: 0,
   frameCount: 0,
   fps: 60,
-  // smooth state values (all EMA)
-  hue: 200,
-  jitter: 0,
-  aX: 0,       // Voice A blob center X (0-1)
-  bX: 1,       // Voice B blob center X (0-1)
-  aAlpha: 0.0, // Voice A presence
-  bAlpha: 0.0, // Voice B presence
-  domScale: 0, // phrase dominance visual weight
-  turnW: 0,    // turn state smooth weight
-  textDrift: 0 // smear-coupled text drift
+  bgHue: 210,
+  bgL: 8,
+  // voice position state (for MIMIC/OPPOSE interpolation)
+  aOff: 0,
+  bOff: 0
 };
 
 function startVisualEngine(canvas){
@@ -3266,313 +3262,214 @@ function startVisualEngine(canvas){
     _ve.fps = (smear<0.15 && dom<0.15) ? 30 : 60;
     _ve.frameCount++;
     if(_ve.frameCount % Math.round(60/_ve.fps) !== 0) return;
-    var dt = (t - _ve.last)/1000;
     _ve.last = t;
-    veUpdate(dt);
-    veRender(ctx, canvas);
+    veDraw(ctx, canvas);
   })(performance.now());
 }
+
 function stopVisualEngine(){ _ve.active = false; }
 
-// ── STATE UPDATE (smooth all inputs) ─────────────────────────────
-function veUpdate(dt){
-  var t = (S&&S.turnState)||0;
-  var vm= (S&&S.voiceMix)||0;
-  var cm= (S&&S.convMode)||0;
-  var sm= (S&&S.dsmear)||0;
-  var dom=(S&&S.phraseDom)||0;
-  var intent=(S&&S.intent)||0;
-
-  // Voice A/B presence — driven by turn and voiceMix
-  var tgtA = t===1 ? 0.95 : t===3 ? 0.7 : (1-vm)*0.85 + 0.1;
-  var tgtB = t===2 ? 0.95 : t===3 ? 0.7 : vm*0.85 + 0.1;
-  _ve.aAlpha += (tgtA - _ve.aAlpha)*0.07;
-  _ve.bAlpha += (tgtB - _ve.bAlpha)*0.07;
-
-  // Voice A/B spatial positions (0-1 normalized X)
-  // MIMIC: B converges toward A center
-  // OPPOSE: B mirrors A (symmetry around 0.5)
-  var aTargetX = 0.28;
-  var bTargetX = cm===1 ? 0.35 : cm===2 ? (1-0.28) : 0.72;  // mimic/normal/oppose
-  _ve.aX += (aTargetX - _ve.aX)*0.05;
-  _ve.bX += (bTargetX - _ve.bX)*0.05;
-
-  // phraseDom visual weight
-  _ve.domScale += (dom - _ve.domScale)*0.06;
-
-  // Intent hue
-  var targetHue = intent===1?190 : intent===2?310 : intent===3?260 : 210;
-  _ve.hue += (targetHue - _ve.hue)*0.04;
-  _ve.jitter += (Math.random()-0.5)*0.6;
-  _ve.jitter *= 0.88;
-
-  // Text drift (smear-coupled)
-  var driftTarget = (sm-0.5)*18;
-  _ve.textDrift += (driftTarget - _ve.textDrift)*0.1;
-}
-
-// ── RENDER ───────────────────────────────────────────────────────
-function veRender(ctx, canvas){
+// ── MAIN DRAW PIPELINE ────────────────────────────────────────────
+function veDraw(ctx, canvas){
   var W = canvas.clientWidth, H = canvas.clientHeight;
-  var sm = (S&&S.dsmear)||0;
+  var vs    = (S&&S.visualState)||{};
+  var fft   = window.fftBins||null;
+  var pDom  = (S&&S.phraseDom)||0;
+  var intent= (S&&S.intent)||0;
+  var turn  = (S&&S.turnState)||0;
+  var smear = vs.smear||(S&&S.dsmear)||0;
+  var form  = vs.form ||(S&&S.dform)||0;
+  var prog  = vs.progress||0;
+  var txt   = vs.text||'';
+  var ec    = vs.energyCurveVal||0;
+  var conv  = (S&&S.convMode)||0;
+  var vMix  = (S&&S.voiceMix)||0;
 
-  // Layer 0: motion trail (DELAY personality)
-  if((S&&S.convMode)===3 || sm>0.65){
-    ctx.globalCompositeOperation = 'copy';
-    ctx.globalAlpha = 0.88;
-    ctx.drawImage(canvas, 0, 1);
-    ctx.globalCompositeOperation = 'source-over';
+  // CLEAR / TRAIL — smear creates motion persistence
+  if(smear > 0.5){
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(canvas, 0, 2);
     ctx.globalAlpha = 1;
+  } else {
+    ctx.clearRect(0,0,W,H);
   }
 
-  veL_background(ctx, W, H);
-  veL_fftTexture(ctx, W, H);
-  veL_voiceFields(ctx, W, H);
-  veL_interaction(ctx, W, H);
-  veL_dominance(ctx, W, H);
-  veL_text(ctx, W, H);
-  veL_minimal(ctx, W, H);
+  veDrawBackground(ctx, W, H, intent, ec);
+  veDrawVoices(ctx, W, H, vMix, turn, pDom, conv);
+  veDrawFFT(ctx, W, H, fft, form, turn, smear);
+  veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix);
+  veDrawOverlays(ctx, W, H, intent, conv, turn, pDom);
 }
 
-// ── L0: BACKGROUND — intent color field ──────────────────────────
-function veL_background(ctx, W, H){
-  var hue = _ve.hue + ((S&&S.intent)===2 ? _ve.jitter : 0);
-  var ec  = (S&&S.visualState&&S.visualState.energyCurveVal)||0;
-  var L   = 5 + ec*10;
-  var g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0, 'hsl('+hue+',55%,'+L+'%)');
-  g.addColorStop(1, 'hsl('+(hue+18)+',55%,'+(L*0.4)+'%)');
-  ctx.fillStyle = g;
+// ── 1. BACKGROUND — intent-driven, energy-breathing ──────────────
+function veDrawBackground(ctx, W, H, intent, ec){
+  var hueMap = [210, 190, 310, 270, 210];
+  var targetHue = hueMap[intent]||210;
+  _ve.bgHue += (targetHue - _ve.bgHue)*0.04;
+  _ve.bgL   += ((8 + ec*12) - _ve.bgL)*0.05;
+  ctx.fillStyle = 'hsl('+_ve.bgHue+',30%,'+_ve.bgL.toFixed(1)+'%)';
   ctx.fillRect(0,0,W,H);
+  if(intent===4){
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0,0,W,H);
+  }
 }
 
-// ── L1: FFT TEXTURE — background energy, not focal ───────────────
-function veL_fftTexture(ctx, W, H){
-  var bins = window.fftBins;
-  if(!bins) return;
-  var N = bins.length, sm = (S&&S.dsmear)||0;
-  ctx.save();
-  ctx.globalAlpha = 0.12 + sm*0.08;  // very subtle — texture not feature
-  ctx.strokeStyle = 'rgba(255,255,255,1)';
-  ctx.lineWidth = 1;
+// ── 2. VOICES A/B — circles with spatial behavior ─────────────────
+function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
+  var xA = W*0.3;
+  var xB = W*0.7;
+  var aAlpha = (1-vMix)*0.9 + 0.1;
+  var bAlpha = vMix*0.9 + 0.1;
+  var sizeA  = 40 + (1-vMix)*30 + pDom*20;
+  var sizeB  = 40 + vMix*30    + pDom*20;
+
+  // convMode modifies positions — interpolated
+  var targetOffA = 0, targetOffB = 0;
+  if(conv===1){ targetOffA=(0.5-vMix)*80;  targetOffB=(0.5-vMix)*80; }  // MIMIC: converge
+  if(conv===2){ targetOffA=(vMix-0.5)*120; targetOffB=(vMix-0.5)*120; }  // OPPOSE: separate
+  _ve.aOff += (targetOffA - _ve.aOff)*0.08;
+  _ve.bOff += (targetOffB - _ve.bOff)*0.08;
+
+  var ghost = (conv===3) ? 0.45 : 1;  // DELAY: B is ghostly
+
+  var cy = H*0.5;
+
+  // Voice A — cyan
+  ctx.globalAlpha = aAlpha;
   ctx.beginPath();
-  var textureY = H*0.5;
+  ctx.arc(xA + _ve.aOff, cy, sizeA, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(120,220,255,0.8)';
+  ctx.fill();
+
+  // Voice B — magenta (ghost in DELAY)
+  ctx.globalAlpha = bAlpha * ghost;
+  ctx.beginPath();
+  ctx.arc(xB - _ve.bOff, cy, sizeB, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,120,220,0.8)';
+  ctx.fill();
+
+  // DELAY: extra ghost offset for temporal echo feel
+  if(conv===3){
+    ctx.globalAlpha = bAlpha * 0.2;
+    ctx.beginPath();
+    ctx.arc(xB - _ve.bOff + 18, cy + 4, sizeB*0.85, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(153,68,255,0.7)';
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+
+  // OVERLAP — line connecting A and B (tension)
+  if(turn===3){
+    ctx.beginPath();
+    ctx.moveTo(xA + _ve.aOff, cy);
+    ctx.lineTo(xB - _ve.bOff, cy);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
+// ── 3. FFT — background texture, bottom register ─────────────────
+function veDrawFFT(ctx, W, H, fft, form, turn, smear){
+  if(!fft) return;
+  var N    = fft.length;
+  var baseY= H*0.82;
+  var tilt = (1-form)*55;
+  var xOff = turn===1?-30:turn===2?30:0;
+  ctx.globalAlpha = 0.18 + smear*0.07;
+  ctx.beginPath();
   for(var i=0;i<N;i++){
     var t = i/(N-1);
     var idx = Math.min(N-1, Math.floor(Math.pow(t,2.2)*(N-1)));
-    var x = t*W;
-    var v = bins[idx];
-    var y = textureY - v*(H*0.22);
+    var x = t*W + xOff;
+    var y = baseY - fft[idx]*(H*0.18) + t*tilt;
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
+  ctx.strokeStyle = '#9cf';
+  ctx.lineWidth = 1;
   ctx.stroke();
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
-// ── L2: VOICE FIELDS — A (cyan left) + B (magenta right) ─────────
-function veL_voiceFields(ctx, W, H){
-  var rms = (S&&S.rms)||0;
-  var t   = (S&&S.turnState)||0;
-  var cm  = (S&&S.convMode)||0;
-
-  // Voice A — cyan radial field
-  var axPx = _ve.aX * W;
-  var ayPx = H * 0.45;
-  var aR   = 90 + _ve.aAlpha*110 + rms*30;
-  var ga = ctx.createRadialGradient(axPx,ayPx,0, axPx,ayPx,aR);
-  ga.addColorStop(0, 'rgba(0,255,255,'+(_ve.aAlpha*0.18)+')');
-  ga.addColorStop(0.5,'rgba(0,200,255,'+(_ve.aAlpha*0.08)+')');
-  ga.addColorStop(1,  'rgba(0,255,255,0)');
-  ctx.fillStyle = ga;
-  ctx.fillRect(0,0,W,H);
-
-  // Voice B — magenta radial field
-  var bxPx = _ve.bX * W;
-  var byPx = H * 0.45;
-  var bR   = 90 + _ve.bAlpha*110 + rms*20;
-  var gb = ctx.createRadialGradient(bxPx,byPx,0, bxPx,byPx,bR);
-  gb.addColorStop(0, 'rgba(255,0,255,'+(_ve.bAlpha*0.18)+')');
-  gb.addColorStop(0.5,'rgba(200,0,255,'+(_ve.bAlpha*0.08)+')');
-  gb.addColorStop(1,  'rgba(255,0,255,0)');
-  ctx.fillStyle = gb;
-  ctx.fillRect(0,0,W,H);
-
-  // OPPOSE: draw mirrored A field at B position (visual inversion)
-  if(cm===2){
-    var gopp = ctx.createRadialGradient(bxPx,byPx,0, bxPx,byPx,aR*0.7);
-    gopp.addColorStop(0,'rgba(0,255,255,'+(_ve.aAlpha*0.1)+')');
-    gopp.addColorStop(1,'rgba(0,255,255,0)');
-    ctx.fillStyle=gopp; ctx.fillRect(0,0,W,H);
-  }
-}
-
-// ── L3: INTERACTION ZONE — turn weight + consEnv pulse ───────────
-function veL_interaction(ctx, W, H){
-  var t    = (S&&S.turnState)||0;
-  var cEnv = (S&&S.consEnv)||0;
-  var rms  = (S&&S.rms)||0;
-  var cx = W*0.5, cy = H*0.45;
-
-  if(t===3){
-    // OVERLAP — tension field between voices
-    var axPx=_ve.aX*W, bxPx=_ve.bX*W;
-    var midX=(axPx+bxPx)*0.5;
-    var tension = ctx.createRadialGradient(midX,cy,0, midX,cy,60);
-    tension.addColorStop(0,'rgba(255,255,255,0.12)');
-    tension.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.fillStyle=tension; ctx.fillRect(0,0,W,H);
-  }
-
-  // consEnv articulation ring — vowel/consonant marker
-  if(cEnv>0.08){
-    var spkX = (S&&S.turnState)===2 ? _ve.bX*W : _ve.aX*W;
-    var r = 48 + cEnv*52;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(spkX, cy, r, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(255,255,255,'+(cEnv*0.45)+')';
-    ctx.lineWidth = (S&&S.visualState&&S.visualState.emphasis) ? 2.5 : 1;
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-// ── L4: PHRASE DOMINANCE — memory takes over layout ───────────────
-function veL_dominance(ctx, W, H){
-  var dom = _ve.domScale;
-  if(dom<0.05) return;
-
-  // Amber field emanating from center — grows with dominance
-  var pulse = 1 + ((S&&S.rms)||0)*0.25;
-  var r = (120 + dom*200) * pulse;
-  var gd = ctx.createRadialGradient(W*0.5,H*0.5,0, W*0.5,H*0.5,r);
-  gd.addColorStop(0, 'rgba(255,165,40,'+(dom*0.14)+')');
-  gd.addColorStop(0.7,'rgba(255,130,20,'+(dom*0.05)+')');
-  gd.addColorStop(1,  'rgba(255,165,40,0)');
-  ctx.fillStyle=gd; ctx.fillRect(0,0,W,H);
-
-  // At high dominance (>0.7): amber border — memory "frames" the scene
-  if(dom>0.7){
-    var br = ctx.createLinearGradient(0,0,0,H);
-    var a = (dom-0.7)/0.3 * 0.25;
-    br.addColorStop(0,   'rgba(255,140,0,'+a+')');
-    br.addColorStop(0.15,'rgba(255,140,0,0)');
-    br.addColorStop(0.85,'rgba(255,140,0,0)');
-    br.addColorStop(1,   'rgba(255,140,0,'+a+')');
-    ctx.fillStyle=br; ctx.fillRect(0,0,W,H);
-  }
-}
-
-// ── L5: TEXT — primary focal point ───────────────────────────────
-function veL_text(ctx, W, H){
-  var vs = S&&S.visualState;
-  if(!vs||!vs.text) return;
-  var progress = vs.progress||0;
-  var wIdx     = vs.wordIndex||0;
-  var emph     = vs.emphasis||false;
-  var cm       = (S&&S.convMode)||0;
-  var dom      = _ve.domScale;
-  var vm       = (S&&S.voiceMix)||0;
-
-  // Text Y position shifts up when phraseDom is high (memory "lifts" text)
-  var baseY = H*(0.72 - dom*0.12);
-
-  // Active word color mixes between cyan (A) and magenta (B) by voiceMix
-  var aR=0, aG=255, aB=255;     // cyan for A
-  var bR=255, bG=0, bB=255;     // magenta for B
-  var wR=Math.round(aR+(bR-aR)*vm);
-  var wG=Math.round(aG+(bG-aG)*vm);
-  var wB=Math.round(aB+(bB-aB)*vm);
-  var activeColor='rgba('+wR+','+wG+','+wB+',1)';
-
-  var words = vs.text.split(' ');
+// ── 4. TEXT — focal point with word-level state ───────────────────
+function veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix){
+  if(!txt) return;
+  var wIdx = (vs&&vs.wordIndex)||0;
+  var emph = (vs&&vs.emphasis)||false;
+  var words = txt.split(' ');
   if(!words.length) return;
 
-  ctx.save();
-  var fontSize = 13 + (emph?2:0);
-  ctx.font = 'italic '+fontSize+'px "JetBrains Mono",monospace';
-  ctx.textBaseline='middle';
-  ctx.textAlign='center';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var baseSize = 15;
+  var scale = 1 + pDom*0.3;
+  if(conv===2) scale *= 0.88;  // OPPOSE: more compressed
+  ctx.font = 'italic '+Math.round(baseSize*scale)+'px "JetBrains Mono",monospace';
 
-  // Compute word widths + total
-  var widths=[], totalW=0;
-  words.forEach(function(w){ var mw=ctx.measureText(w).width+5; widths.push(mw); totalW+=mw; });
+  // Active word color — interpolates A (cyan) to B (magenta) by voiceMix
+  var wR=Math.round(120+(255-120)*vMix), wG=Math.round(220+(120-220)*vMix), wB=Math.round(255+(220-255)*vMix);
+  var activeCol = 'rgb('+wR+','+wG+','+wB+')';
 
-  var startX = W*0.5 + _ve.textDrift - totalW*0.5;
-  var curX = startX;
+  var textY = H*0.72 - pDom*H*0.08;  // rises with dominance
 
-  // DELAY: render ghost text offset behind
-  if(cm===3){
+  // DELAY: render ghost behind
+  if(conv===3){
     ctx.save();
-    ctx.globalAlpha=0.2;
-    var gX=startX+12, gCX=curX+12;
-    words.forEach(function(w,i){
-      ctx.fillStyle='rgba(153,68,255,0.8)';
-      ctx.fillText(w, gCX+widths[i]*0.5, baseY+4);
-      gCX+=widths[i];
-    });
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = 'rgba(153,68,255,1)';
+    ctx.fillText(txt, W/2+14, textY+5);
     ctx.restore();
   }
 
-  // Main words
+  // Measure words for per-word rendering
+  var widths=[], totalW=0;
+  words.forEach(function(w){ var mw=ctx.measureText(w).width+5; widths.push(mw); totalW+=mw; });
+  var curX = W/2 - totalW/2;
+
   words.forEach(function(w,i){
-    var isActive = i===wIdx;
-    if(isActive){
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = emph ? 'rgba(255,220,80,1)' : activeColor;
-    } else {
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = 'rgba(255,255,255,1)';
-    }
-    ctx.fillText(w, curX+widths[i]*0.5, baseY);
-    curX+=widths[i];
+    var isAct = i===wIdx;
+    ctx.globalAlpha = isAct ? (conv===3?0.65:1.0) : 0.2;
+    ctx.fillStyle = isAct ? (emph?'rgba(255,220,80,1)':activeCol) : 'rgba(255,255,255,1)';
+    ctx.fillText(w, curX+widths[i]/2, textY);
+    curX += widths[i];
   });
-  ctx.globalAlpha=1;
+  ctx.globalAlpha = 1;
 
-  // Progress line — thin, same color as active word
-  var bY=baseY+18, bX0=W*0.18, bW=W*0.64;
-  ctx.globalAlpha=0.15;
-  ctx.fillStyle='rgba(255,255,255,1)';
-  ctx.fillRect(bX0,bY,bW,1);
-  ctx.globalAlpha=0.7;
-  ctx.fillStyle=activeColor;
-  ctx.fillRect(bX0,bY,bW*progress,1);
-  ctx.globalAlpha=1;
-  ctx.restore();
+  // Progress bar — full width, bottom
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, H-5, W, 5);
+  ctx.fillStyle = activeCol;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(0, H-5, W*prog, 5);
+  ctx.globalAlpha = 1;
 }
 
-// ── L6: MINIMAL OVERLAYS — only what's needed ─────────────────────
-function veL_minimal(ctx, W, H){
+// ── 5. OVERLAYS — minimal, fade with intentEnv ────────────────────
+function veDrawOverlays(ctx, W, H, intent, conv, turn, pDom){
   var iEnv = (S&&S.intentEnv)||0;
-  var dom  = _ve.domScale;
-  if(iEnv<0.08) return;
+  ctx.globalAlpha = Math.max(0.3, iEnv*0.65);
+  ctx.font = '9px "JetBrains Mono",monospace';
+  ctx.textBaseline = 'alphabetic';
 
-  ctx.save();
-  ctx.globalAlpha = iEnv*0.55;
-  ctx.font='italic 8px "JetBrains Mono",monospace';
+  var iTxt=['','FOLLOW','CONTRAST','CALL','SILENCE'][intent]||'';
+  var cTxt=['','MIMIC','OPPOSE','DELAY'][conv]||'';
+  var tTxt=['','A','B','A·B'][turn]||'';
 
-  // Turn state — top, small, only in active turns
-  var t=(S&&S.turnState)||0;
-  if(t>0){
-    var tCols=['','rgba(0,255,255,1)','rgba(255,0,255,1)','rgba(255,255,255,0.7)'];
-    var tLbls=['','A','B','A·B'];
-    ctx.fillStyle=tCols[t];
-    ctx.textAlign='left';
-    ctx.fillText(tLbls[t],8,12);
-  }
+  ctx.fillStyle = 'rgba(200,200,200,1)';
+  ctx.textAlign='left';   ctx.fillText(iTxt, 6, H-8);
+  ctx.textAlign='center'; ctx.fillText(cTxt, W/2, H-8);
+  ctx.textAlign='right';  ctx.fillText(tTxt, W-6, H-8);
 
-  // MEM% — only when really dominant
-  if(dom>0.55){
+  if(pDom>0.5){
     ctx.fillStyle='rgba(255,165,40,1)';
-    ctx.textAlign='right';
-    ctx.fillText('MEM '+Math.round(dom*100)+'%',W-8,12);
+    ctx.fillText('MEM '+(pDom*100|0)+'%', W-6, 13);
   }
-
-  ctx.globalAlpha=1;
-  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
 }
-
-
 
 
 // ── UI EVENTS ─────────────────────────────────────────────────────
