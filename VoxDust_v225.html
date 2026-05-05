@@ -3238,18 +3238,20 @@ var _ve = {
   fps: 60,
   bgHue: 210,
   bgL: 8,
-  // voice position state (for MIMIC/OPPOSE interpolation)
+  scale: 1,       // Fix 2: physical scale for projection
   aOff: 0,
   bOff: 0
 };
 
 function startVisualEngine(canvas){
-  var DPR = window.devicePixelRatio||1;
+  var DPR = Math.min(2, window.devicePixelRatio||1);   // cap for projection
   var ctx = canvas.getContext('2d');
   function resize(){
     canvas.width  = Math.round(canvas.clientWidth  * DPR);
     canvas.height = Math.round(canvas.clientHeight * DPR);
     ctx.setTransform(DPR,0,0,DPR,0,0);
+    // Fix 2: physical scale factor — keeps proportions on large screens
+    _ve.scale = Math.min(canvas.clientWidth, canvas.clientHeight) / 600;
   }
   resize();
   window.addEventListener('resize', resize);
@@ -3295,44 +3297,72 @@ function veDraw(ctx, canvas){
   }
 
   veDrawBackground(ctx, W, H, intent, ec);
+  veDrawDominance(ctx, W, H, pDom);
   veDrawVoices(ctx, W, H, vMix, turn, pDom, conv);
   veDrawFFT(ctx, W, H, fft, form, turn, smear);
   veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix);
   veDrawOverlays(ctx, W, H, intent, conv, turn, pDom);
 }
 
-// ── 1. BACKGROUND — intent-driven, energy-breathing ──────────────
+// ── 1. BACKGROUND — stable hsl, intent-driven ────────────────────
 function veDrawBackground(ctx, W, H, intent, ec){
-  var hueMap = [210, 190, 310, 270, 210];
-  var targetHue = hueMap[intent]||210;
-  _ve.bgHue += (targetHue - _ve.bgHue)*0.04;
-  _ve.bgL   += ((8 + ec*12) - _ve.bgL)*0.05;
-  ctx.fillStyle = 'hsl('+_ve.bgHue+',30%,'+_ve.bgL.toFixed(1)+'%)';
+  var hue = intent===1?190 : intent===2?310 : intent===3?260 : 210;
+  _ve.bgHue += (hue - _ve.bgHue)*0.04;
+  _ve.bgL   += ((8 + ec*10) - _ve.bgL)*0.05;
+  // Fix 6: single fill — no gradient (stable on projectors, no banding)
+  ctx.fillStyle = 'hsla('+_ve.bgHue.toFixed(0)+',40%,'+_ve.bgL.toFixed(1)+'%,1)';
   ctx.fillRect(0,0,W,H);
   if(intent===4){
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillStyle='rgba(0,0,0,0.3)';
     ctx.fillRect(0,0,W,H);
   }
 }
 
-// ── 2. VOICES A/B — circles with spatial behavior ─────────────────
+// ── DOMINANCE AURA — mid-layer, memory field ──────────────────────
+function veDrawDominance(ctx, W, H, pDom){
+  if(pDom<0.05) return;
+  var cx=W*0.5, cy=H*0.5;
+  var sc=_ve.scale||1;
+  var rms=(S&&S.rms)||0;
+  // Fix 5: large field from center — "installation" scale aura
+  var inner=50*sc, outer=(200+pDom*200)*sc*(1+rms*0.15);
+  var g=ctx.createRadialGradient(cx,cy,inner, cx,cy,outer);
+  g.addColorStop(0,'rgba(255,180,80,'+(pDom*0.22)+')');
+  g.addColorStop(0.7,'rgba(255,150,40,'+(pDom*0.06)+')');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W,H);
+  // At high dominance add framing effect (top/bottom bars)
+  if(pDom>0.65){
+    var a=(pDom-0.65)/0.35*0.18;
+    ctx.fillStyle='rgba(255,140,0,'+a+')';
+    ctx.fillRect(0,0,W,H*0.12);
+    ctx.fillRect(0,H*0.88,W,H*0.12);
+  }
+}
+
+
 function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   var xA = W*0.3;
   var xB = W*0.7;
+  var sc = _ve.scale||1;
+  var BASE_R = 40*sc;
+
+  // Fix 3: size from actual dominance, not just voiceMix
+  var aDom = (S&&S._aDom)||0, bDom = (S&&S._bDom)||0;
+  var sizeA = BASE_R + aDom*50*sc + pDom*30*sc;
+  var sizeB = BASE_R + bDom*50*sc + pDom*30*sc;
+
   var aAlpha = (1-vMix)*0.9 + 0.1;
   var bAlpha = vMix*0.9 + 0.1;
-  var sizeA  = 40 + (1-vMix)*30 + pDom*20;
-  var sizeB  = 40 + vMix*30    + pDom*20;
 
-  // convMode modifies positions — interpolated
   var targetOffA = 0, targetOffB = 0;
-  if(conv===1){ targetOffA=(0.5-vMix)*80;  targetOffB=(0.5-vMix)*80; }  // MIMIC: converge
-  if(conv===2){ targetOffA=(vMix-0.5)*120; targetOffB=(vMix-0.5)*120; }  // OPPOSE: separate
+  if(conv===1){ targetOffA=(0.5-vMix)*80*sc; targetOffB=(0.5-vMix)*80*sc; }
+  if(conv===2){ targetOffA=(vMix-0.5)*120*sc; targetOffB=(vMix-0.5)*120*sc; }
   _ve.aOff += (targetOffA - _ve.aOff)*0.08;
   _ve.bOff += (targetOffB - _ve.bOff)*0.08;
 
-  var ghost = (conv===3) ? 0.45 : 1;  // DELAY: B is ghostly
-
+  var ghost = (conv===3) ? 0.45 : 1;
   var cy = H*0.5;
 
   // Voice A — cyan
@@ -3342,31 +3372,32 @@ function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   ctx.fillStyle = 'rgba(120,220,255,0.8)';
   ctx.fill();
 
-  // Voice B — magenta (ghost in DELAY)
+  // Voice B — magenta
   ctx.globalAlpha = bAlpha * ghost;
   ctx.beginPath();
   ctx.arc(xB - _ve.bOff, cy, sizeB, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(255,120,220,0.8)';
   ctx.fill();
 
-  // DELAY: extra ghost offset for temporal echo feel
+  // DELAY: temporal echo ghost
   if(conv===3){
-    ctx.globalAlpha = bAlpha * 0.2;
+    ctx.globalAlpha = bAlpha*0.2;
     ctx.beginPath();
-    ctx.arc(xB - _ve.bOff + 18, cy + 4, sizeB*0.85, 0, Math.PI*2);
+    ctx.arc(xB - _ve.bOff + 18*sc, cy + 4, sizeB*0.85, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(153,68,255,0.7)';
     ctx.fill();
   }
 
   ctx.globalAlpha = 1;
 
-  // OVERLAP — line connecting A and B (tension)
+  // Fix 4: OVERLAP line — thickness from min(aDom,bDom), alpha from intentEnv
   if(turn===3){
+    var iEnv = (S&&S.intentEnv)||0;
     ctx.beginPath();
     ctx.moveTo(xA + _ve.aOff, cy);
     ctx.lineTo(xB - _ve.bOff, cy);
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,'+(0.15+iEnv*0.3)+')';
+    ctx.lineWidth   = 1 + Math.min(aDom,bDom)*4;
     ctx.stroke();
     ctx.lineWidth = 1;
   }
