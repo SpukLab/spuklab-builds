@@ -395,7 +395,7 @@ var S = {
   turnState:0, turnHold:0, turnCooldown:0,
   turnOwner:0, interruptIntent:0, overlapAmt:0,
   // v21.2 Conversational Behavior
-  convMode:0, convEnv:0.0, convDrift:0.0,
+  convMode:0, convEnv:0.0, convDrift:0.0, convLock:0,
   // Motif Quantization + Human Swing (v20.1)
   swingAmt:0.0, swingPhase:0,
   // Call / Response Engine (v20.2)
@@ -938,11 +938,11 @@ function applyDSP(spec){
     } else {
       S._domWarp=1;
     }
-    // Task 1 v20.9.1: split coherence with mixNorm (no +3dB buildup)
-    var bW=S.voiceMix;
-    var mixNorm=1/Math.sqrt((1-bW)*(1-bW)+bW*bW+0.001);
-    if(cohGainA) cohGainA.gain.setTargetAtTime(cohVal*cohBoost*(1-bW)*mixNorm,now,0.08);
-    if(cohGainB) cohGainB.gain.setTargetAtTime(cohVal*cohBoost*bW*0.85*mixNorm,now,0.08);
+    var bW2=S.voiceMix;
+    var mixNorm=1/Math.sqrt((1-bW2)*(1-bW2)+bW2*bW2+0.001);
+    cohVal=Math.min(cohVal,1.3);   // Task 2: cohVal clamp
+    if(cohGainA) cohGainA.gain.setTargetAtTime(cohVal*cohBoost*(1-bW2)*mixNorm,now,0.08);
+    if(cohGainB) cohGainB.gain.setTargetAtTime(cohVal*cohBoost*bW2*0.85*mixNorm,now,0.08);
     cohGain.gain.setTargetAtTime(cohVal*cohBoost,now,0.08);
   }
 
@@ -1064,6 +1064,10 @@ function applyDSP(spec){
   } else if(pvNode){
     pvNode.parameters.get('mix').setTargetAtTime(0,now,0.08);
   }
+
+  // v21.2.1 Task 2: global clamp — prevent runaway modulation accumulation
+  smearUsed=Math.max(0.05,Math.min(smearUsed,1.4));
+  wetAmt=Math.max(0.02,Math.min(wetAmt,1.5));
 
   // SMEAR: handled in playTick via smearEngine.update() — no separate timer
   // v21 Task 4+5: turn-taking duck + interrupt
@@ -1314,10 +1318,12 @@ function playTick(){
   // Task 8 v20.9.1: gain staging debug (every ~1s, remove when stable)
   if(typeof _dbgFrame==='undefined') window._dbgFrame=0;
   if(++window._dbgFrame%33===0&&cohGainA&&convWetA){
-    console.log('[VD gains]',{
+    console.log('[VD]',{
       cohA:cohGainA.gain.value.toFixed(3),cohB:cohGainB?cohGainB.gain.value.toFixed(3):'—',
       wetA:convWetA.gain.value.toFixed(3),wetB:convWetB?convWetB.gain.value.toFixed(3):'—',
-      vMix:S.voiceMix.toFixed(2),dom:S.phraseDom.toFixed(2),nov:S.novelty.toFixed(2)
+      vMix:S.voiceMix.toFixed(2),dom:S.phraseDom.toFixed(2),nov:S.novelty.toFixed(2),
+      conv:['N','M','O','D'][S.convMode]||'?',cEnv:S.convEnv.toFixed(2),
+      turn:S.turnState,lock:Math.round(S.convLock)
     });
   }
   // Task 2: swing derivation — auto, no UI needed
@@ -1412,17 +1418,24 @@ function playTick(){
   S.intentEnv+=(1-S.intentEnv)*0.2;   // smooth envelope toward 1
   if(S.intent!==prevIntent) S.intentTimer=0;
   S.intentTimer+=dt;
-  // v21.2 Task 1: conversational behavior selection — driven by intent
+  // v21.2 Task 1: conversational behavior selection — with hysteresis lock
+  if(S.convLock>0) S.convLock-=dt;
   if(S.turnState===0&&S.phraseEnv>0.4){
     var cr=Math.random();
-    if(S.intent===1)       S.convMode=cr<0.7?1:3;   // FOLLOW → mimic or delay
-    else if(S.intent===2)  S.convMode=cr<0.6?2:3;   // CONTRAST → oppose or delay
-    else if(S.intent===3)  S.convMode=3;             // CALL → delay (reflexive)
-    else                   S.convMode=0;             // idle → neutral
+    var newMode;
+    if(S.intent===1)       newMode=cr<0.7?1:3;
+    else if(S.intent===2)  newMode=cr<0.6?2:3;
+    else if(S.intent===3)  newMode=3;
+    else                   newMode=0;
+    // Task 3: hysteresis — mode can't flip until convLock expires
+    if(newMode!==S.convMode&&S.convLock<=0){
+      S.convMode=newMode;
+      S.convLock=200+Math.random()*200;
+    }
   }
-  // Task 2: convEnv — smooth fade in/out of behavior character
+  // Task 2 v21.2.1 + Task 7: convEnv — decay faster when turn active
   S.convEnv+=(1-S.convEnv)*0.15;
-  if(S.turnState!==0) S.convEnv*=0.85;
+  if(S.turnState!==0) S.convEnv*=0.7;   // Task 7: conv steps back during speech
   // v20.6: Phrase Dominance — memory takes control in low-energy gaps
   var lowEdom=S.energyFac<0.22;
   var hasMem=S.phraseMem.length>0;
@@ -1622,8 +1635,15 @@ function updateConsonantDetector(fd){
     S.crActive=true;
     S.crTimer=0;
     S.crDelay=120+S.phraseEnv*220+Math.random()*60;
-    // Task 5 v21.2: DELAY personality — reflexive, responds late
-    if(S.convMode===3) S.crDelay+=120+Math.random()*180;
+    if(S.convMode===3){
+      var extraDelay=120+Math.random()*180;
+      // Task 5 v21.2.1: snap delay to PQ grid to preserve groove
+      if(S.pqInterval>0.08&&S.pqIntervals.length>=3){
+        var steps=Math.max(1,Math.round(extraDelay/(S.pqInterval*1000)));
+        extraDelay=steps*S.pqInterval*1000;
+      }
+      S.crDelay+=extraDelay;
+    }
     S.crEnergy=S.energyFac;
     S.crResponding=false;
   }
@@ -2181,13 +2201,17 @@ function pmSpawnStutter(amp,durScale){
 function pmReplay(now,e,delayMs,isResponse){
   if(!e) return;
   delayMs=delayMs||0;
+  // Task 1 v21.2.1: snapshot conv state at schedule time — use snap inside closure
+  var snap={convMode:S.convMode,convEnv:S.convEnv,phraseEnv:S.phraseEnv};
   function doReplay(){
-    var phraseVar=0.9+S.phraseEnv*0.2;
-    // Task 5: response mode — softer, narrower direction (system "answers" not "repeats")
+    var phraseVar=0.9+snap.phraseEnv*0.2;
     var respScale=isResponse?0.75:1.0;
-    S.consEnv=Math.max(S.consEnv,e.consEnv*0.7*phraseVar*respScale);
-    S.semEnv=Math.max(S.semEnv,e.semEnv*0.7*phraseVar*respScale);
-    S.consDir=e.consDir*(isResponse?0.5:0.6);
+    // Task 6: MIMIC boost (snap, not live S)
+    var mimicBoost=snap.convMode===1?(1+snap.convEnv*0.15):1.0;
+    S.consEnv=Math.max(S.consEnv,e.consEnv*0.7*phraseVar*respScale*mimicBoost);
+    S.semEnv=Math.max(S.semEnv,e.semEnv*0.7*phraseVar*respScale*mimicBoost);
+    // Task 4: OPPOSE partial inversion (-0.7 not -1.0)
+    S.consDir=e.consDir*(isResponse?0.5:0.6)*(snap.convMode===2?-0.7:1.0);
     S.targetMatter=clamp(S.targetMatter+(e.semEnv*e.energy)*0.006);
     if(e.zone&&Math.random()<0.5) pmSpawnStutter(0.08*(1-S.dsmear),0.8);
     // T1: inject PM-marked snapshot
@@ -2314,33 +2338,30 @@ function pqSwingOffset(interval,swingAmt,phaseToggle){
 function scheduleMotifStep(step,scheduledTime){
   var varScale=0.85+S.phraseEnv*0.3;
   var mut=motifMutationFactor();
-  // Task 3 v21.2: MIMIC — closer to original (less drift, more intensity)
-  if(S.convMode===1){
-    tDrift*=0.5;
-    S._formDrift=1+(Math.random()-0.5)*0.04;
-  }
-  // Task 4 v21.2: OPPOSE — inverted direction, more drift, wider pitch
-  else if(S.convMode===2){
-    tDrift*=1.3;
-    S._formDrift=1+(Math.random()-0.5)*0.12;
-  }
+  // Task 1 v21.2.1: snapshot state NOW — callback reads snap, not live S
+  var snap={convMode:S.convMode,convEnv:S.convEnv,intent:S.intent};
   // Task 4: timing drift proportional to mutation
   var tDrift=(Math.random()-0.5)*S.pqInterval*0.08*mut;
-  tDrift*=(1+S.novelty*0.5);   // Task 4: novelty → more timing drift
+  tDrift*=(1+S.novelty*0.5);
+  // convMode timing adjustment (uses snap)
+  if(snap.convMode===1) tDrift*=0.5;
+  else if(snap.convMode===2) tDrift*=(1+snap.convEnv*0.2);  // Task 4 reduced: 0.2 was 0.3
   var finalT=Math.max(AC.currentTime,scheduledTime+tDrift);
   var dtMs=Math.max(0,(finalT-AC.currentTime)*1000);
-  // Task 6: form drift — pre-compute to pass into deferred closure
   var formDrift=1+(Math.random()-0.5)*0.08*mut;
+  // convMode formDrift (uses snap)
+  if(snap.convMode===1) formDrift=1+(Math.random()-0.5)*0.04;
+  else if(snap.convMode===2) formDrift=1+(Math.random()-0.5)*0.12;
   setTimeout(function(){
-    // Task 4: env variation
     var eVar=1+(Math.random()-0.5)*0.3*mut;
-    // Task 3+4 v21.2: convMode shapes injection character
-    if(S.convMode===1){ eVar*=(1+S.convEnv*0.2); }          // MIMIC: more intense
-    else if(S.convMode===2){ eVar*=0.7; }                    // OPPOSE: less echo
+    // Task 1: use snap (not live S) for conv behavior — state is frozen at schedule time
+    if(snap.convMode===1){ eVar*=(1+snap.convEnv*0.15); }   // Task 6: 0.15 (was 0.2)
+    else if(snap.convMode===2){ eVar*=0.7; }
     S.consEnv=step.consEnv*varScale*eVar;
-    S.semEnv=step.semEnv*varScale*(S.convMode===2?1.2:1.0)*eVar;
+    // Task 4: OPPOSE semEnv reduced: 0.15 (was 0.2)
+    S.semEnv=step.semEnv*varScale*(snap.convMode===2?1+snap.convEnv*0.15:1.0)*eVar;
     var cDir=step.consDir*0.6;
-    if(S.convMode===2) cDir*=-1;   // Task 4: OPPOSE inverts spatial direction
+    if(snap.convMode===2) cDir*=-0.7;   // Task 4: partial inversion (-0.7 was -1.0)
     S.consDir=cDir;
     // Task 4: matter push scales with mutation
     S.targetMatter=clamp(S.targetMatter+step.energy*0.01*(1+mut*0.5));
