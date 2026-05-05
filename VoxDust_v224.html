@@ -1,0 +1,3849 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VoxDust v18</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@1,300;1,400;1,700;1,800&family=Inter:wght@400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --bg1:#13111f; --bg2:#1b1726;
+  --border:rgba(153,68,255,.18); --cyan:#00ffff; --mag:#ff00ff;
+  --vio:#9944ff; --violt:#b580ff;
+  --btn:rgba(153,68,255,.07); --active:rgba(153,68,255,.18);
+  --w:rgba(255,255,255,.92); --dim:rgba(255,255,255,.38);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;min-height:100%;background:linear-gradient(155deg,var(--bg1),var(--bg2));color:var(--w);font-family:Inter,sans-serif;font-size:13px}
+.app{max-width:480px;margin:0 auto;padding:16px 12px;display:flex;flex-direction:column;gap:10px}
+
+/* Header */
+header{display:flex;align-items:baseline;gap:4px;margin-bottom:2px}
+.logo{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:22px;letter-spacing:-1px}
+.logo .s{font-weight:800;color:var(--w)}.logo .l{font-weight:300;color:var(--cyan)}
+.ver{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);margin-left:6px;align-self:flex-end}
+
+/* Canvas */
+#ac{width:100%;height:100px;background:rgba(153,68,255,.06);border:1px solid var(--border);border-radius:6px;display:block}
+
+/* Section */
+.sec{background:rgba(153,68,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.slbl{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--violt);text-transform:uppercase;letter-spacing:1px}
+
+/* Row */
+.row{display:flex;align-items:center;gap:8px}
+.row label{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);min-width:52px;flex-shrink:0}
+.val{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--cyan);min-width:38px;text-align:right;flex-shrink:0}
+
+/* Slider */
+input[type=range]{-webkit-appearance:none;flex:1;height:4px;background:rgba(255,255,255,.08);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer}
+input[type=range]:disabled{opacity:.5;cursor:default}
+
+/* Button */
+button{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;font-weight:bold;color:var(--w);background:var(--btn);border:1px solid var(--border);border-radius:5px;padding:6px 10px;cursor:pointer;user-select:none;transition:background .1s,color .1s}
+button.on{background:var(--active);color:var(--mag)}
+button.act{background:var(--active);color:var(--cyan)}
+button.play{background:rgba(0,255,255,.1);color:var(--cyan);box-shadow:0 0 8px rgba(0,255,255,.2)}
+button.rec-live{background:rgba(255,0,0,.15);color:#ff4444;border-color:rgba(255,68,68,.4)}
+
+/* Evolution grid */
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+
+/* Spectrum bar */
+.spbar{position:relative;height:20px;border-radius:4px;overflow:hidden;background:linear-gradient(90deg,#003399,#0099ff,#00ff99,#ffaa00,#ff3300)}
+#cur{position:absolute;top:0;bottom:0;width:3px;background:white;border-radius:2px;box-shadow:0 0 6px white;left:30%}
+
+/* Spectral grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+
+/* DSP chips */
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;padding:2px 7px;border-radius:3px;border:1px solid var(--border);background:var(--btn);color:var(--dim);transition:all .3s}
+.chip.on{color:var(--cyan);border-color:rgba(0,255,255,.35);background:rgba(0,255,255,.07)}
+.chip.form-on{color:var(--mag);border-color:rgba(255,0,255,.35);background:rgba(255,0,255,.07)}
+.chip.rev-on{color:var(--violt);border-color:rgba(153,68,255,.5);background:rgba(153,68,255,.12)}
+
+/* Transport */
+.transport{display:flex;gap:8px;justify-content:center}
+.transport button{padding:10px 22px;font-size:11px}
+
+/* Status */
+#st{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim);text-align:center;min-height:14px;transition:color .2s}
+#st.a{color:var(--cyan)}
+
+/* Two-col */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* Library */
+.titem{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--btn);border:1px solid var(--border);border-radius:5px}
+.tname{flex:1;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--w)}
+.tdur{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim)}
+.titem button{padding:3px 7px;font-size:8px}
+
+/* Slot status */
+.sstat{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--dim)}
+
+/* Silence controls */
+#silCtrl{display:flex;flex-direction:column;gap:6px}
+
+/* Presets row */
+#pGrid{display:flex;gap:6px;flex-wrap:wrap}
+#pGrid button{padding:7px 16px}
+#pGrid button.saved{border-color:rgba(0,255,255,.3);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><span class="s">SPUK</span><span class="l">LAB</span></div>
+    <span class="ver">VoxDust v22.4</span>
+  </header>
+
+  <canvas id="ac" width="480" height="100"></canvas>
+
+  <!-- Visual Engine Canvas (full visual layer) -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+    <button id="visBtn" style="font-size:8px;padding:4px 8px">VIS OFF</button>
+    <span style="font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;color:var(--dim)">visual engine</span>
+  </div>
+  <canvas id="vc" width="480" height="260" style="display:none;width:100%;border-radius:6px;border:1px solid var(--border)"></canvas>
+
+  <!-- PLAYBACK -->
+  <div class="sec">
+    <div class="slbl">Playback</div>
+    <div class="row">
+      <label>STRETCH</label>
+      <input type="range" id="stretch" min="50" max="200" value="100">
+      <span class="val" id="stretchV">1.0x</span>
+    </div>
+    <div class="row">
+      <label>A &lt;-&gt; B</label>
+      <input type="range" id="mix" min="0" max="100" value="50">
+      <span class="val" id="mixV">50</span>
+    </div>
+    <div class="row" style="gap:8px">
+      <button id="lfoBtn">LFO OFF</button>
+      <div class="row" style="flex:1">
+        <label>FREQ</label>
+        <input type="range" id="lfoFreq" min="10" max="500" value="50">
+        <span class="val" id="lfoFreqV">0.5Hz</span>
+      </div>
+    </div>
+    <div class="row">
+      <label>DEPTH</label>
+      <input type="range" id="lfoDepth" min="0" max="100" value="30">
+      <span class="val" id="lfoDepthV">30%</span>
+    </div>
+    <div class="row">
+      <button id="loopBtn">LOOP ON</button>
+    </div>
+    <div id="silCtrl">
+      <div class="row">
+        <label>CHANCE</label>
+        <input type="range" id="chance" min="0" max="100" value="40">
+        <span class="val" id="chanceV">40%</span>
+      </div>
+      <div class="row">
+        <label>MIN</label>
+        <input type="range" id="silMin" min="0" max="1000" value="150" step="10">
+        <span class="val" id="silMinV">150ms</span>
+      </div>
+      <div class="row">
+        <label>MAX</label>
+        <input type="range" id="silMax" min="100" max="3000" value="600" step="10">
+        <span class="val" id="silMaxV">600ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLOTS -->
+  <div class="sec twocol">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="slbl">Slot A</div>
+      <div class="sstat" id="statA">ready</div>
+      <button id="recA">MIC</button>
+      <button id="loadA">LOAD</button>
+      <input type="file" id="fileA" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" style="display:none">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="slbl">Slot B</div>
+      <div class="sstat" id="statB">ready</div>
+      <button id="recB">MIC</button>
+      <button id="loadB">LOAD</button>
+      <input type="file" id="fileB" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" style="display:none">
+    </div>
+  </div>
+
+  <!-- EVOLUTION -->
+  <div class="sec">
+    <div class="slbl">Evolution</div>
+    <div class="spbar"><div id="cur"></div></div>
+    <div class="mgrid" id="mgrid"></div>
+  </div>
+
+  <!-- ENTROPY + ARTICULATION -->
+  <div class="sec">
+    <div class="slbl">Entropy + Articulation</div>
+    <div class="row">
+      <label>ENTROPY</label>
+      <input type="range" id="entropy" min="0" max="100" value="30">
+      <span class="val" id="entropyV">30%</span>
+    </div>
+    <div class="row">
+      <label>ARTICUL</label>
+      <input type="range" id="articulation" min="0" max="100" value="50">
+      <span class="val" id="articulV">50%</span>
+    </div>
+    <div class="row">
+      <label>PM DENS</label>
+      <input type="range" id="pmDensity" min="0" max="100" value="35">
+      <span class="val" id="pmDensV">35%</span>
+    </div>
+  </div>
+
+  <!-- SPECTRAL v18 DSP -->
+  <div class="sec">
+    <div class="slbl">Spectral — v18 DSP Active</div>
+    <div class="chips">
+      <span class="chip" id="chipSmear">SMEAR grain</span>
+      <span class="chip" id="chipForm">FORM formant</span>
+      <span class="chip" id="chipRev">REVERB conv</span>
+    </div>
+    <div class="sgrid">
+      <div class="row"><label>FORM</label><input type="range" id="sForm" min="0" max="100" value="50" disabled><span class="val" id="sFormV">50</span></div>
+      <div class="row"><label>SMEAR</label><input type="range" id="sSmear" min="0" max="100" value="0" disabled><span class="val" id="sSmearV">0</span></div>
+      <div class="row"><label>INTENS</label><input type="range" id="sIntens" min="0" max="100" value="80" disabled><span class="val" id="sIntensV">80</span></div>
+      <div class="row"><label>REVERB</label><input type="range" id="sRev" min="0" max="100" value="30" disabled><span class="val" id="sRevV">30</span></div>
+      <div class="row"><label>DRY/WET</label><input type="range" id="sDW" min="0" max="100" value="0" disabled><span class="val" id="sDWV">0</span></div>
+    </div>
+  </div>
+
+  <!-- TRANSPORT -->
+  <div class="transport">
+    <button id="playBtn">PLAY</button>
+    <button id="stopBtn">STOP</button>
+    <button id="recBtn">REC</button>
+    <button id="pvBtn" style="opacity:0.4">PV OFF</button>
+  </div>
+
+  <div id="st">v18 loading...</div>
+
+  <!-- CLIP SYSTEM -->
+  <div class="sec" id="clipSec">
+    <div class="slbl">Clips</div>
+    <div class="row" style="gap:6px">
+      <button id="clipLoadBtn">LOAD CLIP</button>
+      <input type="file" id="clipFileIn" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" style="display:none">
+      <span class="val" id="clipStatus" style="flex:1;text-align:left;font-size:9px;color:var(--dim)">no clips</span>
+    </div>
+    <div class="row" style="gap:6px;align-items:flex-start">
+      <label>TEXT</label>
+      <textarea id="clipText" rows="2" style="flex:1;background:rgba(153,68,255,.07);border:1px solid var(--border);border-radius:4px;color:var(--w);font-family:'JetBrains Mono',monospace;font-size:9px;font-style:italic;padding:4px;resize:none"></textarea>
+    </div>
+    <div id="clipList" style="display:flex;flex-direction:column;gap:4px"></div>
+    <div class="slbl" style="margin-top:4px">Deck</div>
+    <div class="row" style="gap:6px">
+      <button id="deckABtn">A ▶</button>
+      <input type="range" id="deckMixSlider" min="0" max="100" value="0" style="flex:1">
+      <button id="deckBBtn">B ▶</button>
+    </div>
+    <div class="slbl" style="margin-top:4px">Timeline</div>
+    <div class="row" style="gap:6px">
+      <button id="tlPlayBtn">RUN</button>
+      <button id="tlStopBtn">STOP</button>
+      <span class="val" id="tlStatus" style="flex:1;text-align:left;font-size:9px;color:var(--dim)">idle</span>
+    </div>
+    <!-- visual state hook (text progress) -->
+    <div id="vsTextWrap" style="margin-top:4px;min-height:24px;position:relative;overflow:hidden">
+      <div id="vsTextBg" style="position:absolute;left:0;top:0;height:100%;background:rgba(0,255,255,.06);width:0%;transition:width .1s"></div>
+      <div id="vsText" style="position:relative;font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;color:var(--w);word-break:break-word;padding:2px 4px"></div>
+    </div>
+  </div>
+
+  <!-- LIBRARY -->
+
+  <div class="sec">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="slbl">Library</div>
+      <button id="packBtn">PACK</button>
+    </div>
+    <div id="tlist"></div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="sec">
+    <div class="slbl">Presets — tap load / hold save</div>
+    <div id="pGrid"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// VoxDust v19 — Inter-Burst Coherence + Mini Phase Vocoder Hybrid
+// ================================================================
+
+// ── PHASE VOCODER WORKLET CODE ────────────────────────────────────
+// Blob-loaded AudioWorklet — FFT512/hop128/Hann, mono, phase-lock lite
+var PV_CODE=`
+class VDPVProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors(){
+    return [{name:'mix',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'}];
+  }
+  constructor(){
+    super();
+    const N=512,H=128;
+    this.N=N; this.H=H;
+    this.inBuf=new Float32Array(N);
+    this.outBuf=new Float32Array(N);
+    this.prevPhase=new Float32Array(N/2+1);
+    this.synthPhase=new Float32Array(N/2+1);
+    this.re=new Float32Array(N);
+    this.im=new Float32Array(N);
+    this.win=new Float32Array(N);
+    for(let i=0;i<N;i++) this.win[i]=0.5*(1-Math.cos(6.28318530718*i/N));
+    this.dform=0;
+    this.port.onmessage=(e)=>{if(e.data.dform!==undefined)this.dform=e.data.dform;};
+  }
+  _fft(re,im){
+    const N=re.length;
+    for(let i=1,j=0;i<N;i++){
+      let b=N>>1;
+      for(;j&b;b>>=1)j^=b;
+      j^=b;
+      if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}
+    }
+    for(let len=2;len<=N;len<<=1){
+      const a=-6.28318530718/len,wr=Math.cos(a),wi=Math.sin(a);
+      const h=len>>1;
+      for(let i=0;i<N;i+=len){
+        let cr=1,ci=0;
+        for(let j=0;j<h;j++){
+          const ur=re[i+j],ui=im[i+j];
+          const vr=re[i+j+h]*cr-im[i+j+h]*ci;
+          const vi=re[i+j+h]*ci+im[i+j+h]*cr;
+          re[i+j]=ur+vr;im[i+j]=ui+vi;
+          re[i+j+h]=ur-vr;im[i+j+h]=ui-vi;
+          const nc=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nc;
+        }
+      }
+    }
+  }
+  process(inputs,outputs,parameters){
+    const inp=inputs[0],out=outputs[0];
+    if(!inp||!inp[0]||!out||!out[0])return true;
+    const mix=parameters.mix[0];
+    const inD=inp[0],outD=out[0];
+    const N=this.N,H=this.H;
+    if(mix<0.005){outD.fill(0);return true;}
+    // Shift input buffer, append new H samples
+    this.inBuf.copyWithin(0,H);
+    this.inBuf.set(inD,N-H);
+    // Windowed analysis frame
+    const re=this.re,im=this.im,win=this.win;
+    for(let i=0;i<N;i++){re[i]=this.inBuf[i]*win[i];im[i]=0;}
+    // Forward FFT
+    this._fft(re,im);
+    // Phase processing
+    const TP=6.28318530718,HN=TP*H/N;
+    const lock=this.dform>0.6;
+    const bins=N/2;
+    for(let k=1;k<bins;k++){
+      const mag=Math.sqrt(re[k]*re[k]+im[k]*im[k]);
+      const ph=Math.atan2(im[k],re[k]);
+      if(lock){
+        this.synthPhase[k]=ph;
+      } else {
+        let dp=ph-this.prevPhase[k]-k*HN;
+        dp-=TP*Math.round(dp/TP);
+        this.synthPhase[k]+=k*HN+dp;
+      }
+      this.prevPhase[k]=ph;
+      re[k]=mag*Math.cos(this.synthPhase[k]);
+      im[k]=mag*Math.sin(this.synthPhase[k]);
+      re[N-k]=re[k];im[N-k]=-im[k];
+    }
+    // DC + Nyquist (keep magnitude, zero phase)
+    re[0]=Math.abs(re[0]);im[0]=0;
+    re[bins]=Math.abs(re[bins]);im[bins]=0;
+    // Inverse FFT (conjugate→FFT→conjugate→scale)
+    for(let i=0;i<N;i++)im[i]=-im[i];
+    this._fft(re,im);
+    const norm=2.0/N;
+    for(let i=0;i<N;i++)this.outBuf[i]+=re[i]*win[i]*norm;
+    // Output H samples, shift
+    for(let i=0;i<H;i++)outD[i]=this.outBuf[i]*mix;
+    this.outBuf.copyWithin(0,H);
+    this.outBuf.fill(0,N-H);
+    return true;
+  }
+}
+registerProcessor('vd-pv',VDPVProcessor);
+`;
+
+// ── STATE ────────────────────────────────────────────────────────
+var S = {
+  matter:0.3, targetMatter:0.3, matterVel:0.0,
+  entropy:0.3,
+  mixAB:0.5, stretch:1.0,
+  playing:false, looping:true,
+  silChance:40, silMin:150, silMax:600,
+  lfoOn:false, lfoFreq:0.5, lfoDepth:0.3,
+  bufA:null, bufB:null,
+  rms:0.0, energyFac:0.1,
+  fastT:0.0, slowT:0.0,
+  // v18 live DSP targets
+  dsmear:0.0, dform:1.0, dreverb:0.0, ddw:0.0,
+  // v18.5 computed
+  entropyEff:0.3,
+  // v19 PV
+  pvEnabled:false, pvMode:'off',
+  // v19.2 consonant detector
+  consScore:0.0, consActive:false,
+  // v19.3 consonant direction
+  consDir:0.0, consEnv:0.0,
+  // v19.4 semantic zones
+  semZone:null, semEnv:0.0,
+  // v19.5 macro articulation control
+  articulation:0.5,
+  // v19.6 stability
+  targetMatterBase:0.3,
+  // Phrase Memory
+  pmEnabled:true, pmDensity:0.35, pmDecay:0.92, pmLastReplay:0,
+  // Phrase Quantization (v19.8)
+  pqEnabled:true, pqInterval:0.18, pqPhase:0.0, pqLastOnsetT:0, pqIntervals:[],
+  // Phrase Shaping Layer (v19.9)
+  phraseEnv:0.0, phraseState:0, phraseTimer:0.0,
+  // Motif Engine (v20)
+  motifEnv:0.0, motifActive:false, motifTimer:0,
+  motif:null, motifIndex:0,
+  // v20.3 Mutation Engine
+  motifGen:0,
+  // v20.4 Intent Layer
+  intent:0, intentEnv:0.0, intentTimer:0,
+  // Fix 4: intent weight for narrative continuity
+  intentWeight:1.0, intentDecay:0.995,
+  // v20.5 Phrase Macro Memory
+  phraseMem:[], phraseCap:null, phraseClock:0,
+  // v20.6 Phrase Dominance
+  phraseDom:0.0, phraseHold:0,
+  // v20.7 Novelty Engine
+  novelty:0.0, noveltyTrend:0.0, lastPhraseHash:0,
+  // v20.8 Dual Voice Identity
+  voice:0, voiceMix:0.0, voiceTarget:0, voiceHold:0,
+  // v21 Turn-Taking Engine
+  turnState:0, turnHold:0, turnCooldown:0,
+  turnOwner:0, interruptIntent:0, overlapAmt:0,
+  // v21.2 Conversational Behavior
+  convMode:0, convEnv:0.0, convDrift:0.0, convLock:0,
+  // v22 Dual Voice
+  lastSpeaker:0, consEnvB:0.0,
+  // Motif Quantization + Human Swing (v20.1)
+  swingAmt:0.0, swingPhase:0,
+  // Call / Response Engine (v20.2)
+  crActive:false, crTimer:0, crDelay:0, crEnergy:0, crResponding:false
+};
+
+// Consonant detector state
+var prevEnergy=0, lastConsTime=0;
+// Phrase Memory ring buffer — ~2.8s @ 30ms tick
+var PM={buf:new Array(96).fill(null),i:0,len:96,tmpMotif:[]};
+// Motif Engine — stores 2–4 event micro-patterns for re-injection
+var MOTIFS={list:[],max:6};
+
+// ── CONSTANTS ────────────────────────────────────────────────────
+var ANCHORS = {Susurro:0.1,'Maquina':0.2,Ritual:0.3,Hibrido:0.4,Eco:0.8,Colapso:0.9};
+// Display names with special chars
+var ANCHOR_LABELS = {Susurro:'Susurro',Maquina:'Máquina',Ritual:'Ritual',Hibrido:'Híbrido',Eco:'Eco',Colapso:'Colapso'};
+var FORMANT_FREQS = [720, 1200, 2400, 3300];  // F1-F4 approximate vocal formants
+
+// ── AUDIO NODES ──────────────────────────────────────────────────
+var AC, analyser;
+var gainA, gainB, gainSum;
+// Formant bank
+var fFilters=[], fGains=[], fBus, fDry;
+// Coherence layer (v18.2: lowpass continuous body under grains)
+var cohLowpass, cohGain, cohGainA, cohGainB;
+// v22 Dual Voice split nodes
+var voiceBusA, voiceBusB, voiceBDelay;
+// Convolver section
+var convolver, convWet, convDry, masterOut;
+// v20.9: split reverb wet paths (A=near, B=distant)
+var preDelayA, preDelayB, convWetA, convWetB;
+// Spectral tilt — post-fBus, pre-convolver (v18.4)
+var tiltLow, tiltHigh;
+// Stereo decorrelation delays — between fBus and tilt (v19)
+var decorrL, decorrR, decorrMerge;
+// Edge / soft saturation — decorrMerge → edgeDrive → edgeShaper → edgePost → tiltLow (v19.1)
+var edgeDrive, edgeShaper, edgePost;
+// Stereo width M/S matrix (v18.3)
+var wSplit, wMerge, wLL, wRR, wRL, wLR;
+// Phase Vocoder hybrid (v19 — desktop/iPad only)
+var pvNode=null, pvGain=null;
+// Master pan — voice identity stereo offset (v20.8)
+var masterPan;
+// Consonant bus — parallel path bypassing SMEAR dilution (v19.5)
+var consBus, consGain;
+// Dynamic de-esser — peaking filter post-edge, pre-tilt (v19.5)
+var deEsser;
+// Reverb pre-delay + micro-compressor (v19.6)
+var preDelay, microComp;
+// Sources
+var srcA=null, srcB=null;
+var playTimer=null, playStart=0, lastCycle=-1, lastTickT=0;
+// SMEAR v2 engine
+var smearEngine=null;
+// IR update throttle
+var lastIRUpdate=0, lastIRVal=-1;
+
+// ── INDEXEDDB ────────────────────────────────────────────────────
+var db=null, takes={};
+
+function initDB(){
+  return new Promise((res,rej)=>{
+    var r=indexedDB.open('VoxDust',1);
+    r.onupgradeneeded=e=>e.target.result.createObjectStore('takes',{keyPath:'id'});
+    r.onsuccess=e=>{db=e.target.result;res();};
+    r.onerror=rej;
+  });
+}
+function saveTake(t){
+  return new Promise((res,rej)=>{
+    var tx=db.transaction('takes','readwrite');
+    tx.objectStore('takes').put(t);
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
+function loadAllTakes(){
+  return new Promise(res=>{
+    var tx=db.transaction('takes','readonly');
+    var req=tx.objectStore('takes').getAll();
+    req.onsuccess=e=>{
+      takes={};
+      e.target.result.forEach(t=>takes[t.id]=t);
+      res();
+    };
+  });
+}
+function deleteTakeDB(id){
+  return new Promise(res=>{
+    var tx=db.transaction('takes','readwrite');
+    tx.objectStore('takes').delete(id);
+    tx.oncomplete=res;
+  });
+}
+
+// ── AUDIO INIT ───────────────────────────────────────────────────
+async function initAC(){
+  AC=new(window.AudioContext||window.webkitAudioContext)();
+  analyser=AC.createAnalyser(); analyser.fftSize=256;
+  masterOut=AC.createGain(); masterOut.gain.value=1.0;
+  // masterPan: voice identity stereo offset (v20.8)
+  masterPan=AC.createStereoPanner?AC.createStereoPanner():AC.createPanner();
+  if(masterPan.pan) masterPan.pan.value=0;
+  masterOut.connect(masterPan);
+  gainA=AC.createGain(); gainA.gain.value=0.5;
+  gainB=AC.createGain(); gainB.gain.value=0.5;
+  gainSum=AC.createGain(); gainSum.gain.value=1.0;
+  gainA.connect(gainSum); gainB.connect(gainSum);
+  buildFormantBank();
+  buildConvolver();
+  buildWidthMatrix();   // must be after convolver (needs masterOut fully wired)
+  await buildPV();      // PV hybrid — non-blocking, fails gracefully on iPhone/old Safari
+  // SMEAR v2 engine — pool output → gainSum (goes through formant+convolver chain)
+  smearEngine=createSmearEngineV2(AC,{
+    outputNode: gainSum,
+    getBuffer:  function(){ return S.mixAB<0.5?(S.bufA||S.bufB):(S.bufB||S.bufA); },
+    getBufA:    function(){ return S.bufA; },
+    getBufB:    function(){ return S.bufB; },
+    getPlayStart: function(){ return playStart; }
+  });
+}
+
+// ── v18 DSP: FORMANT BANK (FORM) ─────────────────────────────────
+// 4 parallel bandpass filters at vocal formant freqs
+// FORM=1 → tight resonances, vocal structure clear
+// FORM=0 → filters muted, spectral form dissolved
+function buildFormantBank(){
+  fBus=AC.createGain(); fBus.gain.value=1.0;
+  fDry=AC.createGain(); fDry.gain.value=1.0;
+  gainSum.connect(fDry); fDry.connect(fBus);
+
+  // v22 Task 1+3: voice identity split — voiceBusA/B as structural identity shapers
+  // voiceBDelay adds 6-10ms to B signal → phase separation from A, distinct source feel
+  voiceBusA=AC.createGain(); voiceBusA.gain.value=1.0;
+  voiceBDelay=AC.createDelay(0.02);
+  voiceBDelay.delayTime.value=0.0075+(Math.random()*0.003);  // 7.5-10.5ms — safe range
+  voiceBusB=AC.createGain(); voiceBusB.gain.value=0.95;  // B slightly quieter structurally
+  gainA.connect(voiceBusA);
+  gainB.connect(voiceBDelay); voiceBDelay.connect(voiceBusB);
+
+  // v20.9.1: independent lowpass per voice (using identity bus outputs)
+  var cohLowpassA=AC.createBiquadFilter();
+  cohLowpassA.type='lowpass'; cohLowpassA.frequency.value=5000; cohLowpassA.Q.value=0.5;
+  var cohLowpassB=AC.createBiquadFilter();
+  cohLowpassB.type='lowpass'; cohLowpassB.frequency.value=5000; cohLowpassB.Q.value=0.5;
+  cohLowpass=cohLowpassA;
+  cohGain=AC.createGain(); cohGain.gain.value=0.6;
+  cohGainA=AC.createGain(); cohGainA.gain.value=0.6;
+  cohGainB=AC.createGain(); cohGainB.gain.value=0.0;
+  voiceBusA.connect(cohLowpassA); cohLowpassA.connect(cohGainA); cohGainA.connect(fBus);
+  voiceBusB.connect(cohLowpassB); cohLowpassB.connect(cohGainB); cohGainB.connect(fBus);
+
+  FORMANT_FREQS.forEach(function(freq,i){
+    var f=AC.createBiquadFilter();
+    f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.0;
+    var g=AC.createGain(); g.gain.value=0.0;
+    gainSum.connect(f); f.connect(g); g.connect(fBus);
+    fFilters.push(f); fGains.push(g);
+  });
+
+  // Consonant bus: gainSum → consBus → consGain → fBus (bypasses SMEAR chain)
+  // Keeps consonant articulation intelligible regardless of SMEAR level
+  consBus=AC.createGain(); consBus.gain.value=1.0;
+  consGain=AC.createGain(); consGain.gain.value=0.0;
+  gainSum.connect(consBus); consBus.connect(consGain); consGain.connect(fBus);
+}
+
+// ── v18 DSP: CONVOLVER (REVERB) ──────────────────────────────────
+function buildConvolver(){
+  // TASK 3: stereo decorrelation — fBus → [delayL, delayR] → merge → tilt
+  // Asymmetric micro-delays create natural stereo without artificial widening
+  decorrL=AC.createDelay(0.02); decorrL.delayTime.value=0.004;   // 4ms L
+  decorrR=AC.createDelay(0.02); decorrR.delayTime.value=0.006;   // 6ms R (asymmetric)
+  decorrMerge=AC.createChannelMerger(2);
+  fBus.connect(decorrL); fBus.connect(decorrR);
+  decorrL.connect(decorrMerge,0,0);   // L delay → merger ch0
+  decorrR.connect(decorrMerge,0,1);   // R delay → merger ch1
+
+  // Spectral tilt: lowshelf + highshelf post-decorr, pre-convolver
+  tiltLow=AC.createBiquadFilter();
+  tiltLow.type='lowshelf'; tiltLow.frequency.value=350; tiltLow.gain.value=0;
+  tiltHigh=AC.createBiquadFilter();
+  tiltHigh.type='highshelf'; tiltHigh.frequency.value=4000; tiltHigh.gain.value=0;
+
+  // Edge / soft saturation: decorrMerge → edgeDrive → edgeShaper (tanh) → edgePost → tiltLow
+  // Amount: energyFac + fastT, attenuated by dsmear — appears on attacks, vanishes in texture
+  edgeDrive=AC.createGain(); edgeDrive.gain.value=1.0;
+  edgeShaper=AC.createWaveShaper(); edgeShaper.oversample='2x';
+  var ec=new Float32Array(256);
+  for(var i=0;i<256;i++){
+    var x=(i/127.5)-1;
+    ec[i]=Math.tanh(3*x)/Math.tanh(3);  // normalized tanh(3): ±0.995 max
+  }
+  edgeShaper.curve=ec;
+  edgePost=AC.createGain(); edgePost.gain.value=1.0;
+  // De-esser: peaking notch at 6.5kHz, applied post-edge pre-tilt
+  // Prevents sibilance buildup when tilt+edge+consonant boost stack
+  deEsser=AC.createBiquadFilter();
+  deEsser.type='peaking'; deEsser.frequency.value=6500;
+  deEsser.Q.value=3; deEsser.gain.value=0;
+  decorrMerge.connect(edgeDrive);
+  edgeDrive.connect(edgeShaper);
+  edgeShaper.connect(edgePost);
+  edgePost.connect(deEsser);
+  deEsser.connect(tiltLow);
+  tiltLow.connect(tiltHigh);
+
+  // TASK 5: micro-compressor — post tilt, before dry/wet split (stabilizes peaks)
+  microComp=AC.createDynamicsCompressor();
+  microComp.threshold.value=-18; microComp.knee.value=12;
+  microComp.ratio.value=3; microComp.attack.value=0.003; microComp.release.value=0.08;
+  tiltHigh.connect(microComp);
+
+  // v20.9: preDelayA (12ms) + preDelayB (28-36ms) built inside buildConvolver
+
+  convolver=AC.createConvolver();
+  convDry=AC.createGain(); convDry.gain.value=1.0;
+  // v20.9 Task 2: dual wet paths — A near (12ms), B distant (28-36ms)
+  preDelayA=AC.createDelay(0.1); preDelayA.delayTime.value=0.012;
+  // Task 2 v20.9.1: B gets +3-7ms random offset — breaks phase coherence with A
+  preDelayB=AC.createDelay(0.1);
+  preDelayB.delayTime.value=0.030+(Math.random()*0.004+0.003);
+  convWetA=AC.createGain(); convWetA.gain.value=0.0;
+  convWetB=AC.createGain(); convWetB.gain.value=0.0;
+  microComp.connect(convDry);
+  microComp.connect(preDelayA); preDelayA.connect(convolver);
+  microComp.connect(preDelayB); preDelayB.connect(convolver);
+  convolver.connect(convWetA); convolver.connect(convWetB);
+  convDry.connect(masterOut); convWetA.connect(masterOut); convWetB.connect(masterOut);
+  // keep convWet alias for compat
+  convWet=convWetA;
+  buildIR(0.0);
+}
+
+function buildIR(revParam){
+  var dur=0.5+revParam*1.8;    // 0.5 → 2.3s
+  var decay=5.0-revParam*3.2;  // 5.0 → 1.8 (slower decay as rev increases)
+  var len=Math.floor(AC.sampleRate*dur);
+  var buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(var ch=0;ch<2;ch++){
+    var d=buf.getChannelData(ch);
+    for(var i=0;i<len;i++){
+      var t=i/len;
+      d[i]=(Math.random()*2-1)*Math.pow(1-t,decay);
+    }
+  }
+  convolver.buffer=buf;
+  lastIRVal=revParam;
+}
+
+// ── v18.3 DSP: STEREO WIDTH M/S MATRIX ──────────────────────────
+// width=0 (FORM=1,SMEAR=0): direct=0.5 cross=0.5 → mono sum (centered)
+// width=1 (FORM=0,SMEAR=1): direct=1.0 cross=0.0 → full stereo (wide)
+function buildWidthMatrix(){
+  wSplit=AC.createChannelSplitter(2);
+  wMerge=AC.createChannelMerger(2);
+  wLL=AC.createGain(); wLL.gain.value=0.5;
+  wRR=AC.createGain(); wRR.gain.value=0.5;
+  wRL=AC.createGain(); wRL.gain.value=0.5;
+  wLR=AC.createGain(); wLR.gain.value=0.5;
+  masterPan.connect(wSplit);   // v20.8: pan before M/S matrix
+  wSplit.connect(wLL,0,0); wSplit.connect(wRR,1,0);
+  wSplit.connect(wLR,0,0); wSplit.connect(wRL,1,0);
+  wLL.connect(wMerge,0,0); wRL.connect(wMerge,0,0);
+  wRR.connect(wMerge,0,1); wLR.connect(wMerge,0,1);
+  wMerge.connect(analyser); wMerge.connect(AC.destination);
+}
+
+// ── v19 DSP: PHASE VOCODER HYBRID ────────────────────────────────
+// AudioWorklet (Blob URL) — FFT512/hop128/Hann mono
+// Parallel path: gainSum → pvNode → pvGain → fBus
+// Auto-disabled on iPhone; pvMix controlled by SMEAR*FORM in applyDSP
+async function buildPV(){
+  if(/iPhone|iPod/.test(navigator.userAgent)){
+    S.pvEnabled=false; S.pvMode='off'; return;
+  }
+  if(!AC.audioWorklet){ S.pvEnabled=false; return; }
+  try{
+    var blob=new Blob([PV_CODE],{type:'application/javascript'});
+    var url=URL.createObjectURL(blob);
+    await AC.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    pvNode=new AudioWorkletNode(AC,'vd-pv',{
+      numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1]
+    });
+    pvGain=AC.createGain(); pvGain.gain.value=1.0;
+    gainSum.connect(pvNode);
+    pvNode.connect(pvGain);
+    pvGain.connect(fBus);
+    S.pvEnabled=true; S.pvMode='hybrid';
+    updatePVButton();
+    setStatus('PV hybrid active',true);
+  }catch(err){
+    console.warn('PV init failed:',err);
+    S.pvEnabled=false; S.pvMode='off';
+  }
+}
+
+// Same IR generator for OfflineAudioContext
+function buildIROffline(ctx,revParam){
+  var dur=0.5+revParam*1.8;
+  var decay=5.0-revParam*3.2;
+  var len=Math.floor(ctx.sampleRate*dur);
+  var buf=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(var ch=0;ch<2;ch++){
+    var d=buf.getChannelData(ch);
+    for(var i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  }
+  return buf;
+}
+
+// ── v18 SMEAR v2 — Pool-based grain engine ────────────────────────
+// Drop-in replacement for v1 grain scheduler.
+// Key improvements: pre-allocated GainNode pool (no hot-path alloc),
+// FORM cross-modulates grain duration + detune, RMS-aware density,
+// accumulative burst clock (driven by playTick, not setTimeout),
+// position-aware offset (FORM=high → near playhead, FORM=low → diffuse).
+function createSmearEngineV2(ctx, cfg){
+  var MAX_GRAINS=24;
+  var burstClock=0;
+  var lastGrainPos=0;
+  var phaseRef=0;
+  var energyAcc=0;
+  var burstPosMem=0;   // TASK 1: inter-burst continuity anchor
+  var smearSmooth=0;   // TASK 5: temporal smoothing on smear param
+  var r2=function(){return Math.random()*2-1;};
+
+  // Pre-allocate GainNode pool — never created again after init
+  var pool=[];
+  for(var i=0;i<MAX_GRAINS;i++){
+    var g=ctx.createGain(); g.gain.value=0;
+    g.connect(cfg.outputNode);
+    pool.push({gain:g,src:null});
+  }
+
+  // Linear envelope + micro fade-out — clean profile, no edge clicks on non-zero-crossing buffers
+  function applyEnv(gainNode,t0,dur,amp){
+    var g=gainNode.gain;
+    var EPS=0.0001;
+    var fade=Math.min(0.008,dur*0.25);   // 8ms max fade-out window
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(EPS,t0);
+    g.linearRampToValueAtTime(amp,t0+dur*0.5);
+    g.linearRampToValueAtTime(EPS,t0+dur-fade);
+    g.setValueAtTime(EPS,t0+dur);
+  }
+
+  function spawnGrain(p,now,buf,params){
+    var src=ctx.createBufferSource();
+    src.buffer=buf;
+    src.playbackRate.value=params.rate;
+    var entrEff=params.entropyEff||0.3;
+    var fVal=params.formVal||0;
+    var rateVar=(Math.random()*2-1)*0.02*entrEff;
+    src.playbackRate.value+=rateVar*(1-fVal*0.7);
+    // Grain focus: consonant direction narrows detune for momentary coherence
+    var det=params.detune*(S.consEnv>0.2?0.7:1.0);
+    src.detune.value=det;
+    // Micro-pan: FORM=1 → center; FORM=0 → full stereo field
+    var pan=ctx.createStereoPanner
+      ? ctx.createStereoPanner()
+      : ctx.createPanner();  // fallback for older webkit
+    if(pan.pan) pan.pan.value=params.panVal;  // StereoPannerNode
+    src.connect(pan); pan.connect(p.gain);
+    applyEnv(p.gain,now,params.dur,params.amp);
+    var safeOff=Math.max(0,Math.min(buf.duration-0.01,params.offset));
+    src.start(now,safeOff,params.dur+0.01);
+    src.stop(now+params.dur+0.015);
+    if(p.src){try{p.src.disconnect();}catch(e){}}
+    p.src=src;
+    src.onended=function(){try{src.disconnect();pan.disconnect();}catch(e){}};
+  }
+
+  function scheduleBurst(now,sm,f,e,en,buf,eEff){
+    eEff=eEff||e;
+    // Density: base count × RMS factor (more energy = more grains)
+    var base=Math.floor(1+sm*5);
+    var count=Math.min(8,Math.floor(base*(0.6+en*0.8)));
+    // TASK 2: energy clamp — avoid granular noise on low-energy signals
+    if(en<0.08) count=Math.max(1,Math.floor(count*0.4));
+    count=Math.min(count,6);   // hard cap — prevents perceptual saturation on iPhone
+    // Duration: FORM=high → shorter/more defined; FORM=low → longer/smeared
+    var maxInterval=0.075-sm*(0.075-0.018);    // mirrors update() interval formula
+    var dur=0.05+(1-f)*0.11;                   // 50–160ms base
+    dur=Math.min(dur,maxInterval*2.2);         // TASK 4: lifetime clamp — no incontrollable grain cloud
+    // Detune: FORM=high suppresses pitch chaos
+    var maxDetune=280*(1-f);                    // 0–280 cents
+    var rateJitter=0.02+e*0.03;
+    // Amplitude: tied to smear + energy accumulation normalization (anti build-up)
+    var amp=0.18+0.22*sm;
+    energyAcc=energyAcc*0.92+count*dur;           // EMA of total grain energy per burst
+    amp*=1/(1+energyAcc*0.15);                    // normalize: dense bursts → lower amp
+    // TASK 4: position memory — pseudo phase-lock
+    // Current playhead position (normalized [0-1])
+    var playPos=0;
+    if(buf.duration>0){
+      var elapsed=ctx.currentTime-cfg.getPlayStart();
+      playPos=(elapsed%buf.duration)/buf.duration;
+    }
+    var spread=(1-f)*0.1;
+    var targetPos=playPos+(Math.random()-0.5)*spread;
+    // TASK 1: inter-burst continuity — snap burstPosMem at burst start
+    burstPosMem=lastGrainPos;
+    // Update lastGrainPos (inter-burst memory, inercia leve)
+    var coherence=f;
+    var lerpedPos=targetPos*(1-coherence)+lastGrainPos*coherence;
+    lastGrainPos=lerpedPos*0.7+lastGrainPos*0.3;
+    lastGrainPos=Math.max(0,Math.min(1,lastGrainPos));
+    phaseRef=playPos;
+    // TASK 4: cluster detune — shared base per burst, individual variation on top
+    var clusterDetune=r2()*maxDetune*0.5;
+
+    for(var i=0;i<count;i++){
+      var pi=Math.floor(Math.random()*MAX_GRAINS);
+      var p=pool[pi];
+      var gbuf=(i%2===0&&cfg.getBufA&&cfg.getBufA())?cfg.getBufA():(cfg.getBufB&&cfg.getBufB()||buf);
+      // TASK 1: use burstPosMem as inter-burst anchor + FORM-based pull toward phaseRef
+      // Grain focus: consonant reduces positional scatter for momentary coherence
+      var focusMult=S.consEnv>0.2?0.6:1.0;
+      var phaseOffset=r2()*(1-f)*0.02*focusMult;
+      var interMem=burstPosMem+(targetPos-burstPosMem)*(1-f);
+      var pos=interMem+phaseOffset+(phaseRef-interMem)*f*0.3;
+      // TASK 2: temporal freeze — consonant anchors grains to phaseRef (micro weight)
+      if(S.consEnv>0.25){
+        var freezeAmt=S.consEnv*0.6;
+        pos=pos*(1-freezeAmt)+phaseRef*freezeAmt;
+      }
+      pos=Math.max(0,Math.min(1,pos));
+      var offset=pos*gbuf.duration;
+      spawnGrain(p,now,gbuf,{
+        dur:dur,
+        offset:offset,
+        detune:clusterDetune+r2()*maxDetune*0.5,  // TASK 4: cluster + individual
+        amp:amp/count,
+        rate:1+r2()*rateJitter,
+        panVal:r2()*(1-f),
+        entropyEff:eEff,
+        formVal:f   // TASK 2: needed for phase damp in spawnGrain
+      });
+    }
+  }
+
+  function update(params){
+    if(!params.playing||params.smear<0.05) return;
+    var buf=cfg.getBuffer();
+    if(!buf) return;
+    // TASK 2: slow drift damper — pull lastGrainPos toward playhead each tick
+    // prevents subtle position wander over long sessions
+    var elapsed=AC.currentTime-cfg.getPlayStart();
+    var playheadPos=buf.duration>0?(elapsed%buf.duration)/buf.duration:0;
+    var driftPull=0.02+params.form*0.05;   // FORM=0: 2% pull; FORM=1: 7% pull
+    lastGrainPos+=((playheadPos-lastGrainPos)*driftPull);
+    lastGrainPos=Math.max(0,Math.min(1,lastGrainPos));
+    // TASK 2: transient protection — reduce smear during high-energy attacks
+    var transientProtect=Math.min(1,params.energy*1.5);
+    var smearEff=params.smear*(1-transientProtect*0.6);
+    // TASK 5: temporal smoothing — prevents jitter from rapid smear changes
+    smearSmooth+=((smearEff-smearSmooth)*0.15);
+    // Accumulative clock — driven by playTick dt, no setTimeout
+    var intervalMax=0.075, intervalMin=0.018;
+    var interval=intervalMax-smearSmooth*(intervalMax-intervalMin);
+    var jitter=interval*params.entropy*0.5;
+    burstClock+=params.dt/1000;
+    if(burstClock>=interval+r2()*jitter){
+      scheduleBurst(ctx.currentTime,smearSmooth,params.form,
+        params.entropy,params.energy,buf,params.entropyEff||params.entropy);
+      burstClock=0;
+    }
+  }
+
+  return{update:update};
+}
+
+// ── UPDATE DSP PARAMS ─────────────────────────────────────────────
+function applyDSP(spec){
+  if(!AC) return;
+  S.dsmear=spec.smear; S.dform=spec.form;
+  S.dreverb=spec.reverb; S.ddw=spec.dryWet;
+
+  // Integration 3: semantic zone smear reduction — consonant = focus, less blur
+  if(S.semZone&&S.semEnv>0.01){
+    var smearMod=S.semZone==='HARD'?-0.35:S.semZone==='MID'?-0.2:-0.1;
+    S.dsmear=clamp(S.dsmear*(1+smearMod*S.semEnv));
+  }
+  // TASK 3: smear floor — prevents total collapse in hard consonants (maintains texture)
+  var smearFloor=0.12+S.energyFac*0.1;
+  S.dsmear=Math.max(S.dsmear,smearFloor);
+  // Task 5: phrase macro — peak → more smear texture; idle → cleaner
+  var phraseSmear=S.dsmear*(0.7+S.phraseEnv*0.6);
+  S.dsmearSmooth=S.dsmearSmooth===undefined?phraseSmear:S.dsmearSmooth;
+  S.dsmearSmooth+=(phraseSmear-S.dsmearSmooth)*0.25;
+  var bW=S.voiceMix;
+  // v22 Task 2: voice B identity — structural differences, applied before other modulations
+  // A = performer-driven: natural, close, stable
+  // B = system-driven: processed, distant, wider
+  var bIdSmear=bW*0.15;   // B: less smear (cleaner)
+  var bIdCoh=1-bW*0.1;    // B: slightly less body
+  var bIdEdge=1+bW*0.3;   // B: more edge
+  var bIdWidth=bW*0.1;    // B: wider
+
+  // v22 Task 4: consEnvB decoupled — B reacts less to performer articulation
+  S.consEnvB=S.consEnv*0.7+(S.crResponding?0.2:0.05);  // floor: B has own presence in silence
+  S.consEnvB=Math.min(1,S.consEnvB);
+
+  var smearUsed=S.dsmearSmooth*(1-bIdSmear);
+  // Task 7: motif needs legibility — reduce smear during playback
+  if(S.motifActive) smearUsed*=(1-motifMutationFactor()*0.25);
+  if(S.crResponding) smearUsed*=0.9;
+  // Task 4 Intent → DSP
+  var iv=S.intentEnv;
+  if(S.intent===1) smearUsed*=(1+iv*0.2);         // follow: more texture
+  else if(S.intent===2) smearUsed*=(1-iv*0.3);    // contrast: cleaner
+  else if(S.intent===3) smearUsed*=(1-iv*0.15);   // call: clear signal
+  // Task 6 v20.5: phrase macro memory DSP influence
+  var pInfluence=Math.min(1,S.phraseEnv*0.5);
+  smearUsed*=(1+pInfluence*0.15);
+  // Task 5 v20.6: dominance — more body, less grain, gentle level reduction
+  var d=S.phraseDom;
+  smearUsed*=(1-d*0.2);
+  // v20.8 Task 5: Voice B personality — cleaner, more aggressive, more spatial
+  var bW=S.voiceMix;
+  smearUsed*=(1-bW*0.2);    // B: less smear
+
+  // v20.9: preDelayB modulated in reverb split block above
+
+  // TASK 4: macro articulation — scales ALL consonant-driven effects globally
+  // Fix 4: intentWeight modulates consEnvA for narrative continuity between clips
+  var consEnvA=S.consEnv*(0.6+S.articulation*0.8)*(0.5+S.intentWeight*0.5);
+
+  var now=AC.currentTime;
+
+  // FORM: formant filter gains + Q
+  // System B: formant micro-shift (+4% max) on consonant — "consonants forward"
+  var fgv=spec.form*0.38;
+  // System B + Task 6 mutation: formant shift = consonant direction + motif form drift
+  var fShift=(1+consEnvA*0.04)*(S._formDrift||1.0);
+  S._formDrift=undefined;   // consume after one tick
+  for(var i=0;i<fGains.length;i++){
+    fGains[i].gain.setTargetAtTime(fgv,now,0.06);
+    fFilters[i].Q.setTargetAtTime(1.0+spec.form*9.0,now,0.08);
+    fFilters[i].frequency.setTargetAtTime(FORMANT_FREQS[i]*fShift,now,0.02);
+  }
+
+  // Coherence layer: FORM now also controls "body" — not just SMEAR
+  if(cohLowpass&&cohGain){
+    cohLowpass.frequency.setTargetAtTime(1200+((1-spec.smear)*4000),now,0.08);
+    var cohBase=(1-spec.smear)*(0.5+spec.form*0.3);
+    // TASK 5: adaptive floor — never lose body completely at high SMEAR
+    var cohFloor=0.08+S.energyFac*0.12;
+    var cohVal=Math.max(cohBase, cohFloor*(1-S.dform));
+    // Integration 3 cohGain: consonant boosts coherence layer
+    var cohBoost=S.semZone&&S.semEnv>0.01
+      ?1+(S.semZone==='HARD'?0.25:S.semZone==='MID'?0.15:0.08)*S.semEnv:1.0;
+    // Task 6 C/R: reduce body during active call window (listening posture)
+    if(S.crActive&&!S.crResponding) cohVal*=0.9;
+    cohVal*=(1+pInfluence*0.1);
+    cohVal*=(1+d*0.25);
+    // Task 6 v20.7: novelty reduces coherence (forces variation)
+    cohVal*=(1-S.novelty*0.3);
+    // Task 7: high novelty weakens phrase dominance
+    // Task 7 v20.7: high novelty warps dominance (not kills it) — memory "mis-speaks"
+    if(S.novelty>0.6){
+      S._domWarp=1+(Math.random()-0.5)*0.3*S.novelty;
+    } else {
+      S._domWarp=1;
+    }
+    var bW2=S.voiceMix;
+    var mixNorm=1/Math.sqrt((1-bW2)*(1-bW2)+bW2*bW2+0.001);
+    cohVal=Math.min(cohVal,1.3);
+    cohVal*=bIdCoh;   // v22: structural B coherence identity
+    if(cohGainA) cohGainA.gain.setTargetAtTime(cohVal*cohBoost*(1-bW2)*mixNorm,now,0.08);
+    if(cohGainB) cohGainB.gain.setTargetAtTime(cohVal*cohBoost*bW2*0.85*mixNorm,now,0.08);
+    cohGain.gain.setTargetAtTime(cohVal*cohBoost,now,0.08);
+  }
+
+  // Stereo width M/S matrix — FORM=high → mono; FORM+SMEAR high → wide
+  // System A: consonant direction — momentary spatial push L or R
+  if(wLL&&wRR){
+    var width=(1-spec.form)*(0.6+spec.smear*0.4);
+    width*=(1+S.novelty*0.12);
+    // Task 7 v20.9.1: voice spread — more width as A/B diverge
+    var voiceSpread=0.2*Math.abs(S.voiceMix-0.5)*2;
+    width=Math.min(width+voiceSpread+bIdWidth*0.7,1.0);
+    var dirAmt=consEnvA*0.25*(1-S.dform);  // FORM high = more mono = less push
+    var wMod=clamp(width+dirAmt*S.consDir,0,1);
+    var direct=(1+wMod)/2;
+    var cross=(1-wMod)/2;
+    var wTau=S.consEnv>0.05?0.04:0.12;     // faster τ when active, slower on decay
+    wLL.gain.setTargetAtTime(direct,now,wTau);
+    wRR.gain.setTargetAtTime(direct,now,wTau);
+    wRL.gain.setTargetAtTime(cross,now,wTau);
+    wLR.gain.setTargetAtTime(cross,now,wTau);
+  }
+
+  // Edge / soft saturation — appears on attacks, vanishes in dense SMEAR
+  if(edgeDrive&&edgePost){
+    var edgeAmt=(S.energyFac*0.5+S.fastT*0.5)*(1-spec.smear*0.7);
+    edgeAmt*=(0.6+S.consScore*0.8);
+    edgeAmt*=(0.7+S.articulation*0.6);
+    if(S.intent===2) edgeAmt*=(1+iv*0.4);
+    edgeAmt*=(1+S.novelty*0.5);
+    edgeAmt*=(1+bW*0.5);
+    edgeAmt*=bIdEdge;
+    if(S.deckFreezeActive) edgeAmt*=0.85;   // Fix 3: freeze = less harsh
+    edgeAmt=Math.min(edgeAmt,0.8);
+    edgeDrive.gain.setTargetAtTime(1+edgeAmt*4,now,0.05);
+    edgePost.gain.setTargetAtTime(1/(1+edgeAmt*1.5),now,0.05);
+  }
+
+  // Stereo decorrelation: FORM=1 → minimal delay (phase-stable); FORM=0 → max spread
+  if(decorrL&&decorrR){
+    var decAmt=(1-spec.form)*0.003;
+    decorrL.delayTime.setTargetAtTime(0.003+decAmt,now,0.5);     // 3–6ms L
+    decorrR.delayTime.setTargetAtTime(0.005+decAmt*0.6,now,0.5); // 5–6.8ms R
+  }
+
+  // REVERB: wet/dry — coupled with SMEAR
+  var wetAmt=spec.dryWet*(spec.reverb*(0.4+spec.smear*0.6));
+  wetAmt*=(1+S.phraseEnv*0.25);   // phrase tail
+  if(S.motifActive) wetAmt*=1.15;
+  if(S.crResponding) wetAmt*=1.2;
+  // Task 4: intent reverb + global level
+  if(S.intent===3) wetAmt*=(1-iv*0.3);
+  wetAmt*=(1+bW*0.25);
+  if(S.convMode===3){wetAmt*=1.15; smearUsed*=0.9;}   // Task 5 v21.2: DELAY = space + clarity
+  // gainSum intent level (silence fade vs normal)
+  if(gainSum){
+    var intentLevel=S.intent===4?0.85:1.0;
+    var intentTau=S.intent===4?0.1:0.2;
+    var domLevel=intentLevel*(1-d*0.1);   // Task 5: dom=1 → -10% level (perceptual compression)
+    if(S.phraseState!==3) gainSum.gain.setTargetAtTime(domLevel,now,intentTau);
+  }
+  // Integration 4: reverb gate — consonant zones cut reverb for closer articulation
+  var revMod=S.semZone&&S.semEnv>0.01
+    ?(S.semZone==='HARD'?-0.3:S.semZone==='MID'?-0.2:-0.1)*S.semEnv:0;
+  // Task 2 v20.9: split wet paths — A near (voiceMix controls), B distant (more wet, more delay)
+  if(convWetA&&convWetB){
+    // Task 1 v20.9.1: mixNorm on wet paths
+    var vM=S.voiceMix;
+    var wetNorm=1/Math.sqrt((1-vM*0.4)*(1-vM*0.4)+(vM*1.2)*(vM*1.2)+0.001);
+    var wA=wetAmt*0.8*(1+revMod)*(1-vM*0.4)*wetNorm;
+    var wB=wetAmt*0.8*(1+revMod)*vM*1.2*wetNorm;
+    // Task 6 v20.9.1: clamp wet sum
+    var wetSum=wA+wB;
+    if(wetSum>1.2){var k=1.2/wetSum; wA*=k; wB*=k;}
+    convWetA.gain.setTargetAtTime(wA,now,0.05);
+    convWetB.gain.setTargetAtTime(wB,now,0.05);
+    if(preDelayB) preDelayB.delayTime.setTargetAtTime(0.028+S.phraseEnv*0.008,now,0.1);
+  } else {
+    if(convWet) convWet.gain.setTargetAtTime(wetAmt*0.8*(1+revMod),now,0.05);
+  }
+  convDry.gain.setTargetAtTime(1.0-wetAmt*0.4,now,0.12);
+  // Task 5 v20.9.1: fastT override per voice — B responds more to transient
+  var t=S.fastT;
+  if(t>0.01){
+    if(cohGain) cohGain.gain.setTargetAtTime(
+      (1-spec.smear)*(0.5+spec.form*0.3)*(1-t*0.3),now,0.05);
+    if(convWetA) convWetA.gain.setTargetAtTime(wA*(1+t*0.3),now,0.05);
+    if(convWetB) convWetB.gain.setTargetAtTime(wB*(1+t*0.5),now,0.05);
+  }
+
+  // Spectral tilt + System B consonant high boost
+  if(tiltLow&&tiltHigh){
+    var tiltDB=(spec.smear-0.5)*4;
+    tiltLow.gain.setTargetAtTime(tiltDB,now,0.1);
+    // v22 Task 4: B uses consEnvB (decoupled from performer articulation)
+    var consEnvDriven=bW>0.5?S.consEnvB:consEnvA;
+    tiltHigh.gain.setTargetAtTime(-tiltDB+consEnvDriven*1.5,now,0.02);
+  }
+
+  // TASK 1: consonant bus — level proportional to consEnv, attenuated by SMEAR
+  if(consGain){
+    var cMix=consEnvA*(1-smearUsed*0.8);
+    consGain.gain.setTargetAtTime(cMix*0.6,now,0.03);
+  }
+
+  // TASK 3: dynamic de-esser — cuts 6.5kHz when consonant is strong (prevents harshness stack)
+  if(deEsser){
+    var ess=Math.max(0,S.consScore-0.6);
+    deEsser.gain.setTargetAtTime(-ess*6,now,0.02);
+  }
+
+  // Re-generate IR if reverb changed significantly + throttle to 2s
+  var now2=Date.now();
+  if(Math.abs(spec.reverb-lastIRVal)>0.1&&(now2-lastIRUpdate)>2000){
+    buildIR(spec.reverb);
+    lastIRUpdate=now2;
+  }
+
+  // v19 PV hybrid — mix controlled by SMEAR×FORM, disabled on iPhone
+  if(pvNode&&S.pvEnabled&&S.pvMode==='hybrid'){
+    var pvMix=spec.smear<0.15?0:spec.smear*(0.3+spec.form*0.4)*0.25;
+    pvNode.parameters.get('mix').setTargetAtTime(pvMix,now,0.08);
+    pvNode.port.postMessage({dform:spec.form});
+  } else if(pvNode){
+    pvNode.parameters.get('mix').setTargetAtTime(0,now,0.08);
+  }
+
+  // v22 Task 8 / fix4: conflict resolver — dominant voice leads, other accompanies
+  if(S.turnState===3){
+    var aDom3=S._aDom||0.5, bDom3=S._bDom||0.5;
+    if(aDom3>bDom3){
+      // A leads: B recedes
+      smearUsed*=0.8;       // B smear reduced
+      if(cohGainB) cohGainB.gain.value*=0.85;
+    } else {
+      // B leads: A softens
+      smearUsed*=0.85;      // A smear softens
+      if(cohGainA) cohGainA.gain.value*=0.9;
+    }
+  }
+
+  // v21.2.1 Task 2: global clamp — prevent runaway modulation accumulation
+  // Freeze mode: smear×0.7, coh×1.2, wet×0.8 — freeze event in timeline
+  if(S.deckFreezeActive){
+    smearUsed = Math.max(0.05, smearUsed*0.7);
+    wetAmt    = wetAmt*0.8;
+    // Fix 3: freeze → clarity — more body, less granular edge
+    if(cohGainA) { var cv=cohGainA.gain.value; cohGainA.gain.setTargetAtTime(cv*1.15,now,0.08); }
+    if(cohGainB) { var cv2=cohGainB.gain.value; cohGainB.gain.setTargetAtTime(cv2*1.15,now,0.08); }
+  }
+  smearUsed=Math.max(0.05,Math.min(smearUsed,1.4));
+  wetAmt=Math.max(0.02,Math.min(wetAmt,1.5));
+
+  // SMEAR: handled in playTick via smearEngine.update() — no separate timer
+  // v21 Task 4+5: turn-taking duck + interrupt
+  if(gainA&&gainB){
+    var aGain=1, bGain=1;
+    if(S.turnState===1){
+      // Task 4: duck scales with speaker energy — louder = more duck
+      var duck=0.25+(1-S.energyFac)*0.2;
+      bGain*=duck;
+    } else if(S.turnState===2){
+      var duck=0.25+(1-S.energyFac)*0.2;
+      aGain*=duck;
+    } else if(S.turnState===3){
+      // Task 5: overlap with dominance hierarchy — louder voice leads
+      var kA=0.5+(S._aDom||0.5)*0.4;
+      var kB=0.5+(S._bDom||0.5)*0.4;
+      aGain*=kA; bGain*=kB;
+    }
+    if(S.interruptIntent){
+      var cutTarget=S.turnOwner===0?gainB:gainA;
+      cutTarget.gain.setTargetAtTime(0.2,now,0.03);  // fast cut
+      // Task 6: rebound — interrupted voice tries to come back at 60%
+      var reboundNode=S.turnOwner===0?gainB:gainA;
+      setTimeout(function(){reboundNode.gain.setTargetAtTime(0.6,AC.currentTime,0.08);},120);
+      S.interruptIntent=0;
+    } else if(!S.lfoOn){
+      // Fix 1: equal-power crossfade (cos law) — no "hole in the middle"
+      var epX=clamp(S.voiceMix);
+      var epA=Math.cos(epX*0.5*Math.PI)*aGain;
+      var epB=Math.cos((1-epX)*0.5*Math.PI)*bGain;
+      gainA.gain.setTargetAtTime(epA,now,0.02);
+      gainB.gain.setTargetAtTime(epB,now,0.02);
+    }
+  }
+  document.getElementById('chipSmear').className='chip'+(spec.smear>0.05?' on':'');
+  document.getElementById('chipForm').className='chip'+(spec.form>0.25?' form-on':'');
+  document.getElementById('chipRev').className='chip'+(spec.reverb>0.12?' rev-on':'');
+}
+
+// ── MATH HELPERS ─────────────────────────────────────────────────
+function smoothstep(e0,e1,x){
+  var t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));
+  return t*t*(3-2*t);
+}
+function clamp(v,lo,hi){ lo=lo===undefined?0:lo; hi=hi===undefined?1:hi; return Math.max(lo,Math.min(hi,v)); }
+function seededRnd(seed){
+  var s=seed;
+  return function(){s=((s*1664525+1013904223)>>>0); return s/4294967295;};
+}
+
+// ── MATTER PHYSICS ────────────────────────────────────────────────
+var entPhase=0;  // TASK 1: entropy breathing LFO phase (~20s cycle)
+
+function updatePhysics(dt){
+  // TASK 1: entropy breathing — ultra-slow internal LFO, not in UI
+  entPhase+=dt*0.00005;
+  var entMod=Math.sin(entPhase)*0.5+0.5;           // [0-1]
+  S.entropyEff=S.entropy*(0.85+entMod*0.3);         // [S.entropy*0.85 → S.entropy*1.15]
+
+  var diff=S.targetMatter-S.matter;
+  if(Math.abs(diff)<0.02) return;
+  // TASK 2: inertia modulated by energy + dsmear (viscosity)
+  var inertia=0.002*(0.7+S.energyFac*0.6);
+  var friction=(0.96+(1-S.entropyEff)*0.03)*(0.9+S.dsmear*0.2);
+  var sign=diff>0?1:-1;
+  var acc=Math.pow(Math.abs(diff),1.2)*inertia*sign;
+  S.matterVel+=acc;
+  S.matterVel*=friction;
+  S.matter=clamp(S.matter+S.matterVel);
+  // Integration 1: semantic zone micro-impulse
+  if(S.semZone&&S.semEnv>0.01){
+    var imp=S.semZone==='HARD'?0.015:S.semZone==='MID'?0.010:0.006;
+    S.targetMatter=clamp(S.targetMatter+imp*S.semEnv*S.energyFac);
+  }
+  // TASK 1: clamp targetMatter within maxDev of base (anti-drift)
+  var base=S.targetMatterBase;
+  var maxDev=0.08+(S.entropyEff||S.entropy)*0.05;
+  S.targetMatter=Math.max(base-maxDev,Math.min(base+maxDev,S.targetMatter));
+  // T3: matter relaxation — pulls toward base in low-energy moments (silence = return to center)
+  var relax=0.002*(1-S.energyFac);
+  S.targetMatter+=(S.targetMatterBase-S.targetMatter)*relax;
+}
+
+function decayTransients(dt){
+  S.fastT*=Math.pow(0.95,dt/16.67);
+  S.slowT*=Math.pow(0.985,dt/16.67);
+  if(S.fastT<0.01) S.fastT=0;
+  if(S.slowT<0.01) S.slowT=0;
+  // TASK 2: unified consonant gesture decay (~80ms) — one coherent articulation feel
+  var decayC=Math.pow(0.86,dt/16.67);
+  S.consEnv*=decayC;
+  S.semEnv*=decayC;
+  if(S.consEnv<0.01) S.consEnv=0;
+  if(S.semEnv<0.01){S.semEnv=0;S.semZone=null;}
+}
+
+// ── SPECTRAL COMPUTATION ──────────────────────────────────────────
+function computeSpec(m,ent,fast,slow){
+  var e=S.entropyEff||ent;    // TASK 1: use breathing-modulated entropy
+  var micro=e*0.5;
+  var vari=0.1+S.energyFac*0.1;
+  var smear=Math.pow(m,2.2)+micro*0.05+fast*vari*0.12+slow*vari*0.05;
+  var form=1-Math.pow(m,1.5);
+  var intensity=0.8+Math.sin(m*Math.PI)*0.2;
+  var reverb=smoothstep(0.2,0.9,m)+fast*0.1;
+  var dw=Math.pow(m,1.8);
+  if(m>=0.25&&m<=0.35){smear*=0.5;reverb*=0.7;}
+  if(m>=0.75&&m<=0.85){reverb*=1.2;}
+  form*=(1-(fast*0.05+e*0.05+slow*0.02));
+  return{form:clamp(form),smear:clamp(smear),intensity:clamp(intensity),reverb:clamp(reverb),dryWet:clamp(dw)};
+}
+
+function updateSpectralUI(){
+  var spec=computeSpec(S.matter,S.entropy,S.fastT,S.slowT);
+  var ids=['sForm','sSmear','sIntens','sRev','sDW'];
+  var vids=['sFormV','sSmearV','sIntensV','sRevV','sDWV'];
+  var vals=[spec.form,spec.smear,spec.intensity,spec.reverb,spec.dryWet];
+  for(var i=0;i<ids.length;i++){
+    var v=Math.round(vals[i]*100);
+    document.getElementById(ids[i]).value=v;
+    document.getElementById(vids[i]).textContent=v;
+  }
+  applyDSP(spec);
+  // Spectrum cursor
+  var glow=Math.abs(S.matterVel)*80;
+  var cur=document.getElementById('cur');
+  cur.style.left=(S.matter*100)+'%';
+  cur.style.boxShadow='0 0 '+(4+glow)+'px '+(1+glow/2)+'px white';
+}
+
+// ── CYCLE TRANSITION (silence driver) ────────────────────────────
+var lastSilenceStrength=0;   // TASK 4: silence memory — continuidad narrativa
+
+function onCycleTransition(silenceOccurred){
+  S.energyFac=Math.pow(Math.max(0.05,S.rms),0.6);
+
+  // TASK 4: carry forward last silence strength (decay each cycle)
+  if(lastSilenceStrength>0.001){
+    S.targetMatter=clamp(S.targetMatter+lastSilenceStrength*0.3);
+    lastSilenceStrength*=0.8;
+  }
+
+  if(silenceOccurred){
+    var delta=1.0*S.energyFac*(S.entropyEff||S.entropy)*0.02;
+    if(Math.random()<0.3){
+      S.targetMatter=clamp(S.targetMatter-delta*0.5);
+      setStatus('[inverted] silence polarity',true);
+    } else {
+      S.targetMatter=clamp(S.targetMatter+delta);
+    }
+    lastSilenceStrength=delta;   // TASK 4: store for next cycles
+    S.fastT=1.0; S.slowT=0.8;
+  } else {
+    S.targetMatter=clamp(S.targetMatter+(-0.3*S.energyFac*(S.entropyEff||S.entropy)*0.02));
+  }
+}
+
+// ── PLAYBACK ──────────────────────────────────────────────────────
+function startPlayback(){
+  if(!S.bufA&&!S.bufB){setStatus('load samples first',false);return;}
+  if(S.playing) stopPlayback();
+  AC.resume();
+  S.playing=true;
+  var bA=S.bufA||S.bufB, bB=S.bufB||S.bufA;
+  srcA=AC.createBufferSource(); srcA.buffer=bA; srcA.loop=S.looping;
+  srcA.playbackRate.value=S.stretch; srcA.connect(gainA);
+  srcB=AC.createBufferSource(); srcB.buffer=bB; srcB.loop=S.looping;
+  srcB.playbackRate.value=S.stretch; srcB.connect(gainB);
+  gainA.gain.setValueAtTime(1-S.mixAB,AC.currentTime);
+  gainB.gain.setValueAtTime(S.mixAB,AC.currentTime);
+  playStart=AC.currentTime; lastCycle=-1;
+  srcA.start(); srcB.start();
+  lastTickT=Date.now();
+  playTimer=setInterval(playTick,30);
+  document.getElementById('playBtn').className='play';
+  setStatus('playing',true);
+}
+
+function playTick(){
+  var now=Date.now();
+  var dt=now-(lastTickT||now);
+  lastTickT=now;
+  updatePhysics(dt);
+  decayTransients(dt);
+  // RMS proxy — keep fd for consonant detector
+  var fd=new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(fd);
+  var sum=0; fd.forEach(function(v){sum+=v*v;});
+  S.rms=Math.sqrt(sum/fd.length)/255;
+  // Consonant detector — uses fd already computed above
+  if(S.playing) updateConsonantDetector(fd);
+  pmCapture(Date.now());   // Phrase Memory capture — after detector
+  // Stutter trigger — fires ONLY on active consonant detection
+  if(S.consActive&&(S.bufA||S.bufB)){
+    var stutterProb=(0.08+(S.entropyEff||S.entropy)*0.12)*(0.5+S.articulation*0.8);
+    if(Math.random()<stutterProb){
+      var sbuf=S.bufA||S.bufB;
+      var sel=AC.currentTime-playStart;
+      var sPos=sbuf.duration>0?(sel%sbuf.duration)/sbuf.duration:0;
+      spawnStutter(sPos,S.consScore);  // pass consScore for scaling
+    }
+  }
+  // LFO
+  if(S.lfoOn){
+    var lv=Math.sin((Date.now()/1000)*S.lfoFreq*Math.PI*2)*S.lfoDepth*0.5;
+    gainA.gain.setTargetAtTime(clamp(1-S.mixAB-lv),AC.currentTime,0.01);
+    gainB.gain.setTargetAtTime(clamp(S.mixAB+lv),AC.currentTime,0.01);
+  } else {
+    gainA.gain.setTargetAtTime(1-S.mixAB,AC.currentTime,0.01);
+    gainB.gain.setTargetAtTime(S.mixAB,AC.currentTime,0.01);
+  }
+  // Cycle / silence
+  var buf=S.bufA||S.bufB;
+  if(buf&&S.looping){
+    var elapsed=AC.currentTime-playStart;
+    var ld=buf.duration;
+    var cn=Math.floor(elapsed/ld);
+    if(cn!==lastCycle){
+      lastCycle=cn;
+      // Integration 2: semantic zones reduce silence during consonant articulation
+      var silMod=S.semZone&&S.semEnv>0.01
+        ?(S.semZone==='HARD'?-0.25:S.semZone==='MID'?-0.15:-0.08)*S.semEnv : 0;
+      var chance=(S.silChance*(1+silMod)+(S.entropyEff||S.entropy)*20)/100;
+      var doSil=Math.random()<chance;
+      onCycleTransition(doSil);
+      if(doSil&&gainSum){
+        var sd=S.silMin+Math.random()*(S.silMax-S.silMin);
+        var t0=AC.currentTime;
+        gainSum.gain.cancelScheduledValues(t0);
+        gainSum.gain.setValueAtTime(1,t0);
+        gainSum.gain.linearRampToValueAtTime(0,t0+0.01);
+        gainSum.gain.setValueAtTime(0,t0+0.01);
+        gainSum.gain.linearRampToValueAtTime(1,t0+0.01+sd/1000);
+        setStatus('silence '+Math.round(sd)+'ms',true);
+      }
+    }
+  }
+  updateSpectralUI();
+  // SMEAR v2 — accumulative clock update (no setTimeout, driven by tick)
+  if(smearEngine){
+    smearEngine.update({
+      playing: S.playing,
+      smear:   S.dsmearSmooth||S.dsmear,   // T4: use smoothed smear
+      form:    S.dform,
+      entropy: S.entropyEff||S.entropy,
+      entropyEff: S.entropyEff||S.entropy,
+      energy:  S.energyFac,
+      dt:      dt
+    });
+  }
+  pmTick(Date.now(),dt);
+  // Task 8 v20.9.1: gain staging debug (every ~1s, remove when stable)
+  if(typeof _dbgFrame==='undefined') window._dbgFrame=0;
+  if(++window._dbgFrame%33===0&&cohGainA&&convWetA){
+    console.log('[VD]',{
+      cohA:cohGainA.gain.value.toFixed(3),cohB:cohGainB?cohGainB.gain.value.toFixed(3):'—',
+      wetA:convWetA.gain.value.toFixed(3),wetB:convWetB?convWetB.gain.value.toFixed(3):'—',
+      vMix:S.voiceMix.toFixed(2),dom:S.phraseDom.toFixed(2),nov:S.novelty.toFixed(2),
+      conv:['N','M','O','D'][S.convMode]||'?',cEnv:S.convEnv.toFixed(2),
+      turn:S.turnState,lock:Math.round(S.convLock)
+    });
+  }
+  // Task 2: swing derivation — auto, no UI needed
+  S.swingAmt=(1-S.dform)*0.6+(S.entropyEff||S.entropy)*0.3;
+  // Task 5: intent modulates swing feel
+  if(S.intent===1) S.swingAmt*=0.7;       // follow: tighter
+  else if(S.intent===2) S.swingAmt*=1.3;  // contrast: more groove
+  if(S.phraseDom>0.5) S.swingAmt*=0.8;
+  S.noveltyTrend*=0.995; S.novelty=Math.min(1,S.noveltyTrend);
+  if(S.novelty>0.85&&S.energyFac<0.2){
+    S.motifGen=0;
+    PM.i=(PM.i+Math.floor(2+Math.random()*2))%PM.len;
+    S.noveltyTrend*=0.5; S.novelty=S.noveltyTrend;
+  }
+  // v20.8: voice selection logic (Tasks 3+4)
+  if(S.intent===1)       S.voiceTarget=0;       // FOLLOW → A (natural)
+  else if(S.intent===2)  S.voiceTarget=1;       // CONTRAST → B (response)
+  else if(S.intent===3)  S.voiceTarget=Math.random()<0.5?0:1; // CALL → either
+  else if(S.novelty>0.6) S.voiceTarget=1;       // novelty → B breaks pattern
+  // v20.8 Task 8: dominance locks voice
+  if(S.phraseDom>0.6) S.voiceTarget=S.voice;
+  // crossfade (τ=0.08 via exponential smoothing)
+  S.voiceMix+=(S.voiceTarget-S.voiceMix)*(0.06+(S.entropyEff||S.entropy)*0.04);
+  // update settled voice
+  if(Math.abs(S.voiceMix-S.voiceTarget)<0.05) S.voice=S.voiceTarget;
+  // apply gains — applyDSP owns gain control (integrates voice + duck + interrupt)
+  S.voiceHold++;
+  // Task 9: micro stereo offset — A center, B +20% right
+  if(masterPan&&masterPan.pan){
+    var panOff=(S.voiceMix-0.5)*0.4;
+    masterPan.pan.setTargetAtTime(panOff,AC.currentTime,0.1);
+  }
+  // PQ: advance implicit pulse phase
+  if(S.pqEnabled&&S.pqInterval>0){
+    S.pqPhase+=(dt/1000)/S.pqInterval;
+    if(S.pqPhase>=1) S.pqPhase-=1;
+  }
+  // Task 3: phrase state machine + v20.5 Phrase Macro Memory capture
+  S.phraseTimer+=dt;
+  // Open capture on build start
+  if((S.phraseState===1||S.phraseState===2)&&!S.phraseCap){
+    S.phraseCap={env:[],cons:[],interval:S.pqInterval||0.2,voice:S.voice};
+  }
+  // Append snapshot each tick during build/peak
+  if(S.phraseCap&&(S.phraseState===1||S.phraseState===2)){
+    S.phraseCap.env.push(S.phraseEnv);
+    S.phraseCap.cons.push(S.consEnv);
+  }
+  if(S.phraseState===1&&S.phraseEnv>0.7) S.phraseState=2;
+  if(S.phraseState===2&&S.phraseTimer>300) S.phraseState=3;
+  if(S.phraseState===3){
+    S.phraseEnv*=0.94;
+    // Commit phrase on full release
+    if(S.phraseEnv<0.05){
+      if(S.phraseCap&&S.phraseCap.env.length>10){
+        // Task 2: phrase fingerprint — detect repetition
+        (function(){
+          var p=S.phraseCap, sum=0, n=0;
+          for(var qi=0;qi<p.env.length;qi+=3){
+            sum+=(p.env[qi]*0.6+(p.cons[qi]||0)*0.4); n++;
+          }
+          var h=n>0?sum/n:0;
+          var diff=Math.abs(h-S.lastPhraseHash);
+          S.lastPhraseHash=h;
+          if(diff<0.035)      S.noveltyTrend+=0.06;   // clear repetition
+          else if(diff>0.08)  S.noveltyTrend*=0.7;    // clear variation
+          else                S.noveltyTrend*=0.92;   // ambiguous → slow decay
+          S.novelty=Math.min(1,S.noveltyTrend);
+        })();
+        S.phraseMem.push(S.phraseCap);
+        if(S.phraseMem.length>6) S.phraseMem.shift();
+      }
+      S.phraseCap=null;
+      S.phraseState=0; S.phraseEnv=0;
+    }
+  }
+  // Task 8: micro gap — automatic breath in release
+  if(S.phraseState===3&&gainSum&&Math.random()<0.15){
+    gainSum.gain.setTargetAtTime(0,AC.currentTime,0.01);
+    gainSum.gain.setTargetAtTime(1,AC.currentTime+0.04,0.02);
+  }
+  // v20.4 Intent detection — decides system behavior mode
+  var lowE=S.energyFac<0.25;
+  var hiP=S.phraseEnv>0.6;
+  var midP=S.phraseEnv>0.3;
+  var prevIntent=S.intent;
+  if(hiP&&!lowE)               S.intent=1;   // follow: riding a strong phrase
+  else if(midP&&(S.entropyEff||S.entropy)>0.4) S.intent=2; // contrast: mid phrase + chaos
+  else if(lowE&&S.pqIntervals.length>=3)       S.intent=3; // call: quiet, has rhythm
+  else if(lowE&&S.phraseEnv<0.2)              S.intent=4; // silence: nothing happening
+  else                         S.intent=0;   // idle
+  S.intentEnv+=(1-S.intentEnv)*0.2;   // smooth envelope toward 1
+  if(S.intent!==prevIntent) S.intentTimer=0;
+  S.intentTimer+=dt;
+  S.intentWeight*=S.intentDecay;   // Fix 4: slow decay for narrative continuity
+  // v21.2 Task 1: conversational behavior selection — with hysteresis lock
+  if(S.convLock>0) S.convLock-=dt;
+  if(S.turnState===0&&S.phraseEnv>0.4){
+    var cr=Math.random();
+    var newMode;
+    if(S.intent===1)       newMode=cr<0.7?1:3;
+    else if(S.intent===2)  newMode=cr<0.6?2:3;
+    else if(S.intent===3)  newMode=3;
+    else                   newMode=0;
+    // Task 3: hysteresis — mode can't flip until convLock expires
+    if(newMode!==S.convMode&&S.convLock<=0){
+      S.convMode=newMode;
+      S.convLock=200+Math.random()*200;
+    }
+  }
+  // Task 2 v21.2.1 + Task 7: convEnv — decay faster when turn active
+  S.convEnv+=(1-S.convEnv)*0.15;
+  if(S.turnState!==0) S.convEnv*=0.7;   // Task 7: conv steps back during speech
+  // v20.6: Phrase Dominance — memory takes control in low-energy gaps
+  var lowEdom=S.energyFac<0.22;
+  var hasMem=S.phraseMem.length>0;
+  if(lowEdom&&hasMem&&S.intent!==1){
+    S.phraseDom+=(1-S.phraseDom)*0.12;
+    S.phraseHold+=dt;
+  } else {
+    S.phraseDom*=0.75;   // performer returns → release fast
+    S.phraseHold=0;
+  }
+  S.phraseDom=Math.min(1,S.phraseDom);
+  // Task 7: hard takeover — force CALL intent when memory dominates long
+  if(S.phraseDom>0.8&&S.phraseHold>300) S.intent=3;
+  // Auto contour: when dom crosses 0.6 and no contour running, start one
+  if(S.phraseDom>0.6&&!S._domContourRunning&&hasMem){
+    S._domContourRunning=true;
+    var pp=pickPhrase();
+    if(pp){
+      applyPhraseContour(pp);
+      setTimeout(function(){S._domContourRunning=false;},
+        Math.max(800,(pp.env.length||10)*35));
+    } else S._domContourRunning=false;
+  }
+  // C/R: tick timer, fire response in low-energy gap
+  if(S.crActive){
+    S.crTimer+=dt;
+    if(S.crTimer>S.crDelay&&S.energyFac<0.35&&!S.crResponding){
+      // Task 6 v21: respond only in IDLE turn — don't speak over performer
+      if(S.turnState===0&&S.turnCooldown<=0){
+        S.crResponding=true;
+        triggerResponse();
+        S.crActive=false;
+        S.turnCooldown=150;
+      }
+    }
+  }
+  // v21 Turn-Taking Engine
+  // Task 1: speaker energy by voice
+  var aEnergy=S.energyFac*(1-S.voiceMix);
+  var bEnergy=S.energyFac*S.voiceMix;
+  var aDom=aEnergy/(aEnergy+bEnergy+0.0001);
+  var bDom=bEnergy/(aEnergy+bEnergy+0.0001);
+  S._aDom=aDom; S._bDom=bDom;   // expose for applyDSP
+  var aActive=aDom>0.6;
+  var bActive=bDom>0.6;
+  // Task 2: turn state machine
+  if(S.turnCooldown>0){
+    S.turnCooldown-=dt;
+    S.turnHold=Math.max(0,S.turnHold-dt);
+  } else {
+    if(aActive&&!bActive){S.turnState=1;S.turnOwner=0;S.turnHold=80+S.energyFac*120+Math.random()*40;S.lastSpeaker=0;}
+    else if(bActive&&!aActive){S.turnState=2;S.turnOwner=1;S.turnHold=80+S.energyFac*120+Math.random()*40;S.lastSpeaker=1;}
+    else if(aActive&&bActive){S.turnState=3;S.turnHold=60+Math.random()*40;}
+    else if(S.turnHold<=0) S.turnState=0;
+  }
+  // Task 3: interrupt detection — large energy differential triggers takeover
+  if(S.turnState!==0){
+    var energyDiff=Math.abs(aEnergy-bEnergy);
+    var intentFactor=S.intent===2?1.4:S.intent===1?0.5:1.0;  // CONTRAST=aggressive, FOLLOW=calm
+    var interruptProb=0.15+energyDiff*0.5*intentFactor;
+    if(energyDiff>0.15&&Math.random()<interruptProb){
+      S.interruptIntent=1;
+      S.turnOwner=aEnergy>bEnergy?0:1;
+      S.turnCooldown=120;
+    }
+  }
+  // Task 6: C/R gated by turnState — response only in IDLE
+  // (handled below in crActive block — add gate there)
+  // Task 8 v21.1: breathing gap — only when turn just ended (hold < 20ms), not random glitch
+  if(S.turnState===0&&S.turnHold<20&&gainSum&&Math.random()<0.18){
+    var gNow=AC.currentTime;
+    gainSum.gain.setTargetAtTime(0,gNow,0.01);
+    setTimeout(function(){gainSum.gain.setTargetAtTime(1,AC.currentTime,0.02);},35);
+  }
+  // v22 Task 7: spatial anchoring by turnState — explicit positions
+  if(masterPan&&masterPan.pan){
+    var panTurn;
+    if(S.turnState===1) panTurn=-0.25;
+    else if(S.turnState===2) panTurn=0.25;
+    else if(S.turnState===3) panTurn=((S._bDom||0.5)-(S._aDom||0.5))*0.25;  // Fix 5: domination drives pan
+    else panTurn=((S._bDom||0.5)-(S._aDom||0.5))*0.15;   // idle: gentle domain drift
+    masterPan.pan.setTargetAtTime(panTurn,AC.currentTime,0.15);
+  }
+
+  // Motif Engine — trigger (Task 4 + Task 6 anti-chaos)
+  var motifProb=0.08;
+  if(S.intent===2) motifProb*=1.3;
+  else if(S.intent===4) motifProb*=0.2;
+  if(S.phraseDom>0.4){base*=(1+S.phraseDom*0.8);motifProb*=(1+S.phraseDom*0.6);}
+  // Task 5 v20.7: high novelty shifts toward motifs (more structural variation)
+  if(S.novelty>0.6){base*=0.6;motifProb*=1.4;}
+  if(!S.motifActive&&S.phraseEnv>0.7&&S.energyFac<0.4&&MOTIFS.list.length>0&&Math.random()<motifProb){
+    S.motifActive=true;
+    S.motifTimer=0;
+    S.motif=MOTIFS.list[(Math.random()*MOTIFS.list.length)|0];
+    S.motifIndex=0;
+    S.motifGen=0;   // Task 2: fresh generation on new motif
+  }
+  // Motif Engine — playback (Task 5)
+  if(S.motifActive&&S.motif){
+    S.motifTimer+=dt;
+    var mStep=S.motif[S.motifIndex];
+    if(mStep&&S.motifTimer>40){
+      var interval=S.pqInterval;
+      // Task 8: lock intensity — skip if grid too unstable
+      if(interval>=0.08&&S.pqIntervals.length>=3){
+        var tQ=pqQuantize(AC.currentTime,interval);
+        S.swingPhase^=1;
+        var swing=pqSwingOffset(interval,S.swingAmt,S.swingPhase);
+        var jitterAmt=S.intent===3?0.015:0.03;
+        if(S.phraseDom>0.5) jitterAmt*=0.4;
+        // Task 7 v21.1: turn drift — more expressive in silence, precise during speech
+        var turnDrift=S.turnState===0?1:0.5;
+        var jitter=(Math.random()-0.5)*interval*jitterAmt*turnDrift;
+        var finalTime=tQ+swing+jitter;
+        scheduleMotifStep(mStep,finalTime);
+      } else {
+        // No valid grid yet — fire immediately (fallback)
+        scheduleMotifStep(mStep,AC.currentTime);
+      }
+      S.motifIndex++;
+      S.motifTimer=0;
+      if(S.motifIndex>=S.motif.length){
+        S.motifActive=false;
+        S.motifGen=Math.min(6,S.motifGen+1);   // Task 7: advance generation
+      }
+    }
+  }
+  // Task 8: strong input resets mutation — performer takes control
+  if(S.energyFac>0.5) S.motifGen=0;
+  // Clip System — non-destructive ticks (zero engine impact)
+  deckTick(dt);
+  var _tlElapsed=(Date.now()/1000)-S.timelineStart;
+  processTimeline(_tlElapsed);
+  updateTextState(_tlElapsed);
+  updateVisualState();
+}
+
+function stopPlayback(){
+  S.playing=false;
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  try{srcA&&srcA.stop();}catch(e){}
+  try{srcB&&srcB.stop();}catch(e){}
+  srcA=null; srcB=null;
+  if(gainSum){gainSum.gain.cancelScheduledValues(AC.currentTime);gainSum.gain.setValueAtTime(1,AC.currentTime);}
+  document.getElementById('playBtn').className='';
+  setStatus('stopped',false);
+}
+
+// ── CONSONANT DETECTOR ────────────────────────────────────────────
+// Lightweight heuristic — no extra FFT, uses analyser data already computed in playTick
+// Features: fastT (attack) + brightRatio (spectral tilt) + energyDelta (onset speed)
+function updateConsonantDetector(fd){
+  // Feature 1: transient attack
+  var attack=S.fastT;
+
+  // Feature 2: brightness ratio — consonants have more energy above ~6kHz
+  // FFT 256 bins at 44.1kHz: bin width ≈ 86Hz
+  // low: bins 5–60 (~430Hz–5.1kHz) | high: bins 80–200 (~6.9kHz–17.2kHz)
+  var high=0,low=0;
+  for(var i=80;i<=200;i++) high+=fd[i];
+  for(var i=5;i<=60;i++) low+=fd[i];
+  var brightRatio=high/(low+1e-6);
+
+  // Feature 3: energy delta (fast onset burst)
+  var energyDelta=S.energyFac-prevEnergy;
+  prevEnergy=S.energyFac;
+
+  // Score [0–~2]: weight attack heaviest, brightness moderate, delta for bursts
+  var score=attack*0.5+clamp(brightRatio*0.3,0,1)+clamp(energyDelta*2.0,0,1);
+  S.consScore=score;
+
+  // Trigger with 60ms cooldown
+  var now=Date.now();
+  var active=score>0.55&&(now-lastConsTime)>60;
+  if(active){
+    lastConsTime=now;
+    S.consDir=(Math.random()*2-1);
+    S.consEnv=1.0;
+    // Semantic zone assignment
+    S.semZone=score>0.75?'HARD':score>0.6?'MID':'SOFT';
+    S.semEnv=1.0;
+    // PQ: capture inter-onset interval for implicit pulse tracking
+    if(S.pqEnabled&&AC){
+      var acNow=AC.currentTime;
+      if(S.pqLastOnsetT>0){
+        var ioiDt=acNow-S.pqLastOnsetT;
+        if(ioiDt>0.06&&ioiDt<0.4){
+          S.pqIntervals.push(ioiDt);
+          if(S.pqIntervals.length>8) S.pqIntervals.shift();
+          var pqSum=0;
+          for(var q=0;q<S.pqIntervals.length;q++) pqSum+=S.pqIntervals[q];
+          S.pqInterval=pqSum/S.pqIntervals.length;
+        }
+      }
+      S.pqLastOnsetT=acNow;
+    }
+  }
+  S.consActive=active;
+  // Phrase Shaping: consonant cluster builds phraseEnv
+  if(active&&S.energyFac>0.15){
+    S.phraseEnv=Math.min(1,S.phraseEnv+0.25);
+    S.phraseState=1; S.phraseTimer=0;
+  }
+  // C/R: capture call event — Task 7 anti-flood: phraseEnv>0.4 required
+  if(active&&S.energyFac>0.25&&S.phraseEnv>0.4){
+    S.crActive=true;
+    S.crTimer=0;
+    S.crDelay=120+S.phraseEnv*220+Math.random()*60;
+    if(S.convMode===3){
+      var extraDelay=120+Math.random()*180;
+      // Task 5 v21.2.1: snap delay to PQ grid to preserve groove
+      if(S.pqInterval>0.08&&S.pqIntervals.length>=3){
+        var steps=Math.max(1,Math.round(extraDelay/(S.pqInterval*1000)));
+        extraDelay=steps*S.pqInterval*1000;
+      }
+      S.crDelay+=extraDelay;
+    }
+    S.crEnergy=S.energyFac;
+    S.crResponding=false;
+  }
+}
+
+// ── STUTTER ENGINE ────────────────────────────────────────────────
+// Micro-repeater: triggered by transients + energy, routes through gainSum → full DSP
+// 1–2 reps, 15–50ms, smooth linear envelope, vanishes at high SMEAR
+function spawnStutter(playheadPos,consScore){
+  consScore=consScore||0.55;
+  var buf=S.bufA||S.bufB;
+  if(!buf||!gainSum) return;
+  var amp=0.15*(1-S.dsmear);
+  if(amp<0.01) return;
+  // Scale reps + dur by consScore — strong consonant → more marked (still subtle)
+  var reps=1+(consScore>0.75?1:0);
+  var dur=(0.015+Math.random()*0.035)*(0.8+consScore*0.4);
+  var rate=0.7+Math.random()*0.6;
+  var fade=Math.min(0.005,dur*0.2);
+  for(var r=0;r<reps;r++){
+    var src=AC.createBufferSource();
+    src.buffer=buf;
+    src.playbackRate.value=rate;
+    var g=AC.createGain(); g.gain.value=0;
+    var t0=AC.currentTime+r*(dur*0.85);     // slight overlap between reps
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.linearRampToValueAtTime(amp,t0+dur*0.35);
+    g.gain.linearRampToValueAtTime(0.0001,t0+dur-fade);
+    g.gain.setValueAtTime(0.0001,t0+dur);
+    var off=Math.max(0,Math.min(buf.duration-dur-0.01,playheadPos*buf.duration));
+    src.connect(g); g.connect(gainSum);
+    src.start(t0,off,dur+0.015);
+    src.stop(t0+dur+0.025);
+    src.onended=function(){try{src.disconnect();g.disconnect();}catch(e){}};
+  }
+}
+
+// ── FILE LOADER (restored v18.4) ─────────────────────────────────
+// iOS canonical fix: AC.resume() sync before click, ArrayBuffer.slice(0), callback decodeAudioData
+function toMono(buf){
+  var out=AC.createBuffer(1,buf.length,buf.sampleRate);
+  var data=out.getChannelData(0);
+  for(var ch=0;ch<buf.numberOfChannels;ch++){
+    var src=buf.getChannelData(ch);
+    for(var i=0;i<data.length;i++) data[i]+=src[i]/buf.numberOfChannels;
+  }
+  return out;
+}
+
+function normalizeBuffer(buf){
+  var data=buf.getChannelData(0);
+  var peak=0;
+  for(var i=0;i<data.length;i++) if(Math.abs(data[i])>peak) peak=Math.abs(data[i]);
+  if(peak>0.001) for(var i=0;i<data.length;i++) data[i]*=0.9/peak;
+}
+
+function rebuildSource(slot){
+  // BufferSource is one-shot — always create new; never reuse
+  if(slot==='A'){
+    if(srcA){try{srcA.stop();}catch(e){} try{srcA.disconnect();}catch(e){} srcA=null;}
+    if(!S.bufA) return;
+    srcA=AC.createBufferSource(); srcA.buffer=S.bufA;
+    srcA.loop=S.looping; srcA.playbackRate.value=S.stretch;
+    srcA.connect(gainA);
+    srcA.onended=function(){srcA=null;};
+    if(S.playing) srcA.start();
+  } else {
+    if(srcB){try{srcB.stop();}catch(e){} try{srcB.disconnect();}catch(e){} srcB=null;}
+    if(!S.bufB) return;
+    srcB=AC.createBufferSource(); srcB.buffer=S.bufB;
+    srcB.loop=S.looping; srcB.playbackRate.value=S.stretch;
+    srcB.connect(gainB);
+    srcB.onended=function(){srcB=null;};
+    if(S.playing) srcB.start();
+  }
+}
+
+function loadFileToSlot(slot){
+  AC.resume();  // iOS: synchronous resume before file picker
+  var inp=document.getElementById('file'+slot);
+  inp.value='';   // allow reloading same file
+  inp.onchange=function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    document.getElementById('stat'+slot).textContent='loading...';
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var ab=ev.target.result.slice(0);  // iOS: copy before decode
+      // Use Promise form for Safari compatibility; fallback to callback
+      var decodeResult;
+      try{ decodeResult=AC.decodeAudioData(ab); } catch(err){ decodeResult=null; }
+      var onDecoded=function(decoded){
+        var mono=toMono(decoded);
+        normalizeBuffer(mono);
+        if(slot==='A') S.bufA=mono; else S.bufB=mono;
+        // Rebuild source if playing so new buffer takes effect immediately
+        if(S.playing) rebuildSource(slot);
+        var name=file.name.length>16?file.name.slice(0,14)+'..':file.name;
+        document.getElementById('stat'+slot).textContent=name+' '+decoded.duration.toFixed(1)+'s';
+        setStatus('slot '+slot+' loaded',true);
+        inp.value='';  // reset for reload
+      };
+      var onError=function(err){ setStatus('decode error slot '+slot+': '+(err&&err.message||err),false); };
+      if(decodeResult&&typeof decodeResult.then==='function'){
+        decodeResult.then(onDecoded).catch(onError);
+      } else {
+        // Callback form fallback
+        AC.decodeAudioData(ab.slice(0),onDecoded,onError);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  inp.click();
+}
+
+// ── MIC RECORDING ─────────────────────────────────────────────────
+var micStream=null, micProc=null, micChunks=[], micSlot='A', micOn=false;
+
+async function toggleMic(slot){
+  if(micOn&&micSlot===slot){stopMic();return;}
+  if(micOn) stopMic();
+  micSlot=slot;
+  await startMic(slot);
+}
+
+async function startMic(slot){
+  try{
+    AC.resume();
+    micStream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+    });
+    var src=AC.createMediaStreamSource(micStream);
+    micProc=AC.createScriptProcessor(4096,1,1);
+    micChunks=[];
+    src.connect(micProc); micProc.connect(AC.destination);
+    micProc.onaudioprocess=function(e){
+      if(!micOn) return;
+      micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    setTimeout(function(){
+      micOn=true;
+      var btn=slot==='A'?'recA':'recB';
+      document.getElementById(btn).className='rec-live';
+      document.getElementById('stat'+slot).textContent='REC live';
+      setStatus('recording '+slot+'...',true);
+    },200);
+  } catch(e){setStatus('mic error: '+e.message,false);}
+}
+
+function stopMic(){
+  if(!micOn) return;
+  micOn=false;
+  var slot=micSlot;
+  try{micProc.disconnect();}catch(e){}
+  try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
+  document.getElementById(slot==='A'?'recA':'recB').className='';
+  document.getElementById('stat'+slot).textContent='processing...';
+  if(micChunks.length===0){setStatus('no audio captured',false);return;}
+  var len=0; micChunks.forEach(function(c){len+=c.length;});
+  var flat=new Float32Array(len), off=0;
+  micChunks.forEach(function(c){flat.set(c,off);off+=c.length;});
+  var peak=0; flat.forEach(function(v){if(Math.abs(v)>peak)peak=Math.abs(v);});
+  if(peak>0) for(var i=0;i<flat.length;i++) flat[i]=flat[i]/peak*0.9;
+  var ab=AC.createBuffer(1,len,AC.sampleRate);
+  ab.getChannelData(0).set(flat);
+  if(slot==='A') S.bufA=ab; else S.bufB=ab;
+  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s';
+  setStatus('slot '+slot+' ready',true);
+  micChunks=[];
+}
+
+// ── REC TAKE (v18 with real DSP) ──────────────────────────────────
+async function recTake(){
+  if(!S.bufA&&!S.bufB){setStatus('no audio to record',false);return;}
+  setStatus('rendering v18 DSP...',true);
+  var buf=S.bufA||S.bufB;
+  var dur=buf.duration, sr=AC.sampleRate;
+  var spec=computeSpec(S.matter,S.entropy,S.fastT,S.slowT);
+  var offline=new OfflineAudioContext(2,Math.floor(dur*sr),sr);
+
+  // Sources
+  var oA=offline.createBufferSource(); oA.buffer=S.bufA||S.bufB;
+  var oB=offline.createBufferSource(); oB.buffer=S.bufB||S.bufA;
+  var ogA=offline.createGain(); ogA.gain.value=1-S.mixAB;
+  var ogB=offline.createGain(); ogB.gain.value=S.mixAB;
+  var ogSum=offline.createGain(); ogSum.gain.value=1.0;
+  oA.connect(ogA); oB.connect(ogB);
+  ogA.connect(ogSum); ogB.connect(ogSum);
+
+  // Formant bank offline
+  var ofBus=offline.createGain();
+  var ofDry=offline.createGain(); ofDry.gain.value=1.0;
+  ogSum.connect(ofDry); ofDry.connect(ofBus);
+  FORMANT_FREQS.forEach(function(freq){
+    var f=offline.createBiquadFilter();
+    f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.0+spec.form*9.0;
+    var g=offline.createGain(); g.gain.value=spec.form*0.38;
+    ogSum.connect(f); f.connect(g); g.connect(ofBus);
+  });
+
+  // Coherence layer offline (mirrors live chain)
+  var ofCohLP=offline.createBiquadFilter();
+  ofCohLP.type='lowpass';
+  ofCohLP.frequency.value=1200+((1-spec.smear)*4000);
+  ofCohLP.Q.value=0.5;
+  var ofCohG=offline.createGain();
+  ofCohG.gain.value=(1-spec.smear)*(0.5+spec.form*0.3);
+  ogSum.connect(ofCohLP); ofCohLP.connect(ofCohG); ofCohG.connect(ofBus);
+
+  // TASK 4: Offline SMEAR — pre-scheduled grain layer for REC parity
+  // Same params as live engine (no micro-pan, no width matrix — perceptual match only)
+  if(spec.smear>0.05){
+    var transProtect=Math.min(1,S.energyFac*1.5);
+    var smearEff=spec.smear*(1-transProtect*0.6);
+    var gInterval=0.075-smearEff*(0.075-0.018);
+    var gDur=Math.min(0.05+(1-spec.form)*0.11, gInterval*2.2);
+    var gCount=Math.min(6,Math.floor((1+smearEff*5)*(0.6+S.energyFac*0.8)));
+    var gDetune=280*(1-spec.form);
+    var gAmp=(0.18+0.22*smearEff)/Math.max(1,gCount);
+    var fade=Math.min(0.008,gDur*0.25);
+    for(var gt=0;gt<dur;gt+=gInterval){
+      for(var gi=0;gi<gCount;gi++){
+        var gbuf=gi%2===0?(S.bufA||S.bufB):(S.bufB||S.bufA);
+        if(!gbuf) continue;
+        var gs=offline.createBufferSource(); gs.buffer=gbuf;
+        gs.detune.value=(Math.random()*2-1)*gDetune;
+        var gg=offline.createGain(); gg.gain.value=0;
+        var t0=gt+gi*gDur*0.2;
+        if(t0>=dur) continue;
+        var gOff=Math.max(0,Math.min(gbuf.duration-0.01,
+          ((gt%gbuf.duration)/gbuf.duration)*gbuf.duration+(Math.random()-0.5)*0.05*gbuf.duration));
+        gg.gain.setValueAtTime(0.0001,t0);
+        gg.gain.linearRampToValueAtTime(gAmp,t0+gDur*0.5);
+        gg.gain.linearRampToValueAtTime(0.0001,t0+gDur-fade);
+        gg.gain.setValueAtTime(0.0001,t0+gDur);
+        gs.connect(gg); gg.connect(ogSum);
+        gs.start(t0,gOff,gDur+0.01);
+      }
+    }
+  }
+
+  // Spectral tilt offline
+  var ofTiltL=offline.createBiquadFilter();
+  ofTiltL.type='lowshelf'; ofTiltL.frequency.value=350;
+  ofTiltL.gain.value=(spec.smear-0.5)*4;
+  var ofTiltH=offline.createBiquadFilter();
+  ofTiltH.type='highshelf'; ofTiltH.frequency.value=4000;
+  ofTiltH.gain.value=-(spec.smear-0.5)*4;
+  ofBus.connect(ofTiltL); ofTiltL.connect(ofTiltH);
+
+  // Convolver offline
+  var oConv=offline.createConvolver();
+  oConv.buffer=buildIROffline(offline,spec.reverb);
+  var wetAmt=spec.dryWet*(spec.reverb*(0.4+spec.smear*0.6));
+  var oWet=offline.createGain(); oWet.gain.value=wetAmt*0.8;
+  var oDry=offline.createGain(); oDry.gain.value=1.0-wetAmt*0.4;
+  ofTiltH.connect(oConv); oConv.connect(oWet);
+  ofTiltH.connect(oDry);
+  oWet.connect(offline.destination); oDry.connect(offline.destination);
+
+  oA.start(0); oB.start(0);
+  var rendered=await offline.startRendering();
+
+  // Normalize
+  var ch0=rendered.getChannelData(0);
+  var pk=0; for(var i=0;i<ch0.length;i++) if(Math.abs(ch0[i])>pk) pk=Math.abs(ch0[i]);
+  if(pk>0.001) for(var i=0;i<ch0.length;i++) ch0[i]=ch0[i]/pk*0.9;
+
+  var id=Date.now().toString();
+  var take={
+    id:id, name:'take_'+(Object.keys(takes).length+1),
+    audioData:new Float32Array(ch0),
+    sampleRate:sr, matter:S.matter, entropy:S.entropy,
+    duration:dur, date:new Date().toISOString().slice(0,10), timestamp:Date.now()
+  };
+  takes[id]=take;
+  await saveTake(take);
+  updateTakeList();
+  setStatus('take saved ('+dur.toFixed(1)+'s) v18 DSP',true);
+}
+
+// ── PRESETS ───────────────────────────────────────────────────────
+var presets={};
+
+function buildPresets(){
+  try{presets=JSON.parse(localStorage.getItem('voxdustPresetsV172')||'{}');}catch(e){presets={};}
+  var grid=document.getElementById('pGrid');
+  grid.innerHTML='';
+  ['P1','P2','P3','P4','P5'].forEach(function(p){
+    var btn=document.createElement('button');
+    btn.id='pr_'+p; btn.textContent=p;
+    if(presets[p]) btn.classList.add('saved');
+    var holdT=null;
+    btn.addEventListener('pointerdown',function(){
+      holdT=setTimeout(function(){
+        holdT=null;
+        presets[p]={center:S.matter,range:0.1,entropy:S.entropy,seed:Math.floor(Math.random()*99999)};
+        localStorage.setItem('voxdustPresetsV172',JSON.stringify(presets));
+        btn.classList.add('saved');
+        setStatus(p+' saved',true);
+      },600);
+    });
+    btn.addEventListener('pointerup',function(){
+      if(holdT){clearTimeout(holdT);holdT=null;loadPreset(p);}
+    });
+    btn.addEventListener('pointercancel',function(){if(holdT)clearTimeout(holdT);});
+    grid.appendChild(btn);
+  });
+}
+
+function loadPreset(p){
+  if(!presets[p]){setStatus(p+' empty — hold to save',false);return;}
+  var pr=presets[p];
+  var rnd=seededRnd(pr.seed);
+  S.entropy=pr.entropy;
+  document.getElementById('entropy').value=Math.round(pr.entropy*100);
+  document.getElementById('entropyV').textContent=Math.round(pr.entropy*100)+'%';
+  S.targetMatter=clamp(pr.center+(rnd()-0.5)*pr.range);
+  S.targetMatterBase=S.targetMatter;  // v19.6: base for drift clamp
+  setStatus(p+' loaded',true);
+}
+
+// ── LIBRARY ───────────────────────────────────────────────────────
+function updateTakeList(){
+  var list=document.getElementById('tlist');
+  var sorted=Object.values(takes).sort(function(a,b){return b.timestamp-a.timestamp;});
+  if(sorted.length===0){
+    list.innerHTML='<div style="font-family:\'JetBrains Mono\',monospace;font-style:italic;font-size:9px;color:var(--dim);padding:4px">no takes</div>';
+    return;
+  }
+  list.innerHTML='';
+  sorted.forEach(function(t){
+    var el=document.createElement('div'); el.className='titem';
+    el.innerHTML='<span class="tname">'+t.name+'</span>'
+      +'<span class="tdur">'+t.duration.toFixed(1)+'s</span>'
+      +'<button onclick="loadTake(\''+t.id+'\',\'A\')">up A</button>'
+      +'<button onclick="loadTake(\''+t.id+'\',\'B\')">up B</button>'
+      +'<button onclick="deleteTake(\''+t.id+'\')" style="color:var(--mag)">del</button>';
+    list.appendChild(el);
+  });
+}
+
+function loadTake(id,slot){
+  var t=takes[id]; if(!t) return;
+  var buf=AC.createBuffer(1,t.audioData.length,t.sampleRate);
+  buf.getChannelData(0).set(t.audioData);
+  if(slot==='A'){S.bufA=buf;document.getElementById('statA').textContent=t.duration.toFixed(1)+'s';}
+  else{S.bufB=buf;document.getElementById('statB').textContent=t.duration.toFixed(1)+'s';}
+  setStatus('take -> slot '+slot,true);
+}
+
+async function deleteTake(id){
+  delete takes[id]; await deleteTakeDB(id); updateTakeList();
+}
+
+// ── PACK EXPORT ───────────────────────────────────────────────────
+async function downloadPack(){
+  var arr=Object.values(takes);
+  if(!arr.length){setStatus('no takes to export',false);return;}
+  setStatus('packing...',true);
+  var zip=new JSZip();
+  arr.forEach(function(t){zip.file(t.name+'.wav',encodeWAV(t.audioData,t.sampleRate));});
+  var blob=await zip.generateAsync({type:'blob'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download='VoxDust_'+Date.now()+'.zip'; a.click();
+  setStatus('pack exported',true);
+}
+
+function encodeWAV(samples,sr){
+  var len=samples.length;
+  var buf=new ArrayBuffer(44+len*2);
+  var v=new DataView(buf);
+  var w=function(o,s){for(var i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+len*2,true);w(8,'WAVEfmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);
+  v.setUint16(34,16,true);w(36,'data');v.setUint32(40,len*2,true);
+  for(var i=0;i<len;i++){
+    var s=Math.max(-1,Math.min(1,samples[i]));
+    v.setInt16(44+i*2,s<0?s*0x8000:s*0x7FFF,true);
+  }
+  return buf;
+}
+
+// ── MATTER GRID ───────────────────────────────────────────────────
+function buildMatterGrid(){
+  var grid=document.getElementById('mgrid');
+  Object.entries(ANCHORS).forEach(function(kv){
+    var key=kv[0], val=kv[1];
+    var btn=document.createElement('button');
+    btn.textContent=ANCHOR_LABELS[key]||key;
+    btn.dataset.v=val;
+    if(Math.abs(val-S.matter)<0.05) btn.classList.add('act');
+    btn.addEventListener('click',function(){
+      S.targetMatter=val;
+      S.targetMatterBase=val;  // v19.6: anchor base for drift clamp
+      grid.querySelectorAll('button').forEach(function(b){b.classList.remove('act');});
+      btn.classList.add('act');
+    });
+    grid.appendChild(btn);
+  });
+}
+
+// ── ANALYSER CANVAS ───────────────────────────────────────────────
+function drawAnalyser(){
+  var canvas=document.getElementById('ac');
+  canvas.width=canvas.offsetWidth||480;
+  var ctx=canvas.getContext('2d');
+  var W=canvas.width, H=canvas.height;
+  window.fftBins=null;   // visual engine reads this
+  (function loop(){
+    requestAnimationFrame(loop);
+    ctx.clearRect(0,0,W,H);
+    if(!analyser) return;
+    var d=new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(d);
+    // Expose normalized fftBins for visual engine
+    var fb=new Float32Array(d.length);
+    for(var fi=0;fi<d.length;fi++) fb[fi]=d[fi]/255;
+    window.fftBins=fb;
+    ctx.beginPath();
+    ctx.strokeStyle='#9944ff'; ctx.lineWidth=2;
+    var step=W/d.length;
+    d.forEach(function(v,i){
+      var x=i*step, y=H-(v/255)*H;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // DSP activity overlays
+    if(S.dsmear>0.04){
+      ctx.fillStyle='rgba(0,255,255,'+(S.dsmear*0.05)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    if(S.dreverb>0.1){
+      ctx.fillStyle='rgba(153,68,255,'+(S.dreverb*0.04)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    if(S.dform>0.5){
+      ctx.fillStyle='rgba(255,0,255,'+(S.dform*0.025)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    // Motif active: amber pulse
+    if(S.motifActive){
+      ctx.fillStyle='rgba(255,170,0,0.06)';
+      ctx.fillRect(0,0,W,H);
+    }
+    // Dominance overlay: amber fills as memory takes control
+    if(S.phraseDom>0.1){
+      ctx.fillStyle='rgba(255,140,0,'+(S.phraseDom*0.08)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    // Task 6: intent label
+    if(S.intent>0){
+      var labels=['','FOLLOW','CONTRAST','CALL','SILENCE'];
+      var cols=['','rgba(0,255,255,.7)','rgba(255,0,255,.7)','rgba(153,68,255,.7)','rgba(255,255,255,.4)'];
+      ctx.font='italic bold 9px JetBrains Mono,monospace';
+      ctx.fillStyle=cols[S.intent];
+      ctx.fillText(labels[S.intent],8,H-8);
+    }
+    // v21.2: convMode label (bottom center)
+    if(S.convMode>0){
+      var cmLabels=['','MIMIC','OPPOSE','DELAY'];
+      var cmCols=['','rgba(0,255,255,.6)','rgba(255,0,255,.6)','rgba(153,68,255,.5)'];
+      ctx.font='italic bold 9px JetBrains Mono,monospace';
+      ctx.fillStyle=cmCols[S.convMode];
+      ctx.textAlign='center';
+      ctx.fillText(cmLabels[S.convMode],W/2,H-8);
+      ctx.textAlign='left';
+    }
+    // v21: turn state indicator (right side)
+    if(S.turnState>0){
+      var tLabels=['','A','B','AB'];
+      var tCols=['','rgba(0,255,255,.7)','rgba(255,0,255,.7)','rgba(255,255,255,.5)'];
+      ctx.font='italic bold 9px JetBrains Mono,monospace';
+      ctx.fillStyle=tCols[S.turnState];
+      ctx.textAlign='right';
+      ctx.fillText(tLabels[S.turnState],W-8,H-8);
+      ctx.textAlign='left';
+    }
+  })();
+}
+
+// ── STATUS ────────────────────────────────────────────────────────
+function setStatus(msg,active){
+  var el=document.getElementById('st');
+  el.textContent=msg; el.className=active?'a':'';
+}
+
+// ── PHRASE MEMORY LITE ───────────────────────────────────────────
+// Captures consonant/semantic events into a ring buffer (~2.8s)
+// Replays them probabilistically in low-energy moments
+// No audio buffer manipulation — writes only to S.consEnv/semEnv/targetMatter
+
+function pmCapture(now){
+  if(!S.pmEnabled) return;
+  PM.buf[PM.i]={
+    t:now, consEnv:S.consEnv, semEnv:S.semEnv,
+    consDir:S.consDir, zone:S.semZone,
+    energy:S.energyFac, smear:S.dsmear, form:S.dform,
+    fromPM:false, voice:S.voice
+  };
+  PM.i=(PM.i+1)%PM.len;
+  // Motif capture: accumulate candidate events during active phrases
+  if(S.consEnv>0.1||S.semEnv>0.1){
+    PM.tmpMotif.push({
+      consEnv:S.consEnv, semEnv:S.semEnv,
+      consDir:S.consDir, energy:S.energyFac, dt:0
+    });
+    if(PM.tmpMotif.length>4) PM.tmpMotif.shift();
+  }
+  // Commit motif when phrase is active and pattern is long enough
+  if(S.phraseEnv>0.6&&PM.tmpMotif.length>=3&&Math.random()<0.2){
+    MOTIFS.list.push(JSON.parse(JSON.stringify(PM.tmpMotif)));
+    if(MOTIFS.list.length>MOTIFS.max) MOTIFS.list.shift();
+  }
+}
+
+function pmPick(){
+  var best=null, bestW=0;
+  for(var k=0;k<PM.len;k++){
+    var e=PM.buf[k];
+    if(!e) continue;
+    // T1: deprioritize PM-generated events — avoids recursive ghost loops
+    if(e.fromPM&&Math.random()<0.7) continue;
+    if(S.novelty>0.3&&age<PM.len*0.3&&Math.random()<S.novelty) continue;
+    // v20.8 Task 6: favor events matching current voice identity (60% filter)
+    if(e.voice!==undefined&&e.voice!==S.voice&&Math.random()<0.6) continue;
+    // T2: temporal bias — recent events weight more (natural phrase continuation)
+    var age=(PM.i-k+PM.len)%PM.len;
+    var timeBias=1-(age/PM.len);
+    var w=(e.consEnv*0.6+e.semEnv*0.4)*(0.5+e.energy*0.5)*(0.6+timeBias*0.4);
+    // Task 7 v21.2: convMode shapes memory selection
+    if(S.convMode===1) w*=1.3;   // MIMIC: reuse familiar material
+    else if(S.convMode===2) w*=0.7; // OPPOSE: avoid repetition
+    if(w>bestW&&Math.random()<0.6){best=e;bestW=w;}
+  }
+  return best;
+}
+
+function pmSpawnStutter(amp,durScale){
+  var buf=S.bufA||S.bufB;
+  if(!buf||!gainSum) return;
+  var dur=(0.015+Math.random()*0.035)*(durScale||0.8);
+  var src=AC.createBufferSource(); src.buffer=buf;
+  var g=AC.createGain(); g.gain.value=0;
+  var t0=AC.currentTime;
+  var fade=Math.min(0.005,dur*0.2);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(amp,t0+dur*0.35);
+  g.gain.linearRampToValueAtTime(0.0001,t0+dur-fade);
+  g.gain.setValueAtTime(0.0001,t0+dur);
+  var el=AC.currentTime-playStart;
+  var off=Math.max(0,Math.min(buf.duration-0.01,buf.duration>0?(el%buf.duration):0));
+  src.connect(g); g.connect(gainSum);
+  src.start(t0,off,dur+0.015);
+  src.stop(t0+dur+0.025);
+  src.onended=function(){try{src.disconnect();g.disconnect();}catch(e){}};
+}
+
+function pmReplay(now,e,delayMs,isResponse){
+  if(!e) return;
+  delayMs=delayMs||0;
+  // Task 1 v21.2.1: snapshot conv state at schedule time — use snap inside closure
+  var snap={convMode:S.convMode,convEnv:S.convEnv,phraseEnv:S.phraseEnv};
+  function doReplay(){
+    var phraseVar=0.9+snap.phraseEnv*0.2;
+    var respScale=isResponse?0.75:1.0;
+    // Task 6: MIMIC boost (snap, not live S)
+    var mimicBoost=snap.convMode===1?(1+snap.convEnv*0.15):1.0;
+    S.consEnv=Math.max(S.consEnv,e.consEnv*0.7*phraseVar*respScale*mimicBoost);
+    S.semEnv=Math.max(S.semEnv,e.semEnv*0.7*phraseVar*respScale*mimicBoost);
+    // Task 4: OPPOSE partial inversion (-0.7 not -1.0)
+    S.consDir=e.consDir*(isResponse?0.5:0.6)*(snap.convMode===2?-0.7:1.0);
+    S.targetMatter=clamp(S.targetMatter+(e.semEnv*e.energy)*0.006);
+    if(e.zone&&Math.random()<0.5) pmSpawnStutter(0.08*(1-S.dsmear),0.8);
+    // T1: inject PM-marked snapshot
+    PM.buf[PM.i]={
+      t:now+delayMs/1000, consEnv:e.consEnv*0.7, semEnv:e.semEnv*0.7,
+      consDir:e.consDir*0.6, zone:e.zone,
+      energy:e.energy*0.6, smear:S.dsmear, form:S.dform, fromPM:true
+    };
+    PM.i=(PM.i+1)%PM.len;
+  }
+  if(delayMs>0) setTimeout(doReplay,delayMs);
+  else doReplay();
+  S.pmLastReplay=now;
+}
+
+function pmTick(now,dt){
+  if(!S.pmEnabled) return;
+  // Decay memory
+  for(var k=0;k<PM.len;k++){
+    var e=PM.buf[k];
+    if(!e) continue;
+    e.consEnv*=S.pmDecay; e.semEnv*=S.pmDecay;
+  }
+  // PQ: compute snap delay toward next implicit pulse
+  var delayMs=0;
+  if(S.pqEnabled&&S.pqIntervals.length>=3){
+    var toGrid=1-S.pqPhase;                     // distance to next beat
+    var snapWindow=0.18;                         // ~30ms at 180ms interval
+    if(toGrid<snapWindow) delayMs=toGrid*S.pqInterval*1000;
+    // if we just passed the beat and are very close, replay immediately
+    if(S.pqPhase<0.05) delayMs=0;
+  }
+  // Replay: more likely in low-energy gaps, cooldown 120ms
+  // Task 4: phrase-shaped density — build/peak → more replay; idle → almost none
+  var base=(0.04+S.pmDensity*0.12)*(0.4+S.phraseEnv*0.6);
+  // Task 3: intent modulates PM replay probability
+  if(S.intent===1) base*=1.4;        // follow → denser
+  else if(S.intent===2) base*=0.6;   // contrast → sparse
+  else if(S.intent===3) base*=0.5;   // call → hold back
+  else if(S.intent===4) base*=0.2;   // silence → almost nothing
+  var energyGate=1-S.energyFac;
+  var cooldown=(now-S.pmLastReplay)>120;
+  if(S.playing&&cooldown&&Math.random()<base*energyGate){
+    var e=pmPick();
+    if(e) pmReplay(now,e,delayMs);
+  }
+}
+
+// ── MOTIF MUTATION ENGINE (v20.3) ────────────────────────────────
+function motifMutationFactor(){
+  var base=Math.min(1,S.motifGen*0.15+(S.entropyEff||S.entropy)*0.3);
+  base=Math.min(1,base*(1+S.novelty*0.8));
+  // Task 7 v21.2: OPPOSE → more mutation (contrast identity)
+  if(S.convMode===2) base=Math.min(1,base*1.3);
+  return base;
+}
+
+// ── PHRASE MACRO MEMORY (v20.5) ──────────────────────────────────
+function pickPhrase(){
+  if(S.phraseMem.length===0) return null;
+  return S.phraseMem[Math.floor(Math.random()*S.phraseMem.length)];
+}
+
+function applyPhraseContour(phrase){
+  if(!phrase||!phrase.env||phrase.env.length===0) return;
+  var len=phrase.env.length;
+  var idx=0;
+  // Replay step interval: use captured IOI, min 25ms, max 100ms
+  var stepMs=Math.max(25,Math.min(100,(phrase.interval||0.2)*1000));
+  function step(){
+    if(idx>=len||!S.playing) return;
+    var pe=phrase.env[idx];
+    var ce=phrase.cons[idx];
+    // Task 3: dominance scales injection — warped by novelty (_domWarp) when repetitive
+    var dom=S.phraseDom*(S._domWarp||1);
+    S.phraseEnv+=(pe-S.phraseEnv)*(0.2+dom*0.5);
+    S.consEnv=Math.max(S.consEnv,ce*(0.5+dom*0.5));
+    idx++;
+    if(idx<len) setTimeout(step,stepMs);
+  }
+  step();
+}
+
+// ── CALL / RESPONSE ENGINE (v20.2) ───────────────────────────────
+function triggerResponse(){
+  // v22 Task 6: explicit lastSpeaker state (not heuristic flip)
+  S.voiceTarget=S.lastSpeaker===0?1:0;
+  S.lastSpeaker=S.voiceTarget;
+  var useMotif=MOTIFS.list.length>0&&Math.random()<0.6;
+  if(useMotif){
+    S.motifActive=true;
+    S.motif=MOTIFS.list[(Math.random()*MOTIFS.list.length)|0];
+    S.motifIndex=0; S.motifTimer=0;
+    S.motifGen=0;   // Task 2: generation reset on response trigger
+  } else {
+    var ev=pmPick();
+    if(ev) pmReplay(Date.now(),ev,0,true);  // isResponse=true
+  }
+  // crResponding flag decays after 400ms
+  setTimeout(function(){S.crResponding=false;},400);
+  // Task 5: intent coupling — replay phrase macro shape on CALL/CONTRAST
+  if(S.intent===3||S.intent===2){
+    var pp=pickPhrase();
+    if(pp) applyPhraseContour(pp);
+  }
+}
+
+// ── MOTIF QUANTIZATION + HUMAN SWING (v20.1) ─────────────────────
+// pqQuantize: snap a time value to the next implicit pulse grid
+function pqQuantize(timeNow,interval){
+  if(!interval||interval<0.08) return timeNow;  // Task 8: lock intensity
+  var phase=(timeNow%interval)/interval;
+  var toNext=(1-phase)*interval;
+  return timeNow+toNext;
+}
+
+// pqSwingOffset: asymmetric human feel — positive beat > negative beat
+function pqSwingOffset(interval,swingAmt,phaseToggle){
+  var base=interval*0.12;   // max 12% of grid
+  var swing=base*swingAmt;
+  return phaseToggle?swing:-swing*0.6;   // asymmetric: +12% / -7.2%
+}
+
+// scheduleMotifStep: deferred step injection via setTimeout
+function scheduleMotifStep(step,scheduledTime){
+  var varScale=0.85+S.phraseEnv*0.3;
+  var mut=motifMutationFactor();
+  // Task 1 v21.2.1: snapshot state NOW — callback reads snap, not live S
+  var snap={convMode:S.convMode,convEnv:S.convEnv,intent:S.intent};
+  // Task 4: timing drift proportional to mutation
+  var tDrift=(Math.random()-0.5)*S.pqInterval*0.08*mut;
+  tDrift*=(1+S.novelty*0.5);
+  // convMode timing adjustment (uses snap)
+  if(snap.convMode===1) tDrift*=0.5;
+  else if(snap.convMode===2) tDrift*=(1+snap.convEnv*0.2);  // Task 4 reduced: 0.2 was 0.3
+  var finalT=Math.max(AC.currentTime,scheduledTime+tDrift);
+  var dtMs=Math.max(0,(finalT-AC.currentTime)*1000);
+  var formDrift=1+(Math.random()-0.5)*0.08*mut;
+  // convMode formDrift (uses snap)
+  if(snap.convMode===1) formDrift=1+(Math.random()-0.5)*0.04;
+  else if(snap.convMode===2) formDrift=1+(Math.random()-0.5)*0.12;
+  setTimeout(function(){
+    var eVar=1+(Math.random()-0.5)*0.3*mut;
+    // Task 1: use snap (not live S) for conv behavior — state is frozen at schedule time
+    if(snap.convMode===1){ eVar*=(1+snap.convEnv*0.15); }   // Task 6: 0.15 (was 0.2)
+    else if(snap.convMode===2){ eVar*=0.7; }
+    S.consEnv=step.consEnv*varScale*eVar;
+    // Task 4: OPPOSE semEnv reduced: 0.15 (was 0.2)
+    S.semEnv=step.semEnv*varScale*(snap.convMode===2?1+snap.convEnv*0.15:1.0)*eVar;
+    var cDir=step.consDir*0.6;
+    if(snap.convMode===2) cDir*=-0.7;   // Task 4: partial inversion (-0.7 was -1.0)
+    S.consDir=cDir;
+    // Task 4: matter push scales with mutation
+    S.targetMatter=clamp(S.targetMatter+step.energy*0.01*(1+mut*0.5));
+    // Task 6: apply formant drift via fShift on next applyDSP tick
+    S._formDrift=formDrift;
+  },dtMs);
+}
+function togglePV(){
+  if(!pvNode||!S.pvEnabled){ setStatus('PV not available (iPhone or unsupported)',false); return; }
+  S.pvMode=S.pvMode==='hybrid'?'off':'hybrid';
+  updatePVButton();
+  setStatus('PV '+S.pvMode,S.pvMode==='hybrid');
+}
+function updatePVButton(){
+  var btn=document.getElementById('pvBtn');
+  if(!btn) return;
+  if(!S.pvEnabled){
+    btn.textContent='PV N/A'; btn.style.opacity='0.3'; btn.className='';
+  } else if(S.pvMode==='hybrid'){
+    btn.textContent='PV HYBRID'; btn.style.opacity='1'; btn.className='act';
+  } else {
+    btn.textContent='PV OFF'; btn.style.opacity='0.6'; btn.className='';
+  }
+}
+
+// ================================================================
+// CLIP SYSTEM v2 — upgraded Clip Manager + Text Sync + Timeline
+// Non-destructive: uses S.bufA/S.bufB, rebuildSource(), S.mixAB
+// Equal-power crossfade, pre-roll fade-in, intent mapping, freeze
+// ================================================================
+
+// ── STATE ────────────────────────────────────────────────────────
+S.samplePool = {clips:[]};
+S.deckA = {clipId:null, active:false, startTime:0};
+S.deckB = {clipId:null, active:false, startTime:0};
+S.deckMix = 0;       // [0-1] current crossfade position
+S.deckTarget = 0;    // [0-1] target for EMA
+S.deckFreezeActive = false;
+
+S.timeline = [];
+S.timelineIndex = 0;
+S.timelineStart = 0;
+S.timelineRunning = false;
+
+S.textState = {activeClipId:null, startTime:0, progress:0, wordIndex:0, emphasis:false};
+
+S.visualState = {text:'', progress:0, wordIndex:0, emphasis:false, rms:0, smear:0, form:0};
+
+// ── CLIP ANALYSIS (offline, load-time only) ───────────────────────
+function analyzeClip(buffer){
+  var ch = buffer.getChannelData(0);
+  var len = ch.length;
+
+  // 1. RMS — full signal
+  var sq = 0;
+  for(var i = 0; i < len; i++) sq += ch[i]*ch[i];
+  var rms = Math.sqrt(sq / len);
+
+  // 2. Spectral centroid — sampled DFT (512 pts, strided)
+  var N = 512, step = Math.max(1, Math.floor(len / N));
+  var centroid = 0, totalMag = 0;
+  for(var b = 1; b < N/2; b++){
+    var re = 0, im = 0;
+    for(var k = 0; k < N; k++){
+      var s = ch[Math.min(k * step, len-1)];
+      var a = 2 * Math.PI * b * k / N;
+      re += s * Math.cos(a);
+      im += s * Math.sin(a);
+    }
+    var mag = Math.sqrt(re*re + im*im) / N;
+    centroid += b * mag;
+    totalMag += mag;
+  }
+  centroid = totalMag > 0 ? (centroid / totalMag) / (N/2) : 0;  // normalized [0-1]
+
+  // 3. Energy curve — 64 buckets RMS
+  var buckets = 64, bLen = Math.floor(len / buckets);
+  var ec = new Float32Array(buckets);
+  for(var bi = 0; bi < buckets; bi++){
+    var s2 = 0;
+    for(var j = 0; j < bLen; j++){var v = ch[bi*bLen+j]; s2+=v*v;}
+    ec[bi] = Math.sqrt(s2 / bLen);
+  }
+  return {rms:rms, centroid:centroid, energyCurve:ec};
+}
+
+function parseWords(text){
+  if(!text || !text.trim()) return null;
+  var ws = text.trim().split(/\s+/);
+  if(!ws.length) return null;
+  // Fix 5: char-proportional timing — longer words occupy more time
+  var totalChars = ws.reduce(function(a,w){ return a + w.length; }, 0);
+  if(totalChars === 0) totalChars = 1;
+  var acc = 0;
+  return ws.map(function(w){
+    var t = acc / totalChars;
+    acc += w.length;
+    return {t:t, w:w, e:/[!?.]$/.test(w)};
+  });
+}
+
+// ── INTENT MAPPING (clip.intent → S.intent) ──────────────────────
+var INTENT_MAP = {
+  'statement':1, 'follow':1,
+  'attack':2,    'contrast':2,
+  'reflection':3,'call':3,
+  'silence':4
+};
+
+function applyClipIntent(clip){
+  if(!clip || !clip.intent) return;
+  var mapped = INTENT_MAP[clip.intent.toLowerCase()];
+  if(mapped !== undefined){
+    // lock intent for this clip's duration (uses convLock mechanism)
+    S.intent = mapped;
+    S.intentEnv = 1.0;
+    S.intentWeight = 1.0;   // Fix 4: fresh intent weight on new clip
+    S.convLock = Math.max(S.convLock, clip.duration * 1000 * 0.5);
+  }
+}
+
+// ── PUBLIC API ────────────────────────────────────────────────────
+function loadClip(file, textOrOpts){
+  var text = typeof textOrOpts === 'string' ? textOrOpts : (textOrOpts && textOrOpts.text)||'';
+  var intent = (textOrOpts && textOrOpts.intent)||null;
+  return new Promise(function(resolve, reject){
+    AC.resume();
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var ab = ev.target.result.slice(0);
+      function onDecoded(decoded){
+        // mono downmix
+        var mono = AC.createBuffer(1, decoded.length, decoded.sampleRate);
+        var d = mono.getChannelData(0);
+        for(var ch = 0; ch < decoded.numberOfChannels; ch++){
+          var src = decoded.getChannelData(ch);
+          for(var i = 0; i < d.length; i++) d[i] += src[i] / decoded.numberOfChannels;
+        }
+        // normalize
+        var pk = 0;
+        for(var i = 0; i < d.length; i++) if(Math.abs(d[i]) > pk) pk = Math.abs(d[i]);
+        if(pk > 0.001) for(var i = 0; i < d.length; i++) d[i] = d[i]/pk*0.9;
+        var analysis = analyzeClip(mono);
+        var id = 'clip_' + Date.now() + '_' + (Math.random()*1e4|0);
+        var clip = {
+          id: id,
+          buffer: mono,
+          duration: mono.duration,
+          rms: analysis.rms,
+          centroid: analysis.centroid,
+          energyCurve: analysis.energyCurve,
+          text: text,
+          words: parseWords(text),
+          intent: intent,
+          ready: true,
+          name: file.name.length > 22 ? file.name.slice(0,20)+'..' : file.name
+        };
+        S.samplePool.clips.push(clip);
+        renderClipList();
+        resolve(clip);
+      }
+      function onErr(e){ reject(e); }
+      var pr;
+      try{ pr = AC.decodeAudioData(ab); }catch(e){ pr = null; }
+      if(pr && typeof pr.then === 'function') pr.then(onDecoded).catch(onErr);
+      else AC.decodeAudioData(ab.slice(0), onDecoded, onErr);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function playClipOnDeck(deckLabel, clipId){
+  var clip = getClip(clipId);
+  if(!clip) return;
+  if(deckLabel === 'A'){
+    S.bufA = clip.buffer;
+    S.deckA.clipId = clipId;
+    S.deckA.active = true;
+    S.deckA.startTime = AC.currentTime + 0.03;  // 30ms pre-roll
+    rebuildSource('A');
+    document.getElementById('statA').textContent = clip.name;
+    // Fade in via gainA (30ms muted → 1.0)
+    if(gainA){
+      gainA.gain.setValueAtTime(0, AC.currentTime);
+      gainA.gain.linearRampToValueAtTime(1-S.mixAB, AC.currentTime+0.03);
+    }
+  } else {
+    S.bufB = clip.buffer;
+    S.deckB.clipId = clipId;
+    S.deckB.active = true;
+    S.deckB.startTime = AC.currentTime + 0.03;
+    rebuildSource('B');
+    document.getElementById('statB').textContent = clip.name;
+    if(gainB){
+      gainB.gain.setValueAtTime(0, AC.currentTime);
+      gainB.gain.linearRampToValueAtTime(S.mixAB, AC.currentTime+0.03);
+    }
+  }
+  applyClipIntent(clip);
+  // update text tracking
+  var active = deckLabel==='A' ? S.deckA : S.deckB;
+  S.textState.activeClipId = clipId;
+  S.textState.startTime = AC.currentTime;
+}
+
+function getClip(id){
+  return S.samplePool.clips.find(function(c){ return c.id===id; })||null;
+}
+
+// ── CROSSFADE (equal-power) ────────────────────────────────────────
+function crossfadeTo(deckLabel, durationMs){
+  S.deckTarget = deckLabel==='B' ? 1 : 0;
+  // deckTick drives EMA toward target; equal-power applied there
+}
+
+function buildTimeline(events){
+  S.timeline = (events||[]).slice().sort(function(a,b){return a.t-b.t;});
+  document.getElementById('tlStatus').textContent = S.timeline.length + ' events';
+}
+
+// Fix 7: timeline composer helper — builds structured clip blocks
+function addClipBlock(opts){
+  if(!opts._t) opts._t = 0;
+  var t = opts._t;
+  var evts = opts._evts || [];
+  if(opts.clipA) evts.push({t:t, type:'PLAY', target:'A', clipId:opts.clipA});
+  if(opts.clipB) evts.push({t:t+0.1, type:'PLAY', target:'B', clipId:opts.clipB});
+  if(opts.crossfade) evts.push({t:t+(opts.crossfade.after||1), type:'CROSSFADE', target:opts.crossfade.to||'B', duration:opts.crossfade.dur||500});
+  if(opts.intent) evts.push({t:t+0.05, type:'SET_PARAM', target:'matter', value:opts.intent==='attack'?0.8:opts.intent==='reflection'?0.2:0.4});
+  if(opts.freeze !== undefined) evts.push({t:t, type:'PLAY', target:'A', clipId:opts.clipA||null, freeze:opts.freeze});
+  opts._t = t + (opts.dur || 4);
+  opts._evts = evts;
+  return opts;
+}
+
+// Finalize composer and load into timeline
+function finalizeBlocks(opts){
+  buildTimeline(opts._evts || []);
+}
+
+function startTimeline(){
+  S.timelineIndex = 0;
+  S.timelineStart = Date.now()/1000;
+  S.timelineRunning = true;
+  document.getElementById('tlStatus').textContent = 'running';
+  if(!S.playing) startPlayback();
+}
+
+// ── DECK TICK (equal-power crossfade + freeze DSP) ────────────────
+function deckTick(dt){
+  // EMA toward target
+  S.deckMix += (S.deckTarget - S.deckMix) * 0.05;
+  var x = clamp(S.deckMix);
+  // Equal-power crossfade via S.mixAB
+  S.mixAB = x;
+  // Sync UI slider
+  var sl = document.getElementById('mix'), sv = document.getElementById('mixV');
+  if(sl) sl.value = Math.round(x*100);
+  if(sv) sv.textContent = Math.round(x*100);
+}
+
+// ── TIMELINE ENGINE ───────────────────────────────────────────────
+function processTimeline(elapsed){
+  if(!S.timelineRunning) return;
+  while(S.timelineIndex < S.timeline.length){
+    var ev = S.timeline[S.timelineIndex];
+    if(elapsed < ev.t) break;
+    executeTimelineEvent(ev);
+    S.timelineIndex++;
+  }
+  if(S.timelineIndex >= S.timeline.length && S.timeline.length > 0){
+    S.timelineRunning = false;
+    S.deckFreezeActive = false;
+    setStatus('timeline done', false);
+    document.getElementById('tlStatus').textContent = 'done';
+  }
+}
+
+function executeTimelineEvent(ev){
+  if(ev.type === 'PLAY' && ev.clipId){
+    playClipOnDeck(ev.target||'A', ev.clipId);
+    if(!S.playing) startPlayback();
+  } else if(ev.type === 'CROSSFADE' || ev.type === 'CROSS'){
+    crossfadeTo(ev.target||'B', ev.duration||500);
+  } else if(ev.type === 'SET_PARAM'){
+    if(ev.target === 'entropy' && ev.value!==undefined) S.entropy = clamp(ev.value);
+    if(ev.target === 'smear'   && ev.value!==undefined) S.targetMatter = clamp(Math.pow(ev.value,0.45));
+    if(ev.target === 'form'    && ev.value!==undefined) S.targetMatter = clamp(1-Math.pow(ev.value,0.67));
+    if(ev.target === 'matter'  && ev.value!==undefined) S.targetMatter = clamp(ev.value);
+  } else if(ev.type === 'LIVE_ON'){
+    S.deckA.active = false; S.deckB.active = false;
+  } else if(ev.type === 'LIVE_OFF'){
+    stopPlayback();
+  }
+  // Freeze mode — modifies DSP feel (applied in applyDSP via S.deckFreezeActive)
+  S.deckFreezeActive = !!ev.freeze;
+  var label = ev.t.toFixed(1) + 's ' + ev.type + (ev.clipId?' ['+ev.clipId.slice(-4)+']':'');
+  document.getElementById('tlStatus').textContent = label;
+}
+
+// ── TEXT SYNC ─────────────────────────────────────────────────────
+function updateTextState(elapsed){
+  var clipId = S.deckA.active ? S.deckA.clipId : (S.deckB.active ? S.deckB.clipId : null);
+  if(!clipId){ S.textState.progress = 0; S.visualState.text = ''; return; }
+  var clip = getClip(clipId);
+  if(!clip || !clip.ready) return;
+  var tStart = S.deckA.active ? S.deckA.startTime : S.deckB.startTime;
+  var t = AC.currentTime - tStart;
+  var prog = clamp(t / clip.duration);
+  S.textState.activeClipId = clipId;
+  S.textState.progress = prog;
+
+  // Word tracking
+  var text = clip.text || '';
+  var wIdx = 0;
+  var emph = false;
+  if(clip.words && clip.words.length > 0){
+    for(var i = 0; i < clip.words.length; i++){
+      if(clip.words[i].t <= prog) wIdx = i;
+    }
+    S.textState.wordIndex = wIdx;
+    S.textState.emphasis = !!clip.words[wIdx].e;
+    emph = S.textState.emphasis;
+    // build highlighted text
+    text = clip.words.map(function(w,i){
+      return i===wIdx ? (w.e ? '[!'+w.w+'!]':'['+w.w+']') : w.w;
+    }).join(' ');
+  }
+
+  S.visualState.text = text;
+  S.visualState.progress = prog;
+  S.visualState.wordIndex = wIdx;
+  S.visualState.emphasis = emph;
+}
+
+// ── VISUAL STATE UPDATE ───────────────────────────────────────────
+function updateVisualState(){
+  S.visualState.rms   = S.rms;
+  S.visualState.smear = S.dsmear;
+  S.visualState.form  = S.dform;
+  // Fix 6: energyCurve drives bg intensity — audio shape → visual
+  var ecVal = 0;
+  var activeClip = getClip(S.textState.activeClipId);
+  if(activeClip && activeClip.energyCurve && S.textState.progress > 0){
+    var ecIdx = Math.min(63, Math.floor(S.textState.progress * 64));
+    ecVal = activeClip.energyCurve[ecIdx];
+  }
+  S.visualState.energyCurveVal = ecVal;
+  var vtEl = document.getElementById('vsText');
+  var vbEl = document.getElementById('vsTextBg');
+  if(vtEl) vtEl.textContent = S.visualState.text || '';
+  if(vbEl) vbEl.style.width = (S.visualState.progress*100).toFixed(1)+'%';
+  // Word emphasis pulse
+  if(S.visualState.emphasis && vbEl){
+    vbEl.style.background = 'rgba(255,0,255,.15)';
+  } else if(vbEl){
+    vbEl.style.background = 'rgba(0,255,255,.06)';
+  }
+}
+
+// ── CLIP LIST UI ──────────────────────────────────────────────────
+function renderClipList(){
+  var el = document.getElementById('clipList');
+  if(!el) return;
+  el.innerHTML = '';
+  if(S.samplePool.clips.length===0){
+    document.getElementById('clipStatus').textContent = 'no clips';
+    return;
+  }
+  document.getElementById('clipStatus').textContent = S.samplePool.clips.length + ' clip(s)';
+  S.samplePool.clips.forEach(function(c){
+    var div = document.createElement('div');
+    div.className = 'titem';
+    div.innerHTML = '<span class="tname">'+c.name+'</span>'
+      + '<span class="tdur">' + c.duration.toFixed(1) + 's</span>'
+      + '<button onclick="playClipOnDeck(\'A\',\''+c.id+'\')">→A</button>'
+      + '<button onclick="playClipOnDeck(\'B\',\''+c.id+'\')">→B</button>'
+      + '<button onclick="removeClip(\''+c.id+'\')" style="color:var(--mag)">✕</button>';
+    el.appendChild(div);
+  });
+}
+
+function removeClip(id){
+  S.samplePool.clips = S.samplePool.clips.filter(function(c){ return c.id!==id; });
+  renderClipList();
+}
+
+// ── INIT CLIP SYSTEM ─────────────────────────────────────────────
+function initClipSystem(){
+  var loadBtn  = document.getElementById('clipLoadBtn');
+  var fileIn   = document.getElementById('clipFileIn');
+  var deckMixSl= document.getElementById('deckMixSlider');
+  var deckABtn = document.getElementById('deckABtn');
+  var deckBBtn = document.getElementById('deckBBtn');
+  var tlPlay   = document.getElementById('tlPlayBtn');
+  var tlStop   = document.getElementById('tlStopBtn');
+
+  loadBtn.addEventListener('click', function(){
+    AC.resume();
+    fileIn.value='';
+    setTimeout(function(){ fileIn.value=''; }, 0);  // Fix 8: iOS Safari same-file reload guard
+    fileIn.click();
+  });
+  fileIn.addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    var text = document.getElementById('clipText').value||'';
+    document.getElementById('clipStatus').textContent = 'loading...';
+    loadClip(file, {text:text, intent:null}).then(function(){
+      fileIn.value='';
+    }).catch(function(){
+      document.getElementById('clipStatus').textContent='error'; fileIn.value='';
+    });
+  });
+
+  deckMixSl.addEventListener('input', function(e){
+    S.deckTarget = e.target.value/100;
+  });
+  deckABtn.addEventListener('click', function(){
+    if(S.samplePool.clips.length>0) playClipOnDeck('A', S.samplePool.clips[0].id);
+  });
+  deckBBtn.addEventListener('click', function(){
+    var idx = S.samplePool.clips.length>1?1:0;
+    if(S.samplePool.clips.length>0) playClipOnDeck('B', S.samplePool.clips[idx].id);
+  });
+
+  tlPlay.addEventListener('click', function(){
+    if(S.timeline.length===0){
+      // auto-build demo from loaded clips
+      var evts=[];
+      S.samplePool.clips.forEach(function(c,i){
+        if(i>0) evts.push({t:i*c.duration-0.5,type:'CROSSFADE',target:i%2===0?'A':'B',duration:500});
+        evts.push({t:i*c.duration,type:'PLAY',target:i%2===0?'A':'B',clipId:c.id});
+      });
+      buildTimeline(evts);
+    }
+    startTimeline();
+  });
+  tlStop.addEventListener('click', function(){
+    S.timelineRunning=false; S.deckFreezeActive=false;
+    document.getElementById('tlStatus').textContent='stopped';
+  });
+}
+
+
+
+// ── CLIP POOL ────────────────────────────────────────────────────
+S.samplePool = {clips:[]};
+
+S.deckA = {clipId:null,gain:1,active:false,startTime:0};
+S.deckB = {clipId:null,gain:0,active:false,startTime:0};
+S.deckMix = 0;
+S.deckTarget = 0;
+
+S.timeline = [];
+S.timelineIndex = 0;
+S.timelineStart = 0;
+S.timelineRunning = false;
+
+S.textState = {activeClipId:null,startTime:0,progress:0};
+
+S.visualState = {text:'',progress:0,rms:0,smear:0,form:0};
+
+// ── ANALYSIS ─────────────────────────────────────────────────────
+function analyzeClip(buffer){
+  var ch=buffer.getChannelData(0);
+  var len=ch.length;
+  // RMS
+  var sq=0; for(var i=0;i<len;i++) sq+=ch[i]*ch[i];
+  var rms=Math.sqrt(sq/len);
+  // Spectral centroid via simple binned FFT (offline, 512 bins)
+  var fftN=512, centroid=0, totalMag=0;
+  for(var b=0;b<fftN/2;b++){
+    var mag=0,cos2=0,sin2=0;
+    var step=Math.max(1,Math.floor(len/fftN));
+    for(var k=0;k<fftN&&k*step<len;k++){
+      var a=2*Math.PI*b*k/fftN;
+      cos2+=ch[k*step]*Math.cos(a);
+      sin2+=ch[k*step]*Math.sin(a);
+    }
+    mag=Math.sqrt(cos2*cos2+sin2*sin2)/fftN;
+    centroid+=b*mag; totalMag+=mag;
+  }
+  centroid=totalMag>0?centroid/totalMag:0;
+  // Energy curve — 64 buckets
+  var buckets=64;
+  var bLen=Math.floor(len/buckets);
+  var ec=new Float32Array(buckets);
+  for(var bi=0;bi<buckets;bi++){
+    var s=0;
+    for(var j=0;j<bLen;j++){var v=ch[bi*bLen+j];s+=v*v;}
+    ec[bi]=Math.sqrt(s/bLen);
+  }
+  return{rms:rms,centroid:centroid/fftN,energyCurve:ec};
+}
+
+function getClip(id){
+  return S.samplePool.clips.find(function(c){return c.id===id;})||null;
+}
+
+function loadClip(file,text){
+  return new Promise(function(resolve,reject){
+    var id='clip_'+Date.now();
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var ab=ev.target.result.slice(0);
+      var onDecoded=function(decoded){
+        var monoC=AC.createBuffer(1,decoded.length,decoded.sampleRate);
+        var d=monoC.getChannelData(0);
+        for(var ch=0;ch<decoded.numberOfChannels;ch++){
+          var src=decoded.getChannelData(ch);
+          for(var i=0;i<d.length;i++) d[i]+=src[i]/decoded.numberOfChannels;
+        }
+        // normalize
+        var pk=0; for(var i=0;i<d.length;i++) if(Math.abs(d[i])>pk) pk=Math.abs(d[i]);
+        if(pk>0.001) for(var i=0;i<d.length;i++) d[i]=d[i]/pk*0.9;
+        var analysis=analyzeClip(monoC);
+        var clip={
+          id:id, buffer:monoC, text:text||'',
+          words:parseWords(text||''),
+          duration:monoC.duration, analysis:analysis, ready:true,
+          name:file.name.length>20?file.name.slice(0,18)+'..':file.name
+        };
+        S.samplePool.clips.push(clip);
+        renderClipList();
+        resolve(clip);
+      };
+      var onErr=function(e){reject(e);};
+      var pr;
+      try{pr=AC.decodeAudioData(ab);}catch(e){pr=null;}
+      if(pr&&typeof pr.then==='function') pr.then(onDecoded).catch(onErr);
+      else AC.decodeAudioData(ab.slice(0),onDecoded,onErr);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── DUAL DECK ────────────────────────────────────────────────────
+function playClipOnDeck(deckLabel,clipId){
+  var clip=getClip(clipId);
+  if(!clip) return;
+  if(deckLabel==='A'){
+    S.bufA=clip.buffer;
+    S.deckA.clipId=clipId; S.deckA.active=true;
+    S.deckA.startTime=AC.currentTime;
+    rebuildSource('A');
+    document.getElementById('statA').textContent=clip.name;
+  } else {
+    S.bufB=clip.buffer;
+    S.deckB.clipId=clipId; S.deckB.active=true;
+    S.deckB.startTime=AC.currentTime;
+    rebuildSource('B');
+    document.getElementById('statB').textContent=clip.name;
+  }
+  // text state tracks whichever deck is active
+  S.textState.activeClipId=clipId;
+  S.textState.startTime=AC.currentTime;
+}
+
+function crossfadeTo(deckLabel,durationMs){
+  S.deckTarget=deckLabel==='B'?1:0;
+  // gradual crossfade via S.mixAB (updated in deckTick below)
+}
+
+function deckTick(dt){
+  // crossfade
+  S.deckMix+=(S.deckTarget-S.deckMix)*0.05;
+  S.mixAB=clamp(S.deckMix);
+  // sync mixAB slider display
+  var sl=document.getElementById('mix');
+  if(sl) sl.value=Math.round(S.mixAB*100);
+  var sv=document.getElementById('mixV');
+  if(sv) sv.textContent=Math.round(S.mixAB*100);
+}
+
+// ── TIMELINE ─────────────────────────────────────────────────────
+function processTimeline(elapsed){
+  if(!S.timelineRunning) return;
+  while(S.timelineIndex<S.timeline.length){
+    var ev=S.timeline[S.timelineIndex];
+    if(elapsed<ev.t) break;
+    executeTimelineEvent(ev);
+    S.timelineIndex++;
+  }
+  if(S.timelineIndex>=S.timeline.length){
+    S.timelineRunning=false;
+    setStatus('timeline done',false);
+    document.getElementById('tlStatus').textContent='done';
+  }
+}
+
+function executeTimelineEvent(ev){
+  if(ev.type==='PLAY'&&ev.clipId){
+    playClipOnDeck(ev.target||'A',ev.clipId);
+    if(!S.playing) startPlayback();
+  } else if(ev.type==='CROSS'){
+    crossfadeTo(ev.target||'B',ev.duration||500);
+  } else if(ev.type==='SET_PARAM'){
+    if(ev.target==='smear'&&ev.value!==undefined) S.entropy=clamp(ev.value);
+    if(ev.target==='form'&&ev.value!==undefined) S.targetMatter=clamp(1-ev.value);
+  } else if(ev.type==='LIVE_ON'){
+    S.deckA.active=false; S.deckB.active=false;  // hand control back
+  } else if(ev.type==='LIVE_OFF'){
+    stopPlayback();
+  }
+  document.getElementById('tlStatus').textContent='t='+ev.t.toFixed(1)+' '+ev.type;
+}
+
+// ── TEXT MANAGER ─────────────────────────────────────────────────
+function updateTextState(elapsed){
+  var clipId=S.deckA.active?S.deckA.clipId:(S.deckB.active?S.deckB.clipId:null);
+  if(!clipId){S.textState.progress=0;return;}
+  var clip=getClip(clipId);
+  if(!clip) return;
+  S.textState.activeClipId=clipId;
+  var t=S.deckA.active?AC.currentTime-S.deckA.startTime:AC.currentTime-S.deckB.startTime;
+  S.textState.progress=clamp(t/clip.duration);
+  // current word from timed words
+  var text=clip.text;
+  if(clip.words){
+    var wIdx=0;
+    for(var i=0;i<clip.words.length;i++){
+      if(clip.words[i].t<=S.textState.progress) wIdx=i;
+    }
+    // highlight current word
+    var words=clip.words;
+    text=words.map(function(w,i){
+      return i===wIdx?'['+w.w+']':w.w;
+    }).join(' ');
+  }
+  S.visualState.text=text;
+  S.visualState.progress=S.textState.progress;
+}
+
+// ── VISUAL STATE UPDATE ───────────────────────────────────────────
+function updateVisualState(){
+  S.visualState.rms=S.rms;
+  S.visualState.smear=S.dsmear;
+  S.visualState.form=S.dform;
+  // update DOM
+  var vtEl=document.getElementById('vsText');
+  var vbEl=document.getElementById('vsTextBg');
+  if(vtEl&&S.visualState.text) vtEl.textContent=S.visualState.text;
+  if(vbEl) vbEl.style.width=(S.visualState.progress*100).toFixed(1)+'%';
+}
+
+// ── CLIP LIST UI ─────────────────────────────────────────────────
+function renderClipList(){
+  var el=document.getElementById('clipList');
+  if(!el) return;
+  el.innerHTML='';
+  if(S.samplePool.clips.length===0){
+    document.getElementById('clipStatus').textContent='no clips';
+    return;
+  }
+  document.getElementById('clipStatus').textContent=S.samplePool.clips.length+' clip(s)';
+  S.samplePool.clips.forEach(function(c){
+    var div=document.createElement('div');
+    div.className='titem';
+    div.innerHTML='<span class="tname">'+c.name+'</span>'
+      +'<span class="tdur">'+c.duration.toFixed(1)+'s</span>'
+      +'<button onclick="playClipOnDeck(\'A\',\''+c.id+'\')">→A</button>'
+      +'<button onclick="playClipOnDeck(\'B\',\''+c.id+'\')">→B</button>'
+      +'<button onclick="removeClip(\''+c.id+'\')" style="color:var(--mag)">del</button>';
+    el.appendChild(div);
+  });
+}
+
+function removeClip(id){
+  S.samplePool.clips=S.samplePool.clips.filter(function(c){return c.id!==id;});
+  renderClipList();
+}
+
+// ── INIT CLIP SYSTEM UI ──────────────────────────────────────────
+function initClipSystem(){
+  var loadBtn=document.getElementById('clipLoadBtn');
+  var fileIn=document.getElementById('clipFileIn');
+  var deckMix=document.getElementById('deckMixSlider');
+  var deckABtn=document.getElementById('deckABtn');
+  var deckBBtn=document.getElementById('deckBBtn');
+  var tlPlay=document.getElementById('tlPlayBtn');
+  var tlStop=document.getElementById('tlStopBtn');
+
+  loadBtn.addEventListener('click',function(){
+    AC.resume();
+    fileIn.value='';
+    fileIn.click();
+  });
+  fileIn.addEventListener('change',function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    var text=document.getElementById('clipText').value||'';
+    document.getElementById('clipStatus').textContent='loading...';
+    loadClip(file,text).then(function(clip){
+      document.getElementById('clipStatus').textContent=S.samplePool.clips.length+' clip(s)';
+      fileIn.value='';
+    }).catch(function(err){
+      document.getElementById('clipStatus').textContent='error';
+      fileIn.value='';
+    });
+  });
+
+  // Deck mix slider → S.deckTarget
+  deckMix.addEventListener('input',function(e){
+    S.deckTarget=e.target.value/100;
+  });
+  deckABtn.addEventListener('click',function(){
+    if(S.samplePool.clips.length>0) playClipOnDeck('A',S.samplePool.clips[0].id);
+  });
+  deckBBtn.addEventListener('click',function(){
+    if(S.samplePool.clips.length>1) playClipOnDeck('B',S.samplePool.clips[1].id);
+    else if(S.samplePool.clips.length>0) playClipOnDeck('B',S.samplePool.clips[0].id);
+  });
+
+  // Timeline controls
+  tlPlay.addEventListener('click',function(){
+    if(S.timeline.length===0){
+      // build demo timeline from loaded clips
+      S.timeline=[];
+      S.samplePool.clips.forEach(function(c,i){
+        S.timeline.push({t:i*c.duration,type:'PLAY',target:i%2===0?'A':'B',clipId:c.id});
+        if(i>0) S.timeline.push({t:i*c.duration-0.5,type:'CROSS',target:i%2===0?'A':'B',duration:500});
+      });
+    }
+    S.timelineIndex=0;
+    S.timelineStart=Date.now()/1000;
+    S.timelineRunning=true;
+    document.getElementById('tlStatus').textContent='running';
+    if(!S.playing) startPlayback();
+  });
+  tlStop.addEventListener('click',function(){
+    S.timelineRunning=false;
+    document.getElementById('tlStatus').textContent='stopped';
+  });
+}
+
+// ================================================================
+// VISUAL ENGINE — coupled to S.visualState + FFT + engine state
+// No audio changes. Renders to #vc canvas.
+// ================================================================
+
+var _ve = {
+  active: false,
+  bgHue: 200,
+  bgJitter: 0,      // Fix 3: coherent jitter state
+  turnOffset: 0,    // Fix 5: interpolated turn offset
+  last: 0,
+  frameCount: 0,
+  fps: 60           // Fix 10: adaptive fps
+};
+
+function startVisualEngine(canvas){
+  var DPR = window.devicePixelRatio||1;
+  var ctx = canvas.getContext('2d');
+  function resize(){
+    canvas.width  = Math.round(canvas.clientWidth  * DPR);
+    canvas.height = Math.round(canvas.clientHeight * DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  _ve.active = true;
+  _ve.last = performance.now();
+  (function frame(t){
+    if(!_ve.active) return;
+    requestAnimationFrame(frame);
+    var dt = (t - _ve.last)/1000;
+    _ve.last = t;
+    _ve.frameCount++;
+    // Fix 10: adaptive fps throttle
+    var smear = (S&&S.dsmear)||0, dom = (S&&S.phraseDom)||0;
+    _ve.fps = (smear < 0.2 && dom < 0.2) ? 30 : 60;
+    if(_ve.frameCount % Math.round(60/_ve.fps) !== 0) return;
+    veRenderFrame(ctx, canvas, dt);
+  })(performance.now());
+}
+
+function stopVisualEngine(){ _ve.active = false; }
+
+// ── LOG-REMAPPED FFT BINS ─────────────────────────────────────────
+function veGetLogBins(){
+  var src = window.fftBins;
+  if(!src || !src.length) return null;
+  var N = src.length, M = 128;
+  var out = new Float32Array(M);
+  for(var i = 0; i < M; i++){
+    var t = i/(M-1);
+    var idx = Math.min(N-1, Math.floor(Math.pow(t, 2.2)*(N-1)));
+    out[i] = src[idx];
+  }
+  return out;
+}
+
+// ── RENDER PIPELINE ───────────────────────────────────────────────
+function veRenderFrame(ctx, canvas, dt){
+  var W = canvas.clientWidth, H = canvas.clientHeight;
+  var smear = (S&&S.dsmear)||0;
+
+  // Fix 2: clean trail — composite 'copy' prevents brightness buildup
+  if(smear > 0.6){
+    ctx.globalCompositeOperation = 'copy';
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(canvas, 0, 2);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  veDrawBg(ctx, W, H, dt);
+  veDrawFFT(ctx, W, H);
+  veDrawPhraseAura(ctx, W, H);
+  veDrawText(ctx, W, H);
+  veDrawOverlays(ctx, W, H);
+}
+
+// ── A) BACKGROUND FIELD ───────────────────────────────────────────
+function veDrawBg(ctx, W, H, dt){
+  var intent = (S&&S.intent)||0;
+  var targetHue =
+    intent===1 ? 190 :
+    intent===2 ? 310 :
+    intent===3 ? 260 :
+                 210;
+  _ve.bgHue += (targetHue - _ve.bgHue) * 0.04;
+
+  // Fix 3: coherent jitter — Ornstein-Uhlenbeck-like (not white noise)
+  _ve.bgJitter += (Math.random()-0.5)*0.5;
+  _ve.bgJitter *= 0.9;
+  var hue = _ve.bgHue + (intent===2 ? _ve.bgJitter : 0);
+
+  var ec  = (S&&S.visualState&&S.visualState.energyCurveVal)||0;
+  var lightness = 8 + ec*12;
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, 'hsla('+hue+',60%,'+lightness+'%,1)');
+  g.addColorStop(1, 'hsla('+(hue+20)+',60%,'+(lightness*0.5)+'%,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  if(intent===4){
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ── B) FFT (log-remapped + tilt + turn offset) ────────────────────
+function veDrawFFT(ctx, W, H){
+  var bins = veGetLogBins();
+  if(!bins) return;
+  var N = bins.length;
+  var smear = (S&&S.dsmear)||0;
+  var form  = (S&&S.dform)||1;
+  var turn  = (S&&S.turnState)||0;
+  var convM = (S&&S.convMode)||0;
+  var rms   = (S&&S.rms)||0;
+
+  var spread = 0.8 + smear*0.6;
+  var center = H * 0.55;
+
+  // Fix 5: interpolated turn offset
+  var targetOffset = turn===1 ? -40 : turn===2 ? 40 : 0;
+  _ve.turnOffset += (targetOffset - _ve.turnOffset)*0.08;
+  var offset = _ve.turnOffset;
+
+  // Fix 4: tilt is structural — (x - centerX) * tiltFactor
+  var tiltFactor = (1-form)*0.15;
+
+  var yFlip = (convM===2) ? -1 : 1;
+
+  for(var pass=0; pass<2; pass++){
+    var alpha = pass===0 ? 0.12 : 0.55;
+    var yMirror = pass===0 ? 1 : yFlip;
+    ctx.beginPath();
+    for(var i=0;i<N;i++){
+      var x = (i/N)*W + offset;
+      var v = bins[i];
+      var amp = H*0.38 * spread * yMirror;
+      // Fix 4: lateral tilt — (x - W/2) contribution
+      var tiltOff = (x - W*0.5) * tiltFactor;
+      var y = center - v*amp + tiltOff;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,'+(alpha*(0.5+smear*0.5))+')';
+    ctx.lineWidth = pass===0 ? 1 : 1.5;
+    ctx.stroke();
+  }
+
+  // RMS glow
+  if(rms > 0.05){
+    var gg = ctx.createRadialGradient(W*0.5+offset,center,0,W*0.5+offset,center,rms*120);
+    gg.addColorStop(0,'hsla('+_ve.bgHue+',80%,70%,'+(rms*0.3)+')');
+    gg.addColorStop(1,'hsla('+_ve.bgHue+',80%,70%,0)');
+    ctx.fillStyle=gg; ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ── C) PHRASE AURA ───────────────────────────────────────────────
+function veDrawPhraseAura(ctx, W, H){
+  var dom    = (S&&S.phraseDom)||0;
+  var rms    = (S&&S.rms)||0;
+  var intent = (S&&S.intent)||0;
+  var cEnv   = (S&&S.consEnv)||0;
+  var cx = W*0.5, cy = H*0.5;
+
+  if(dom > 0.05){
+    // Fix 6: pulse with RMS + intent fade
+    var pulse  = 1 + rms*0.3;
+    var baseR  = 180 + dom*280;
+    var radius = baseR * pulse;
+    var intentScale = intent===4 ? 0.5 : 1.0;
+    var g = ctx.createRadialGradient(cx,cy,0,cx,cy,radius);
+    g.addColorStop(0,'rgba(255,180,80,'+(dom*0.18*intentScale)+')');
+    g.addColorStop(0.6,'rgba(255,140,40,'+(dom*0.06*intentScale)+')');
+    g.addColorStop(1,'rgba(255,180,80,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+
+  // Fix 7: consEnv ring — articulation marker
+  if(cEnv > 0.08){
+    var r = 80 + cEnv*80;
+    ctx.beginPath();
+    ctx.arc(cx + _ve.turnOffset*0.5, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,255,255,'+(cEnv*0.4)+')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // emphasis flash — filled dot
+    if((S&&S.visualState&&S.visualState.emphasis)){
+      ctx.beginPath();
+      ctx.arc(cx + _ve.turnOffset*0.5, cy, 6, 0, Math.PI*2);
+      ctx.fillStyle='rgba(255,220,80,0.8)';
+      ctx.fill();
+    }
+  }
+}
+
+// ── D) TEXT SYNC ──────────────────────────────────────────────────
+function veDrawText(ctx, W, H){
+  var vs = S&&S.visualState;
+  if(!vs||!vs.text) return;
+  var progress = vs.progress||0;
+  var emph     = vs.emphasis||false;
+  var convM    = (S&&S.convMode)||0;
+  var smear    = (S&&S.dsmear)||0;
+
+  // Fix 8: text breathes with smear — horizontal drift
+  var drift = (smear-0.5)*20;
+  var scale = 1 + (emph?0.35:0) + (convM===2?-0.15:convM===1?0.1:0);
+  var yPos  = convM===2 ? H*0.75 : H*0.82;
+
+  // Fix 8: split word highlight — active word bright, rest tinted
+  var words = vs.text ? vs.text.split(' ') : [];
+  var wIdx  = vs.wordIndex||0;
+  if(words.length > 0){
+    ctx.save();
+    ctx.font = 'italic '+(Math.round(12*scale))+'px "JetBrains Mono",monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // compute total width
+    var totalW = 0;
+    var widths = words.map(function(w){ var mw=ctx.measureText(w).width; totalW+=mw+6; return mw; });
+    var startX = W*0.5 + drift - totalW*0.5;
+    var curX = startX;
+    words.forEach(function(w,i){
+      var isActive = i===wIdx;
+      ctx.globalAlpha = isActive ? (convM===3?0.6:0.92) : 0.28;
+      ctx.fillStyle = isActive ? (emph?'rgba(255,220,80,1)':'rgba(255,255,255,1)') : 'rgba(255,255,255,1)';
+      ctx.fillText(w, curX+widths[i]*0.5, yPos);
+      curX += widths[i]+6;
+    });
+    ctx.globalAlpha=1;
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.translate(W*0.5+drift, yPos);
+    ctx.scale(scale,scale);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='italic 13px "JetBrains Mono",monospace';
+    ctx.fillStyle=emph?'rgba(255,220,80,0.92)':'rgba(255,255,255,0.85)';
+    ctx.fillText(vs.text,0,0,W*0.85);
+    ctx.restore();
+  }
+
+  // progress bar
+  var bY=H*0.90, bX0=W*0.15, bW=W*0.7;
+  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(bX0,bY,bW,2);
+  ctx.fillStyle=emph?'rgba(255,220,80,0.7)':'rgba(0,255,255,0.5)';
+  ctx.fillRect(bX0,bY,bW*progress,2);
+}
+
+// ── E) OVERLAYS ───────────────────────────────────────────────────
+function veDrawOverlays(ctx, W, H){
+  // Fix 9: fade with intentEnv, hide in SILENCE
+  var intent = (S&&S.intent)||0;
+  var iEnv   = (S&&S.intentEnv)||0;
+  if(intent===4 && iEnv < 0.3) return;  // silence: suppress
+  var baseAlpha = iEnv * 0.6;
+  ctx.globalAlpha = baseAlpha;
+  ctx.font = 'italic 9px "JetBrains Mono",monospace';
+
+  var tLabels=['','A','B','AB'];
+  var tCols=['','rgba(0,255,255,1)','rgba(255,0,255,1)','rgba(255,255,255,1)'];
+  var tState=(S&&S.turnState)||0;
+  if(tState>0){
+    ctx.fillStyle=tCols[tState]; ctx.textAlign='right';
+    ctx.fillText(tLabels[tState],W-8,H-8);
+  }
+
+  var cmLabels=['','MIMIC','OPPOSE','DELAY'];
+  var cmCols=['','rgba(0,255,255,1)','rgba(255,0,255,1)','rgba(153,68,255,1)'];
+  var convM=(S&&S.convMode)||0;
+  if(convM>0){
+    ctx.fillStyle=cmCols[convM]; ctx.textAlign='center';
+    ctx.fillText(cmLabels[convM],W*0.5,H-8);
+  }
+
+  var iLabels=['','FOLLOW','CONTRAST','CALL','SILENCE'];
+  var iCols=['','rgba(0,255,255,1)','rgba(255,0,255,1)','rgba(153,68,255,1)','rgba(255,255,255,1)'];
+  if(intent>0){
+    ctx.fillStyle=iCols[intent]; ctx.textAlign='left';
+    ctx.fillText(iLabels[intent],8,H-8);
+  }
+
+  var dom=(S&&S.phraseDom)||0;
+  if(dom>0.5){
+    ctx.fillStyle='rgba(255,180,80,1)'; ctx.textAlign='right';
+    ctx.fillText('MEM '+Math.round(dom*100)+'%',W-8,14);
+  }
+
+  ctx.globalAlpha=1;
+  ctx.textAlign='left';
+}
+
+function startVisualEngine(canvas){
+  var DPR = window.devicePixelRatio||1;
+  var ctx = canvas.getContext('2d');
+  function resize(){
+    canvas.width  = Math.round(canvas.clientWidth  * DPR);
+    canvas.height = Math.round(canvas.clientHeight * DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  _ve.active = true;
+  _ve.last = performance.now();
+  (function frame(t){
+    if(!_ve.active){return;}
+    requestAnimationFrame(frame);
+    var dt = (t - _ve.last)/1000;
+    _ve.last = t;
+    _ve.frameCount++;
+    veRenderFrame(ctx, canvas, dt);
+  })(performance.now());
+}
+
+function stopVisualEngine(){
+  _ve.active = false;
+}
+
+// ── RENDER PIPELINE ───────────────────────────────────────────────
+function veRenderFrame(ctx, canvas, dt){
+  var W = canvas.clientWidth, H = canvas.clientHeight;
+
+  // DELAY trail: draw previous frame at low alpha before clearing
+  var smear = (S && S.dsmear)||0;
+  if(smear > 0.6){
+    ctx.globalAlpha = 0.08 + smear*0.04;
+    ctx.drawImage(canvas, 0, 2);  // slight vertical drift
+    ctx.globalAlpha = 1;
+  }
+
+  veDrawBg(ctx, W, H, dt);
+  veDrawFFT(ctx, W, H);
+  veDrawPhraseAura(ctx, W, H);
+  veDrawText(ctx, W, H);
+  veDrawOverlays(ctx, W, H);
+}
+
+// ── A) BACKGROUND FIELD ───────────────────────────────────────────
+function veDrawBg(ctx, W, H, dt){
+  var intent = (S && S.intent)||0;
+  var targetHue =
+    intent===1 ? 190 :   // FOLLOW → cyan
+    intent===2 ? 310 :   // CONTRAST → magenta
+    intent===3 ? 260 :   // CALL → violet
+                 210;    // SILENCE / idle
+  _ve.bgHue += (targetHue - _ve.bgHue) * 0.04;
+
+  // Extra: CONTRAST adds jitter
+  var jitter = (intent===2) ? (Math.random()-0.5)*6 : 0;
+  var hue = _ve.bgHue + jitter;
+
+  var g = ctx.createLinearGradient(0,0,0,H);
+  var ec = (S && S.visualState && S.visualState.energyCurveVal)||0;
+  var lightness = 8 + ec*12;   // Fix 6: darker/brighter with clip energy
+  g.addColorStop(0, 'hsla('+hue+',60%,'+lightness+'%,1)');
+  g.addColorStop(1, 'hsla('+(hue+20)+',60%,'+(lightness*0.5)+'%,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // SILENCE fades toward black
+  if(intent===4){
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ── B) FFT (spectral body) ────────────────────────────────────────
+function veDrawFFT(ctx, W, H){
+  var bins = window.fftBins;
+  if(!bins || bins.length===0) return;
+  var N = bins.length;
+  var smear = (S && S.dsmear)||0;
+  var form  = (S && S.dform)||1;
+  var turn  = (S && S.turnState)||0;
+  var convM = (S && S.convMode)||0;
+
+  var spread = 0.8 + smear*0.6;
+  var center = H * 0.55;
+  // Turn offset: A-speak shifts left, B-speak shifts right
+  var offset = turn===1 ? -40 : turn===2 ? 40 : 0;
+  // Form tilt: FORM low → tilt down toward right
+  var tilt = (1-form) * 0.12;
+
+  // OPPOSE: invert FFT vertically
+  var yFlip = (convM===2) ? -1 : 1;
+
+  // Draw mirror + primary
+  for(var pass=0; pass<2; pass++){
+    var alpha = pass===0 ? 0.12 : 0.55;
+    var yMirror = pass===0 ? 1 : yFlip;
+    ctx.beginPath();
+    for(var i=0;i<N;i++){
+      var x = (i/N)*W + offset;
+      var v = bins[i];
+      var tiltOff = (i/N)*tilt*H;
+      var y = center - v * (H*0.38) * spread * yMirror + tiltOff;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    var alpha2 = alpha * (0.5 + smear*0.5);
+    ctx.strokeStyle = 'rgba(255,255,255,'+alpha2+')';
+    ctx.lineWidth = pass===0 ? 1 : 1.5;
+    ctx.stroke();
+  }
+
+  // RMS glow circle
+  var rms = (S && S.rms)||0;
+  if(rms > 0.05){
+    var g = ctx.createRadialGradient(W*0.5+offset, center, 0, W*0.5+offset, center, rms*120);
+    var h = _ve.bgHue;
+    g.addColorStop(0, 'hsla('+h+',80%,70%,'+(rms*0.3)+')');
+    g.addColorStop(1, 'hsla('+h+',80%,70%,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ── C) PHRASE AURA ───────────────────────────────────────────────
+function veDrawPhraseAura(ctx, W, H){
+  var dom = (S && S.phraseDom)||0;
+  if(dom < 0.05) return;
+  var radius = 180 + dom*280;
+  var g = ctx.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, radius);
+  g.addColorStop(0, 'rgba(255,180,80,'+(dom*0.18)+')');
+  g.addColorStop(0.6,'rgba(255,140,40,'+(dom*0.06)+')');
+  g.addColorStop(1,  'rgba(255,180,80,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // consEnv pulse ring
+  var cEnv = (S && S.consEnv)||0;
+  if(cEnv > 0.1){
+    ctx.beginPath();
+    ctx.arc(W*0.5, H*0.5, 80+cEnv*60, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,180,80,'+(cEnv*0.25)+')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+// ── D) TEXT SYNC ──────────────────────────────────────────────────
+function veDrawText(ctx, W, H){
+  var vs = S && S.visualState;
+  if(!vs || !vs.text) return;
+  var progress = vs.progress||0;
+  var emph = vs.emphasis||false;
+
+  // MIMIC: smoother text (larger, stable)
+  // OPPOSE: smaller, offset
+  var convM = (S && S.convMode)||0;
+  var scale  = 1 + (emph ? 0.35 : 0) + (convM===2 ? -0.15 : convM===1 ? 0.1 : 0);
+  var yPos   = convM===2 ? H*0.75 : H*0.82;
+  var alpha  = convM===3 ? 0.55 : 0.92;  // DELAY: ghostly text
+
+  ctx.save();
+  ctx.translate(W*0.5, yPos);
+  ctx.scale(scale, scale);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'italic 13px "JetBrains Mono",monospace';
+  ctx.fillStyle = emph
+    ? 'rgba(255,220,80,'+alpha+')'
+    : 'rgba(255,255,255,'+alpha+')';
+  // limit text width
+  var maxW = W * 0.85;
+  ctx.fillText(vs.text, 0, 0, maxW);
+  ctx.restore();
+
+  // progress bar
+  var barY = H*0.90, barX0 = W*0.15, barW = W*0.7;
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(barX0, barY, barW, 2);
+  var barFill = emph ? 'rgba(255,220,80,0.7)' : 'rgba(0,255,255,0.5)';
+  ctx.fillStyle = barFill;
+  ctx.fillRect(barX0, barY, barW*progress, 2);
+}
+
+// ── E) OVERLAYS ───────────────────────────────────────────────────
+function veDrawOverlays(ctx, W, H){
+  ctx.font = 'italic 9px "JetBrains Mono",monospace';
+
+  // Turn state — bottom right
+  var tLabels = ['','A','B','AB'];
+  var tCols   = ['','rgba(0,255,255,.7)','rgba(255,0,255,.7)','rgba(255,255,255,.55)'];
+  var tState  = (S && S.turnState)||0;
+  if(tState > 0){
+    ctx.fillStyle = tCols[tState];
+    ctx.textAlign = 'right';
+    ctx.fillText(tLabels[tState], W-8, H-8);
+  }
+
+  // Conv mode — bottom center
+  var cmLabels = ['','MIMIC','OPPOSE','DELAY'];
+  var cmCols   = ['','rgba(0,255,255,.55)','rgba(255,0,255,.55)','rgba(153,68,255,.5)'];
+  var convM = (S && S.convMode)||0;
+  if(convM > 0){
+    ctx.fillStyle = cmCols[convM];
+    ctx.textAlign = 'center';
+    ctx.fillText(cmLabels[convM], W*0.5, H-8);
+  }
+
+  // Intent — bottom left
+  var iLabels = ['','FOLLOW','CONTRAST','CALL','SILENCE'];
+  var iCols   = ['','rgba(0,255,255,.55)','rgba(255,0,255,.55)','rgba(153,68,255,.55)','rgba(255,255,255,.3)'];
+  var intent = (S && S.intent)||0;
+  if(intent > 0){
+    ctx.fillStyle = iCols[intent];
+    ctx.textAlign = 'left';
+    ctx.fillText(iLabels[intent], 8, H-8);
+  }
+
+  // phraseDom label — top right (when dominating)
+  var dom = (S && S.phraseDom)||0;
+  if(dom > 0.5){
+    ctx.fillStyle = 'rgba(255,180,80,'+(dom*0.7)+')';
+    ctx.textAlign = 'right';
+    ctx.fillText('MEM '+Math.round(dom*100)+'%', W-8, 14);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+// ── UI EVENTS ─────────────────────────────────────────────────────
+function initUI(){
+  document.getElementById('stretch').addEventListener('input',function(e){
+    S.stretch=e.target.value/100;
+    document.getElementById('stretchV').textContent=S.stretch.toFixed(1)+'x';
+    if(srcA) srcA.playbackRate.value=S.stretch;
+    if(srcB) srcB.playbackRate.value=S.stretch;
+  });
+  document.getElementById('mix').addEventListener('input',function(e){
+    S.mixAB=e.target.value/100;
+    document.getElementById('mixV').textContent=e.target.value;
+  });
+  document.getElementById('lfoBtn').addEventListener('click',function(e){
+    S.lfoOn=!S.lfoOn;
+    e.target.textContent='LFO '+(S.lfoOn?'ON':'OFF');
+    e.target.className=S.lfoOn?'on':'';
+  });
+  document.getElementById('lfoFreq').addEventListener('input',function(e){
+    S.lfoFreq=e.target.value/100;
+    document.getElementById('lfoFreqV').textContent=S.lfoFreq.toFixed(1)+'Hz';
+  });
+  document.getElementById('lfoDepth').addEventListener('input',function(e){
+    S.lfoDepth=e.target.value/100;
+    document.getElementById('lfoDepthV').textContent=e.target.value+'%';
+  });
+  document.getElementById('loopBtn').addEventListener('click',function(e){
+    S.looping=!S.looping;
+    e.target.textContent='LOOP '+(S.looping?'ON':'OFF');
+    e.target.className=S.looping?'':'on';
+    document.getElementById('silCtrl').style.display=S.looping?'':'none';
+    if(srcA) srcA.loop=S.looping;
+    if(srcB) srcB.loop=S.looping;
+  });
+  document.getElementById('chance').addEventListener('input',function(e){
+    S.silChance=parseInt(e.target.value);
+    document.getElementById('chanceV').textContent=e.target.value+'%';
+  });
+  document.getElementById('silMin').addEventListener('input',function(e){
+    S.silMin=parseInt(e.target.value);
+    document.getElementById('silMinV').textContent=e.target.value+'ms';
+  });
+  document.getElementById('silMax').addEventListener('input',function(e){
+    S.silMax=parseInt(e.target.value);
+    document.getElementById('silMaxV').textContent=e.target.value+'ms';
+  });
+  document.getElementById('entropy').addEventListener('input',function(e){
+    S.entropy=e.target.value/100;
+    document.getElementById('entropyV').textContent=e.target.value+'%';
+  });
+  document.getElementById('articulation').addEventListener('input',function(e){
+    S.articulation=e.target.value/100;
+    document.getElementById('articulV').textContent=e.target.value+'%';
+  });
+  document.getElementById('pmDensity').addEventListener('input',function(e){
+    S.pmDensity=e.target.value/100;
+    document.getElementById('pmDensV').textContent=e.target.value+'%';
+  });
+  // Mic REC — iOS canonical fix: resume + setTimeout before getUserMedia
+  document.getElementById('recA').addEventListener('click',function(){
+    AC.resume(); setTimeout(function(){toggleMic('A');},50);
+  });
+  document.getElementById('recB').addEventListener('click',function(){
+    AC.resume(); setTimeout(function(){toggleMic('B');},50);
+  });
+  // File load — iOS canonical fix applied inside loadFileToSlot
+  document.getElementById('loadA').addEventListener('click',function(){ loadFileToSlot('A'); });
+  document.getElementById('loadB').addEventListener('click',function(){ loadFileToSlot('B'); });
+  // Transport
+  document.getElementById('playBtn').addEventListener('click',function(){
+    AC.resume();
+    if(S.playing) stopPlayback(); else startPlayback();
+  });
+  document.getElementById('stopBtn').addEventListener('click',stopPlayback);
+  document.getElementById('recBtn').addEventListener('click',recTake);
+  document.getElementById('packBtn').addEventListener('click',downloadPack);
+  document.getElementById('pvBtn').addEventListener('click',togglePV);
+  // Visual engine toggle
+  document.getElementById('visBtn').addEventListener('click',function(){
+    var vc = document.getElementById('vc');
+    var btn = document.getElementById('visBtn');
+    if(_ve.active){
+      stopVisualEngine();
+      vc.style.display='none';
+      btn.textContent='VIS OFF'; btn.className='';
+    } else {
+      vc.style.display='block';
+      btn.textContent='VIS ON'; btn.className='act';
+      startVisualEngine(vc);
+    }
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+async function init(){
+  await initDB();
+  buildMatterGrid();
+  buildPresets();
+  await initAC();
+  await loadAllTakes();
+  updateTakeList();
+  initUI();
+  initClipSystem();
+  drawAnalyser();
+  updateSpectralUI();
+  setStatus('v19 loading PV...',false);
+}
+
+init();
+</script>
+</body>
+</html>
