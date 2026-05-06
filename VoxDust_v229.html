@@ -450,6 +450,8 @@ var S = {
   _ph:null, _phStream:null, _phEdge:0, _phVib:0,
   // Phoneme group state
   _phGroups:null, _phGroupIdx:0, _phGroupT:0,
+  // Prosody (intonation tilt)
+  _prosody:0,
   // v20.5 Phrase Macro Memory
   phraseMem:[], phraseCap:null, phraseClock:0,
   // v20.6 Phrase Dominance
@@ -1000,7 +1002,7 @@ function applyDSP(spec){
   // System B: formant micro-shift (+4% max) on consonant — "consonants forward"
   var fgv=spec.form*0.38;
   // System B + Task 6 mutation: formant shift = consonant direction + motif form drift
-  var fShift=(1+consEnvA*0.04)*(S._formDrift||1.0)*(1+(S._phVib||0)*0.02);
+  var fShift=(1+consEnvA*0.04)*(S._formDrift||1.0)*(1+(S._phVib||0)*0.02)*(1+(S._prosody||0)*0.015);
   S._formDrift=undefined;   // consume after one tick
   for(var i=0;i<fGains.length;i++){
     fGains[i].gain.setTargetAtTime(fgv,now,0.06);
@@ -1720,6 +1722,9 @@ function playTick(){
   // Phoneme state decay
   S._phEdge=(S._phEdge||0)*0.82;
   S._phVib=(S._phVib||0)*0.72;
+
+  // Fix 4: phraseDom needs a floor decay — without it, aura stays stuck
+  if(S.energyFac<0.2) S.phraseDom*=0.985;
 
   deckTick(dt);
   var _tlElapsed=(Date.now()/1000)-S.timelineStart;
@@ -3358,6 +3363,7 @@ function stepPhGroup(dt){
   if(!S.followText||!S._phGroups||!S._phGroups.length) return;
   S._phGroupT-=dt*1000;
   if(S._phGroupT>0) return;
+  if(S._phGroupIdx>=S._phGroups.length) S._phGroupIdx=0;
   var idx=S._phGroupIdx%S._phGroups.length;
   var g=S._phGroups[idx];
   if(!g) return;
@@ -3372,7 +3378,7 @@ function stepPhGroup(dt){
     if(p.stress) stressAcc+=1;
   }
   dur/=g.length;
-  S.consEnv=Math.min(1,S.consEnv+consE*0.25);
+  S.consEnv=Math.min(1.0, S.consEnv+consE*0.25);  // Fix 2: clamped
   S.phraseEnv=Math.min(1,S.phraseEnv+vowelE*0.05);
   S._phEdge=(S._phEdge||0)*0.7+edgeAcc*0.3;
   S._phVib=(S._phVib||0)*0.7+vibAcc*0.25;
@@ -3388,8 +3394,11 @@ function stepPhGroup(dt){
     S._textTimingNudge=(S._textTimingNudge||0)+0.015*stressAcc;
     S._convBias=Math.min(1,(S._convBias||0)+0.08*stressAcc);
   }
-  S._phGroupT=Math.max(20,dur);
+  S._phGroupT=Math.max(70,dur);
   S._phGroupIdx=idx+1;
+  // Prosodia: vowels lift intonation, consonants ground it
+  var prosodyTilt=vowelE-consE*0.5;
+  S._prosody=(S._prosody||0)*0.8+prosodyTilt*0.2;
 }
 
 
@@ -3894,8 +3903,17 @@ function veDrawFlow(ctx, W, H){
   var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
   var barW=g.length*20*sc;
   var hasStress=g.some(function(p){return p.stress;});
+  var isHeavy=g.length>=3;
+  // Heavy groups (CCV) get a structural outline
+  if(isHeavy){
+    ctx.strokeStyle='rgba(255,255,255,0.25)';
+    ctx.lineWidth=2*sc;
+    ctx.strokeRect(cx-barW/2, cy+90*sc, barW, 6*sc);
+  }
+  ctx.globalAlpha=isHeavy?0.9:0.6;
   ctx.fillStyle=hasStress?'rgba(255,200,80,0.18)':'rgba(255,255,255,0.08)';
   ctx.fillRect(cx-barW/2, cy+90*sc, barW, 6*sc);
+  ctx.globalAlpha=1; ctx.lineWidth=1;
   // phoneme type dots
   ctx.fillStyle='rgba(255,255,255,0.25)';
   for(var i=0;i<g.length;i++){
