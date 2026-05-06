@@ -1091,7 +1091,8 @@ function applyDSP(spec){
   wetAmt*=(1+bW*0.25);
   if(S.convMode===3){wetAmt*=1.15; smearUsed*=0.9;}
   // v22.6: segment energy arc — reverb breathes with segment position
-  wetAmt*=(0.9+(S._segEnergy||0)*0.2);
+  wetAmt*=(0.92+(S._segEnergy||0)*0.16);   // Fix 5: reduced from 0.9+0.2 to avoid stacking
+  wetAmt=Math.min(wetAmt,1.4);             // early clamp before reverb routing
   // gainSum intent level (silence fade vs normal)
   if(gainSum){
     var intentLevel=S.intent===4?0.85:1.0;
@@ -1550,15 +1551,22 @@ function playTick(){
   if(S.intent!==prevIntent) S.intentTimer=0;
   S.intentTimer+=dt;
   S.intentWeight*=S.intentDecay;
-  // Text intentBias decays and blends with computed intent
   S._intentBias=(S._intentBias||0)*0.97;
-  if(S._intentBias>0.15 && S.intent!==2){
-    // bias toward CALL/reflection without hard override
-    S.intentEnv=Math.min(1,S.intentEnv+(S._intentBias*0.1));
-  }
+  S._intentBias=Math.min(1.2,S._intentBias);
+  // Bias integrates into intentEnv via EMA — no hard override
+  var ib=Math.min(1,S._intentBias);
+  if(ib>0.1&&S.intent!==2) S.intentEnv=Math.min(1,S.intentEnv+(1-S.intentEnv)*ib*0.08);
   // v21.2 Task 1: conversational behavior selection — with hysteresis lock
   if(S.convLock>0) S.convLock-=dt;
-  if(S.turnState===0&&S.phraseEnv>0.4){
+  // Fix 3: _convRequest from text drives convMode through convLock gate
+  if(S._convRequest!==undefined&&S._convRequest!==null&&S.convLock<=0){
+    var newMode=S._convRequest;
+    if(newMode!==S.convMode){
+      S.convMode=newMode;
+      S.convLock=200+Math.random()*200;
+    }
+    S._convRequest=null;
+  } else if(S.turnState===0&&S.phraseEnv>0.4){
     var cr=Math.random();
     var newMode;
     if(S.intent===1)       newMode=cr<0.7?1:3;
@@ -2425,8 +2433,9 @@ function pmTick(now,dt){
   // PQ: compute snap delay toward next implicit pulse
   var delayMs=0;
   if(S.pqEnabled&&S.pqIntervals.length>=3){
-    var toGrid=1-S.pqPhase;                     // distance to next beat
-    var snapWindow=0.18;                         // ~30ms at 180ms interval
+    var toGrid=1-S.pqPhase+(S._pqPhaseOffset||0);  // Fix 2: text shifts grid position
+    toGrid=Math.max(0,Math.min(1,toGrid));
+    var snapWindow=0.18;
     if(toGrid<snapWindow) delayMs=toGrid*S.pqInterval*1000;
     // if we just passed the beat and are very close, replay immediately
     if(S.pqPhase<0.05) delayMs=0;
@@ -2920,15 +2929,17 @@ function updateTextState(elapsed){
     if(fwLen<=3) S.consEnv=Math.min(1,S.consEnv+0.15);
     // Timing humanization — word length affects motif timing
     S._textTimingNudge=(Math.random()-0.5)*0.02*(fwLen/6);
-    // Micro swing: short words tighten timing
     S._textSwing=fwLen<=3?0.1:0;
-    // convMode from word character — punctuation → echo, long → reflexion
-    if(fw.e)        S.convMode=1;   // emphasis → MIMIC
-    else if(fwLen>8) S.convMode=3;  // long word → DELAY
-    else if(S.convMode===1||S.convMode===3) S.convMode=0;  // decay back to neutral
-    // Voice B reads too — B "reacts" to text when it's speaking
+    // Fix 2: pqPhaseOffset — text shifts where grid falls (grid-level, not just jitter)
+    S._pqPhaseOffset=((S._pqPhaseOffset||0)*0.9)+S._textTimingNudge*0.5;
+    // Fix 3: convMode changes go through convLock to avoid glitches
+    if(fw.e&&S.convLock<=0)          S._convRequest=1;  // emphasis → MIMIC
+    else if(fwLen>8&&S.convLock<=0)  S._convRequest=3;  // long word → DELAY
+    else if(S.convLock<=0&&(S.convMode===1||S.convMode===3)) S._convRequest=0;
+    // Fix 4: voice B reads text — response weighted by intentBias (internal state)
     if(S.voiceMix>0.5){
-      S.consEnvB=Math.min(1,S.consEnvB+0.1*(fw.e?1:0.4));
+      var bTxt=(fw.e?1:0.4)*(0.6+(S._intentBias||0)*0.4);
+      S.consEnvB=Math.min(1,S.consEnvB+0.08*bTxt);
     }
   }
 }
@@ -3756,6 +3767,14 @@ function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   var aDom = (S&&S._aDom)||0, bDom = (S&&S._bDom)||0;
   var sizeA = BASE_R + aDom*50*sc + pDom*30*sc;
   var sizeB = BASE_R + bDom*50*sc + pDom*30*sc;
+  // Fix 6: text density — long words add visual mass
+  var txtDensity=0;
+  if(S&&S.visualState&&S.visualState.wordIndex!==undefined&&S.followText){
+    var aw=S.visualState&&S.visualState.text?S.visualState.text.split(' ')[S.visualState.wordIndex||0]:'';
+    txtDensity=(aw&&aw.length?aw.length/10:0);
+  }
+  sizeA+=txtDensity*6*sc;
+  sizeB+=txtDensity*4*sc;
 
   // Fix 1: focus hierarchy — dominant element gets full alpha, rest recedes
   var focus = Math.max(aDom, bDom, pDom);
