@@ -456,6 +456,8 @@ var S = {
   _prosodyCurve:0, _sentences:null,
   // Contour Imprinting — sentence shape memory ring
   contours:new Array(8), contourIdx:0, _cBuf:null,
+  // Contour blend A/B
+  _contourA:null, _contourB:null, _contourMix:0,
   // v20.5 Phrase Macro Memory
   phraseMem:[], phraseCap:null, phraseClock:0,
   // v20.6 Phrase Dominance
@@ -1735,6 +1737,14 @@ function playTick(){
 
   // Fix 4: phraseDom needs a floor decay — without it, aura stays stuck
   if(S.energyFac<0.2) S.phraseDom*=0.985;
+  // Contour blend mix: bDom drives A→B, convMode adds bias
+  S._contourMix=Math.min(1,Math.max(0,
+    (S._bDom||0)*0.8 + (S.convMode===3?0.2:0) + (S.convMode===2?-0.1:0)
+  ));
+  // Apply blend when following text or in response
+  if((S.followText||S.crResponding) && (S._contourA||S._contourB)){
+    applyContourBlend();
+  }
   // Prosody C+E: curve compacts timing at peak + nudges convBias
   if(S._prosodyCurve&&S.followText){
     S._convBias=Math.min(1,(S._convBias||0)+S._prosodyCurve*0.05);
@@ -3467,6 +3477,9 @@ function commitContour(sentence){
   c.hash=((c.curve[4]*7+c.curve[16]*13+c.curve[28]*17)|0);
   S.contours[S.contourIdx]=c;
   S.contourIdx=(S.contourIdx+1)%8;
+  // Blend: A = what was just spoken, B = best memory pick
+  S._contourA=c;
+  S._contourB=pickContour()||c;  // fallback to self if ring empty
   S._cBuf=null;
 }
 
@@ -3498,7 +3511,50 @@ function applyContour(c){
   S._textTimingNudge=(S._textTimingNudge||0)+(v-0.5)*0.01;
 }
 
-// ── PHONEME GROUPER ────────────────────────────────────────────
+// ── CONTOUR BLEND A/B ────────────────────────────────────────────
+function sampleContour(c){
+  if(!c||!c.len) return 0;
+  var idx=Math.min(c.len-1,(S.pqPhase*(c.len-1))|0);
+  return c.curve[idx]||0;
+}
+
+function blendContours(a,b,x){
+  if(!a&&!b) return 0;
+  if(!b) return sampleContour(a);
+  if(!a) return sampleContour(b);
+  var vA=sampleContour(a), vB=sampleContour(b);
+  // equal-power blend — consistent with audio crossfade
+  var gA=Math.cos(x*Math.PI*0.5), gB=Math.cos((1-x)*Math.PI*0.5);
+  return Math.min(1,Math.max(0, vA*gA + vB*gB));
+}
+
+function blendStress(a,b,x){
+  var iA=a?(S.pqPhase*(a.len-1))|0:0;
+  var iB=b?(S.pqPhase*(b.len-1))|0:0;
+  var sA=a&&a.stress?a.stress[Math.min(iA,a.len-1)]:0;
+  var sB=b&&b.stress?b.stress[Math.min(iB,b.len-1)]:0;
+  return (sA*(1-x)+sB*x)>0.4;
+}
+
+function applyContourBlend(){
+  var a=S._contourA, b=S._contourB, x=S._contourMix||0;
+  var v=blendContours(a,b,x);
+  // conv grammar on blended value
+  var m=S.convMode, env=Math.min(1,S.convEnv||0);
+  if(m===2) v=1-v;              // OPPOSE: invert
+  else if(m===3) v*=(1-env*0.25); // DELAY: softer
+  v=Math.min(1,Math.max(0,v*0.8));  // attenuate to not compete
+  S.phraseEnv=Math.min(1,S.phraseEnv+(v-S.phraseEnv)*0.06);
+  S.phraseEnv*=0.98;  // prevent accumulation
+  S._prosody=(S._prosody||0)+(v-S._prosody)*0.08;
+  S._textTimingNudge=(S._textTimingNudge||0)+(v-0.5)*0.01;
+  // stress from blend
+  if(blendStress(a,b,x)){
+    S.consEnv=Math.min(1,S.consEnv+0.1);
+  }
+}
+
+
 
 function groupPhonemes(stream){
   var groups=[],g=[];
@@ -3977,6 +4033,9 @@ function veDraw(ctx, canvas){
   veDrawFlow(ctx, W, H);
   veDrawStressFlash(ctx, W, H);
   veDrawFFT(ctx, W, H, fft, form, turn, smear);
+  veDrawContoursAB(ctx, W, H);
+  veDrawContourBlend(ctx, W, H);
+  veDrawBlendCursor(ctx, W, H);
   veDrawContour(ctx, W, H);
   veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix);
   veDrawOverlays(ctx, W, H, intent, conv, turn, pDom);
@@ -4095,7 +4154,59 @@ function veDrawStressFlash(ctx, W, H){
   ctx.lineWidth=4*sc; ctx.stroke(); ctx.lineWidth=1;
 }
 
-// ── CONTOUR GHOST — prosody memory overlay ────────────────────────
+// ── CONTOUR BLEND VISUAL — A/B ghost lines + blend cursor ─────────
+function _drawContourLine(ctx, c, color, W, H){
+  if(!c||!c.len) return;
+  var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
+  ctx.beginPath();
+  for(var i=0;i<c.len;i++){
+    var x=cx-160*sc+i*(320*sc/c.len);
+    var y=cy+(c.curve[i]-0.5)*(-90)*sc;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=1.5*sc; ctx.stroke(); ctx.lineWidth=1;
+}
+
+function veDrawContoursAB(ctx, W, H){
+  // A = cyan (performer), B = magenta (memory)
+  _drawContourLine(ctx, S._contourA, 'rgba(120,220,255,0.25)', W, H);
+  _drawContourLine(ctx, S._contourB, 'rgba(255,120,220,0.25)', W, H);
+}
+
+function veDrawContourBlend(ctx, W, H){
+  var a=S._contourA, b=S._contourB, mix=S._contourMix||0;
+  if(!a&&!b) return;
+  var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
+  ctx.beginPath();
+  for(var i=0;i<32;i++){
+    var xn=i/31;
+    var iA=a?Math.min(a.len-1,(xn*(a.len-1))|0):0;
+    var iB=b?Math.min(b.len-1,(xn*(b.len-1))|0):0;
+    var vA=a?a.curve[iA]:0, vB=b?b.curve[iB]:0;
+    var gA=Math.cos(mix*Math.PI*0.5), gB=Math.cos((1-mix)*Math.PI*0.5);
+    var v=Math.min(1,Math.max(0,vA*gA+vB*gB));
+    // OPPOSE: invert blend visually
+    if(S.convMode===2) v=1-v;
+    var x=cx-160*sc+i*(320*sc/32);
+    var y=cy+(v-0.5)*(-100)*sc;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle='rgba(255,200,120,0.7)';
+  ctx.lineWidth=3*sc; ctx.stroke(); ctx.lineWidth=1;
+}
+
+function veDrawBlendCursor(ctx, W, H){
+  var a=S._contourA, b=S._contourB, mix=S._contourMix||0;
+  if(!a&&!b) return;
+  var v=blendContours(a,b,mix);
+  if(S.convMode===2) v=1-v;
+  var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
+  var y=cy+(v-0.5)*(-100)*sc;
+  ctx.beginPath(); ctx.arc(cx, y, 5*sc, 0, Math.PI*2);
+  ctx.fillStyle='rgba(255,220,140,1)'; ctx.fill();
+}
+
+// ── CONTOUR GHOST — prosody memory overlay (single best pick) ─────
 function veDrawContour(ctx, W, H){
   var c=pickContour();
   if(!c||!c.len) return;
