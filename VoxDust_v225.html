@@ -2182,15 +2182,22 @@ function drawAnalyser(){
     var fb=new Float32Array(d.length);
     for(var fi=0;fi<d.length;fi++) fb[fi]=d[fi]/255;
     window.fftBins=fb;
-    // Send state to projection viewer if open
-    if(projWin&&!projWin.closed){
-      try{projWin.postMessage({
-        visual:S.visualState, fftBins:Array.from(fb.slice(0,128)),
-        aDom:S._aDom||0, bDom:S._bDom||0,
-        phraseDom:S.phraseDom||0, voiceMix:S.voiceMix||0,
-        turnState:S.turnState||0, intent:S.intent||0,
-        convMode:S.convMode||0, rms:S.rms||0
-      },'*');}catch(e){}
+    // Send state to projection viewer — throttled to ~60fps real
+    if(projWin){
+      if(projWin.closed){ projWin=null; document.getElementById('projBtn').className=''; document.getElementById('projBtn').textContent='PROYECTAR'; }
+      else {
+        var pNow=performance.now();
+        if(pNow-(_ve._lastSend||0)>16){
+          _ve._lastSend=pNow;
+          try{projWin.postMessage({
+            visual:S.visualState, fftBins:Array.from(fb.slice(0,128)),
+            aDom:S._aDom||0, bDom:S._bDom||0,
+            phraseDom:S.phraseDom||0, voiceMix:S.voiceMix||0,
+            turnState:S.turnState||0, intent:S.intent||0,
+            convMode:S.convMode||0, rms:S.rms||0
+          },'*');}catch(e){}
+        }
+      }
     }
     // Fix bar 3: update spectrum bar cursor in RAF (not only in playTick)
     var curEl=document.getElementById('cur');
