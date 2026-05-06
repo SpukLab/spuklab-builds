@@ -448,6 +448,8 @@ var S = {
   _intentBias:0, _segEnergy:0, _textTimingNudge:0, _textSwing:0,
   // Phoneme engine state
   _ph:null, _phStream:null, _phEdge:0, _phVib:0,
+  // Phoneme group state
+  _phGroups:null, _phGroupIdx:0, _phGroupT:0,
   // v20.5 Phrase Macro Memory
   phraseMem:[], phraseCap:null, phraseClock:0,
   // v20.6 Phrase Dominance
@@ -1709,9 +1711,11 @@ function playTick(){
   // Task 8: strong input resets mutation — performer takes control
   if(S.energyFac>0.5) S.motifGen=0;
   // Clip System — non-destructive ticks (zero engine impact)
-  // Phoneme engine — text-driven articulation
-  if(S.followText && S._phStream && S._phStream.length){
-    stepPhoneme(S, S._phStream, dt/1000);
+  // Phoneme group scheduler — replaces stepPhoneme (group-level articulation)
+  if(S.followText && S._phGroups && S._phGroups.length){
+    stepPhGroup(dt/1000);
+  } else if(S.followText && S._phStream && S._phStream.length){
+    stepPhoneme(S, S._phStream, dt/1000);  // fallback to single phoneme
   }
   // Phoneme state decay
   S._phEdge=(S._phEdge||0)*0.82;
@@ -2494,8 +2498,15 @@ function applyPhraseContour(phrase){
     var pe=phrase.env[idx];
     var ce=phrase.cons[idx];
     var dom=S.phraseDom*(S._domWarp||1)*domMod;
-    // dirMod: OPPOSE flips the consEnv sign (pulls down instead of up)
-    var consTarget=ce*(0.5+dom*0.5)*varMod;
+    // Fix 7: phGroups couple to contour variation and speed
+    var gCoupling=1;
+    if(S._phGroups&&S._phGroups.length){
+      var gi=S._phGroupIdx%S._phGroups.length;
+      var gl=S._phGroups[gi]?S._phGroups[gi].length:1;
+      gCoupling=1+S.consEnv*0.2*(gl/3);  // longer groups = more variation
+      stepMs=Math.max(15,Math.min(160,stepMs*(1-S.phraseEnv*0.15)));
+    }
+    var consTarget=ce*(0.5+dom*0.5)*varMod*gCoupling;
     S.phraseEnv+=(pe-S.phraseEnv)*(0.2+dom*0.5);
     if(dirMod>0) S.consEnv=Math.max(S.consEnv, consTarget);
     else         S.consEnv=Math.max(0, S.consEnv - consTarget*0.3); // OPPOSE: releases
@@ -3313,8 +3324,57 @@ function stepPhoneme(S,stream,dt){
   ph.t=dur;
 }
 
+// ── PHONEME GROUPER ────────────────────────────────────────────
+function phType(p){ return p.v?'V':p.pause?'P':'C'; }
 
-function autoSegments(words){
+function groupPhonemes(stream){
+  var groups=[],g=[];
+  for(var i=0;i<stream.length;i++){
+    var p=stream[i],t=phType(p);
+    if(t==='P'){ if(g.length){groups.push(g);g=[];} continue; }
+    g.push(p);
+    if(g.length>=3){ groups.push(g);g=[];continue; }
+    if(g.length===2){
+      var t0=phType(g[0]),t1=phType(g[1]);
+      if((t0==='C'&&t1==='V')||(t0==='V'&&t1==='C')){ groups.push(g);g=[]; }
+    }
+  }
+  if(g.length) groups.push(g);
+  return groups;
+}
+
+// ── PHONEME GROUP SCHEDULER (replaces stepPhoneme) ─────────────
+function stepPhGroup(dt){
+  if(!S.followText||!S._phGroups||!S._phGroups.length) return;
+  S._phGroupT-=dt*1000;
+  if(S._phGroupT>0) return;
+  var idx=S._phGroupIdx%S._phGroups.length;
+  var g=S._phGroups[idx];
+  if(!g) return;
+  var dur=0,consE=0,vowelE=0,edgeAcc=0,vibAcc=0;
+  for(var i=0;i<g.length;i++){
+    var p=g[i];
+    var base=(p.v?90:55)*(1+(Math.random()-0.5)*0.25);
+    dur+=base;
+    if(!p.v){ consE+=(p.a||0.5); edgeAcc+=(p.e||0); }
+    else { vowelE+=(p.w||0.7); }
+    if(p.vib) vibAcc+=1;
+  }
+  dur/=g.length;
+  S.consEnv=Math.min(1,S.consEnv+consE*0.25);
+  S.phraseEnv=Math.min(1,S.phraseEnv+vowelE*0.05);
+  S._phEdge=(S._phEdge||0)*0.7+edgeAcc*0.3;
+  S._phVib=(S._phVib||0)*0.7+vibAcc*0.25;
+  if(S.voiceMix>0.5){ S._phEdge*=1.2; if(vibAcc) S._phVib*=1.4; }
+  var domD=consE*0.03+vowelE*0.01;
+  S.phraseDom=Math.min(1,S.phraseDom+(1-S.phraseDom)*domD);
+  var hasPlosive=g.some(function(ph){return ph.d;});
+  if(hasPlosive) S.consDir=(Math.random()<0.5?-1:1)*(0.5+consE*0.3);
+  S._phGroupT=Math.max(20,dur);
+  S._phGroupIdx=idx+1;
+}
+
+
   if(!words||!words.length) return [];
   var segs=[]; var last=0;
   words.forEach(function(w,i){
@@ -3607,8 +3667,11 @@ function initClipSystem(){
       clip.words=parseWords(text);
       clip.segments=autoSegments(clip.words);
       clip.phonemes=textToPhonemes(text);
-      // Load phoneme stream if follow mode active
-      if(S.followText){ S._phStream=clip.phonemes; S._ph={i:0,t:0}; }
+      clip.phGroups=groupPhonemes(clip.phonemes);
+      if(S.followText){
+        S._phStream=clip.phonemes; S._ph={i:0,t:0};
+        S._phGroups=clip.phGroups; S._phGroupIdx=0; S._phGroupT=0;
+      }
       var segEl=document.getElementById('segStatus');
       if(segEl) segEl.textContent=clip.segments.length+' segs / '+clip.phonemes.filter(function(p){return !p.pause;}).length+' phones';
       renderClipList();
@@ -3626,7 +3689,9 @@ function initClipSystem(){
       var clip=cid?getClip(cid):(S.samplePool.clips[S.samplePool.clips.length-1]||null);
       if(clip){
         if(!clip.phonemes) clip.phonemes=textToPhonemes(clip.text||'');
+        if(!clip.phGroups) clip.phGroups=groupPhonemes(clip.phonemes);
         S._phStream=clip.phonemes; S._ph={i:0,t:0};
+        S._phGroups=clip.phGroups; S._phGroupIdx=0; S._phGroupT=0;
       }
     } else {
       S._phStream=null;
@@ -3794,6 +3859,13 @@ function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   }
   sizeA+=txtDensity*6*sc;
   sizeB+=txtDensity*4*sc;
+  // Fix 8: phoneme group size adds visual weight
+  if(S&&S._phGroups&&S._phGroups.length){
+    var gi2=(S._phGroupIdx||0)%S._phGroups.length;
+    var gSize=S._phGroups[gi2]?S._phGroups[gi2].length:1;
+    sizeA+=gSize*3*sc;
+    sizeB+=gSize*2*sc;
+  }
 
   // Fix 1: focus hierarchy — dominant element gets full alpha, rest recedes
   var focus = Math.max(aDom, bDom, pDom);
