@@ -444,6 +444,8 @@ var S = {
   intent:0, intentEnv:0.0, intentTimer:0,
   // Fix 4: intent weight for narrative continuity
   intentWeight:1.0, intentDecay:0.995,
+  // v22.6 text integration
+  _intentBias:0, _segEnergy:0, _textTimingNudge:0, _textSwing:0,
   // v20.5 Phrase Macro Memory
   phraseMem:[], phraseCap:null, phraseClock:0,
   // v20.6 Phrase Dominance
@@ -1083,7 +1085,9 @@ function applyDSP(spec){
   // Task 4: intent reverb + global level
   if(S.intent===3) wetAmt*=(1-iv*0.3);
   wetAmt*=(1+bW*0.25);
-  if(S.convMode===3){wetAmt*=1.15; smearUsed*=0.9;}   // Task 5 v21.2: DELAY = space + clarity
+  if(S.convMode===3){wetAmt*=1.15; smearUsed*=0.9;}
+  // v22.6: segment energy arc — reverb breathes with segment position
+  wetAmt*=(0.9+(S._segEnergy||0)*0.2);
   // gainSum intent level (silence fade vs normal)
   if(gainSum){
     var intentLevel=S.intent===4?0.85:1.0;
@@ -1541,7 +1545,13 @@ function playTick(){
   S.intentEnv+=(1-S.intentEnv)*0.2;   // smooth envelope toward 1
   if(S.intent!==prevIntent) S.intentTimer=0;
   S.intentTimer+=dt;
-  S.intentWeight*=S.intentDecay;   // Fix 4: slow decay for narrative continuity
+  S.intentWeight*=S.intentDecay;
+  // Text intentBias decays and blends with computed intent
+  S._intentBias=(S._intentBias||0)*0.97;
+  if(S._intentBias>0.15 && S.intent!==2){
+    // bias toward CALL/reflection without hard override
+    S.intentEnv=Math.min(1,S.intentEnv+(S._intentBias*0.1));
+  }
   // v21.2 Task 1: conversational behavior selection — with hysteresis lock
   if(S.convLock>0) S.convLock-=dt;
   if(S.turnState===0&&S.phraseEnv>0.4){
@@ -2509,6 +2519,8 @@ function scheduleMotifStep(step,scheduledTime){
   // Task 4: timing drift proportional to mutation
   var tDrift=(Math.random()-0.5)*S.pqInterval*0.08*mut;
   tDrift*=(1+S.novelty*0.5);
+  // v22.6: text timing nudge — word length humanizes motif timing
+  tDrift*=(1+(S._textTimingNudge||0));
   // convMode timing adjustment (uses snap)
   if(snap.convMode===1) tDrift*=0.5;
   else if(snap.convMode===2) tDrift*=(1+snap.convEnv*0.2);  // Task 4 reduced: 0.2 was 0.3
@@ -2865,7 +2877,7 @@ function updateTextState(elapsed){
   S.visualState.wordIndex = wIdx;
   S.visualState.emphasis = emph;
 
-  // ── SEGMENT HOOK — drives engine from text position ───────────
+  // ── SEGMENT HOOK — soft bias, not hard override ───────────────
   if(clip.segments && clip.segments.length){
     var seg=null;
     for(var si=0;si<clip.segments.length;si++){
@@ -2873,20 +2885,39 @@ function updateTextState(elapsed){
     }
     if(seg){
       S.visualState.segment=seg.label;
-      // Segment duration drives intent: long = reflection, short = call
+      // Segment energy arc — sin curve: soft start, peak, soft close
+      var segPos=(prog-seg.t0)/Math.max(0.001,seg.t1-seg.t0);
+      S._segEnergy=Math.sin(segPos*Math.PI);
+      // Soft intent bias (long segments = reflective), not hard override
       var segDur=seg.t1-seg.t0;
-      if(segDur>0.3&&S.intent!==1) S.intent=3;  // long segment → CALL / reflection
+      if(segDur>0.3){
+        S._intentBias=(S._intentBias||0)*0.9+0.2;
+      } else {
+        S._intentBias=(S._intentBias||0)*0.85;
+      }
     }
   }
 
-  // ── FOLLOW TEXT MODE — word position nudges targetMatter ─────
+  // ── FOLLOW TEXT MODE — text drives timing, convMode, voice B ─────
   if(S.followText && clip.words && wIdx>0){
-    var w=clip.words[wIdx];
-    // emphasis words push matter; normal words pull toward center
-    var nudge=w.e?0.04:-0.01;
+    var fw=clip.words[wIdx];
+    var fwLen=fw.w.length;
+    // Spectrum nudge (existing)
+    var nudge=fw.e?0.04:-0.01;
     S.targetMatter=clamp(S.targetMatter+nudge*(Math.random()-0.5)*0.5);
-    // phrasing rhythm: consonant words (short) add energy spike
-    if(w.w.length<=3) S.consEnv=Math.min(1,S.consEnv+0.15);
+    if(fwLen<=3) S.consEnv=Math.min(1,S.consEnv+0.15);
+    // Timing humanization — word length affects motif timing
+    S._textTimingNudge=(Math.random()-0.5)*0.02*(fwLen/6);
+    // Micro swing: short words tighten timing
+    S._textSwing=fwLen<=3?0.1:0;
+    // convMode from word character — punctuation → echo, long → reflexion
+    if(fw.e)        S.convMode=1;   // emphasis → MIMIC
+    else if(fwLen>8) S.convMode=3;  // long word → DELAY
+    else if(S.convMode===1||S.convMode===3) S.convMode=0;  // decay back to neutral
+    // Voice B reads too — B "reacts" to text when it's speaking
+    if(S.voiceMix>0.5){
+      S.consEnvB=Math.min(1,S.consEnvB+0.1*(fw.e?1:0.4));
+    }
   }
 }
 
@@ -3612,6 +3643,10 @@ function veDrawDominance(ctx, W, H, pDom){
 function veDrawVoices(ctx, W, H, vMix, turn, pDom, conv){
   var xA = W*0.3;
   var xB = W*0.7;
+  // v22.6: text timing nudge physically displaces voices
+  var txtF=(S&&S._textTimingNudge)||0;
+  xA+=txtF*200*(_ve.scale||1);
+  xB-=txtF*200*(_ve.scale||1);
   var sc = _ve.scale||1;
   var BASE_R = 40*sc;
 
