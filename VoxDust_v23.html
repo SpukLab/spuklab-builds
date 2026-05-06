@@ -1737,10 +1737,11 @@ function playTick(){
 
   // Fix 4: phraseDom needs a floor decay — without it, aura stays stuck
   if(S.energyFac<0.2) S.phraseDom*=0.985;
-  // Contour blend mix: bDom drives A→B, convMode adds bias
-  S._contourMix=Math.min(1,Math.max(0,
+  // Contour blend mix: bDom drives A→B with EMA inertia (no jitter)
+  var targetMix=Math.min(1,Math.max(0,
     (S._bDom||0)*0.8 + (S.convMode===3?0.2:0) + (S.convMode===2?-0.1:0)
   ));
+  S._contourMix=((S._contourMix||0)*0.94+targetMix*0.06);  // EMA 0.06 ≈ 400ms inertia
   // Apply blend when following text or in response
   if((S.followText||S.crResponding) && (S._contourA||S._contourB)){
     applyContourBlend();
@@ -3479,19 +3480,28 @@ function commitContour(sentence){
   S.contourIdx=(S.contourIdx+1)%8;
   // Blend: A = what was just spoken, B = best memory pick
   S._contourA=c;
-  S._contourB=pickContour()||c;  // fallback to self if ring empty
+  var bPick=pickContour(c);  // exclude A from pick
+  S._contourB=bPick||null;   // null if ring empty — no self-reference
   S._cBuf=null;
 }
 
-function pickContour(){
+function pickContour(exclude){
   var best=null,bestScore=-1;
+  var recentIdx=(S.contourIdx-1+8)%8;
   for(var i=0;i<8;i++){
     var c=S.contours[i];
     if(!c||!c.len) continue;
-    var age=i===((S.contourIdx-1+8)%8)?0.8:1.0;
-    var typeMatch=(c.type===(S.intent-1))?1.2:1.0;
-    var novelty=1-Math.abs(c.energy-(S.phraseEnv||0));
-    var score=age*typeMatch*novelty;
+    if(exclude&&c===exclude) continue;  // skip self
+    // Recency: most recent = 1.2 (favor), others = 1.0
+    var recency=i===recentIdx?1.2:1.0;
+    // Type affinity: match sentence type to convMode expectation
+    // DELAY(3)→QUESTION(1), MIMIC(1)→STATEMENT(0), OPPOSE(2)→any, NEUTRAL→STATEMENT
+    var wantType=S.convMode===3?1:S.convMode===1?0:S.convMode===2?c.type:0;
+    var typeMatch=c.type===wantType?1.2:1.0;
+    // Energy affinity: prefer contours close to current phraseEnv
+    var energyDiff=Math.abs(c.energy-(S.phraseEnv||0));
+    var novelty=1-energyDiff;  // high when energies match
+    var score=recency*typeMatch*novelty;
     if(score>bestScore){bestScore=score;best=c;}
   }
   return best;
@@ -3538,20 +3548,18 @@ function blendStress(a,b,x){
 
 function applyContourBlend(){
   var a=S._contourA, b=S._contourB, x=S._contourMix||0;
-  var v=blendContours(a,b,x);
-  // conv grammar on blended value
+  if(!a) return;  // nothing to apply without A
+  // If no B, use A only (x→0 automatically)
+  var v=b?blendContours(a,b,x):sampleContour(a);
   var m=S.convMode, env=Math.min(1,S.convEnv||0);
-  if(m===2) v=1-v;              // OPPOSE: invert
-  else if(m===3) v*=(1-env*0.25); // DELAY: softer
-  v=Math.min(1,Math.max(0,v*0.8));  // attenuate to not compete
+  if(m===2) v=1-v;
+  else if(m===3) v*=(1-env*0.25);
+  v=Math.min(1,Math.max(0,v*0.8));
   S.phraseEnv=Math.min(1,S.phraseEnv+(v-S.phraseEnv)*0.06);
-  S.phraseEnv*=0.98;  // prevent accumulation
+  S.phraseEnv*=0.98;
   S._prosody=(S._prosody||0)+(v-S._prosody)*0.08;
   S._textTimingNudge=(S._textTimingNudge||0)+(v-0.5)*0.01;
-  // stress from blend
-  if(blendStress(a,b,x)){
-    S.consEnv=Math.min(1,S.consEnv+0.1);
-  }
+  if(b&&blendStress(a,b,x)) S.consEnv=Math.min(1,S.consEnv+0.1);
 }
 
 
@@ -4036,7 +4044,6 @@ function veDraw(ctx, canvas){
   veDrawContoursAB(ctx, W, H);
   veDrawContourBlend(ctx, W, H);
   veDrawBlendCursor(ctx, W, H);
-  veDrawContour(ctx, W, H);
   veDrawText(ctx, W, H, txt, prog, conv, pDom, vs, vMix);
   veDrawOverlays(ctx, W, H, intent, conv, turn, pDom);
 }
@@ -4168,41 +4175,45 @@ function _drawContourLine(ctx, c, color, W, H){
 }
 
 function veDrawContoursAB(ctx, W, H){
-  // A = cyan (performer), B = magenta (memory)
-  _drawContourLine(ctx, S._contourA, 'rgba(120,220,255,0.25)', W, H);
-  _drawContourLine(ctx, S._contourB, 'rgba(255,120,220,0.25)', W, H);
+  // Ghost lines: lower alpha so blend line dominates
+  _drawContourLine(ctx, S._contourA, 'rgba(120,220,255,0.18)', W, H);
+  if(S._contourB) _drawContourLine(ctx, S._contourB, 'rgba(255,120,220,0.18)', W, H);
 }
 
 function veDrawContourBlend(ctx, W, H){
   var a=S._contourA, b=S._contourB, mix=S._contourMix||0;
-  if(!a&&!b) return;
+  if(!a) return;  // nothing to draw without at least A
   var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
+  // Alpha: stronger at extremes (clear A or B), softer at midpoint (ambiguous blend)
+  var blendAlpha=0.4+Math.abs(mix-0.5)*0.6;
   ctx.beginPath();
   for(var i=0;i<32;i++){
     var xn=i/31;
-    var iA=a?Math.min(a.len-1,(xn*(a.len-1))|0):0;
+    var iA=Math.min(a.len-1,(xn*(a.len-1))|0);
     var iB=b?Math.min(b.len-1,(xn*(b.len-1))|0):0;
-    var vA=a?a.curve[iA]:0, vB=b?b.curve[iB]:0;
+    var vA=a.curve[iA], vB=b?b.curve[iB]:vA;
     var gA=Math.cos(mix*Math.PI*0.5), gB=Math.cos((1-mix)*Math.PI*0.5);
     var v=Math.min(1,Math.max(0,vA*gA+vB*gB));
-    // OPPOSE: invert blend visually
-    if(S.convMode===2) v=1-v;
+    if(S.convMode===2) v=1-v;  // OPPOSE: flip
     var x=cx-160*sc+i*(320*sc/32);
     var y=cy+(v-0.5)*(-100)*sc;
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
-  ctx.strokeStyle='rgba(255,200,120,0.7)';
-  ctx.lineWidth=3*sc; ctx.stroke(); ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(255,200,120,'+blendAlpha.toFixed(2)+')';
+  ctx.lineWidth=2.5*sc; ctx.stroke(); ctx.lineWidth=1;
 }
 
 function veDrawBlendCursor(ctx, W, H){
   var a=S._contourA, b=S._contourB, mix=S._contourMix||0;
-  if(!a&&!b) return;
+  if(!a) return;
+  var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
+  // X follows pqPhase — shows current position on the curve
+  var pq=S.pqPhase||0;
+  var cursorX=cx-160*sc+pq*(320*sc);
   var v=blendContours(a,b,mix);
   if(S.convMode===2) v=1-v;
-  var sc=_ve.scale||1, cx=_ve.cx, cy=_ve.cy;
   var y=cy+(v-0.5)*(-100)*sc;
-  ctx.beginPath(); ctx.arc(cx, y, 5*sc, 0, Math.PI*2);
+  ctx.beginPath(); ctx.arc(cursorX, y, 4*sc, 0, Math.PI*2);
   ctx.fillStyle='rgba(255,220,140,1)'; ctx.fill();
 }
 
