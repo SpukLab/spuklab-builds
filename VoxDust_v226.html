@@ -232,6 +232,19 @@ button.rec-live{background:rgba(255,0,0,.15);color:#ff4444;border-color:rgba(255
 
   <div id="st">v18 loading...</div>
 
+  <!-- TEXT ENGINE — auto-compile text to timeline -->
+  <div class="sec" id="teSec">
+    <div class="slbl">Text → Engine</div>
+    <textarea id="teText" rows="4" placeholder="pegá texto aquí → compilar → play" style="width:100%;background:rgba(153,68,255,.07);border:1px solid var(--border);border-radius:4px;color:var(--w);font-family:'JetBrains Mono',monospace;font-size:9px;font-style:italic;padding:4px;resize:none;box-sizing:border-box"></textarea>
+    <div class="row" style="gap:6px;margin-top:4px">
+      <label style="font-size:9px">WPM</label>
+      <input type="number" id="teWpm" value="140" min="60" max="280" style="width:44px;background:rgba(153,68,255,.07);border:1px solid var(--border);border-radius:4px;color:var(--w);font-size:9px;padding:2px 4px">
+      <button id="teCompileBtn">COMPILE</button>
+      <button id="teRunBtn">COMPILE+RUN</button>
+      <span class="val" id="teStatus" style="flex:1;text-align:left;font-size:9px;color:var(--dim)">idle</span>
+    </div>
+  </div>
+
   <!-- CLIP SYSTEM -->
   <div class="sec" id="clipSec">
     <div class="slbl">Clips</div>
@@ -2806,6 +2819,7 @@ function executeTimelineEvent(ev){
     if(ev.target === 'smear'   && ev.value!==undefined) S.targetMatter = clamp(Math.pow(ev.value,0.45));
     if(ev.target === 'form'    && ev.value!==undefined) S.targetMatter = clamp(1-Math.pow(ev.value,0.67));
     if(ev.target === 'matter'  && ev.value!==undefined) S.targetMatter = clamp(ev.value);
+    if(ev.target === '_convMode'&&ev.value!==undefined) S.convMode = ev.value;
   } else if(ev.type === 'LIVE_ON'){
     S.deckA.active = false; S.deckB.active = false;
   } else if(ev.type === 'LIVE_OFF'){
@@ -2931,7 +2945,168 @@ function removeClip(id){
   renderClipList();
 }
 
-// ── INIT CLIP SYSTEM ─────────────────────────────────────────────
+// ================================================================
+// TEXT → EVENT ENGINE — compila texto en timeline automático
+// Compatible con buildTimeline() + loadClip() + intent/convMode
+// ================================================================
+
+// ── SENTENCE SPLITTER ────────────────────────────────────────────
+function splitSentences(text){
+  return text
+    .replace(/\n+/g,' ')
+    .split(/([.!?…]+)/)
+    .reduce(function(acc,part,i,arr){
+      // recombine sentence with its punctuation
+      if(i%2===0){
+        var punct=arr[i+1]||'';
+        var s=(part+punct).trim();
+        if(s) acc.push(s);
+      }
+      return acc;
+    },[])
+    .filter(function(s){return s.length>1;});
+}
+
+function tokenize(s){ return s.split(/\s+/).filter(Boolean); }
+
+// ── INTENT DETECTION ─────────────────────────────────────────────
+function detectIntent(s){
+  var sl=s.toLowerCase();
+  if(/[¿?]/.test(s))                                        return 3; // CALL
+  if(/\bno\b|contra|pero|fanatismo|caos|nunca|jamás/.test(sl)) return 2; // CONTRAST
+  if(/silencio|nada|vacío|quietud|pausa/.test(sl))          return 4; // SILENCE
+  return 1; // FOLLOW default
+}
+
+// ── CONVMODE DETECTION ────────────────────────────────────────────
+function detectConvMode(s,intent){
+  var sl=s.toLowerCase();
+  if(intent===3) return 3;  // CALL → DELAY
+  if(intent===2) return 2;  // CONTRAST → OPPOSE
+  if(/repite|eco|reflejo|otra vez|de nuevo/.test(sl)) return 1; // MIMIC
+  return 0;  // NEUTRAL
+}
+
+// ── PAUSE BY PUNCTUATION ─────────────────────────────────────────
+function punctuationPause(s){
+  if(/…|\.\.\./.test(s)) return 1.2;
+  if(/\?$/.test(s))      return 0.8;
+  if(/!$/.test(s))       return 0.6;
+  if(/,$/.test(s))       return 0.3;
+  return 0.5;
+}
+
+// ── TEXT-ONLY CLIP (no audio buffer — text-sync only) ─────────────
+function makeTextClip(text,intent){
+  var id='txt_'+Date.now()+'_'+(Math.random()*1e4|0);
+  var words=parseWords(text);
+  // Estimate duration from word count at 140wpm
+  var estDur=Math.max(1, tokenize(text).length*(60/140));
+  // Create silent AudioBuffer as carrier
+  var sr=AC?AC.sampleRate:44100;
+  var buf=AC.createBuffer(1,Math.round(estDur*sr),sr);
+  var analysis={rms:0,centroid:0.3,energyCurve:new Float32Array(64).fill(0.1)};
+  var clip={
+    id:id, buffer:buf, duration:estDur,
+    rms:0, centroid:0.3, energyCurve:analysis.energyCurve,
+    text:text, textRaw:text,
+    words:words, segments:autoSegments(words),
+    intent:intent, ready:true,
+    name:text.slice(0,22)+'..'
+  };
+  S.samplePool.clips.push(clip);
+  renderClipList();
+  return id;
+}
+
+// ── MAIN COMPILER ─────────────────────────────────────────────────
+function textToEvents(text, opts){
+  opts=opts||{};
+  var WPM=opts.wpm||140;
+  var baseDur=60/WPM;
+  var sentences=splitSentences(text);
+  if(!sentences.length) return [];
+
+  var t=0;
+  var evts=[];
+
+  sentences.forEach(function(s,i){
+    var words=tokenize(s);
+    // Fix 1: human timing variation ±10%
+    var dur=words.length*baseDur*(0.9+Math.random()*0.2);
+    var intent=detectIntent(s);
+    var convM=detectConvMode(s,intent);
+    // Fix 3: alternate A/B
+    var deck=i%2===0?'A':'B';
+
+    // Create text-only clip (silent carrier with text metadata)
+    var clipId=makeTextClip(s,intent);
+
+    // CROSSFADE before play (except first)
+    if(i>0){
+      evts.push({t:Math.max(0,t-0.4),type:'CROSSFADE',target:deck,duration:400});
+    }
+
+    // PLAY
+    evts.push({
+      t:t, type:'PLAY', target:deck, clipId:clipId,
+      freeze:intent===4  // SILENCE → freeze DSP
+    });
+
+    // SET_PARAM: entropy by intent
+    var entVal=intent===2?0.7:intent===3?0.5:intent===4?0.15:0.35;
+    evts.push({t:t+0.05,type:'SET_PARAM',target:'entropy',value:entVal});
+
+    // SET_PARAM: matter/form by intent
+    var matterVal=intent===2?0.75:intent===3?0.35:intent===4?0.1:0.45;
+    evts.push({t:t+0.05,type:'SET_PARAM',target:'matter',value:matterVal});
+
+    // convMode injection via S state (not a timeline event — set directly)
+    evts.push({t:t,type:'SET_PARAM',target:'_convMode',value:convM});
+
+    // DELAY: late cognitive response
+    if(convM===3){
+      evts.push({t:t+dur*0.6,type:'SET_PARAM',target:'entropy',value:0.6});
+    }
+
+    // Fix 2: micro silence injection (20% probability)
+    var extra=punctuationPause(s);
+    if(Math.random()<0.2) extra+=0.2+Math.random()*0.3;
+    t+=dur+extra;
+  });
+
+  return evts;
+}
+
+// ── _convMode SET_PARAM hook (in executeTimelineEvent) ──────────
+// Add handling for _convMode in existing executeTimelineEvent:
+// if(ev.target === '_convMode') S.convMode = ev.value;
+
+// ── UI: TEXT COMPILER SECTION ─────────────────────────────────────
+function initTextEngine(){
+  var compileBtn=document.getElementById('teCompileBtn');
+  var teText=document.getElementById('teText');
+  var teStatus=document.getElementById('teStatus');
+  if(!compileBtn||!teText) return;
+
+  compileBtn.addEventListener('click',function(){
+    var text=teText.value.trim();
+    if(!text){teStatus.textContent='sin texto';return;}
+    // Clear old text clips
+    S.samplePool.clips=S.samplePool.clips.filter(function(c){return c.id.indexOf('txt_')!==0;});
+    var evts=textToEvents(text,{wpm:parseInt(document.getElementById('teWpm').value)||140});
+    buildTimeline(evts);
+    teStatus.textContent=evts.length+' eventos / '+S.samplePool.clips.filter(function(c){return c.id.indexOf('txt_')===0;}).length+' frases';
+    renderClipList();
+  });
+
+  document.getElementById('teRunBtn').addEventListener('click',function(){
+    if(!S.timeline.length){document.getElementById('teCompileBtn').click();}
+    startTimeline();
+  });
+}
+
+
 function initClipSystem(){
   var loadBtn  = document.getElementById('clipLoadBtn');
   var fileIn   = document.getElementById('clipFileIn');
@@ -3716,6 +3891,7 @@ async function init(){
   updateTakeList();
   initUI();
   initClipSystem();
+  initTextEngine();
   drawAnalyser();
   updateSpectralUI();
   setStatus('v19 loading PV...',false);
