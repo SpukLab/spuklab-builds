@@ -3555,62 +3555,6 @@ function renderBank(){
 }
 
 
-}
-
-
-
-  var fileIn   = document.getElementById('clipFileIn');
-  var deckMixSl= document.getElementById('deckMixSlider');
-  var deckABtn = document.getElementById('deckABtn');
-  var deckBBtn = document.getElementById('deckBBtn');
-  var tlPlay   = document.getElementById('tlPlayBtn');
-  var tlStop   = document.getElementById('tlStopBtn');
-
-  loadBtn.addEventListener('click', function(){
-    AC.resume();
-    fileIn.value='';
-    setTimeout(function(){ fileIn.value=''; }, 0);  // Fix 8: iOS Safari same-file reload guard
-    fileIn.click();
-  });
-  fileIn.addEventListener('change', function(e){
-    var file = e.target.files[0]; if(!file) return;
-    var text = document.getElementById('clipText').value||'';
-    document.getElementById('clipStatus').textContent = 'loading...';
-    loadClip(file, {text:text, intent:null}).then(function(){
-      fileIn.value='';
-    }).catch(function(){
-      document.getElementById('clipStatus').textContent='error'; fileIn.value='';
-    });
-  });
-
-  deckMixSl.addEventListener('input', function(e){
-    S.deckTarget = e.target.value/100;
-  });
-  deckABtn.addEventListener('click', function(){
-    if(S.samplePool.clips.length>0) playClipOnDeck('A', S.samplePool.clips[0].id);
-  });
-  deckBBtn.addEventListener('click', function(){
-    var idx = S.samplePool.clips.length>1?1:0;
-    if(S.samplePool.clips.length>0) playClipOnDeck('B', S.samplePool.clips[idx].id);
-  });
-
-  tlPlay.addEventListener('click', function(){
-    if(S.timeline.length===0){
-      // auto-build demo from loaded clips
-      var evts=[];
-      S.samplePool.clips.forEach(function(c,i){
-        if(i>0) evts.push({t:i*c.duration-0.5,type:'CROSSFADE',target:i%2===0?'A':'B',duration:500});
-        evts.push({t:i*c.duration,type:'PLAY',target:i%2===0?'A':'B',clipId:c.id});
-      });
-      buildTimeline(evts);
-    }
-    startTimeline();
-  });
-  tlStop.addEventListener('click', function(){
-    S.timelineRunning=false; S.deckFreezeActive=false;
-    document.getElementById('tlStatus').textContent='stopped';
-  });
-}
 
 
 
@@ -4606,28 +4550,28 @@ function initUI(){
   // LOAD A/B — iOS canonical: sync resume → fi.click() → file.arrayBuffer() → ingestAudioBuffer
   function _makeLoadHandler(slot){
     return function(){
-      AC.resume();           // sync — no await, stays in gesture stack
+      // iOS fix: onchange MUST be registered before click()
       var fi=document.getElementById('file'+slot);
-      fi.value='';           // reset before click (iOS reuse fix)
-      fi.click();            // must be in same sync gesture
       fi.onchange=function(){
         var file=fi.files[0]; if(!file) return;
         fi.value='';
-        console.log('[LOAD]',slot,file.name,file.type,file.size,'AC:',AC.state);
-        if(AC.state!=='running'){
-          console.warn('[LOAD] AC not running, state:',AC.state);
-          AC.resume();
-        }
+        console.log('[LOAD]',slot,file.name,file.size,'AC:',AC.state);
         var text=(document.getElementById('clipText')||{}).value||'';
         document.getElementById('stat'+slot).textContent='loading…';
         setLoaderStatus('loading…');
-        var abP=file.arrayBuffer?file.arrayBuffer():new Promise(function(res,rej){
-          var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file);
-        });
-        abP.then(function(ab){ return ingestAudioBuffer(ab,text,file.name,slot); })
-          .then(function(c){ if(c) document.getElementById('stat'+slot).textContent=c.name; })
-          .catch(function(e){ console.error('[LOAD ERR]',slot,e); setLoaderStatus('error: '+(e&&e.message||'decode failed')); });
+        // FileReader: most compatible path for iOS Safari gesture chain
+        var reader=new FileReader();
+        reader.onload=function(ev){
+          ingestAudioBuffer(ev.target.result,text,file.name,slot)
+            .then(function(c){ if(c) document.getElementById('stat'+slot).textContent=c.name; })
+            .catch(function(e){ console.error('[DECODE ERR]',e); setLoaderStatus('decode failed — try WAV'); });
+        };
+        reader.onerror=function(e){ console.error('[READER ERR]',e); };
+        reader.readAsArrayBuffer(file);
       };
+      AC.resume();    // sync resume — after onchange, before click
+      fi.value='';    // allow re-selecting same file
+      fi.click();     // open picker in same gesture
     };
   }
   document.getElementById('loadA').addEventListener('click',_makeLoadHandler('A'));
