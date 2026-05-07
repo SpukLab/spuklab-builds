@@ -4,247 +4,144 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>VoxDust — Projection</title>
+<meta name="mobile-web-app-capable" content="yes">
+<title>VoxDust Projection</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:none;}
   canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;}
-  #idle{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);font:italic 10px "JetBrains Mono",monospace;color:rgba(255,255,255,0.18);pointer-events:none;}
+  #idle{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    font:italic 9px/1 monospace;color:rgba(255,255,255,0.15);pointer-events:none;transition:opacity 1s;}
 </style>
 </head>
 <body>
 <canvas id="pc"></canvas>
-<div id="idle">VoxDust — waiting for signal</div>
-
+<div id="idle">VoxDust</div>
 <script>
-// ── STATE ─────────────────────────────────────────────────────────
-var state = {
-  visual:{text:'',progress:0,wordIndex:0,emphasis:false,rms:0,smear:0,form:0},
-  fftBins:[], aDom:0, bDom:0,
-  phraseDom:0, voiceMix:0,
-  turnState:0, intent:0, convMode:0, rms:0
-};
-var hasSignal = false;
-var lastSignal = 0;
-
-window.addEventListener('message', function(e){
+var state=null, lastSignal=0;
+window.addEventListener('message',function(e){
   if(!e.data||typeof e.data!=='object') return;
-  state = e.data;
-  hasSignal = true;
-  lastSignal = performance.now();
+  state=e.data; lastSignal=performance.now();
   document.getElementById('idle').style.opacity='0';
 });
 
-// ── CANVAS SETUP ─────────────────────────────────────────────────
-var c = document.getElementById('pc');
-var ctx = c.getContext('2d');
-var DPR = Math.min(1.5, window.devicePixelRatio||1);  // 1.5 cap — 2.0 causes GPU drops on HDMI
-var W, H, SCALE;
-
+var c=document.getElementById('pc'), ctx=c.getContext('2d');
+var DPR=Math.min(1.25,window.devicePixelRatio||1), W, H, SCALE;
 function resize(){
-  DPR = Math.min(1.5, window.devicePixelRatio||1);
-  c.width  = Math.round(window.innerWidth  * DPR);
-  c.height = Math.round(window.innerHeight * DPR);
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  W = window.innerWidth;
-  H = window.innerHeight;
-  SCALE = Math.min(W,H)/600;
+  DPR=Math.min(1.25,window.devicePixelRatio||1);
+  c.width=Math.round(innerWidth*DPR); c.height=Math.round(innerHeight*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=true;
+  W=innerWidth; H=innerHeight; SCALE=Math.min(W,H)/600;
 }
-window.addEventListener('resize', resize);
-resize();
+window.addEventListener('resize',resize); resize();
 
-// WakeLock — prevent screen sleep during installation
-var _wakeLock=null;
-async function _requestWake(){
-  try{if('wakeLock' in navigator) _wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
-}
-document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible') _requestWake();
-});
-_requestWake();
+// WakeLock
+var _wl=null;
+async function _wake(){ try{if('wakeLock' in navigator) _wl=await navigator.wakeLock.request('screen');}catch(e){} }
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible') _wake();});
+_wake();
 
-// ── SMOOTH STATE ─────────────────────────────────────────────────
-var sm = {
-  bgHue:210, bgL:8,
-  aOff:0, bOff:0,
-  aAlpha:0.5, bAlpha:0.5,
-  dom:0, hue:210
-};
+var sm={bgHue:210,bgL:8,aOff:0,bOff:0,dom:0};
+var _fc=0;
 
-// ── RENDER LOOP ───────────────────────────────────────────────────
-var frameCount=0;
 function draw(){
-  requestAnimationFrame(draw);
-  frameCount++;
-
-  // Fix 3: guard against empty/incomplete state (first frames)
+  requestAnimationFrame(draw); _fc++;
   if(!state||!state.visual) return;
-
-  // Adaptive fps
-  if(performance.now()-lastSignal > 3000 && hasSignal){
-    document.getElementById('idle').style.opacity='0.5';
-  }
-
-  // Adaptive fps: 30fps when quiet
-  var smear=(state.visual&&state.visual.smear)||0;
-  var dom=state.phraseDom||0;
+  var smear=(state.visual&&state.visual.smear)||0, dom=state.phraseDom||0;
   var fps=(smear<0.15&&dom<0.15)?30:60;
-  if(frameCount % Math.round(60/fps) !== 0) return;
+  if(_fc%Math.round(60/fps)!==0) return;
 
-  // Smooth inputs
-  var intent=state.intent||0, conv=state.convMode||0;
-  var vMix=state.voiceMix||0;
-  var pDom=state.phraseDom||0;
-  var turn=state.turnState||0;
-  var aDom=state.aDom||0, bDom=state.bDom||0;
-  var rms=state.rms||0;
-  var vs=state.visual||{};
-  var ec=(vs.energyCurveVal)||0;
+  var vs=state.visual||{}, conv=state.convMode||0, vMix=state.voiceMix||0;
+  var turn=state.turnState||0, intent=state.intent||0;
+  var aDom=state.aDom||0, bDom=state.bDom||0, rms=state.rms||0;
+  var ec=vs.energyCurveVal||0;
 
-  var targetHue=intent===1?190:intent===2?310:intent===3?260:210;
-  sm.bgHue+=(targetHue-sm.bgHue)*0.04;
+  sm.bgHue+=((intent===1?190:intent===2?310:intent===3?260:210)-sm.bgHue)*0.04;
   sm.bgL+=((8+ec*10)-sm.bgL)*0.05;
-  sm.dom+=(pDom-sm.dom)*0.06;
+  sm.dom+=(dom-sm.dom)*0.06;
 
-  // CLEAR
-  ctx.fillStyle='hsl('+sm.bgHue.toFixed(0)+',40%,'+sm.bgL.toFixed(1)+'%)';
-  ctx.fillRect(0,0,W,H);
+  // Trail — fillRect only (stable on HDMI, no composite copy)
+  if(smear>0.45){ ctx.fillStyle='rgba(0,0,0,'+(0.08+smear*0.06)+')'; ctx.fillRect(0,0,W,H); }
+  else { ctx.clearRect(0,0,W,H); }
+
+  // Background
+  ctx.fillStyle='hsl('+sm.bgHue.toFixed(0)+',40%,'+sm.bgL.toFixed(1)+'%)'; ctx.fillRect(0,0,W,H);
   if(intent===4){ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,0,W,H);}
 
-  // ── DOMINANCE AURA (mid-layer) ──
-  if(sm.dom>0.05){
-    var sc=SCALE;
-    var auraA=Math.min(0.25,sm.dom*0.3);
-    var auraA2=Math.min(0.08,sm.dom*0.09);
-    var inner=50*sc, outer=(200+sm.dom*200)*sc*(1+rms*0.15);
-    var g=ctx.createRadialGradient(W/2,H/2,inner, W/2,H/2,outer);
-    g.addColorStop(0,'rgba(255,180,80,'+auraA+')');
-    g.addColorStop(0.7,'rgba(255,150,40,'+auraA2+')');
-    g.addColorStop(1,'rgba(0,0,0,0)');
+  var cx=W*0.5, cy=H*0.48, sc=SCALE;
+
+  // Dominance aura
+  if(sm.dom>0.12){
+    var auraA=Math.min(0.25,sm.dom*0.3), inner=50*sc, outer=(200+sm.dom*200)*sc*(1+rms*0.12);
+    var g=ctx.createRadialGradient(cx,cy,inner,cx,cy,outer);
+    g.addColorStop(0,'rgba(255,180,80,'+auraA+')'); g.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    if(sm.dom>0.65){
-      var ba=(sm.dom-0.65)/0.35*0.18;
-      ctx.fillStyle='rgba(255,140,0,'+ba+')';
-      ctx.fillRect(0,0,W,H*0.12);
-      ctx.fillRect(0,H*0.88,W,H*0.12);
-    }
+    if(sm.dom>0.65){var ba=(sm.dom-0.65)/0.35*0.18;ctx.fillStyle='rgba(255,140,0,'+ba+')';ctx.fillRect(0,0,W,H*0.1);ctx.fillRect(0,H*0.9,W,H*0.1);}
   }
 
-  // ── FFT TEXTURE (background) ──
+  // FFT — background texture only
   var fft=state.fftBins;
   if(fft&&fft.length){
-    var N=fft.length, baseY=H*0.82, tilt=(1-(vs.form||0))*55;
-    var xOff=turn===1?-30:turn===2?30:0;
-    ctx.globalAlpha=0.18+smear*0.07;
-    ctx.beginPath();
-    for(var i=0;i<N;i++){
-      var t2=i/(N-1);
-      var x2=t2*W+xOff, y2=baseY-fft[i]*(H*0.18)+t2*tilt;
-      if(i===0)ctx.moveTo(x2,y2);else ctx.lineTo(x2,y2);
-    }
-    ctx.strokeStyle='#9cf'; ctx.lineWidth=1; ctx.stroke();
-    ctx.globalAlpha=1;
+    var N=fft.length, baseY=H*0.82;
+    ctx.globalAlpha=0.12+smear*0.05; ctx.beginPath();
+    for(var i=0;i<N;i++){var t2=i/(N-1);var xi=Math.min(N-1,Math.floor(Math.pow(t2,2.2)*(N-1)));if(i===0) ctx.moveTo(t2*W,baseY-fft[xi]*(H*0.14)+t2*30);else ctx.lineTo(t2*W,baseY-fft[xi]*(H*0.14)+t2*30);}
+    ctx.strokeStyle='#9cf'; ctx.lineWidth=1; ctx.stroke(); ctx.globalAlpha=1;
   }
 
-  // ── VOICES ──
-  var xA=W*0.3, xB=W*0.7, cy=H*0.5;
-  var BASE_R=40*SCALE;
-  var sizeA=BASE_R+aDom*50*SCALE+pDom*30*SCALE;
-  var sizeB=BASE_R+bDom*50*SCALE+pDom*30*SCALE;
-  var aAlpha=(1-vMix)*0.9+0.1, bAlpha=vMix*0.9+0.1;
-  var focus=Math.max(aDom,bDom,pDom);
-  var focusA=0.6+focus*0.4;
-
-  // convMode offsets
-  var oA=0, oB=0;
-  if(conv===1){oA=(0.5-vMix)*80*SCALE; oB=(0.5-vMix)*80*SCALE;}
-  if(conv===2){oA=(vMix-0.5)*120*SCALE; oB=(vMix-0.5)*120*SCALE;}
-  sm.aOff+=(oA-sm.aOff)*0.08;
-  sm.bOff+=(oB-sm.bOff)*0.08;
-
+  // Voice fields
+  var rA=(40+aDom*60+sm.dom*30)*sc, rB=(40+bDom*60+sm.dom*30)*sc;
+  var fAlpha=0.6+Math.max(aDom,bDom,sm.dom)*0.4;
+  var oA=0,oB=0;
+  if(conv===1){oA=(0.5-vMix)*80*sc;oB=oA;}
+  if(conv===2){oA=(vMix-0.5)*120*sc;oB=oA;}
+  sm.aOff+=(oA-sm.aOff)*0.08; sm.bOff+=(oB-sm.bOff)*0.08;
   var ghost=conv===3?0.45:1;
 
-  ctx.globalAlpha=aAlpha*focusA;
-  ctx.beginPath(); ctx.arc(xA+sm.aOff,cy,sizeA,0,Math.PI*2);
-  ctx.fillStyle='rgba(120,220,255,0.85)'; ctx.fill();
+  ctx.globalAlpha=((1-vMix)*0.9+0.1)*fAlpha;
+  ctx.beginPath(); ctx.arc(cx-120*sc+sm.aOff,cy,rA,0,Math.PI*2);
+  ctx.fillStyle='rgba(120,220,255,0.9)'; ctx.fill();
 
-  ctx.globalAlpha=bAlpha*ghost*focusA;
-  ctx.beginPath(); ctx.arc(xB-sm.bOff,cy,sizeB,0,Math.PI*2);
-  ctx.fillStyle='rgba(255,120,220,0.85)'; ctx.fill();
+  ctx.globalAlpha=((vMix*0.9+0.1)*ghost)*fAlpha;
+  ctx.beginPath(); ctx.arc(cx+120*sc-sm.bOff,cy,rB,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,120,220,0.9)'; ctx.fill();
 
-  if(conv===3){
-    var gT=performance.now();
-    var gOx=18*SCALE+Math.sin(gT*0.002)*6;
-    var gOy=4+Math.cos(gT*0.0015)*4;
-    ctx.globalAlpha=bAlpha*0.2;
-    ctx.beginPath(); ctx.arc(xB-sm.bOff+gOx,cy+gOy,sizeB*0.85,0,Math.PI*2);
-    ctx.fillStyle='rgba(153,68,255,0.7)'; ctx.fill();
-  }
+  if(conv===3){var gT=performance.now();ctx.globalAlpha=(vMix*0.9+0.1)*0.18;ctx.beginPath();ctx.arc(cx+120*sc-sm.bOff+18*sc+Math.sin(gT*0.002)*6,cy+4+Math.cos(gT*0.0015)*4,rB*0.85,0,Math.PI*2);ctx.fillStyle='rgba(153,68,255,0.7)';ctx.fill();}
   ctx.globalAlpha=1;
 
-  // OVERLAP line
-  if(turn===3){
-    var iEnv=0.6;
-    ctx.beginPath(); ctx.moveTo(xA+sm.aOff,cy); ctx.lineTo(xB-sm.bOff,cy);
-    ctx.strokeStyle='rgba(255,255,255,'+(0.15+iEnv*0.3)+')';
-    ctx.lineWidth=1+Math.min(aDom,bDom)*4; ctx.stroke(); ctx.lineWidth=1;
-  }
+  if(turn===3){ctx.beginPath();ctx.moveTo(cx-120*sc+sm.aOff,cy);ctx.lineTo(cx+120*sc-sm.bOff,cy);ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1+Math.min(aDom,bDom)*4;ctx.stroke();ctx.lineWidth=1;}
 
-  // ── TEXT (focal) ──
+  // Stress flash
+  var edge=state.phEdge||0;
+  if(edge>0.05){ctx.beginPath();ctx.arc(cx,cy,120*sc,0,Math.PI*2);ctx.strokeStyle='rgba(255,180,80,'+Math.min(0.3,edge*0.45)+')';ctx.lineWidth=4*sc;ctx.stroke();ctx.lineWidth=1;}
+
+  // Text
   var txt=vs.text||'';
   if(txt){
-    var wIdx=vs.wordIndex||0, emph=vs.emphasis||false;
-    var words=txt.split(' ');
-    var baseSize=Math.round(22*SCALE);
-    var sc2=1+pDom*0.3; if(conv===2)sc2*=0.88;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.font='italic '+Math.round(baseSize*sc2)+'px "JetBrains Mono",monospace';
-    // shadow for legibility
-    ctx.shadowColor='rgba(0,0,0,0.65)';
-    ctx.shadowBlur=8*SCALE; ctx.shadowOffsetY=1;
-    // active word color: A→B interpolated
-    var wR=Math.round(120+(255-120)*vMix),wG=Math.round(220+(120-220)*vMix),wBB=Math.round(255+(220-255)*vMix);
-    var ac='rgb('+wR+','+wG+','+wBB+')';
+    var wIdx=vs.wordIndex||0,prog=vs.progress||0,pDom=sm.dom;
+    var words=txt.split(' '),bsz=Math.round((18+pDom*6)*sc);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='italic '+bsz+'px "JetBrains Mono",monospace';
+    ctx.shadowColor='rgba(0,0,0,0.7)';ctx.shadowBlur=10*sc;ctx.shadowOffsetY=1;
+    var wR=Math.round(120+(255-120)*vMix),wG=Math.round(220+(120-220)*vMix),wBc=Math.round(255+(220-255)*vMix);
+    var ac='rgb('+wR+','+wG+','+wBc+')';
     var textY=H*0.72-pDom*H*0.08;
-    // DELAY ghost
-    if(conv===3){
-      ctx.globalAlpha=0.18; ctx.fillStyle='rgba(153,68,255,1)';
-      ctx.fillText(txt,W/2+14,textY+5); ctx.globalAlpha=1;
-    }
-    // per-word
     var widths=[],totalW=0;
     words.forEach(function(w){var mw=ctx.measureText(w).width+5;widths.push(mw);totalW+=mw;});
     var curX=W/2-totalW/2;
     words.forEach(function(w,i){
-      ctx.globalAlpha=i===wIdx?1:0.22;
-      ctx.fillStyle=i===wIdx?(emph?'rgba(255,220,80,1)':ac):'rgba(255,255,255,1)';
+      ctx.globalAlpha=i===wIdx?1:0.2; ctx.fillStyle=i===wIdx?ac:'rgba(255,255,255,1)';
       ctx.fillText(w,curX+widths[i]/2,textY); curX+=widths[i];
     });
-    ctx.globalAlpha=1;
-    ctx.shadowBlur=0; ctx.shadowColor='transparent';
-    // progress bar
-    var prog=vs.progress||0;
-    ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(0,H-5,W,5);
-    ctx.fillStyle=ac; ctx.globalAlpha=0.85;
-    ctx.fillRect(0,H-5,W*prog,5); ctx.globalAlpha=1;
+    ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.shadowColor='transparent';
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,H-4,W,4);
+    ctx.fillStyle=ac;ctx.globalAlpha=0.8;ctx.fillRect(0,H-4,W*prog,4);ctx.globalAlpha=1;
   }
-
-  // ── MINIMAL OVERLAYS ──
-  ctx.globalAlpha=0.35;
-  ctx.font='10px "JetBrains Mono",monospace';
-  ctx.textBaseline='alphabetic';
-  var tLbls=['','A','B','A·B'][turn]||'';
-  if(tLbls){ctx.fillStyle='rgba(200,200,200,1)';ctx.textAlign='left';ctx.fillText(tLbls,10,H-10);}
-  if(sm.dom>0.5){ctx.fillStyle='rgba(255,165,40,1)';ctx.textAlign='right';ctx.fillText('MEM '+(sm.dom*100|0)+'%',W-10,14);}
-  ctx.globalAlpha=1; ctx.textAlign='left';
 }
-
 draw();
 
-// Fullscreen on tap/click — standard + webkit (iPad Safari)
 document.addEventListener('click',function(){
   var el=document.documentElement;
-  if(el.requestFullscreen)            el.requestFullscreen();
+  if(el.requestFullscreen) el.requestFullscreen();
   else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
 });
 </script>

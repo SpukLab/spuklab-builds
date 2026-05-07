@@ -2320,7 +2320,8 @@ function drawAnalyser(){
             aDom:S._aDom||0, bDom:S._bDom||0,
             phraseDom:S.phraseDom||0, voiceMix:S.voiceMix||0,
             turnState:S.turnState||0, intent:S.intent||0,
-            convMode:S.convMode||0, rms:S.rms||0
+            convMode:S.convMode||0, rms:S.rms||0,
+            phEdge:S._phEdge||0
           },'*');}catch(e){}
         }
       }
@@ -4828,13 +4829,13 @@ function initUI(){
     S.pmDensity=e.target.value/100;
     document.getElementById('pmDensV').textContent=e.target.value+'%';
   });
-  // MIC — await resume in same gesture, no setTimeout
-  document.getElementById('recA').addEventListener('click',function(){
-    AC.resume().then(function(){ toggleMic('A'); });
-  });
-  document.getElementById('recB').addEventListener('click',function(){
-    AC.resume().then(function(){ toggleMic('B'); });
-  });
+  // MIC — temporarily disabled (Safari iOS AudioContext interference)
+  var recABtn=document.getElementById('recA'), recBBtn=document.getElementById('recB');
+  if(recABtn){ recABtn.disabled=true; recABtn.title='mic off'; recABtn.style.opacity='0.25'; }
+  if(recBBtn){ recBBtn.disabled=true; recBBtn.title='mic off'; recBBtn.style.opacity='0.25'; }
+  // Restore mic: remove the 3 lines above and uncomment:
+  // document.getElementById('recA').addEventListener('click',function(){AC.resume().then(function(){toggleMic('A');});});
+  // document.getElementById('recB').addEventListener('click',function(){AC.resume().then(function(){toggleMic('B');});});
   // LOAD A/B — iOS canonical: sync resume → fi.click() → file.arrayBuffer() → ingestAudioBuffer
   function _makeLoadHandler(slot){
     return function(){
@@ -4877,7 +4878,7 @@ function initUI(){
     projWin=window.open(
       'https://spuklab.github.io/spuklab-builds/VoxDust_projection.html',
       'vox_proj',
-      'popup=yes,width=1280,height=720'
+      'popup=yes,width=1920,height=1080'
     );
     document.getElementById('projBtn').className='act';
     document.getElementById('projBtn').textContent='PROJ ON';
