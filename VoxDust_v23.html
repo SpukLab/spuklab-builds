@@ -1997,7 +1997,8 @@ async function toggleMic(slot){
 
 async function startMic(slot){
   try{
-    AC.resume();
+    // iOS Safari: resume must be awaited in the same click gesture chain
+    await AC.resume();
     micStream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
     });
@@ -2012,11 +2013,12 @@ async function startMic(slot){
     setTimeout(function(){
       micOn=true;
       var btn=slot==='A'?'recA':'recB';
-      document.getElementById(btn).className='rec-live';
+      var el=document.getElementById(btn);
+      if(el) el.className='rec-live';
       document.getElementById('stat'+slot).textContent='REC live';
       setStatus('recording '+slot+'...',true);
     },200);
-  } catch(e){setStatus('mic error: '+e.message,false);}
+  } catch(e){setStatus('mic: '+e.message,false);}
 }
 
 function stopMic(){
@@ -2025,20 +2027,42 @@ function stopMic(){
   var slot=micSlot;
   try{micProc.disconnect();}catch(e){}
   try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
-  document.getElementById(slot==='A'?'recA':'recB').className='';
+  var btnEl=document.getElementById(slot==='A'?'recA':'recB');
+  if(btnEl) btnEl.className='';
   document.getElementById('stat'+slot).textContent='processing...';
   if(micChunks.length===0){setStatus('no audio captured',false);return;}
+  // Assemble + normalize
   var len=0; micChunks.forEach(function(c){len+=c.length;});
-  var flat=new Float32Array(len), off=0;
+  var flat=new Float32Array(len),off=0;
   micChunks.forEach(function(c){flat.set(c,off);off+=c.length;});
   var peak=0; flat.forEach(function(v){if(Math.abs(v)>peak)peak=Math.abs(v);});
   if(peak>0) for(var i=0;i<flat.length;i++) flat[i]=flat[i]/peak*0.9;
-  var ab=AC.createBuffer(1,len,AC.sampleRate);
-  ab.getChannelData(0).set(flat);
-  if(slot==='A') S.bufA=ab; else S.bufB=ab;
-  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s';
-  setStatus('slot '+slot+' ready',true);
+  var mono=AC.createBuffer(1,len,AC.sampleRate);
+  mono.getChannelData(0).set(flat);
+  // Route through bank (analysis + waveform + tags)
+  var recName='rec_'+slot+'_'+Date.now()+'.wav';
+  var recText=document.getElementById('clipText')?document.getElementById('clipText').value:'';
+  var analysis=analyzeClip(mono);
+  var words=parseWords(recText), phonemes=words?textToPhonemes(recText):[], phGrps=phonemes.length?groupPhonemes(phonemes):[], sents=words?buildSentences(words):[];
+  var recClip={
+    id:'mic_'+Date.now()+'_'+(Math.random()*1e4|0),
+    buffer:mono, duration:mono.duration,
+    rms:analysis.rms, centroid:analysis.centroid, energyCurve:analysis.energyCurve,
+    waveform:buildWaveformPreview(mono),
+    text:recText, textRaw:recText,
+    words:words, segments:autoSegments(words), sentences:sents,
+    phonemes:phonemes, phGroups:phGrps,
+    intent:null, tags:autoTag(analysis,phGrps), ready:true,
+    createdAt:Date.now(), name:recName
+  };
+  S.samplePool.clips.push(recClip);
+  loadClipToBank(recClip);
+  stageClip(slot,recClip.id);
+  if(S.loader.autoActivate) activateStageClip(slot);
+  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s mic';
+  setStatus('mic '+slot+' → bank',true);
   micChunks=[];
+  renderClipList();
 }
 
 // ── REC TAKE (v18 with real DSP) ──────────────────────────────────
@@ -4809,16 +4833,46 @@ function initUI(){
     S.pmDensity=e.target.value/100;
     document.getElementById('pmDensV').textContent=e.target.value+'%';
   });
-  // Mic REC — iOS canonical fix: resume + setTimeout before getUserMedia
+  // MIC — await resume in same gesture, no setTimeout
   document.getElementById('recA').addEventListener('click',function(){
-    AC.resume(); setTimeout(function(){toggleMic('A');},50);
+    AC.resume().then(function(){ toggleMic('A'); });
   });
   document.getElementById('recB').addEventListener('click',function(){
-    AC.resume(); setTimeout(function(){toggleMic('B');},50);
+    AC.resume().then(function(){ toggleMic('B'); });
   });
-  // File load — iOS canonical fix applied inside loadFileToSlot
-  document.getElementById('loadA').addEventListener('click',function(){ loadFileToSlot('A'); });
-  document.getElementById('loadB').addEventListener('click',function(){ loadFileToSlot('B'); });
+  // LOAD A/B — iOS canonical: resume sync, click hidden input, decode inside reader.onload
+  document.getElementById('loadA').addEventListener('click',function(){
+    AC.resume();  // sync call (iOS requires this before file input click)
+    var fi=document.getElementById('fileA');
+    fi.value='';
+    fi.onchange=function(){
+      var file=fi.files[0];
+      if(!file) return;
+      fi.value='';
+      var text=document.getElementById('clipText')?document.getElementById('clipText').value:'';
+      document.getElementById('statA').textContent='loading…';
+      ingestClip({file:file,text:text,target:'A',autoPlay:false}).then(function(c){
+        if(c) document.getElementById('statA').textContent=c.name;
+      });
+    };
+    fi.click();
+  });
+  document.getElementById('loadB').addEventListener('click',function(){
+    AC.resume();
+    var fi=document.getElementById('fileB');
+    fi.value='';
+    fi.onchange=function(){
+      var file=fi.files[0];
+      if(!file) return;
+      fi.value='';
+      var text=document.getElementById('clipText')?document.getElementById('clipText').value:'';
+      document.getElementById('statB').textContent='loading…';
+      ingestClip({file:file,text:text,target:'B',autoPlay:false}).then(function(c){
+        if(c) document.getElementById('statB').textContent=c.name;
+      });
+    };
+    fi.click();
+  });
   // Transport
   document.getElementById('playBtn').addEventListener('click',function(){
     AC.resume();
