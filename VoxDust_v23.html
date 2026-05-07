@@ -1985,14 +1985,9 @@ function loadFileToSlot(slot){
   inp.click();
 }
 
-// ── MIC RECORDING — MediaRecorder (mp4 fallback for iOS Safari) ───
-var micStream=null, micRecorder=null, micSlot='A', micOn=false;
-
-function _micMime(){
-  var types=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'];
-  for(var i=0;i<types.length;i++) if(typeof MediaRecorder!=='undefined'&&MediaRecorder.isTypeSupported(types[i])) return types[i];
-  return '';
-}
+// ── MIC RECORDING — ScriptProcessor (reliable on Safari iOS) ────
+// MediaRecorder is unreliable on Safari — using Float32 capture instead.
+var micStream=null, micProc=null, micChunks=[], micSlot='A', micOn=false;
 
 async function toggleMic(slot){
   if(micOn&&micSlot===slot){ stopMic(); return; }
@@ -2004,43 +1999,62 @@ async function toggleMic(slot){
 async function startMic(slot){
   try{
     await AC.resume();
+    console.log('[MIC] AC state:', AC.state, 'slot:', slot);
+    if(AC.state!=='running'){ setStatus('AudioContext blocked — tap first',false); return; }
     micStream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
     });
-    var mime=_micMime();
-    micRecorder=mime?new MediaRecorder(micStream,{mimeType:mime}):new MediaRecorder(micStream);
-    micRecorder._chunks=[];
-    micRecorder.ondataavailable=function(e){ if(e.data&&e.data.size>0) micRecorder._chunks.push(e.data); };
-    micRecorder.start(100);
-    micOn=true;
-    var btnEl=document.getElementById(slot==='A'?'recA':'recB');
-    if(btnEl) btnEl.className='rec-live';
-    document.getElementById('stat'+slot).textContent='REC live';
-    setStatus('recording '+slot+'…',true);
-  } catch(e){ setStatus('mic: '+e.message,false); }
+    var src=AC.createMediaStreamSource(micStream);
+    micProc=AC.createScriptProcessor(4096,1,1);
+    micChunks=[];
+    src.connect(micProc);
+    micProc.connect(AC.destination);  // must be connected for onaudioprocess to fire
+    micProc.onaudioprocess=function(e){
+      if(!micOn) return;
+      micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    setTimeout(function(){
+      micOn=true;
+      var btnEl=document.getElementById(slot==='A'?'recA':'recB');
+      if(btnEl) btnEl.className='rec-live';
+      document.getElementById('stat'+slot).textContent='REC live';
+      setStatus('recording '+slot+'…',true);
+    },200);
+    console.log('[MIC] started, sampleRate:', AC.sampleRate);
+  } catch(e){ console.error('[MIC ERR]',e); setStatus('mic: '+e.message,false); }
 }
 
 function stopMic(){
-  if(!micOn||!micRecorder) return;
-  var slot=micSlot;
+  if(!micOn) return;
   micOn=false;
+  var slot=micSlot;
+  try{micProc.disconnect();}catch(e){}
+  try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
   var btnEl=document.getElementById(slot==='A'?'recA':'recB');
   if(btnEl) btnEl.className='';
   document.getElementById('stat'+slot).textContent='processing…';
-  micRecorder.onstop=function(){
-    var chunks=micRecorder._chunks||[];
-    if(!chunks.length){ setStatus('no audio captured',false); return; }
-    var blob=new Blob(chunks,{type:micRecorder.mimeType||'audio/webm'});
-    var text=(document.getElementById('clipText')||{}).value||'';
-    blob.arrayBuffer().then(function(ab){
-      return ingestAudioBuffer(ab,text,'mic_'+slot+'_'+Date.now(),slot);
-    }).then(function(c){
-      if(c) document.getElementById('stat'+slot).textContent=c.duration.toFixed(1)+'s mic';
-      setStatus('mic '+slot+' → bank',true);
-    }).catch(function(e){ setStatus('mic decode: '+e.message,false); });
-    try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
-  };
-  micRecorder.stop();
+  if(!micChunks.length){ setStatus('no audio captured',false); return; }
+  // Assemble Float32 chunks into AudioBuffer — no blob, no decode
+  var len=0; micChunks.forEach(function(c){len+=c.length;});
+  var flat=new Float32Array(len), off=0;
+  micChunks.forEach(function(c){flat.set(c,off);off+=c.length;});
+  var peak=0; for(var i=0;i<flat.length;i++) if(Math.abs(flat[i])>peak) peak=Math.abs(flat[i]);
+  if(peak>0.001) for(var i=0;i<flat.length;i++) flat[i]=flat[i]/peak*0.9;
+  var mono=AC.createBuffer(1,len,AC.sampleRate);
+  mono.getChannelData(0).set(flat);
+  console.log('[MIC] captured', (len/AC.sampleRate).toFixed(2),'s');
+  // Build clip directly from AudioBuffer — no decodeAudioData needed
+  var text=(document.getElementById('clipText')||{}).value||'';
+  var recName='mic_'+slot+'_'+Date.now();
+  var clip=buildClipFromBuffer(mono, text, recName);
+  S.samplePool.clips.push(clip);
+  loadClipToBank(clip);
+  stageClip(slot,clip.id);
+  if(S.loader.autoActivate) activateStageClip(slot);
+  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s mic';
+  setStatus('mic '+slot+' → bank',true);
+  micChunks=[];
+  renderClipList();
 }
 
 // ── REC TAKE (v18 with real DSP) ──────────────────────────────────
@@ -2815,9 +2829,10 @@ function buildClipFromBuffer(buf, text, name){
 
 function ingestAudioBuffer(arrayBuffer, text, name, target){
   target=target||'A';
-  // Decode: callback form for iOS Safari compatibility (no Promise.then)
+  console.log('[INGEST]',name,target,'bytes:',arrayBuffer&&arrayBuffer.byteLength,'AC:',AC.state);
   return new Promise(function(resolve,reject){
     AC.decodeAudioData(arrayBuffer.slice(0), function(decoded){
+      console.log('[DECODE OK]',name,'dur:',decoded.duration.toFixed(2),'s','ch:',decoded.numberOfChannels);
       var mono=toMono(decoded);
       normalizeBuffer(mono, 0.9);
       var clip=buildClipFromBuffer(mono, text, name);
@@ -2827,11 +2842,12 @@ function ingestAudioBuffer(arrayBuffer, text, name, target){
       if(S.loader.autoActivate) activateStageClip(target);
       renderClipList();
       saveBankMeta();
-      setLoaderStatus('ready');
+      setLoaderStatus('ready — '+clip.name);
       resolve(clip);
     }, function(e){
-      setLoaderStatus('decode error');
-      reject(e);
+      console.error('[DECODE FAIL]',name,e);
+      setLoaderStatus('decode error: '+(e&&e.message||'codec?'));
+      reject(e||new Error('decodeAudioData failed'));
     });
   });
 }
@@ -4822,12 +4838,18 @@ function initUI(){
   // LOAD A/B — iOS canonical: sync resume → fi.click() → file.arrayBuffer() → ingestAudioBuffer
   function _makeLoadHandler(slot){
     return function(){
-      AC.resume();
+      AC.resume();           // sync — no await, stays in gesture stack
       var fi=document.getElementById('file'+slot);
-      fi.value='';
+      fi.value='';           // reset before click (iOS reuse fix)
+      fi.click();            // must be in same sync gesture
       fi.onchange=function(){
         var file=fi.files[0]; if(!file) return;
         fi.value='';
+        console.log('[LOAD]',slot,file.name,file.type,file.size,'AC:',AC.state);
+        if(AC.state!=='running'){
+          console.warn('[LOAD] AC not running, state:',AC.state);
+          AC.resume();
+        }
         var text=(document.getElementById('clipText')||{}).value||'';
         document.getElementById('stat'+slot).textContent='loading…';
         setLoaderStatus('loading…');
@@ -4836,9 +4858,8 @@ function initUI(){
         });
         abP.then(function(ab){ return ingestAudioBuffer(ab,text,file.name,slot); })
           .then(function(c){ if(c) document.getElementById('stat'+slot).textContent=c.name; })
-          .catch(function(){ setLoaderStatus('decode error'); });
+          .catch(function(e){ console.error('[LOAD ERR]',slot,e); setLoaderStatus('error: '+(e&&e.message||'decode failed')); });
       };
-      fi.click();
     };
   }
   document.getElementById('loadA').addEventListener('click',_makeLoadHandler('A'));
@@ -4853,8 +4874,11 @@ function initUI(){
   document.getElementById('packBtn').addEventListener('click',downloadPack);
   document.getElementById('pvBtn').addEventListener('click',togglePV);
   document.getElementById('projBtn').addEventListener('click',function(){
-    projWin=window.open('https://spuklab.github.io/spuklab-builds/VoxDust_projection.html','_blank',
-      'noopener,width=1280,height=720');
+    projWin=window.open(
+      'https://spuklab.github.io/spuklab-builds/VoxDust_projection.html',
+      'vox_proj',
+      'popup=yes,width=1280,height=720'
+    );
     document.getElementById('projBtn').className='act';
     document.getElementById('projBtn').textContent='PROJ ON';
   });
