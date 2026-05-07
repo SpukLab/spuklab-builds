@@ -1985,11 +1985,17 @@ function loadFileToSlot(slot){
   inp.click();
 }
 
-// ── MIC RECORDING ─────────────────────────────────────────────────
-var micStream=null, micProc=null, micChunks=[], micSlot='A', micOn=false;
+// ── MIC RECORDING — MediaRecorder (mp4 fallback for iOS Safari) ───
+var micStream=null, micRecorder=null, micSlot='A', micOn=false;
+
+function _micMime(){
+  var types=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'];
+  for(var i=0;i<types.length;i++) if(typeof MediaRecorder!=='undefined'&&MediaRecorder.isTypeSupported(types[i])) return types[i];
+  return '';
+}
 
 async function toggleMic(slot){
-  if(micOn&&micSlot===slot){stopMic();return;}
+  if(micOn&&micSlot===slot){ stopMic(); return; }
   if(micOn) stopMic();
   micSlot=slot;
   await startMic(slot);
@@ -1997,72 +2003,44 @@ async function toggleMic(slot){
 
 async function startMic(slot){
   try{
-    // iOS Safari: resume must be awaited in the same click gesture chain
     await AC.resume();
     micStream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
     });
-    var src=AC.createMediaStreamSource(micStream);
-    micProc=AC.createScriptProcessor(4096,1,1);
-    micChunks=[];
-    src.connect(micProc); micProc.connect(AC.destination);
-    micProc.onaudioprocess=function(e){
-      if(!micOn) return;
-      micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-    };
-    setTimeout(function(){
-      micOn=true;
-      var btn=slot==='A'?'recA':'recB';
-      var el=document.getElementById(btn);
-      if(el) el.className='rec-live';
-      document.getElementById('stat'+slot).textContent='REC live';
-      setStatus('recording '+slot+'...',true);
-    },200);
-  } catch(e){setStatus('mic: '+e.message,false);}
+    var mime=_micMime();
+    micRecorder=mime?new MediaRecorder(micStream,{mimeType:mime}):new MediaRecorder(micStream);
+    micRecorder._chunks=[];
+    micRecorder.ondataavailable=function(e){ if(e.data&&e.data.size>0) micRecorder._chunks.push(e.data); };
+    micRecorder.start(100);
+    micOn=true;
+    var btnEl=document.getElementById(slot==='A'?'recA':'recB');
+    if(btnEl) btnEl.className='rec-live';
+    document.getElementById('stat'+slot).textContent='REC live';
+    setStatus('recording '+slot+'…',true);
+  } catch(e){ setStatus('mic: '+e.message,false); }
 }
 
 function stopMic(){
-  if(!micOn) return;
-  micOn=false;
+  if(!micOn||!micRecorder) return;
   var slot=micSlot;
-  try{micProc.disconnect();}catch(e){}
-  try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
+  micOn=false;
   var btnEl=document.getElementById(slot==='A'?'recA':'recB');
   if(btnEl) btnEl.className='';
-  document.getElementById('stat'+slot).textContent='processing...';
-  if(micChunks.length===0){setStatus('no audio captured',false);return;}
-  // Assemble + normalize
-  var len=0; micChunks.forEach(function(c){len+=c.length;});
-  var flat=new Float32Array(len),off=0;
-  micChunks.forEach(function(c){flat.set(c,off);off+=c.length;});
-  var peak=0; flat.forEach(function(v){if(Math.abs(v)>peak)peak=Math.abs(v);});
-  if(peak>0) for(var i=0;i<flat.length;i++) flat[i]=flat[i]/peak*0.9;
-  var mono=AC.createBuffer(1,len,AC.sampleRate);
-  mono.getChannelData(0).set(flat);
-  // Route through bank (analysis + waveform + tags)
-  var recName='rec_'+slot+'_'+Date.now()+'.wav';
-  var recText=document.getElementById('clipText')?document.getElementById('clipText').value:'';
-  var analysis=analyzeClip(mono);
-  var words=parseWords(recText), phonemes=words?textToPhonemes(recText):[], phGrps=phonemes.length?groupPhonemes(phonemes):[], sents=words?buildSentences(words):[];
-  var recClip={
-    id:'mic_'+Date.now()+'_'+(Math.random()*1e4|0),
-    buffer:mono, duration:mono.duration,
-    rms:analysis.rms, centroid:analysis.centroid, energyCurve:analysis.energyCurve,
-    waveform:buildWaveformPreview(mono),
-    text:recText, textRaw:recText,
-    words:words, segments:autoSegments(words), sentences:sents,
-    phonemes:phonemes, phGroups:phGrps,
-    intent:null, tags:autoTag(analysis,phGrps), ready:true,
-    createdAt:Date.now(), name:recName
+  document.getElementById('stat'+slot).textContent='processing…';
+  micRecorder.onstop=function(){
+    var chunks=micRecorder._chunks||[];
+    if(!chunks.length){ setStatus('no audio captured',false); return; }
+    var blob=new Blob(chunks,{type:micRecorder.mimeType||'audio/webm'});
+    var text=(document.getElementById('clipText')||{}).value||'';
+    blob.arrayBuffer().then(function(ab){
+      return ingestAudioBuffer(ab,text,'mic_'+slot+'_'+Date.now(),slot);
+    }).then(function(c){
+      if(c) document.getElementById('stat'+slot).textContent=c.duration.toFixed(1)+'s mic';
+      setStatus('mic '+slot+' → bank',true);
+    }).catch(function(e){ setStatus('mic decode: '+e.message,false); });
+    try{micStream.getTracks().forEach(function(t){t.stop();});}catch(e){}
   };
-  S.samplePool.clips.push(recClip);
-  loadClipToBank(recClip);
-  stageClip(slot,recClip.id);
-  if(S.loader.autoActivate) activateStageClip(slot);
-  document.getElementById('stat'+slot).textContent=(len/AC.sampleRate).toFixed(1)+'s mic';
-  setStatus('mic '+slot+' → bank',true);
-  micChunks=[];
-  renderClipList();
+  micRecorder.stop();
 }
 
 // ── REC TAKE (v18 with real DSP) ──────────────────────────────────
@@ -2811,67 +2789,68 @@ function applyClipIntent(clip){
 }
 
 // ── PUBLIC API ────────────────────────────────────────────────────
+// ── UNIFIED DECODE PIPELINE ────────────────────────────────────
+// ALL audio enters through ingestAudioBuffer → buildClipFromBuffer
+// No other decode/build paths should exist.
+
+function buildClipFromBuffer(buf, text, name){
+  var analysis=analyzeClip(buf);
+  var words=parseWords(text||'');
+  var phonemes=words?textToPhonemes(text):[];
+  var phGrps=phonemes.length?groupPhonemes(phonemes):[];
+  var sents=words?buildSentences(words):[];
+  return {
+    id:'clip_'+Date.now()+'_'+(Math.random()*1e4|0),
+    buffer:buf, duration:buf.duration,
+    rms:analysis.rms, centroid:analysis.centroid, energyCurve:analysis.energyCurve,
+    waveform:buildWaveformPreview(buf),
+    text:text||'', textRaw:text||'',
+    words:words, segments:autoSegments(words), sentences:sents,
+    phonemes:phonemes, phGroups:phGrps,
+    intent:null, tags:autoTag(analysis,phGrps),
+    ready:true, createdAt:Date.now(),
+    name:(name||'clip').slice(0,22)
+  };
+}
+
+function ingestAudioBuffer(arrayBuffer, text, name, target){
+  target=target||'A';
+  // Decode: callback form for iOS Safari compatibility (no Promise.then)
+  return new Promise(function(resolve,reject){
+    AC.decodeAudioData(arrayBuffer.slice(0), function(decoded){
+      var mono=toMono(decoded);
+      normalizeBuffer(mono, 0.9);
+      var clip=buildClipFromBuffer(mono, text, name);
+      S.samplePool.clips.push(clip);
+      loadClipToBank(clip);
+      stageClip(target, clip.id);
+      if(S.loader.autoActivate) activateStageClip(target);
+      renderClipList();
+      saveBankMeta();
+      setLoaderStatus('ready');
+      resolve(clip);
+    }, function(e){
+      setLoaderStatus('decode error');
+      reject(e);
+    });
+  });
+}
+
+// loadClip kept for timeline/text engine compatibility — routes to ingestAudioBuffer
 function loadClip(file, textOrOpts){
-  var text = typeof textOrOpts === 'string' ? textOrOpts : (textOrOpts && textOrOpts.text)||'';
-  var intent = (textOrOpts && textOrOpts.intent)||null;
-  return new Promise(function(resolve, reject){
+  var text=typeof textOrOpts==='string'?textOrOpts:((textOrOpts&&textOrOpts.text)||'');
+  return new Promise(function(resolve,reject){
     AC.resume();
-    var reader = new FileReader();
-    reader.onload = function(ev){
-      var ab = ev.target.result.slice(0);
-      function onDecoded(decoded){
-        // mono downmix
-        var mono = AC.createBuffer(1, decoded.length, decoded.sampleRate);
-        var d = mono.getChannelData(0);
-        for(var ch = 0; ch < decoded.numberOfChannels; ch++){
-          var src = decoded.getChannelData(ch);
-          for(var i = 0; i < d.length; i++) d[i] += src[i] / decoded.numberOfChannels;
-        }
-        // normalize
-        var pk = 0;
-        for(var i = 0; i < d.length; i++) if(Math.abs(d[i]) > pk) pk = Math.abs(d[i]);
-        if(pk > 0.001) for(var i = 0; i < d.length; i++) d[i] = d[i]/pk*0.9;
-        var analysis = analyzeClip(mono);
-        var id = 'clip_' + Date.now() + '_' + (Math.random()*1e4|0);
-        var words = parseWords(text);
-        var phonemes = words ? textToPhonemes(text) : [];
-        var phGrps   = phonemes.length ? groupPhonemes(phonemes) : [];
-        var sents    = words ? buildSentences(words) : [];
-        var clip = {
-          id: id,
-          buffer: mono,
-          duration: mono.duration,
-          rms: analysis.rms,
-          centroid: analysis.centroid,
-          energyCurve: analysis.energyCurve,
-          waveform: buildWaveformPreview(mono),
-          text: text,
-          textRaw: text,
-          words: words,
-          segments: autoSegments(words),
-          sentences: sents,
-          phonemes: phonemes,
-          phGroups: phGrps,
-          intent: intent,
-          tags: autoTag(analysis, phGrps),
-          ready: true,
-          createdAt: Date.now(),
-          name: file.name.length > 22 ? file.name.slice(0,20)+'..' : file.name
-        };
-        S.samplePool.clips.push(clip);
-        loadClipToBank(clip);
-        renderClipList();
-        resolve(clip);
-      }
-      function onErr(e){ reject(e); }
-      var pr;
-      try{ pr = AC.decodeAudioData(ab); }catch(e){ pr = null; }
-      if(pr && typeof pr.then === 'function') pr.then(onDecoded).catch(onErr);
-      else AC.decodeAudioData(ab.slice(0), onDecoded, onErr);
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      ingestAudioBuffer(ev.target.result, text, file.name, 'A').then(resolve).catch(reject);
     };
+    reader.onerror=reject;
     reader.readAsArrayBuffer(file);
   });
 }
+
+
 
 function playClipOnDeck(deckLabel, clipId){
   var clip = getClip(clipId);
@@ -3360,30 +3339,30 @@ function autoTag(analysis, phGroups){
   return tags;
 }
 
-// ── INGEST — central entry point (replaces ad-hoc loadClip calls) ──
-// No reparsing after this call. All fields computed once here.
+// ── INGEST — entry point for FILE objects ─────────────────────────
+// Uses file.arrayBuffer() (native, no FileReader), then ingestAudioBuffer
 function ingestClip(opts){
   var file=opts.file, text=opts.text||'', target=opts.target||'A', autoPlay=opts.autoPlay||false;
   if(!file) return Promise.resolve(null);
   if(S.loader.loading){
     S.loader.queue.push(opts);
-    setLoaderStatus('queued ('+(S.loader.queue.length)+')');
+    setLoaderStatus('queued ('+S.loader.queue.length+')');
     return Promise.resolve(null);
   }
   S.loader.loading=true;
   setLoaderStatus('loading…');
-  return loadClip(file, {text:text, intent:null}).then(function(clip){
+  // file.arrayBuffer() is the cleanest path on modern iOS Safari
+  var abPromise=file.arrayBuffer?file.arrayBuffer():new Promise(function(res,rej){
+    var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file);
+  });
+  return abPromise.then(function(ab){
+    return ingestAudioBuffer(ab, text, file.name, target);
+  }).then(function(clip){
     S.loader.lastClipId=clip.id;
-    // Stage — stageClip already wires bufA/B
-    stageClip(target, clip.id);
-    // Activate text pipeline if requested
-    if(S.loader.autoActivate) activateStageClip(target);
     if(autoPlay) playStaged(target);
-    setLoaderStatus('ready');
-    saveBankMeta();
     return clip;
   }).catch(function(e){
-    setLoaderStatus('error: '+e.message);
+    setLoaderStatus('error: '+(e&&e.message||e));
     return null;
   }).finally(function(){
     S.loader.loading=false;
@@ -4840,39 +4819,30 @@ function initUI(){
   document.getElementById('recB').addEventListener('click',function(){
     AC.resume().then(function(){ toggleMic('B'); });
   });
-  // LOAD A/B — iOS canonical: resume sync, click hidden input, decode inside reader.onload
-  document.getElementById('loadA').addEventListener('click',function(){
-    AC.resume();  // sync call (iOS requires this before file input click)
-    var fi=document.getElementById('fileA');
-    fi.value='';
-    fi.onchange=function(){
-      var file=fi.files[0];
-      if(!file) return;
+  // LOAD A/B — iOS canonical: sync resume → fi.click() → file.arrayBuffer() → ingestAudioBuffer
+  function _makeLoadHandler(slot){
+    return function(){
+      AC.resume();
+      var fi=document.getElementById('file'+slot);
       fi.value='';
-      var text=document.getElementById('clipText')?document.getElementById('clipText').value:'';
-      document.getElementById('statA').textContent='loading…';
-      ingestClip({file:file,text:text,target:'A',autoPlay:false}).then(function(c){
-        if(c) document.getElementById('statA').textContent=c.name;
-      });
+      fi.onchange=function(){
+        var file=fi.files[0]; if(!file) return;
+        fi.value='';
+        var text=(document.getElementById('clipText')||{}).value||'';
+        document.getElementById('stat'+slot).textContent='loading…';
+        setLoaderStatus('loading…');
+        var abP=file.arrayBuffer?file.arrayBuffer():new Promise(function(res,rej){
+          var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file);
+        });
+        abP.then(function(ab){ return ingestAudioBuffer(ab,text,file.name,slot); })
+          .then(function(c){ if(c) document.getElementById('stat'+slot).textContent=c.name; })
+          .catch(function(){ setLoaderStatus('decode error'); });
+      };
+      fi.click();
     };
-    fi.click();
-  });
-  document.getElementById('loadB').addEventListener('click',function(){
-    AC.resume();
-    var fi=document.getElementById('fileB');
-    fi.value='';
-    fi.onchange=function(){
-      var file=fi.files[0];
-      if(!file) return;
-      fi.value='';
-      var text=document.getElementById('clipText')?document.getElementById('clipText').value:'';
-      document.getElementById('statB').textContent='loading…';
-      ingestClip({file:file,text:text,target:'B',autoPlay:false}).then(function(c){
-        if(c) document.getElementById('statB').textContent=c.name;
-      });
-    };
-    fi.click();
-  });
+  }
+  document.getElementById('loadA').addEventListener('click',_makeLoadHandler('A'));
+  document.getElementById('loadB').addEventListener('click',_makeLoadHandler('B'));
   // Transport
   document.getElementById('playBtn').addEventListener('click',function(){
     AC.resume();
