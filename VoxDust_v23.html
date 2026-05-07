@@ -247,19 +247,19 @@ button.rec-live{background:rgba(255,0,0,.15);color:#ff4444;border-color:rgba(255
 
   <!-- BANK / STAGE -->
   <div class="sec" id="bankSec">
-    <div class="slbl">Bank <span id="bankCount" style="font-weight:300;color:var(--dim)">0 clips</span></div>
-    <div id="bankList" style="max-height:90px;overflow-y:auto;margin-bottom:4px"></div>
+    <div class="slbl">Bank <span id="bankCount" style="font-weight:300;color:var(--dim)">0 clips</span> <span id="loaderStatus" style="font-weight:300;color:var(--dim);font-size:8px"></span></div>
+    <div id="dropZone" style="border:1px dashed rgba(153,68,255,.35);border-radius:4px;padding:6px;text-align:center;font-size:9px;color:var(--dim);margin-bottom:4px;cursor:pointer;transition:background .15s">DROP AUDIO HERE</div>
+    <div id="bankList" style="max-height:110px;overflow-y:auto;margin-bottom:4px"></div>
     <div class="row" style="gap:6px">
-      <span style="font-size:9px;color:var(--dim)">STAGED</span>
-      <span id="stageAName" style="font-size:9px;color:rgba(120,220,255,.8);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span>
+      <span style="font-size:9px;color:rgba(120,220,255,.8);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="stageAName">A: —</span>
       <button id="stageABtn" onclick="playStaged('A')" style="font-size:8px">▶A</button>
-      <span id="stageBName" style="font-size:9px;color:rgba(255,120,220,.8);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span>
+      <span style="font-size:9px;color:rgba(255,120,220,.8);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="stageBName">B: —</span>
       <button id="stageBBtn" onclick="playStaged('B')" style="font-size:8px">▶B</button>
     </div>
     <div class="row" style="gap:6px">
-      <button onclick="autoPlaySequence(S.bank.order);startTimeline()">AUTO SEQ</button>
       <button onclick="activateStageClip('A')">ACTIVATE A</button>
       <button onclick="activateStageClip('B')">ACTIVATE B</button>
+      <button onclick="autoPlaySequence(S.bank.order);startTimeline()">AUTO SEQ</button>
     </div>
   </div>
 
@@ -2704,6 +2704,7 @@ S.followText = false;
 // ACTIVE: S.bufA/S.bufB (existing system, unchanged)
 S.bank  = {clips:{}, order:[]};
 S.stage = {A:null, B:null};
+S.loader = {queue:[], loading:false, lastClipId:null, autoActivate:true, autoStageA:true};
 S.timelineIndex = 0;
 S.timelineStart = 0;
 S.timelineRunning = false;
@@ -2809,6 +2810,9 @@ function loadClip(file, textOrOpts){
         var analysis = analyzeClip(mono);
         var id = 'clip_' + Date.now() + '_' + (Math.random()*1e4|0);
         var words = parseWords(text);
+        var phonemes = words ? textToPhonemes(text) : [];
+        var phGrps   = phonemes.length ? groupPhonemes(phonemes) : [];
+        var sents    = words ? buildSentences(words) : [];
         var clip = {
           id: id,
           buffer: mono,
@@ -2816,12 +2820,18 @@ function loadClip(file, textOrOpts){
           rms: analysis.rms,
           centroid: analysis.centroid,
           energyCurve: analysis.energyCurve,
+          waveform: buildWaveformPreview(mono),
           text: text,
           textRaw: text,
           words: words,
           segments: autoSegments(words),
+          sentences: sents,
+          phonemes: phonemes,
+          phGroups: phGrps,
           intent: intent,
+          tags: autoTag(analysis, phGrps),
           ready: true,
+          createdAt: Date.now(),
           name: file.name.length > 22 ? file.name.slice(0,20)+'..' : file.name
         };
         S.samplePool.clips.push(clip);
@@ -3299,7 +3309,101 @@ function initTextEngine(){
   });
 }
 
-// ── BANK/STAGE ─────────────────────────────────────────────────
+// ── INGESTION HELPERS ─────────────────────────────────────────
+function buildWaveformPreview(buf){
+  // 64 RMS buckets → Float32Array for mini canvas rendering
+  var ch=buf.getChannelData(0), len=ch.length, N=64;
+  var out=new Float32Array(N), bLen=Math.floor(len/N);
+  for(var i=0;i<N;i++){
+    var sq=0;
+    for(var j=0;j<bLen;j++){var v=ch[i*bLen+j]||0;sq+=v*v;}
+    out[i]=Math.sqrt(sq/bLen);
+  }
+  // normalize to [0,1]
+  var pk=0;for(var i=0;i<N;i++)if(out[i]>pk)pk=out[i];
+  if(pk>0)for(var i=0;i<N;i++)out[i]/=pk;
+  return out;
+}
+
+function autoTag(analysis, phGroups){
+  var tags=[];
+  if(analysis.rms<0.12) tags.push('quiet');
+  else if(analysis.rms>0.5) tags.push('loud');
+  if(analysis.centroid>0.65) tags.push('bright');
+  else if(analysis.centroid<0.25) tags.push('dark');
+  if(phGroups&&phGroups.length>80) tags.push('dense');
+  else if(phGroups&&phGroups.length<20) tags.push('sparse');
+  return tags;
+}
+
+// ── INGEST — central entry point (replaces ad-hoc loadClip calls) ──
+// No reparsing after this call. All fields computed once here.
+function ingestClip(opts){
+  var file=opts.file, text=opts.text||'', target=opts.target||'A', autoPlay=opts.autoPlay||false;
+  if(!file) return Promise.resolve(null);
+  if(S.loader.loading){
+    S.loader.queue.push(opts);
+    setLoaderStatus('queued ('+(S.loader.queue.length)+')');
+    return Promise.resolve(null);
+  }
+  S.loader.loading=true;
+  setLoaderStatus('loading…');
+  return loadClip(file, {text:text, intent:null}).then(function(clip){
+    S.loader.lastClipId=clip.id;
+    // Stage — stageClip already wires bufA/B
+    stageClip(target, clip.id);
+    // Activate text pipeline if requested
+    if(S.loader.autoActivate) activateStageClip(target);
+    if(autoPlay) playStaged(target);
+    setLoaderStatus('ready');
+    saveBankMeta();
+    return clip;
+  }).catch(function(e){
+    setLoaderStatus('error: '+e.message);
+    return null;
+  }).finally(function(){
+    S.loader.loading=false;
+    processQueue();
+  });
+}
+
+function processQueue(){
+  if(S.loader.loading||!S.loader.queue.length) return;
+  var next=S.loader.queue.shift();
+  ingestClip(next);
+}
+
+function setLoaderStatus(msg){
+  var el=document.getElementById('loaderStatus');
+  if(el) el.textContent=msg;
+}
+
+// ── BANK PERSISTENCE (metadata only — no buffers) ─────────────────
+function saveBankMeta(){
+  try{
+    var meta=S.bank.order.map(function(id){
+      var c=S.bank.clips[id];
+      return c?{id:c.id,name:c.name,duration:c.duration,rms:c.rms,centroid:c.centroid,tags:c.tags,text:c.textRaw,createdAt:c.createdAt}:null;
+    }).filter(Boolean);
+    localStorage.setItem('vd_bank_meta',JSON.stringify(meta));
+  }catch(e){}
+}
+
+function loadBankMeta(){
+  try{
+    var saved=JSON.parse(localStorage.getItem('vd_bank_meta')||'[]');
+    // Show placeholder entries until re-loaded (no buffer)
+    saved.forEach(function(m){
+      if(!S.bank.clips[m.id]){
+        S.bank.clips[m.id]={id:m.id,name:m.name+'*',duration:m.duration,rms:m.rms,centroid:m.centroid,tags:m.tags||[],text:m.text||'',textRaw:m.text||'',buffer:null,ready:false,createdAt:m.createdAt};
+        if(S.bank.order.indexOf(m.id)<0) S.bank.order.push(m.id);
+      }
+    });
+    renderBank();
+  }catch(e){}
+}
+
+
 // BANK = all loaded clips (already analyzed, text parsed)
 // STAGE = A/B prepared — wires buffers + text state, no reparsing
 // ACTIVE = S.bufA/bufB (existing, unchanged)
@@ -3391,15 +3495,39 @@ function renderBank(){
     if(!clip) return;
     var isA=S.stage.A&&S.stage.A.id===id;
     var isB=S.stage.B&&S.stage.B.id===id;
+    var notReady=!clip.ready||!clip.buffer;
     var row=document.createElement('div');
-    row.style.cssText='display:flex;gap:4px;padding:2px 0;align-items:center;border-bottom:1px solid rgba(153,68,255,.08)';
-    row.innerHTML=
-      '<span style="flex:1;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--w);font-style:italic">'+clip.name+'</span>'+
+    row.style.cssText='display:flex;gap:4px;padding:3px 0;align-items:center;border-bottom:1px solid rgba(153,68,255,.08);opacity:'+(notReady?'0.45':'1');
+    // Waveform mini
+    var wfC=document.createElement('canvas');
+    wfC.width=36; wfC.height=14;
+    wfC.style.cssText='flex-shrink:0;border-radius:2px;background:rgba(153,68,255,.06)';
+    if(clip.waveform){
+      var wCtx=wfC.getContext('2d');
+      wCtx.fillStyle=isA?'rgba(120,220,255,0.7)':isB?'rgba(255,120,220,0.7)':'rgba(153,68,255,0.5)';
+      var wN=clip.waveform.length;
+      for(var wi=0;wi<36;wi++){
+        var wv=clip.waveform[Math.floor(wi/36*wN)]||0;
+        var wh=Math.max(1,wv*12);
+        wCtx.fillRect(wi,7-wh/2,1,wh);
+      }
+    }
+    // Name + meta
+    var dur=clip.duration?clip.duration.toFixed(1)+'s':'';
+    var tagStr=clip.tags&&clip.tags.length?clip.tags.join(' '):'';
+    var info=document.createElement('div');
+    info.style.cssText='flex:1;min-width:0;overflow:hidden';
+    info.innerHTML='<div style="font-size:9px;font-style:italic;color:var(--w);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+clip.name+'</div>'+
+      '<div style="font-size:8px;color:var(--dim)">'+dur+(tagStr?' · '+tagStr:'')+'</div>';
+    // Buttons
+    var btns=document.createElement('div');
+    btns.style.cssText='display:flex;gap:3px;flex-shrink:0';
+    btns.innerHTML=
       '<button class="'+(isA?'act':'')+'" onclick="stageClip(\'A\',\''+id+'\')">A</button>'+
       '<button class="'+(isB?'act':'')+'" onclick="stageClip(\'B\',\''+id+'\')">B</button>'+
-      '<button onclick="playStaged(\'A\')" style="font-size:8px">▶A</button>'+
-      '<button onclick="playStaged(\'B\')" style="font-size:8px">▶B</button>'+
+      (notReady?'':'<button onclick="playStaged(\'A\')" style="font-size:8px">▶A</button>')+
       '<button onclick="removeFromBank(\''+id+'\')" style="color:rgba(255,80,80,.7);padding:2px 5px">×</button>';
+    row.appendChild(wfC); row.appendChild(info); row.appendChild(btns);
     el.appendChild(row);
   });
   var cnt=document.getElementById('bankCount');
@@ -4706,6 +4834,33 @@ function initUI(){
     document.getElementById('projBtn').className='act';
     document.getElementById('projBtn').textContent='PROJ ON';
   });
+
+  // Drop zone — ingestClip API
+  var dz=document.getElementById('dropZone');
+  if(dz){
+    dz.onclick=function(){
+      // fallback click: open file picker
+      var fi=document.createElement('input');
+      fi.type='file'; fi.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
+      fi.onchange=function(){
+        if(fi.files[0]) ingestClip({file:fi.files[0],text:document.getElementById('clipText').value||'',target:'A',autoPlay:false});
+      };
+      AC.resume(); fi.click();
+    };
+    dz.addEventListener('dragover',function(e){e.preventDefault();dz.style.background='rgba(153,68,255,.12)';});
+    dz.addEventListener('dragleave',function(){dz.style.background='';});
+    dz.addEventListener('drop',function(e){
+      e.preventDefault(); dz.style.background='';
+      var files=[].slice.call(e.dataTransfer.files);
+      var audio=files.filter(function(f){return f.type.startsWith('audio')||/\.(mp3|wav|m4a|aiff|aif|caf)$/i.test(f.name);});
+      var text=document.getElementById('clipText').value||'';
+      audio.forEach(function(f,i){ S.loader.queue.push({file:f,text:text,target:i%2===0?'A':'B'}); });
+      processQueue();
+    });
+  }
+
+  // Restore bank metadata from previous session
+  loadBankMeta();
   // Visual engine toggle
   document.getElementById('visBtn').addEventListener('click',function(){
     var vc = document.getElementById('vc');
