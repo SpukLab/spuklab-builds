@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOUND FORGE 2A — SpukLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@0,400;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   SOUND FORGE — Phase 2A
+   Visual Hierarchy + DNA Export
+   SpukLab 2025
+═══════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+:root{
+  /* Core palette */
+  --bg:      linear-gradient(155deg,#13111f 0%,#1b1726 100%);
+  --violet:  #9944ff;
+  --vdim:    rgba(153,68,255,0.16);
+  --vglow:   rgba(153,68,255,0.06);
+  --vact:    rgba(153,68,255,0.20);
+  --cyan:    #00ffff;
+  --mag:     #ff00ff;
+  --white:   #fff;
+  --gray:    rgba(255,255,255,0.36);
+  --mono:    'JetBrains Mono',monospace;
+  /* Organism identity colors */
+  --o0:      #ff4422;   /* KICK — explosive red-orange */
+  --o0d:     rgba(255,68,34,0.18);
+  --o0b:     rgba(255,68,34,0.06);
+  --o1:      #ffaa00;   /* DEBRIS — amber unstable */
+  --o1d:     rgba(255,170,0,0.18);
+  --o1b:     rgba(255,170,0,0.05);
+  --o2:      #8866ff;   /* GHOST — deep violet */
+  --o2d:     rgba(136,102,255,0.20);
+  --o2b:     rgba(136,102,255,0.06);
+  /* Current organism (set by JS) */
+  --org-accent: var(--o0);
+  --org-dim:    var(--o0d);
+  --org-bg:     var(--o0b);
+}
+
+html,body{width:100%;height:100%;overflow:hidden;background:#0d0b18;color:var(--white);
+  font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;touch-action:none;}
+#app{width:100%;height:100%;display:flex;flex-direction:column;background:var(--bg);}
+
+/* ─── HEADER ─── */
+header{display:flex;align-items:center;padding:8px 14px;
+  border-bottom:1px solid var(--vdim);background:rgba(8,6,18,.7);
+  flex-shrink:0;gap:10px;min-height:42px;}
+.logo .sp{font-weight:800;font-size:15px;color:var(--white);letter-spacing:.04em;}
+.logo .lb{font-weight:300;font-size:15px;color:var(--cyan);letter-spacing:.04em;}
+.sep{width:1px;height:18px;background:var(--vdim);flex-shrink:0;}
+.appid{display:flex;flex-direction:column;line-height:1.1;}
+.appid-n{font-family:var(--mono);font-style:italic;font-weight:700;font-size:11px;
+  color:var(--violet);letter-spacing:.14em;}
+.appid-p{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;}
+.hsp{flex:1;}
+.hstrip{display:flex;align-items:center;gap:11px;}
+.hi{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;}
+.hl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.08em;}
+.hv{font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan);}
+.hv.warn{color:#ffcc00;}.hv.danger{color:#ff3333;}
+.hv.ph{font-size:11px;padding-top:2px;}
+.ph-intro{color:var(--gray)!important;}.ph-build{color:#88aaff!important;}
+.ph-peak{color:var(--cyan)!important;}.ph-tension{color:#ffcc00!important;}
+.ph-rupture{color:var(--mag)!important;}.ph-recovery{color:#44ff99!important;}
+.ph-void{color:rgba(80,80,140,0.7)!important;}.ph-aftershock{color:#ff6600!important;}
+
+/* ─── MAIN ─── */
+main{flex:1;display:flex;overflow:hidden;min-height:0;}
+
+/* ─── CANVAS PANEL ─── */
+.cvp{flex:1.35;position:relative;border-right:1px solid var(--vdim);
+  background:#050310;overflow:hidden;}
+#scope{display:block;width:100%;height:100%;}
+.cov{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+
+/* Canvas labels — minimal, no clutter */
+.cl{position:absolute;font-family:var(--mono);font-size:11px;letter-spacing:.11em;}
+.cl.osc{top:9px;left:11px;color:rgba(153,68,255,.3);}
+.cl.fft{bottom:9px;left:11px;color:rgba(153,68,255,.28);}
+.cl.pack{top:9px;right:11px;color:rgba(0,255,255,.22);font-style:italic;}
+
+/* Voice dots — smaller, more subtle */
+.vgrid{position:absolute;bottom:26px;right:9px;
+  display:grid;grid-template-columns:repeat(8,8px);gap:3px;}
+.vdot{width:6px;height:6px;border-radius:50%;
+  background:rgba(153,68,255,.1);border:1px solid rgba(153,68,255,.15);
+  transition:background .07s;}
+.vdot.active{background:rgba(0,255,255,.7);border-color:rgba(0,255,255,.5);}
+.vdot.hot{background:rgba(255,0,255,.7);border-color:rgba(255,0,255,.5);}
+
+/* Influence indicators — contextual, fade in/out */
+.infstrip{position:absolute;top:34px;right:11px;
+  display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:11px;}
+.infitem{color:rgba(153,68,255,.38);transition:color .25s,opacity .4s;opacity:.4;}
+.infitem.on{color:var(--cyan);opacity:1;}
+.infitem.ter{color:#ff9900;opacity:1;}
+
+/* EMF strip — minimal, always there but quiet */
+.emfstrip{position:absolute;top:34px;left:11px;
+  display:flex;flex-direction:column;gap:1px;}
+.emfi{font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.28);}
+.emfi span{font-style:italic;color:rgba(0,255,255,.45);}
+
+/* Drift badge */
+.driftbadge{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:11px;color:rgba(255,200,0,.6);
+  letter-spacing:.1em;opacity:0;transition:opacity .3s;pointer-events:none;}
+.driftbadge.show{opacity:1;}
+
+/* Territory strip — CONTEXTUAL: only visible during conflict */
+.terstrip{position:absolute;bottom:42px;left:11px;opacity:0;
+  transition:opacity .5s;pointer-events:none;}
+.terstrip.active{opacity:1;}
+.terrow{display:flex;align-items:center;gap:4px;margin-bottom:2px;}
+.terlbl{font-family:var(--mono);font-size:11px;color:rgba(255,150,0,.5);width:20px;}
+.terb{width:36px;height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;}
+.terf{height:100%;border-radius:2px;transition:width .25s;}
+.terf.k{background:linear-gradient(90deg,rgba(0,136,255,.8),rgba(0,255,255,.6));}
+.terf.d{background:linear-gradient(90deg,rgba(255,102,51,.8),rgba(255,204,0,.6));}
+.terf.g{background:linear-gradient(90deg,rgba(136,68,255,.8),rgba(200,136,255,.6));}
+
+/* ─── CONTROLS PANEL ─── */
+.cpanel{width:312px;flex-shrink:0;display:flex;flex-direction:column;
+  overflow:hidden;} /* no scroll — panes handle it */
+
+/* ─── MODE BAR ─── */
+.modebar{display:flex;align-items:center;gap:0;flex-shrink:0;
+  border-bottom:1px solid var(--vdim);background:rgba(8,6,18,.5);}
+.mbtn{flex:1;padding:9px 6px;background:none;border:none;border-right:1px solid var(--vdim);
+  color:var(--gray);font-family:var(--mono);font-style:italic;font-size:11px;
+  letter-spacing:.12em;cursor:pointer;text-align:center;
+  transition:background .12s,color .12s;-webkit-tap-highlight-color:transparent;}
+.mbtn:last-child{border-right:none;}
+.mbtn.active{background:var(--vact);color:var(--cyan);}
+.mbtn.stress-btn{color:rgba(255,100,50,.5);}
+.mbtn.stress-btn.active{background:rgba(255,80,0,.12);color:#ff6633;}
+
+/* ─── PANES ─── */
+.pane{flex:1;overflow-y:auto;overflow-x:hidden;padding:11px;gap:9px;
+  display:none;flex-direction:column;}
+.pane.visible{display:flex;}
+.pane::-webkit-scrollbar{width:2px;}
+.pane::-webkit-scrollbar-thumb{background:var(--vdim);}
+
+/* ─── SECTION ─── */
+.sec{border:1px solid var(--vdim);border-radius:5px;padding:9px 11px;
+  background:rgba(153,68,255,.04);}
+.sec.org-identity{border-color:var(--org-dim);background:var(--org-bg);
+  transition:border-color .3s,background .3s;}
+.st{font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.12em;
+  color:var(--violet);text-transform:uppercase;margin-bottom:7px;
+  padding-bottom:4px;border-bottom:1px solid var(--vdim);}
+.st.org-tint{color:var(--org-accent);border-color:var(--org-dim);transition:color .3s;}
+
+/* ─── ORGANISM SELECTOR ─── */
+.orgsel{display:flex;gap:4px;}
+.obtn{flex:1;padding:7px 4px;border-radius:4px;color:var(--gray);
+  font-family:var(--mono);font-style:italic;font-size:11px;cursor:pointer;
+  text-align:center;transition:all .12s;-webkit-tap-highlight-color:transparent;}
+.obtn[data-org="0"]{background:rgba(255,68,34,.07);border:1px solid rgba(255,68,34,.2);}
+.obtn[data-org="1"]{background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.18);}
+.obtn[data-org="2"]{background:rgba(136,102,255,.07);border:1px solid rgba(136,102,255,.2);}
+.obtn[data-org="0"].active{background:rgba(255,68,34,.2);border-color:var(--o0);color:var(--o0);}
+.obtn[data-org="1"].active{background:rgba(255,170,0,.18);border-color:var(--o1);color:var(--o1);}
+.obtn[data-org="2"].active{background:rgba(136,102,255,.2);border-color:var(--o2);color:var(--o2);}
+
+/* ─── ORGANISM IDENTITY ─── */
+.org-insignia{font-family:var(--mono);font-weight:700;font-size:20px;
+  color:var(--org-accent);letter-spacing:.04em;line-height:1;
+  margin-bottom:4px;opacity:.85;transition:color .3s;}
+.org-name-main{font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:13px;color:var(--white);margin-bottom:5px;}
+.orgtags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px;}
+.otag{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:2px;}
+.otag.t{background:rgba(0,255,255,.09);color:var(--cyan);}
+.otag.pk{background:rgba(153,68,255,.14);color:#b580ff;}
+.otag.ro{background:rgba(255,0,255,.09);color:var(--mag);}
+.fp-badge{display:inline-block;font-family:var(--mono);font-size:11px;
+  padding:2px 7px;border-radius:2px;letter-spacing:.07em;}
+.fp-stable{background:rgba(68,255,153,.13);color:#44ff99;}
+.fp-unstable{background:rgba(255,80,0,.13);color:#ff6633;}
+.fp-explosive{background:rgba(255,0,255,.12);color:var(--mag);}
+.fp-ghost{background:rgba(100,80,180,.2);color:#9988cc;}
+.org-mood{font-family:var(--mono);font-size:11px;color:var(--gray);
+  font-style:italic;margin-top:4px;}
+/* Mutation tolerance bar */
+.mut-tol-row{display:flex;align-items:center;gap:7px;margin-top:6px;}
+.mtlbl{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.07em;width:60px;flex-shrink:0;}
+.mttrack{flex:1;height:2px;background:rgba(255,255,255,.06);border-radius:1px;overflow:hidden;}
+.mtfill{height:100%;background:var(--org-accent);border-radius:1px;
+  transition:width .2s,background .3s;}
+
+/* ─── PARAM ROWS ─── */
+.prow{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.prow:last-child{margin-bottom:0;}
+.plbl{font-family:var(--mono);font-size:11px;letter-spacing:.07em;
+  color:var(--gray);width:68px;flex-shrink:0;}
+.ptr{flex:1;height:3px;background:rgba(255,255,255,.05);border-radius:2px;
+  overflow:hidden;position:relative;}
+.pf{height:100%;border-radius:2px;position:absolute;left:0;top:0;
+  transition:width .15s ease,left .15s ease;}
+.pf.pitch{background:var(--cyan);}.pf.trans{background:#ff6633;}
+.pf.sat{background:var(--mag);}.pf.res{background:#44ff99;}
+.pf.pan{background:#ffcc00;}.pf.fat{background:linear-gradient(90deg,#44ff99,#ff3300);}
+.pf.tens{background:linear-gradient(90deg,var(--violet),var(--mag));}
+.pf.ener{background:linear-gradient(90deg,#0055ff,var(--cyan));}
+.pf.dens{background:linear-gradient(90deg,#44ff99,var(--cyan));}
+.pf.drift{background:linear-gradient(90deg,#ff9900,#ffff00);}
+.pf.rec{background:linear-gradient(90deg,#44ff99,#88ffaa);}
+.pval{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:var(--white);width:44px;text-align:right;flex-shrink:0;}
+
+/* ─── STAT ROWS ─── */
+.srow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.srow:last-child{margin-bottom:0;}
+.slbl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;}
+.sval{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--cyan);}
+.sval.warn{color:#ffcc00;}.sval.danger{color:#ff3333;}.sval.mutx{color:var(--mag);}
+.gspd{margin-top:6px;text-align:center;font-family:var(--mono);font-style:italic;
+  font-size:12px;color:var(--violet);letter-spacing:.12em;transition:color .5s;}
+
+/* ─── STRESS PANE (hidden by default) ─── */
+.stress-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.sgi{font-family:var(--mono);font-size:11px;}
+.sgi .slbl{display:block;margin-bottom:1px;}
+.sgi .sval{font-size:12px;}
+
+/* ═══════════════════════════════════════
+   DNA EXPORT PANE
+═══════════════════════════════════════ */
+
+/* Pack header */
+.pack-header{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--vdim);}
+.pack-label{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.1em;margin-bottom:3px;}
+.pack-name{font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:18px;color:var(--white);letter-spacing:.04em;}
+
+/* Organism checklist */
+.org-list{display:flex;flex-direction:column;gap:5px;}
+.org-check{display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border-radius:4px;border:1px solid;cursor:pointer;
+  transition:background .1s;-webkit-tap-highlight-color:transparent;}
+.org-check[data-oi="0"]{border-color:rgba(255,68,34,.2);background:rgba(255,68,34,.05);}
+.org-check[data-oi="1"]{border-color:rgba(255,170,0,.18);background:rgba(255,170,0,.04);}
+.org-check[data-oi="2"]{border-color:rgba(136,102,255,.2);background:rgba(136,102,255,.05);}
+.org-check.checked[data-oi="0"]{background:rgba(255,68,34,.12);border-color:rgba(255,68,34,.45);}
+.org-check.checked[data-oi="1"]{background:rgba(255,170,0,.12);border-color:rgba(255,170,0,.45);}
+.org-check.checked[data-oi="2"]{background:rgba(136,102,255,.14);border-color:rgba(136,102,255,.45);}
+.check-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  border:1px solid;transition:background .15s;}
+.org-check[data-oi="0"] .check-dot{border-color:var(--o0);}
+.org-check[data-oi="1"] .check-dot{border-color:var(--o1);}
+.org-check[data-oi="2"] .check-dot{border-color:var(--o2);}
+.org-check.checked[data-oi="0"] .check-dot{background:var(--o0);}
+.org-check.checked[data-oi="1"] .check-dot{background:var(--o1);}
+.org-check.checked[data-oi="2"] .check-dot{background:var(--o2);}
+.check-name{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--white);}
+.check-role{font-family:var(--mono);font-size:11px;color:var(--gray);margin-left:auto;}
+
+/* DNA profile */
+.dna-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.dna-item{padding:6px 8px;background:rgba(153,68,255,.04);
+  border:1px solid var(--vdim);border-radius:3px;}
+.dna-key{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.07em;margin-bottom:2px;}
+.dna-val{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--cyan);}
+
+/* Variation selector */
+.var-row{display:flex;gap:5px;}
+.varbtn{flex:1;padding:8px;background:var(--vglow);border:1px solid var(--vdim);
+  border-radius:4px;color:var(--gray);font-family:var(--mono);font-style:italic;
+  font-size:13px;cursor:pointer;text-align:center;letter-spacing:.04em;
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.varbtn.active{background:var(--vact);border-color:var(--violet);color:var(--cyan);}
+
+/* FORGE DNA button */
+.forge-dna-btn{width:100%;padding:14px;background:rgba(153,68,255,.1);
+  border:1px solid var(--violet);border-radius:5px;color:var(--white);
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:15px;
+  letter-spacing:.18em;cursor:pointer;text-align:center;
+  transition:background .12s,border-color .12s;
+  -webkit-tap-highlight-color:transparent;}
+.forge-dna-btn:active,.forge-dna-btn.active{
+  background:rgba(153,68,255,.28);border-color:var(--cyan);}
+.forge-dna-btn:disabled{opacity:.35;cursor:default;}
+
+/* ─── RENDER STATE ─── */
+.render-pane{display:none;flex-direction:column;gap:8px;}
+.render-pane.visible{display:flex;}
+.render-title{font-family:var(--mono);font-style:italic;font-size:12px;
+  color:var(--violet);letter-spacing:.14em;text-transform:uppercase;}
+.render-canvas-wrap{height:48px;position:relative;overflow:hidden;
+  border:1px solid var(--vdim);border-radius:4px;background:#040210;}
+#render-scope{display:block;width:100%;height:100%;}
+.render-log{font-family:var(--mono);font-size:11px;color:var(--gray);
+  line-height:1.6;min-height:60px;}
+.render-log .rl{opacity:0;animation:fadeIn .3s ease forwards;}
+@keyframes fadeIn{to{opacity:1;}}
+.render-progress{height:2px;background:rgba(255,255,255,.06);border-radius:1px;
+  overflow:hidden;margin-top:2px;}
+.render-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--violet),var(--cyan));
+  transition:width .4s ease;border-radius:1px;}
+
+/* ─── RESULT STATE ─── */
+.result-pane{display:none;flex-direction:column;gap:8px;}
+.result-pane.visible{display:flex;}
+.result-header{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:#44ff99;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;}
+.result-packname{font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:14px;color:var(--white);margin-bottom:8px;}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;}
+.rgi{padding:5px 7px;background:rgba(68,255,153,.04);
+  border:1px solid rgba(68,255,153,.14);border-radius:3px;}
+.rgi-k{font-family:var(--mono);font-size:11px;color:rgba(68,255,153,.6);letter-spacing:.06em;}
+.rgi-v{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--white);}
+
+/* Export button */
+.export-btn{width:100%;padding:12px;background:rgba(68,255,153,.08);
+  border:1px solid rgba(68,255,153,.35);border-radius:5px;color:#44ff99;
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:13px;
+  letter-spacing:.14em;cursor:pointer;text-align:center;
+  transition:background .12s;-webkit-tap-highlight-color:transparent;}
+.export-btn:active{background:rgba(68,255,153,.18);}
+
+/* ─── BRIDGE ANIMATION ─── */
+.bridge-pane{display:none;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;padding:28px 11px;text-align:center;}
+.bridge-pane.visible{display:flex;}
+.bridge-label{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.12em;text-transform:uppercase;}
+.bridge-canvas-wrap{width:100%;height:38px;position:relative;}
+#bridge-scope{display:block;width:100%;height:100%;}
+.bridge-target{font-family:var(--mono);font-style:italic;font-size:13px;
+  color:var(--cyan);letter-spacing:.1em;}
+.bridge-done-label{font-family:var(--mono);font-size:11px;color:#44ff99;
+  letter-spacing:.14em;opacity:0;transition:opacity .5s;}
+.bridge-done-label.show{opacity:1;}
+
+/* Reset / back */
+.back-btn{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.1em;background:none;border:none;cursor:pointer;
+  text-align:center;padding:6px;text-decoration:underline;
+  -webkit-tap-highlight-color:transparent;}
+
+/* ─── FOOTER ─── */
+footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
+  background:rgba(8,6,18,.72);height:72px;}
+#tbtn{flex:1;background:rgba(153,68,255,.09);border:none;
+  border-right:1px solid var(--vdim);color:var(--white);
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:24px;
+  letter-spacing:.22em;cursor:pointer;transition:background .06s;
+  -webkit-tap-highlight-color:transparent;}
+#tbtn.fire{background:rgba(153,68,255,.36);}
+.fstats{width:180px;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;gap:4px;padding:9px;}
+.frow{display:flex;align-items:center;gap:6px;}
+.flbl{font-family:var(--mono);font-size:11px;color:var(--gray);}
+.fval{font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan);}
+#fdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  background:#44ff99;transition:background .5s;}
+#flbl{font-family:var(--mono);font-size:11px;color:var(--gray);}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<header>
+  <div class="logo"><span class="sp">SPUK</span><span class="lb">LAB</span></div>
+  <div class="sep"></div>
+  <div class="appid">
+    <span class="appid-n">SOUND FORGE</span>
+    <span class="appid-p">PHASE 2A — VISUAL HIERARCHY + DNA EXPORT</span>
+  </div>
+  <div class="hsp"></div>
+  <div class="hstrip">
+    <div class="hi"><span class="hl">TENSION</span><span class="hv" id="h-t">0.00</span></div>
+    <div class="hi"><span class="hl">ENERGY</span><span class="hv" id="h-e">0.00</span></div>
+    <div class="hi"><span class="hl">PHASE</span><span class="hv ph" id="h-ph">intro</span></div>
+    <div class="hi"><span class="hl">FPS</span><span class="hv" id="h-fps">--</span></div>
+    <div class="hi"><span class="hl">V</span><span class="hv" id="h-vc">0</span></div>
+  </div>
+</header>
+
+<main>
+
+<!-- CANVAS -->
+<div class="cvp">
+  <canvas id="scope"></canvas>
+  <div class="cov">
+    <span class="cl osc">OSC</span>
+    <span class="cl fft">FFT</span>
+    <span class="cl pack" id="cl-pk">rust_ritual</span>
+    <!-- EMF — minimal, always subtle -->
+    <div class="emfstrip">
+      <span class="emfi">INT <span id="emf-int">0.00</span></span>
+      <span class="emfi">SIL <span id="emf-sil">0.0s</span></span>
+      <span class="emfi">DOM <span id="emf-dom">--</span></span>
+    </div>
+    <!-- Influence — fades contextually -->
+    <div class="infstrip">
+      <span class="infitem" id="inf-kg">K→GHOST</span>
+      <span class="infitem" id="inf-td">T→DEBRIS</span>
+      <span class="infitem" id="inf-ds">D→SAT</span>
+      <span class="infitem" id="inf-ter">TERRITORY</span>
+    </div>
+    <!-- Territory — only during conflict -->
+    <div class="terstrip" id="terstrip">
+      <div class="terrow">
+        <span class="terlbl">K</span>
+        <div class="terb"><div class="terf k" id="ter-k-lo"></div></div>
+        <div class="terb"><div class="terf k" id="ter-k-mi"></div></div>
+        <div class="terb"><div class="terf k" id="ter-k-hi"></div></div>
+      </div>
+      <div class="terrow">
+        <span class="terlbl">D</span>
+        <div class="terb"><div class="terf d" id="ter-d-lo"></div></div>
+        <div class="terb"><div class="terf d" id="ter-d-mi"></div></div>
+        <div class="terb"><div class="terf d" id="ter-d-hi"></div></div>
+      </div>
+      <div class="terrow">
+        <span class="terlbl">G</span>
+        <div class="terb"><div class="terf g" id="ter-g-lo"></div></div>
+        <div class="terb"><div class="terf g" id="ter-g-mi"></div></div>
+        <div class="terb"><div class="terf g" id="ter-g-hi"></div></div>
+      </div>
+    </div>
+    <!-- Voice dots -->
+    <div class="vgrid" id="vgrid"></div>
+    <!-- Drift badge -->
+    <div class="driftbadge" id="driftbadge"></div>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="cpanel">
+
+  <!-- MODE BAR -->
+  <div class="modebar">
+    <button class="mbtn active" id="mb-forge">FORGE</button>
+    <button class="mbtn" id="mb-export">DNA EXPORT</button>
+    <button class="mbtn stress-btn" id="mb-stress">STRESS</button>
+  </div>
+
+  <!-- ═══════════════════════════════════
+       FORGE PANE
+  ════════════════════════════════════ -->
+  <div class="pane visible" id="pane-forge">
+
+    <!-- Organism selector -->
+    <div class="orgsel">
+      <button class="obtn active" data-org="0">RUST KICK</button>
+      <button class="obtn"        data-org="1">DEBRIS HIT</button>
+      <button class="obtn"        data-org="2">SPECTRAL GHOST</button>
+    </div>
+
+    <!-- Organism identity -->
+    <div class="sec org-identity" id="org-id-sec">
+      <div class="org-insignia" id="org-insignia">RK_01</div>
+      <div class="org-name-main" id="org-name">Rust Ritual Kick</div>
+      <div class="orgtags">
+        <span class="otag t"  id="org-type">kick_cluster</span>
+        <span class="otag pk" id="org-pack">rust_ritual</span>
+        <span class="otag ro" id="org-role">low_anchor</span>
+      </div>
+      <span class="fp-badge" id="fp-badge">EXPLOSIVE</span>
+      <div class="org-mood" id="org-mood">ritual · agg 0.71 · instability 0.68</div>
+      <div class="mut-tol-row">
+        <span class="mtlbl">MUT.TOL</span>
+        <div class="mttrack"><div class="mtfill" id="mt-fill" style="width:82%"></div></div>
+        <span class="pval" id="mt-val">0.82</span>
+      </div>
+    </div>
+
+    <!-- Mutation state -->
+    <div class="sec">
+      <div class="st org-tint" id="mut-st-title">MUTATION STATE</div>
+      <div class="prow">
+        <span class="plbl">PITCH</span>
+        <div class="ptr"><div class="pf pitch" id="pf-pitch"></div></div>
+        <span class="pval" id="pv-pitch">0.00</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">TRANSIENT</span>
+        <div class="ptr"><div class="pf trans" id="pf-trans"></div></div>
+        <span class="pval" id="pv-trans">0ms</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">SATURATION</span>
+        <div class="ptr"><div class="pf sat" id="pf-sat"></div></div>
+        <span class="pval" id="pv-sat">0</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">RESONANCE</span>
+        <div class="ptr"><div class="pf res" id="pf-res"></div></div>
+        <span class="pval" id="pv-res">0hz</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">PAN</span>
+        <div class="ptr"><div class="pf pan" id="pf-pan" style="position:absolute;height:100%;top:0;"></div></div>
+        <span class="pval" id="pv-pan">0.00</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">T.DRIFT</span>
+        <div class="ptr"><div class="pf drift" id="pf-drift"></div></div>
+        <span class="pval" id="pv-drift">0ms</span>
+      </div>
+    </div>
+
+    <!-- Global state -->
+    <div class="sec">
+      <div class="st">GLOBAL STATE</div>
+      <div class="prow">
+        <span class="plbl">TENSION</span>
+        <div class="ptr"><div class="pf tens" id="gf-t"></div></div>
+      </div>
+      <div class="prow">
+        <span class="plbl">ENERGY</span>
+        <div class="ptr"><div class="pf ener" id="gf-e"></div></div>
+      </div>
+      <div class="prow">
+        <span class="plbl">DENSITY</span>
+        <div class="ptr"><div class="pf dens" id="gf-d"></div></div>
+      </div>
+      <div class="gspd">NARRATIVE: <span id="gs-ph">INTRO</span></div>
+    </div>
+
+    <!-- Organism stats -->
+    <div class="sec">
+      <div class="st">ORGANISM STATS</div>
+      <div class="srow"><span class="slbl">PLAY COUNT</span><span class="sval" id="st-cnt">0</span></div>
+      <div class="prow" style="margin-top:4px;">
+        <span class="plbl">FATIGUE</span>
+        <div class="ptr"><div class="pf fat" id="pf-fat"></div></div>
+        <span class="pval" id="pv-fat">0.00</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">RECOVERY</span>
+        <div class="ptr"><div class="pf rec" id="pf-rec"></div></div>
+        <span class="pval" id="pv-rec">1.00</span>
+      </div>
+      <div class="srow" style="margin-top:3px;">
+        <span class="slbl">MUTATION X</span><span class="sval mutx" id="st-mx">1.00x</span>
+      </div>
+      <div class="srow">
+        <span class="slbl">INST.MOMENTUM</span><span class="sval" id="st-im">0.00</span>
+      </div>
+    </div>
+
+  </div><!-- /pane-forge -->
+
+  <!-- ═══════════════════════════════════
+       DNA EXPORT PANE
+  ════════════════════════════════════ -->
+  <div class="pane" id="pane-export">
+
+    <!-- IDLE STATE -->
+    <div id="export-idle">
+
+      <div class="pack-header">
+        <div class="pack-label">ACTIVE PACK</div>
+        <div class="pack-name">Rust Ritual</div>
+      </div>
+
+      <div class="sec">
+        <div class="st">ORGANISMS</div>
+        <div class="org-list">
+          <div class="org-check checked" data-oi="0" id="oc-0">
+            <span class="check-dot"></span>
+            <span class="check-name">Rust Kick</span>
+            <span class="check-role">low_anchor</span>
+          </div>
+          <div class="org-check checked" data-oi="1" id="oc-1">
+            <span class="check-dot"></span>
+            <span class="check-name">Debris Hit</span>
+            <span class="check-role">mid_body</span>
+          </div>
+          <div class="org-check checked" data-oi="2" id="oc-2">
+            <span class="check-dot"></span>
+            <span class="check-name">Spectral Ghost</span>
+            <span class="check-role">ghost</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="st">DNA PROFILE</div>
+        <div class="dna-grid">
+          <div class="dna-item">
+            <div class="dna-key">MUT.TOLERANCE</div>
+            <div class="dna-val" id="dna-mt">--</div>
+          </div>
+          <div class="dna-item">
+            <div class="dna-key">SPECTRAL ID</div>
+            <div class="dna-val" id="dna-sp">--</div>
+          </div>
+          <div class="dna-item">
+            <div class="dna-key">EMOTIONAL CORE</div>
+            <div class="dna-val" id="dna-em">--</div>
+          </div>
+          <div class="dna-item">
+            <div class="dna-key">TERRITORY</div>
+            <div class="dna-val" id="dna-ter">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="st">VARIATIONS</div>
+        <div class="var-row">
+          <button class="varbtn active" data-v="1">1</button>
+          <button class="varbtn" data-v="4">4</button>
+          <button class="varbtn" data-v="12">12</button>
+        </div>
+      </div>
+
+      <button class="forge-dna-btn" id="forge-dna-btn">FORGE DNA</button>
+
+    </div><!-- /export-idle -->
+
+    <!-- RENDER STATE -->
+    <div class="render-pane" id="render-pane">
+      <div class="render-title">FORGING ORGANISM DNA</div>
+      <div class="render-canvas-wrap">
+        <canvas id="render-scope"></canvas>
+      </div>
+      <div class="render-log" id="render-log"></div>
+      <div class="render-progress">
+        <div class="render-bar" id="render-bar"></div>
+      </div>
+    </div>
+
+    <!-- RESULT STATE -->
+    <div class="result-pane" id="result-pane">
+      <div class="result-header">SOUND DNA PACK READY</div>
+      <div class="result-packname" id="res-packname">rust_ritual.sound_dna_v1</div>
+      <div class="result-grid">
+        <div class="rgi">
+          <div class="rgi-k">ORGANISMS</div>
+          <div class="rgi-v" id="res-orgs">3</div>
+        </div>
+        <div class="rgi">
+          <div class="rgi-k">VARIATIONS</div>
+          <div class="rgi-v" id="res-vars">12</div>
+        </div>
+        <div class="rgi">
+          <div class="rgi-k">EMOTIONAL CORE</div>
+          <div class="rgi-v" id="res-em">ritual</div>
+        </div>
+        <div class="rgi">
+          <div class="rgi-k">SPECTRAL CHAR.</div>
+          <div class="rgi-v" id="res-sp">dark</div>
+        </div>
+        <div class="rgi">
+          <div class="rgi-k">MUT.CAPABILITY</div>
+          <div class="rgi-v" id="res-mc">high</div>
+        </div>
+        <div class="rgi">
+          <div class="rgi-k">FORMAT</div>
+          <div class="rgi-v">sound_dna_v1</div>
+        </div>
+      </div>
+      <button class="export-btn" id="export-sb-btn">EXPORT TO SPUKBEATSONE</button>
+      <button class="back-btn" id="back-btn">← forge again</button>
+    </div>
+
+    <!-- BRIDGE STATE -->
+    <div class="bridge-pane" id="bridge-pane">
+      <div class="bridge-label">TRANSFERRING DNA</div>
+      <div class="bridge-canvas-wrap">
+        <canvas id="bridge-scope"></canvas>
+      </div>
+      <div class="bridge-target">SpukBeatsOne</div>
+      <div class="bridge-done-label" id="bridge-done">ORGANISM RECEIVED</div>
+      <button class="back-btn" id="bridge-back-btn">← new forge</button>
+    </div>
+
+  </div><!-- /pane-export -->
+
+  <!-- STRESS PANE -->
+  <div class="pane" id="pane-stress">
+    <div class="sec" style="border-color:rgba(255,80,0,.25);">
+      <div class="st" style="color:#ff6633;">STRESS MONITOR</div>
+      <div class="stress-grid">
+        <div class="sgi"><span class="slbl">ACTIVE VOICES</span><span class="sval" id="sv-ac">0/16</span></div>
+        <div class="sgi"><span class="slbl">PEAK VOICES</span><span class="sval" id="sv-pk">0</span></div>
+        <div class="sgi"><span class="slbl">FRAME TIME</span><span class="sval" id="sv-ft">0ms</span></div>
+        <div class="sgi"><span class="slbl">QUALITY</span><span class="sval" id="sv-ql">FULL</span></div>
+        <div class="sgi"><span class="slbl">EVICTIONS</span><span class="sval" id="sv-ev">0</span></div>
+        <div class="sgi"><span class="slbl">TOTAL TRIGGERS</span><span class="sval" id="sv-tot">0</span></div>
+      </div>
+    </div>
+    <div class="sec" style="border-color:rgba(255,180,0,.2);">
+      <div class="st" style="color:#ffcc00;">EVENT MEMORY</div>
+      <div class="stress-grid">
+        <div class="sgi"><span class="slbl">RECENT INT.</span><span class="sval" id="mem-int">0.00</span></div>
+        <div class="sgi"><span class="slbl">SILENCE</span><span class="sval" id="mem-sil">0.0s</span></div>
+        <div class="sgi"><span class="slbl">RUPTURES</span><span class="sval" id="mem-rup">0</span></div>
+        <div class="sgi"><span class="slbl">DENSITY TRD</span><span class="sval" id="mem-trd">flat</span></div>
+        <div class="sgi"><span class="slbl">ANTICIPATION</span><span class="sval" id="mem-ant">0.00</span></div>
+        <div class="sgi"><span class="slbl">DOMINANT</span><span class="sval" id="mem-dom">--</span></div>
+      </div>
+    </div>
+    <div class="sec" style="border-color:rgba(255,150,0,.2);">
+      <div class="st" style="color:#ff9900;">TERRITORY</div>
+      <div class="stress-grid">
+        <div class="sgi"><span class="slbl">NEGOTIATION</span><span class="sval" id="ter-neg">idle</span></div>
+        <div class="sgi"><span class="slbl">K-LOW / MID</span><span class="sval" id="ter-k-s">--</span></div>
+        <div class="sgi"><span class="slbl">D-MID / HIGH</span><span class="sval" id="ter-d-s">--</span></div>
+        <div class="sgi"><span class="slbl">G-BODY</span><span class="sval" id="ter-g-s">--</span></div>
+      </div>
+    </div>
+  </div><!-- /pane-stress -->
+
+</div><!-- .cpanel -->
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <button id="tbtn">TRIGGER</button>
+  <div class="fstats">
+    <div class="frow">
+      <span class="flbl">TRIGGERS</span>
+      <span class="fval" id="fi-tot">0</span>
+    </div>
+    <div class="frow">
+      <span id="fdot"></span>
+      <span id="flbl">FRESH</span>
+    </div>
+  </div>
+</footer>
+
+</div><!-- #app -->
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SOUND FORGE — Phase 2A
+   Audio engine: Safety Layer + all Phase 1.6 systems
+   Visual: Ghost trails, trigger scars, organism identity,
+   contextual visibility, DNA Export state machine
+   SpukLab 2025
+═══════════════════════════════════════════════════════════ */
+
+// ─── UTILS (declared first — used everywhere) ─────────────
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function setW(id,pct){const el=document.getElementById(id);if(el)el.style.width=clamp(pct*100,0,100).toFixed(1)+'%';}
+function setT(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+
+// ─── DEBUG FLAGS ─────────────────────────────────────────
+const DEBUG={audio:false,territory:false,emf:false,performance:false};
+function dbg(s,...a){if(DEBUG[s])console.log(`[SF:${s}]`,...a);}
+
+// ─── AUDIO PARAM SAFETY ──────────────────────────────────
+const AP={FREQ_MIN:24,FREQ_MAX:18000,GAIN_MIN:0,GAIN_MAX:1.2,Q_MIN:0.0001,Q_MAX:24,PAN_MIN:-1,PAN_MAX:1};
+function safe(v,fb=0){return(typeof v==='number'&&isFinite(v))?v:fb;}
+function clampAudio(v,min,max,fb=0){return Math.max(min,Math.min(max,safe(v,fb)));}
+function safeParam(p,v,mn,mx,fb=0){try{const val=clampAudio(v,mn,mx,fb);if(p&&typeof p.value!=='undefined')p.value=val;}catch(e){dbg('audio','safeParam FAIL:',e.message);}}
+function safeFreq(p,v,fb=440){safeParam(p,v,AP.FREQ_MIN,AP.FREQ_MAX,fb);}
+function safeQ(p,v,fb=1){safeParam(p,v,AP.Q_MIN,AP.Q_MAX,fb);}
+function safeSetValue(p,v,t,mn,mx,fb=0){try{p.setValueAtTime(clampAudio(v,mn,mx,fb),clampAudio(t,0,3600,0));}catch(e){dbg('audio','SSV FAIL:',e.message);}}
+function safeLinearRamp(p,v,t,mn,mx,fb=0){try{p.linearRampToValueAtTime(clampAudio(v,mn,mx,fb),clampAudio(t,0,3600,0));}catch(e){dbg('audio','SLR FAIL:',e.message);}}
+function safeExpRamp(p,v,t,mn,mx,fb=0.001){try{p.exponentialRampToValueAtTime(Math.max(0.00001,clampAudio(v,mn,mx,fb)),clampAudio(t,0,3600,0));}catch(e){dbg('audio','SER FAIL:',e.message);}}
+
+// ─── TERRITORY SAFETY CONSTANT ───────────────────────────
+const TERRITORY_INFLUENCE_MAX=0.42;
+
+// ─── AUDIO CONTEXT ───────────────────────────────────────
+let AC=null,masterGain,compressor,masterSat,masterAnalyser;
+let noiseBuffer=null,FFT_SIZE=2048;
+
+function initAC(){
+  if(AC)return;
+  AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
+  masterGain=AC.createGain();masterGain.gain.value=0.82;
+  compressor=AC.createDynamicsCompressor();
+  compressor.threshold.value=-16;compressor.knee.value=8;
+  compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
+  masterSat=AC.createWaveShaper();masterSat.curve=satCurve(28);masterSat.oversample='4x';
+  masterAnalyser=AC.createAnalyser();
+  masterAnalyser.fftSize=FFT_SIZE;masterAnalyser.smoothingTimeConstant=.88;
+  masterGain.connect(compressor);compressor.connect(masterSat);
+  masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
+  noiseBuffer=genNoise(2);
+  initPool();
+  startWatchdog();
+}
+function satCurve(k){const n=512,c=new Float32Array(n);for(let i=0;i<n;i++){const x=(i*2)/n-1;c[i]=((Math.PI+k)*x)/(Math.PI+k*Math.abs(x));}return c;}
+function genNoise(dur){const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}return buf;}
+
+// ─── WATCHDOG ────────────────────────────────────────────
+let _wdi=null;
+function startWatchdog(){
+  if(_wdi)return;
+  _wdi=setInterval(()=>{
+    if(!AC)return;
+    if(AC.state!=='running')AC.resume().then(()=>dbg('audio','Watchdog resume'));
+    if(masterAnalyser){
+      const b=new Uint8Array(masterAnalyser.fftSize);
+      masterAnalyser.getByteTimeDomainData(b);
+      const rms=Math.sqrt(b.reduce((s,v)=>s+(v/128-1)**2,0)/b.length);
+      const act=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
+      if(act>0&&rms<0.002)console.warn('[SF:watchdog] AUDIO STALL — voices:',act,'rms:',rms.toFixed(4));
+    }
+  },2000);
+}
+
+// ─── VOICE POOL ──────────────────────────────────────────
+const POOL_SIZE=16;const pool=[];
+class Voice{
+  constructor(){
+    this.free=true;this.freeAt=0;
+    this.bus=AC.createGain();this.panner=AC.createStereoPanner();this.sat=AC.createWaveShaper();
+    this.bus.gain.value=0;
+    this.bus.connect(this.panner);this.panner.connect(this.sat);this.sat.connect(masterGain);
+  }
+  available(){return this.free||(AC&&AC.currentTime>=this.freeAt);}
+  claim(dur){this.free=false;this.freeAt=AC.currentTime+dur+0.12;setTimeout(()=>{this.free=true;},(dur+0.16)*1000);}
+}
+function initPool(){
+  for(let i=0;i<POOL_SIZE;i++)pool.push(new Voice());
+  const g=document.getElementById('vgrid');
+  if(g)g.innerHTML=Array.from({length:16},()=>'<div class="vdot"></div>').join('');
+}
+function getVoice(){
+  for(const v of pool)if(v.available())return v;
+  Perf.evictions++;
+  return pool.reduce((a,b)=>a.freeAt<b.freeAt?a:b);
+}
+
+// ─── ORGANISM DEFINITIONS ────────────────────────────────
+const ORG_COLORS=['#ff4422','#ffaa00','#8866ff'];
+const ORG_CSS_VARS=[
+  {accent:'var(--o0)',dim:'var(--o0d)',bg:'var(--o0b)'},
+  {accent:'var(--o1)',dim:'var(--o1d)',bg:'var(--o1b)'},
+  {accent:'var(--o2)',dim:'var(--o2d)',bg:'var(--o2b)'}
+];
+const ORG_INSIGNIA=['RK_01','DH_02','SG_03'];
+
+const ORGANISMS=[
+  {id:'rust_kick',name:'Rust Ritual Kick',pack:'rust_ritual',type:'kick_cluster',role:'low_anchor',
+   mood:'ritual · agg 0.71 · instability 0.68',fatiguePersonality:'explosive',
+   mutTolerance:0.82,spectralChar:'dark',emotionalCore:'ritual',
+   spectralClaim:{low:.92,mid:.35,high:.08},
+   layers:{
+     transient:{on:true,waveform:'sine',baseFreq:88,freqDecay:.068,freqFloor:.12,ampDecay:.085,gain:.98},
+     body:{on:true,waveform:'sine',baseFreq:52,freqDecay:.28,freqFloor:.42,ampDecay:.52,gain:.72},
+     noise:{on:true,filterType:'bandpass',filterFreq:115,filterQ:3.2,dur:.14,gain:.24},
+     air:{on:false}
+   },
+   mut:{pitchRange:[-.14,.10],transAtk:[.00015,.0024],satRange:[18,88],resonRange:[65,165],panRange:[-.28,.28],fatigueScale:.88}
+  },
+  {id:'debris',name:'Debris Hit',pack:'rust_ritual',type:'percussive_debris',role:'mid_body',
+   mood:'industrial · agg 0.55 · instability 0.82',fatiguePersonality:'unstable',
+   mutTolerance:0.70,spectralChar:'mid_heavy',emotionalCore:'industrial',
+   spectralClaim:{low:.28,mid:.88,high:.55},
+   layers:{
+     transient:{on:true,waveform:'triangle',baseFreq:420,freqDecay:.038,freqFloor:.16,ampDecay:.062,gain:.88},
+     body:{on:true,waveform:'sine',baseFreq:145,freqDecay:.11,freqFloor:.48,ampDecay:.21,gain:.42},
+     noise:{on:true,filterType:'bandpass',filterFreq:870,filterQ:1.8,dur:.09,gain:.48},
+     air:{on:false}
+   },
+   mut:{pitchRange:[-.32,.32],transAtk:[.00008,.0009],satRange:[35,130],resonRange:[110,320],panRange:[-.52,.52],fatigueScale:1.12}
+  },
+  {id:'ghost',name:'Spectral Ghost',pack:'rust_ritual',type:'ghost_impact',role:'ghost',
+   mood:'void · agg 0.12 · instability 0.92',fatiguePersonality:'ghost',
+   mutTolerance:0.55,spectralChar:'spectral_dust',emotionalCore:'void',
+   spectralClaim:{low:.22,mid:.18,high:.12},
+   layers:{
+     transient:{on:false},
+     body:{on:true,waveform:'sine',baseFreq:36,freqDecay:1.1,freqFloor:.78,ampDecay:1.6,gain:.28},
+     noise:{on:true,filterType:'lowpass',filterFreq:85,filterQ:.55,dur:1.1,gain:.17},
+     air:{on:true,filterFreq:175,filterQ:.4,dur:2.0,gain:.09}
+   },
+   mut:{pitchRange:[-.55,.55],transAtk:[0,0],satRange:[4,22],resonRange:[28,68],panRange:[-.65,.65],fatigueScale:.38}
+  }
+];
+
+// ─── FATIGUE RECOVERY PROFILES ───────────────────────────
+const RECOVERY_PROFILES={
+  stable:{curve:f=>f*(1-.045),label:'STABLE',badgeClass:'fp-stable'},
+  unstable:{curve:f=>f*(1-.012),label:'UNSTABLE',badgeClass:'fp-unstable'},
+  explosive:{curve:f=>f>.85?Math.max(0,f-.22):f*(1-.008),label:'EXPLOSIVE',badgeClass:'fp-explosive'},
+  ghost:{curve:f=>Math.max(.12,f*(1-.018)),label:'GHOST',badgeClass:'fp-ghost'}
+};
+
+// ─── ORGANISM MEMORY ─────────────────────────────────────
+const MEM=ORGANISMS.map(()=>({lastPitchDrift:0,instabilityMomentum:0,playCount:0,fatigue:0,recoveryLevel:1}));
+let _recInterval=null;
+function startRecovery(){
+  if(_recInterval)return;
+  _recInterval=setInterval(()=>{
+    MEM.forEach((m,i)=>{
+      const prof=RECOVERY_PROFILES[ORGANISMS[i].fatiguePersonality];
+      if(m.fatigue>0){m.fatigue=Math.max(0,prof.curve(m.fatigue));m.recoveryLevel=clamp(1-m.fatigue,0,1);m.instabilityMomentum*=0.94;}
+    });
+    updateRecoveryUI();
+  },2000);
+}
+
+// ─── EVENT MEMORY FIELD ──────────────────────────────────
+const EMF={
+  recentIntensity:0,silenceDuration:0,ruptureCount:0,dominantOrganism:-1,
+  densityTrend:0,anticipationLevel:0,
+  _lastTriggerTime:0,_densityHistory:[],
+  onTrigger(oi,energy){
+    const now=Date.now()/1000;this.silenceDuration=0;this._lastTriggerTime=now;
+    this.dominantOrganism=oi;this.recentIntensity=this.recentIntensity*.82+energy*.18;
+    this._densityHistory.push(GlobalState.density);
+    if(this._densityHistory.length>20)this._densityHistory.shift();
+  },
+  onRupture(){this.ruptureCount++;},
+  selfUpdate(){
+    const now=Date.now()/1000;
+    this.silenceDuration=this._lastTriggerTime>0?now-this._lastTriggerTime:0;
+    if(this._densityHistory.length>=6){
+      const mid=Math.floor(this._densityHistory.length/2);
+      const early=this._densityHistory.slice(0,mid).reduce((a,b)=>a+b,0)/mid;
+      const late=this._densityHistory.slice(mid).reduce((a,b)=>a+b,0)/(this._densityHistory.length-mid);
+      const diff=late-early;this.densityTrend=diff>.06?1:diff<-.06?-1:0;
+    }
+    if(GlobalState.tension>.5&&this.silenceDuration>.5&&this.silenceDuration<8)
+      this.anticipationLevel=clamp(this.anticipationLevel+.025,0,1);
+    else this.anticipationLevel*=.96;
+    this.updateUI();
+  },
+  updateUI(){
+    const dn=['KICK','DEBRIS','GHOST'],tl=['falling','flat','rising'];
+    setT('emf-int',this.recentIntensity.toFixed(2));
+    setT('emf-sil',this.silenceDuration.toFixed(1)+'s');
+    setT('emf-dom',this.dominantOrganism>=0?dn[this.dominantOrganism]:'--');
+    setT('mem-int',this.recentIntensity.toFixed(2));
+    setT('mem-sil',this.silenceDuration.toFixed(1)+'s');
+    setT('mem-rup',this.ruptureCount);
+    setT('mem-trd',tl[this.densityTrend+1]);
+    setT('mem-ant',this.anticipationLevel.toFixed(2));
+    setT('mem-dom',this.dominantOrganism>=0?dn[this.dominantOrganism]:'--');
+  }
+};
+
+// ─── SPECTRAL TERRITORY ──────────────────────────────────
+const Territory={
+  claimed:{kick:{low:0,mid:0,high:0},debris:{low:0,mid:0,high:0},ghost:{low:0,mid:0,high:0}},
+  negotiating:false,_negTimer:null,
+  onTrigger(oi){
+    const org=ORGANISMS[oi],key=['kick','debris','ghost'][oi],sm=0.08,tgt=org.spectralClaim;
+    this.claimed[key].low +=(tgt.low -this.claimed[key].low)*sm+(1-sm)*tgt.low*.3;
+    this.claimed[key].mid +=(tgt.mid -this.claimed[key].mid)*sm+(1-sm)*tgt.mid*.3;
+    this.claimed[key].high+=(tgt.high-this.claimed[key].high)*sm+(1-sm)*tgt.high*.3;
+    for(const b of['low','mid','high'])this.claimed[key][b]=Math.min(TERRITORY_INFLUENCE_MAX*2,this.claimed[key][b]);
+    const others=[[0,'kick'],[1,'debris'],[2,'ghost']].filter(([i])=>i!==oi);
+    for(const[,ok]of others){
+      const yL=Math.min(org.spectralClaim.low*.36,TERRITORY_INFLUENCE_MAX);
+      const yM=Math.min(org.spectralClaim.mid*.30,TERRITORY_INFLUENCE_MAX);
+      const yH=Math.min(org.spectralClaim.high*.26,TERRITORY_INFLUENCE_MAX);
+      this.claimed[ok].low *=(1-yL*sm);this.claimed[ok].mid *=(1-yM*sm);this.claimed[ok].high*=(1-yH*sm);
+      for(const b of['low','mid','high'])this.claimed[ok][b]=Math.max(.04,this.claimed[ok][b]);
+    }
+    this.negotiating=true;
+    clearTimeout(this._negTimer);
+    this._negTimer=setTimeout(()=>{
+      this.negotiating=false;
+      for(const k of['kick','debris','ghost']){this.claimed[k].low*=.78;this.claimed[k].mid*=.72;this.claimed[k].high*=.68;}
+      this.updateUI();
+    },600);
+    this.updateUI();
+  },
+  getFilterMod(oi){
+    const org=ORGANISMS[oi];
+    const others=[0,1,2].filter(i=>i!==oi).map(i=>{const ok=['kick','debris','ghost'][i];return this.claimed[ok];});
+    const dom=org.spectralClaim.low>org.spectralClaim.mid?'low':'mid';
+    const pressure=Math.min(others.reduce((s,c)=>s+c[dom],0),TERRITORY_INFLUENCE_MAX);
+    return clamp(1-pressure*.22,.68,1.08);
+  },
+  updateUI(){
+    // Canvas territory strip — contextual
+    const ts=document.getElementById('terstrip');
+    if(ts)ts.classList.toggle('active',this.negotiating);
+    const infEl=document.getElementById('inf-ter');
+    if(infEl)infEl.className='infitem'+(this.negotiating?' ter':'');
+    const orgs=['kick','debris','ghost'],bands=['lo','mi','hi'],keys=['low','mid','high'];
+    for(const o of orgs)for(let b=0;b<3;b++)setW(`ter-${o[0]}-${bands[b]}`,this.claimed[o][keys[b]]);
+    setT('ter-neg',this.negotiating?'active':'idle');
+    setT('ter-k-s',`${this.claimed.kick.low.toFixed(2)} / ${this.claimed.kick.mid.toFixed(2)}`);
+    setT('ter-d-s',`${this.claimed.debris.mid.toFixed(2)} / ${this.claimed.debris.high.toFixed(2)}`);
+    setT('ter-g-s',`${this.claimed.ghost.low.toFixed(2)}`);
+  }
+};
+
+// ─── CROSS-ORGANISM INFLUENCE ─────────────────────────────
+const Influence={
+  kickEnergy:0,_kickTarget:0,_kd:null,
+  onKickTrigger(){
+    this._kickTarget=1;clearTimeout(this._kd);
+    this._kd=setTimeout(()=>{const dec=()=>{this._kickTarget*=.85;if(this._kickTarget>.01)setTimeout(dec,80);else this._kickTarget=0;};dec();},40);
+  },
+  _smooth(){this.kickEnergy+=(this._kickTarget-this.kickEnergy)*.10;if(this.kickEnergy<.001)this.kickEnergy=0;},
+  apply(oi,params){
+    this._smooth();
+    const T=clamp(safe(GlobalState.tension,0),0,1),D=clamp(safe(GlobalState.density,0),0,1);
+    params.airGainBoost=0;params.noiseFreqMult=1;params.satBoost=0;
+    if(oi===2&&this.kickEnergy>.25){params.airGainBoost=clampAudio(this.kickEnergy*.10,0,.15);setInf('inf-kg',true,2500);}
+    else if(oi===2)setInf('inf-kg',false);
+    if(oi===1&&T>.6){params.noiseFreqMult=clampAudio(1-(T-.6)*.65,.34,1);setInf('inf-td',true,2500);}
+    else if(oi===1)setInf('inf-td',false);
+    params.satBoost=clampAudio(D*14,0,28);setInf('inf-ds',D>.4,2500);
+    return params;
+  }
+};
+// Contextual influence: auto-fade after timeout
+const _infTimers={};
+function setInf(id,on,fadeMs=0){
+  const el=document.getElementById(id);if(!el)return;
+  if(on){
+    el.className='infitem on';
+    if(fadeMs>0){clearTimeout(_infTimers[id]);_infTimers[id]=setTimeout(()=>{el.className='infitem';},fadeMs);}
+  } else {el.className='infitem';}
+}
+
+// ─── GLOBAL STATE ─────────────────────────────────────────
+const GlobalState={
+  tension:0,energy:0,density:0,phase:'intro',
+  _stamps:[],_recTimer:null,_voidTimer:null,
+  record(){const now=Date.now();this._stamps.push(now);this._stamps=this._stamps.filter(t=>t>now-20000);if(this.phase==='void')this.phase='aftershock';},
+  selfEvolve(){
+    const now=Date.now(),recent=this._stamps.filter(t=>t>now-5000).length,idle=recent===0;
+    this.density+=(Math.min(1,recent/12)-this.density)*.14;
+    if(this.phase==='recovery'||this.phase==='void'){this.tension*=.93;this.energy*=.91;this.density*=.89;}
+    else if(this.phase==='aftershock'){this.tension=Math.min(1,this.tension*1.06);setTimeout(()=>{if(this.phase==='aftershock')this.phase='recovery';},800);}
+    else{this.tension+=((this.density*.82+this.energy*.18)-this.tension)*.07;this.energy+=(this.density*.88-this.energy)*.05;}
+    if(idle){this.tension*=.982;this.energy*=.975;this.density*=.968;}
+    this.tension=clamp(this.tension,0,1);this.energy=clamp(this.energy,0,1);this.density=clamp(this.density,0,1);
+    const prev=this.phase;
+    if(!['recovery','void','aftershock'].includes(this.phase)){
+      const t=this.tension;
+      if(t<.14)this.phase='intro';else if(t<.38)this.phase='build';else if(t<.62)this.phase='peak';else if(t<.82)this.phase='tension';else this.phase='rupture';
+    }
+    if(prev!=='rupture'&&this.phase==='rupture')EMF.onRupture();
+    if(prev==='rupture'&&idle&&this.phase==='rupture'){
+      clearTimeout(this._recTimer);
+      this._recTimer=setTimeout(()=>{
+        if(this.tension>.7&&this._stamps.filter(s=>s>Date.now()-3000).length===0){
+          this.phase='recovery';
+          this._voidTimer=setTimeout(()=>{if(this._stamps.filter(s=>s>Date.now()-4000).length===0)this.phase='void';},4000);
+        }
+      },2500);
+    }
+    EMF.selfUpdate();this.updateUI();
+  },
+  updateUI(){
+    setW('gf-t',this.tension);setW('gf-e',this.energy);setW('gf-d',this.density);
+    setT('gs-ph',this.phase.toUpperCase());setT('h-t',this.tension.toFixed(2));
+    setT('h-e',this.energy.toFixed(2));setT('h-ph',this.phase);
+    const cls='ph-'+this.phase;
+    ['h-ph','gs-ph'].forEach(id=>{const el=document.getElementById(id);if(el){el.className=(id==='h-ph'?'hv ph ':'')+cls;}});
+  },
+  start(){setInterval(()=>this.selfEvolve(),380);}
+};
+
+// ─── PERFORMANCE MONITOR ──────────────────────────────────
+const Perf={
+  fps:60,frameTime:0,quality:'full',evictions:0,totalTriggers:0,peakVoices:0,
+  _fh:[],_lf:0,
+  tick(now){
+    const dt=now-this._lf;this._lf=now;
+    if(dt>0&&dt<500){this._fh.push(dt);if(this._fh.length>20)this._fh.shift();const avg=this._fh.reduce((a,b)=>a+b,0)/this._fh.length;this.frameTime=avg;this.fps=Math.round(1000/avg);}
+    this.quality=this.frameTime>28?'minimal':this.frameTime>18?'reduced':'full';
+    if(masterAnalyser){const tgt=this.quality==='minimal'?512:this.quality==='reduced'?1024:2048;if(masterAnalyser.fftSize!==tgt){masterAnalyser.fftSize=tgt;FFT_SIZE=tgt;}}
+  },
+  updateUI(){
+    const active=AC?pool.filter(v=>!v.free&&AC.currentTime<v.freeAt).length:0;
+    if(active>this.peakVoices)this.peakVoices=active;
+    setT('h-fps',this.fps);setT('h-vc',active);
+    setT('sv-ac',`${active}/16`);setT('sv-pk',this.peakVoices);
+    setT('sv-ft',this.frameTime.toFixed(1)+'ms');setT('sv-ql',this.quality.toUpperCase());
+    setT('sv-ev',this.evictions);setT('sv-tot',this.totalTriggers);
+    const dots=document.querySelectorAll('.vdot');
+    dots.forEach((d,i)=>{
+      if(i<pool.length){const v=pool[i];const ia=!v.free&&AC&&AC.currentTime<v.freeAt;const ih=ia&&(v.freeAt-AC.currentTime)>.5;d.className='vdot'+(ih?' hot':ia?' active':'');}
+    });
+    const fEl=document.getElementById('h-fps');if(fEl)fEl.className='hv'+(this.fps<40?' danger':this.fps<55?' warn':'');
+  }
+};
+
+// ─── TEMPORAL DRIFT ───────────────────────────────────────
+function calcDrift(mem){return clamp(-0.008+Math.random()*0.024+mem.instabilityMomentum*0.018,-0.012,0.038);}
+
+// ─── MUTATION CALCULATOR ──────────────────────────────────
+function calcMut(org,mem){
+  const M=org.mut,fm=1+mem.fatigue*M.fatigueScale;
+  function rand(lo,hi){return lo+Math.random()*(hi-lo);}
+  function randF(lo,hi){const c=(lo+hi)/2,s=(hi-lo)/2*fm;return c+(Math.random()*2-1)*s;}
+  const antiBias=EMF.anticipationLevel*0.08;
+  const rawP=randF(M.pitchRange[0],M.pitchRange[1])+antiBias;
+  const pitchDrift=rawP*.65+mem.lastPitchDrift*.35;
+  const transAtk=M.transAtk[1]>0?rand(M.transAtk[0],M.transAtk[1]):0;
+  const saturation=rand(M.satRange[0],M.satRange[1])*(1+GlobalState.tension*.38);
+  const bodyRes=randF(M.resonRange[0],M.resonRange[1]);
+  const pan=randF(M.panRange[0],M.panRange[1])*(1+GlobalState.density*.18);
+  const pN=clamp((pitchDrift-M.pitchRange[0])/(M.pitchRange[1]-M.pitchRange[0]),0,1);
+  const tN=M.transAtk[1]>0?clamp((transAtk-M.transAtk[0])/(M.transAtk[1]-M.transAtk[0]),0,1):0;
+  const sN=clamp((saturation-M.satRange[0])/(M.satRange[1]-M.satRange[0]),0,1);
+  const rN=clamp((bodyRes-M.resonRange[0])/(M.resonRange[1]-M.resonRange[0]),0,1);
+  const panN=(pan-M.panRange[0])/(M.panRange[1]-M.panRange[0]);
+  return{pitchDrift,transAtk,saturation,bodyRes,pan,pN,tN,sN,rN,panN};
+}
+
+// ─── TRIGGER SCARS ────────────────────────────────────────
+// Visual memory of triggers — "cicatrices temporales"
+const scars=[];
+function addScar(orgIdx,pitchDrift){
+  scars.push({org:orgIdx,ph:clamp((pitchDrift+0.6)/1.2,0,1),age:0,maxAge:90,alpha:1});
+  if(scars.length>12)scars.shift();
+}
+
+// ─── TRIGGER ──────────────────────────────────────────────
+let currentOrg=0;
+function trigger(){try{_triggerInner();}catch(e){console.warn('[SF:trigger] FAIL SOFT:',e.message);}}
+function _triggerInner(){
+  if(!AC)initAC();
+  AC.resume();
+  const org=ORGANISMS[currentOrg],mem=MEM[currentOrg];
+  const mut=calcMut(org,mem),drift=calcDrift(mem);
+  const now=AC.currentTime,t=clampAudio(now+Math.max(0,drift),now,now+0.05);
+  const pR=clampAudio(Math.pow(2,safe(mut.pitchDrift,0)/12),.5,2);
+  Territory.onTrigger(currentOrg);
+  const filterMod=Territory.getFilterMod(currentOrg);
+  let inf={airGainBoost:0,noiseFreqMult:1,satBoost:0};
+  inf=Influence.apply(currentOrg,inf);
+  if(currentOrg===0)Influence.onKickTrigger();
+  const v=getVoice();let maxDur=0;
+  // TRANSIENT
+  if(org.layers.transient.on){
+    const L=org.layers.transient,osc=AC.createOscillator(),g=AC.createGain();
+    osc.type=L.waveform;
+    safeSetValue(osc.frequency,clampAudio(L.baseFreq*pR,AP.FREQ_MIN,AP.FREQ_MAX),t,AP.FREQ_MIN,AP.FREQ_MAX);
+    safeExpRamp(osc.frequency,clampAudio(L.baseFreq*L.freqFloor*pR,AP.FREQ_MIN,AP.FREQ_MAX,AP.FREQ_MIN),t+L.freqDecay,AP.FREQ_MIN,AP.FREQ_MAX);
+    const atk=clampAudio(mut.transAtk,.00005,.05,.001);
+    safeSetValue(g.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(g.gain,clampAudio(L.gain,0,1.2),t+atk,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(g.gain,.001,t+L.ampDecay,0.00001,AP.GAIN_MAX);
+    osc.connect(g);g.connect(v.bus);osc.start(t);osc.stop(t+L.ampDecay+.05);
+    maxDur=Math.max(maxDur,L.ampDecay);
+  }
+  // BODY
+  if(org.layers.body.on){
+    const L=org.layers.body,osc=AC.createOscillator(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    osc.type=L.waveform;
+    safeSetValue(osc.frequency,clampAudio(L.baseFreq*pR,AP.FREQ_MIN,AP.FREQ_MAX),t,AP.FREQ_MIN,AP.FREQ_MAX);
+    safeExpRamp(osc.frequency,clampAudio(L.baseFreq*L.freqFloor*pR,AP.FREQ_MIN,AP.FREQ_MAX,AP.FREQ_MIN),t+L.freqDecay,AP.FREQ_MIN,AP.FREQ_MAX);
+    safeSetValue(g.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(g.gain,clampAudio(L.gain,0,1.2),t+.003,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(g.gain,.001,t+L.ampDecay,.00001,AP.GAIN_MAX);
+    flt.type='lowpass';safeFreq(flt.frequency,safe(mut.bodyRes,120));safeQ(flt.Q,2.4);
+    osc.connect(flt);flt.connect(g);g.connect(v.bus);osc.start(t);osc.stop(t+L.ampDecay+.05);
+    maxDur=Math.max(maxDur,L.ampDecay);
+  }
+  // NOISE
+  if(org.layers.noise.on){
+    const L=org.layers.noise,src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    src.buffer=noiseBuffer;flt.type=L.filterType;
+    safeFreq(flt.frequency,clampAudio(L.filterFreq*pR*safe(inf.noiseFreqMult,1)*safe(filterMod,1),AP.FREQ_MIN,AP.FREQ_MAX,L.filterFreq));
+    safeQ(flt.Q,L.filterQ);
+    safeSetValue(g.gain,clampAudio(L.gain,0,1.2),t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(g.gain,.001,t+L.dur,.00001,AP.GAIN_MAX);
+    src.connect(flt);flt.connect(g);g.connect(v.bus);src.start(t);src.stop(t+L.dur+.05);
+    maxDur=Math.max(maxDur,L.dur);
+  }
+  // AIR
+  if(org.layers.air&&org.layers.air.on){
+    const L=org.layers.air,src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    src.buffer=noiseBuffer;flt.type='lowpass';safeFreq(flt.frequency,L.filterFreq);safeQ(flt.Q,L.filterQ);
+    const ag=clampAudio(L.gain+safe(inf.airGainBoost,0),0,.5);
+    safeSetValue(g.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(g.gain,ag,t+.09,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(g.gain,.001,t+L.dur,.00001,AP.GAIN_MAX);
+    src.connect(flt);flt.connect(g);g.connect(v.bus);src.start(t);src.stop(t+L.dur+.05);
+    maxDur=Math.max(maxDur,L.dur);
+  }
+  v.sat.curve=satCurve(clampAudio(mut.saturation+safe(inf.satBoost,0),1,200));
+  v.panner.pan.setValueAtTime(clampAudio(mut.pan,AP.PAN_MIN,AP.PAN_MAX),t);
+  v.bus.gain.setValueAtTime(1,t);v.claim(maxDur);
+  // Memory
+  mem.lastPitchDrift=mut.pitchDrift;
+  mem.instabilityMomentum=clamp(mem.instabilityMomentum*.82+Math.abs(mut.pitchDrift)*.3+mem.fatigue*.15,0,1);
+  mem.playCount++;
+  if(org.fatiguePersonality==='explosive'&&mem.fatigue>.85)mem.fatigue=.02;
+  else mem.fatigue=clamp(mem.fatigue+.013*org.mut.fatigueScale,0,1);
+  mem.recoveryLevel=clamp(1-mem.fatigue,0,1);
+  GlobalState.record();EMF.onTrigger(currentOrg,GlobalState.energy);Perf.totalTriggers++;
+  addScar(currentOrg,mut.pitchDrift);
+  updateMutUI(mut,mem,org,drift);flashTrigger();
+  if(Math.abs(drift)>.006){
+    const b=document.getElementById('driftbadge');
+    if(b){b.textContent=(drift*1000).toFixed(0)+'ms';b.classList.add('show');setTimeout(()=>b.classList.remove('show'),320);}
+  }
+}
+
+// ─── ORGANISM SELECTOR ────────────────────────────────────
+function selectOrg(idx){
+  currentOrg=idx;
+  const org=ORGANISMS[idx],mem=MEM[idx];
+  const cv=ORG_CSS_VARS[idx];
+  document.documentElement.style.setProperty('--org-accent',cv.accent);
+  document.documentElement.style.setProperty('--org-dim',cv.dim);
+  document.documentElement.style.setProperty('--org-bg',cv.bg);
+  setT('org-insignia',ORG_INSIGNIA[idx]);
+  setT('org-name',org.name);setT('org-type',org.type);setT('org-pack',org.pack);
+  setT('org-role',org.role);setT('org-mood',org.mood);setT('cl-pk',org.pack);
+  const prof=RECOVERY_PROFILES[org.fatiguePersonality];
+  const badge=document.getElementById('fp-badge');
+  if(badge){badge.textContent=prof.label;badge.className='fp-badge '+prof.badgeClass;}
+  const mtFill=document.getElementById('mt-fill');if(mtFill)mtFill.style.width=(org.mutTolerance*100).toFixed(0)+'%';
+  setT('mt-val',org.mutTolerance.toFixed(2));
+  setT('st-cnt',mem.playCount);setT('st-mx',(1+mem.fatigue*org.mut.fatigueScale).toFixed(2)+'x');
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+  setW('pf-fat',mem.fatigue);setT('pv-fat',mem.fatigue.toFixed(2));
+  setW('pf-rec',mem.recoveryLevel);setT('pv-rec',mem.recoveryLevel.toFixed(2));
+  document.querySelectorAll('.obtn').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  ['pf-pitch','pf-trans','pf-sat','pf-res','pf-drift'].forEach(id=>setW(id,0));
+  const panEl=document.getElementById('pf-pan');if(panEl){panEl.style.left='50%';panEl.style.width='0%';}
+  // Update DNA profile display
+  updateDNAProfile();
+}
+
+// ─── UI UPDATES ───────────────────────────────────────────
+function updateMutUI(mut,mem,org,drift){
+  setW('pf-pitch',mut.pN);setW('pf-trans',mut.tN);setW('pf-sat',mut.sN);setW('pf-res',mut.rN);
+  setW('pf-fat',mem.fatigue);setW('pf-rec',mem.recoveryLevel);
+  const dN=clamp((drift+.012)/.050,0,1);setW('pf-drift',dN);
+  const panEl=document.getElementById('pf-pan'),p=clamp(mut.pan,-1,1);
+  if(panEl){if(p>=0){panEl.style.left='50%';panEl.style.width=(p*50).toFixed(1)+'%';}
+    else{panEl.style.left=(50+p*50).toFixed(1)+'%';panEl.style.width=(Math.abs(p)*50).toFixed(1)+'%';}}
+  setT('pv-pitch',mut.pitchDrift.toFixed(2)+'st');
+  setT('pv-trans',(mut.transAtk*1000).toFixed(1)+'ms');
+  setT('pv-sat',mut.saturation.toFixed(0));setT('pv-res',mut.bodyRes.toFixed(0)+'hz');
+  setT('pv-pan',mut.pan.toFixed(2));setT('pv-drift',(drift*1000).toFixed(1)+'ms');
+  setT('pv-fat',mem.fatigue.toFixed(2));setT('pv-rec',mem.recoveryLevel.toFixed(2));
+  setT('st-cnt',mem.playCount);
+  setT('st-mx',(1+mem.fatigue*org.mut.fatigueScale).toFixed(2)+'x');
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+  setT('fi-tot',Perf.totalTriggers);
+  const dot=document.getElementById('fdot'),lbl=document.getElementById('flbl'),f=mem.fatigue;
+  if(dot&&lbl){
+    if(f<.25){dot.style.background='#44ff99';lbl.textContent='FRESH';}
+    else if(f<.50){dot.style.background='#ffcc00';lbl.textContent='WORN';}
+    else if(f<.75){dot.style.background='#ff6600';lbl.textContent='FATIGUED';}
+    else{dot.style.background='#ff0033';lbl.textContent='ERODED';}
+  }
+}
+function updateRecoveryUI(){
+  const mem=MEM[currentOrg];
+  setW('pf-fat',mem.fatigue);setT('pv-fat',mem.fatigue.toFixed(2));
+  setW('pf-rec',mem.recoveryLevel);setT('pv-rec',mem.recoveryLevel.toFixed(2));
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+}
+function updateDNAProfile(){
+  const org=ORGANISMS[currentOrg];
+  const checked=document.querySelectorAll('.org-check.checked');
+  if(checked.length===0){
+    ['dna-mt','dna-sp','dna-em','dna-ter'].forEach(id=>setT(id,'--'));return;
+  }
+  const avgMT=Array.from(checked).reduce((s,el)=>s+ORGANISMS[parseInt(el.dataset.oi)].mutTolerance,0)/checked.length;
+  const chars=Array.from(checked).map(el=>ORGANISMS[parseInt(el.dataset.oi)].spectralChar).join('/');
+  const ems=Array.from(checked).map(el=>ORGANISMS[parseInt(el.dataset.oi)].emotionalCore).join('·');
+  setT('dna-mt',avgMT.toFixed(2));
+  setT('dna-sp',chars.length>10?chars.slice(0,10)+'…':chars);
+  setT('dna-em',ems);
+  setT('dna-ter',Territory.negotiating?'active':'stable');
+}
+
+let flashAmt=0;
+function flashTrigger(){
+  const btn=document.getElementById('tbtn');btn.classList.add('fire');
+  setTimeout(()=>btn.classList.remove('fire'),68);flashAmt=1;
+}
+
+// ─── MODE BAR ─────────────────────────────────────────────
+let currentMode='forge';
+function setMode(mode){
+  currentMode=mode;
+  const modes=['forge','export','stress'];
+  modes.forEach(m=>{
+    document.getElementById(`pane-${m}`).classList.toggle('visible',m===mode);
+    document.getElementById(`mb-${m}`).classList.toggle('active',m===mode);
+  });
+  if(mode==='export')updateDNAProfile();
+}
+document.getElementById('mb-forge').addEventListener('click',()=>setMode('forge'));
+document.getElementById('mb-export').addEventListener('click',()=>setMode('export'));
+document.getElementById('mb-stress').addEventListener('click',()=>setMode(currentMode==='stress'?'forge':'stress'));
+
+// ─── DNA EXPORT STATE MACHINE ─────────────────────────────
+let exportVariations=12,_renderRaf=null;
+
+// Variation selector
+document.querySelectorAll('.varbtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    exportVariations=parseInt(btn.dataset.v);
+    document.querySelectorAll('.varbtn').forEach(b=>b.classList.toggle('active',b===btn));
+  });
+});
+// Organism check toggles
+document.querySelectorAll('.org-check').forEach(el=>{
+  el.addEventListener('click',()=>{
+    el.classList.toggle('checked');updateDNAProfile();
+  });
+});
+
+document.getElementById('forge-dna-btn').addEventListener('click',startForge);
+document.getElementById('back-btn').addEventListener('click',resetExport);
+document.getElementById('bridge-back-btn').addEventListener('click',resetExport);
+document.getElementById('export-sb-btn').addEventListener('click',startBridge);
+
+function showExportState(state){
+  ['idle','render','result','bridge'].forEach(s=>{
+    const idleEl=document.getElementById('export-idle');
+    const el=s==='idle'?idleEl:document.getElementById(`${s}-pane`);
+    if(!el)return;
+    if(s==='idle')el.style.display=state==='idle'?'block':'none';
+    else el.classList.toggle('visible',s===state);
+  });
+}
+
+function startForge(){
+  const checked=document.querySelectorAll('.org-check.checked');
+  if(checked.length===0)return;
+  showExportState('render');
+  // Render progress animation
+  const steps=[
+    'initializing organism DNA...',
+    'extracting emotional profile...',
+    'computing mutation trajectories...',
+    'encoding spectral identity...',
+    'sealing territory behavior...',
+    'forging pack signature...',
+    'finalizing sound_dna_v1...'
+  ];
+  const log=document.getElementById('render-log');
+  const bar=document.getElementById('render-bar');
+  log.innerHTML='';
+  let step=0;
+  const rscope=document.getElementById('render-scope');
+  const rctx=rscope.getContext('2d');
+  let rPhase=0;
+  // Render canvas animation
+  function animRender(){
+    if(currentMode!=='export')return;
+    const rw=rscope.offsetWidth,rh=rscope.offsetHeight;
+    rscope.width=rw;rscope.height=rh;
+    rctx.fillStyle='rgba(4,2,16,0.85)';rctx.fillRect(0,0,rw,rh);
+    rPhase+=0.08;
+    // Scan line
+    const scanX=(rPhase*28)%rw;
+    rctx.strokeStyle='rgba(153,68,255,0.7)';rctx.lineWidth=1;
+    rctx.beginPath();rctx.moveTo(scanX,0);rctx.lineTo(scanX,rh);rctx.stroke();
+    // DNA wave
+    rctx.beginPath();rctx.strokeStyle='rgba(0,255,255,0.5)';rctx.lineWidth=1.5;
+    for(let x=0;x<rw;x++){
+      const y=rh/2+Math.sin(x*.08+rPhase)*rh*.25+Math.sin(x*.02-rPhase*.5)*rh*.1;
+      x===0?rctx.moveTo(x,y):rctx.lineTo(x,y);
+    }
+    rctx.stroke();
+    if(document.getElementById('render-pane').classList.contains('visible'))
+      _renderRaf=requestAnimationFrame(animRender);
+  }
+  _renderRaf=requestAnimationFrame(animRender);
+  // Log steps
+  function nextStep(){
+    if(step>=steps.length){finishRender();return;}
+    const div=document.createElement('div');div.className='rl';
+    div.textContent='▸ '+steps[step];log.appendChild(div);log.scrollTop=999;
+    bar.style.width=((step+1)/steps.length*100).toFixed(0)+'%';
+    step++;setTimeout(nextStep,step===1?300:260+Math.random()*180);
+  }
+  setTimeout(nextStep,200);
+}
+
+function finishRender(){
+  cancelAnimationFrame(_renderRaf);
+  const checked=Array.from(document.querySelectorAll('.org-check.checked'));
+  const orgNames=checked.map(el=>ORGANISMS[parseInt(el.dataset.oi)].name);
+  const avgMT=checked.reduce((s,el)=>s+ORGANISMS[parseInt(el.dataset.oi)].mutTolerance,0)/checked.length;
+  const mutCap=avgMT>.75?'high':avgMT>.50?'medium':'moderate';
+  setT('res-orgs',checked.length);setT('res-vars',exportVariations);
+  setT('res-em','ritual·void');setT('res-sp','dark/spectral');setT('res-mc',mutCap);
+  setTimeout(()=>showExportState('result'),400);
+}
+
+function startBridge(){
+  showExportState('bridge');
+  const bscope=document.getElementById('bridge-scope');
+  const bctx=bscope.getContext('2d');
+  const bDone=document.getElementById('bridge-done');
+  bDone.classList.remove('show');
+  let bPhase=0,bProgress=0;
+  function animBridge(){
+    const bw=bscope.offsetWidth,bh=bscope.offsetHeight;
+    bscope.width=bw;bscope.height=bh;
+    bctx.fillStyle='rgba(4,2,16,0.9)';bctx.fillRect(0,0,bw,bh);
+    bPhase+=0.12;bProgress=Math.min(1,bProgress+0.016);
+    // Packet trail
+    const px=bProgress*bw;
+    for(let i=0;i<6;i++){
+      const tx=px-(i*12);if(tx<0)continue;
+      const alpha=(6-i)/6*(1-i/6);
+      bctx.fillStyle=`rgba(0,255,255,${alpha*.8})`;
+      bctx.fillRect(tx-2,bh/2-2,5,4);
+    }
+    // Receiver pulse
+    if(bProgress>.85){
+      const pulse=(bProgress-.85)/.15;
+      bctx.strokeStyle=`rgba(68,255,153,${pulse*.6})`;bctx.lineWidth=1;
+      bctx.beginPath();bctx.arc(bw-8,bh/2,4+pulse*6,0,Math.PI*2);bctx.stroke();
+    }
+    if(bProgress<1)requestAnimationFrame(animBridge);
+    else{
+      // Export real JSON
+      exportDNAJson();
+      setTimeout(()=>bDone.classList.add('show'),200);
+    }
+  }
+  requestAnimationFrame(animBridge);
+}
+
+function exportDNAJson(){
+  const checked=Array.from(document.querySelectorAll('.org-check.checked'));
+  const pack={
+    format:'sound_dna_v1',packId:'rust_ritual',packName:'Rust Ritual',
+    exported:new Date().toISOString(),
+    spuklab_version:'2a',
+    sharedDNA:{saturationFloor:.3,stereoCharacter:'unstable_wide',spectralTilt:'dark',
+      pitchReference:'A1',textureProfile:'corroded_tape',mutationStyle:'organic_slow'},
+    organisms:checked.map(el=>{
+      const org=ORGANISMS[parseInt(el.dataset.oi)];
+      return{
+        id:org.id,name:org.name,type:org.type,spectralRole:org.role,
+        fatiguePersonality:org.fatiguePersonality,mutTolerance:org.mutTolerance,
+        spectralClaim:org.spectralClaim,emotionalCore:org.emotionalCore,
+        spectralChar:org.spectralChar,mood:org.mood,
+        mutation:{pitchRange:org.mut.pitchRange,satRange:org.mut.satRange,
+          resonRange:org.mut.resonRange,panRange:org.mut.panRange,
+          fatigueScale:org.mut.fatigueScale},
+        runtime:{playCount:MEM[ORGANISMS.indexOf(org)].playCount,
+          fatigue:MEM[ORGANISMS.indexOf(org)].fatigue,
+          instabilityMomentum:MEM[ORGANISMS.indexOf(org)].instabilityMomentum}
+      };
+    }),
+    variations:exportVariations,
+    globalState:{tension:GlobalState.tension,energy:GlobalState.energy,
+      density:GlobalState.density,phase:GlobalState.phase}
+  };
+  const blob=new Blob([JSON.stringify(pack,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='rust_ritual.sound_dna_v1.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+function resetExport(){
+  showExportState('idle');
+  const bar=document.getElementById('render-bar');if(bar)bar.style.width='0%';
+  const log=document.getElementById('render-log');if(log)log.innerHTML='';
+  cancelAnimationFrame(_renderRaf);
+  updateDNAProfile();
+}
+
+// ─── CANVAS VISUALIZATION ─────────────────────────────────
+function initCanvas(){
+  const canvas=document.getElementById('scope');
+  const panel=canvas.parentElement;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  let W,H;
+  function resize(){
+    W=panel.clientWidth;H=panel.clientHeight;
+    canvas.width=W*dpr;canvas.height=H*dpr;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  requestAnimationFrame(()=>{resize();window.addEventListener('resize',()=>{ctx.setTransform(1,0,0,1,0,0);resize();});});
+
+  function draw(now){
+    requestAnimationFrame(draw);Perf.tick(now);
+    if(!W||!H)return;
+    const q=Perf.quality;
+
+    // GHOST TRAILS — soft clear for persistence
+    ctx.fillStyle='rgba(5,3,16,0.80)';
+    ctx.fillRect(0,0,W,H);
+
+    // Flash
+    if(flashAmt>.01){ctx.fillStyle=`rgba(153,68,255,${flashAmt*.22})`;ctx.fillRect(0,0,W,H);flashAmt*=.78;}
+
+    // Subtle grid
+    ctx.strokeStyle='rgba(153,68,255,0.04)';ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){ctx.beginPath();ctx.moveTo(0,H*i/4);ctx.lineTo(W,H*i/4);ctx.stroke();}
+
+    // TRIGGER SCARS — draw before waveform, fade with age
+    const oscH=H*.64;
+    scars.forEach(s=>{
+      s.age++;
+      s.alpha=Math.max(0,1-s.age/s.maxAge);
+      if(s.alpha<=0)return;
+      const x=s.ph*W;
+      const color=ORG_COLORS[s.org];
+      ctx.strokeStyle=color.replace(')',`,${s.alpha*.55})`).replace('rgb','rgba');
+      ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,oscH*.2);ctx.lineTo(x,oscH*.8);ctx.stroke();
+    });
+    // Clean dead scars
+    for(let i=scars.length-1;i>=0;i--)if(scars[i].alpha<=0)scars.splice(i,1);
+
+    if(!masterAnalyser){Perf.updateUI();return;}
+    const fft=masterAnalyser.fftSize;
+    const tBuf=new Uint8Array(fft),fBuf=new Uint8Array(fft/2);
+    masterAnalyser.getByteTimeDomainData(tBuf);
+
+    // Center line
+    ctx.strokeStyle='rgba(153,68,255,0.08)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,oscH*.5);ctx.lineTo(W,oscH*.5);ctx.stroke();
+
+    // Oscilloscope — glow pass (skip in minimal)
+    if(q!=='minimal'){
+      ctx.beginPath();ctx.strokeStyle='rgba(0,255,255,0.14)';ctx.lineWidth=5;
+      for(let i=0;i<fft;i++){const x=(i/fft)*W,y=(tBuf[i]/255)*oscH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+      ctx.stroke();
+    }
+    // Sharp pass
+    ctx.beginPath();ctx.strokeStyle='rgba(0,255,255,0.85)';ctx.lineWidth=1.5;
+    for(let i=0;i<fft;i++){const x=(i/fft)*W,y=(tBuf[i]/255)*oscH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();
+
+    // Divider
+    ctx.strokeStyle='rgba(153,68,255,0.10)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,H*.68);ctx.lineTo(W,H*.68);ctx.stroke();
+
+    // FFT — reduced height 23% (was 28%), reduced brightness ~22%
+    const sTop=H*.71,sH=H*0.23;
+    masterAnalyser.getByteFrequencyData(fBuf);
+    const bars=q==='minimal'?28:q==='reduced'?44:64;
+    const bw=W/bars;
+    for(let i=0;i<bars;i++){
+      const idx=Math.floor(Math.pow(i/bars,1.7)*fBuf.length);
+      const v=fBuf[Math.min(idx,fBuf.length-1)]/255,bh=v*sH,t=i/bars;
+      let r,g,b;
+      if(t<.5){r=Math.round(t*2*153);g=Math.round((1-t*2)*255);b=255;}
+      else{r=Math.round(153+(t-.5)*2*102);g=0;b=Math.round(255-(t-.5)*2*255);}
+      // Reduced opacity compared to p16
+      ctx.fillStyle=`rgba(${r},${g},${b},${.42+v*.32})`;
+      ctx.fillRect(i*bw+.5,sTop+sH-bh,bw-1.5,bh);
+    }
+    Perf.updateUI();
+  }
+  draw(performance.now());
+}
+
+// ─── EVENT BINDINGS ───────────────────────────────────────
+document.getElementById('tbtn').addEventListener('touchstart',e=>{e.preventDefault();trigger();},{passive:false});
+document.getElementById('tbtn').addEventListener('mousedown',e=>{e.preventDefault();trigger();});
+document.querySelectorAll('.obtn').forEach((btn,i)=>{
+  btn.addEventListener('touchstart',e=>{e.preventDefault();selectOrg(i);},{passive:false});
+  btn.addEventListener('click',()=>selectOrg(i));
+});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();trigger();}
+  if(e.code==='Digit1')selectOrg(0);if(e.code==='Digit2')selectOrg(1);if(e.code==='Digit3')selectOrg(2);
+  if(e.code==='KeyE')setMode(currentMode==='export'?'forge':'export');
+});
+
+// ─── INIT ─────────────────────────────────────────────────
+initCanvas();
+GlobalState.start();
+startRecovery();
+showExportState('idle');
+selectOrg(0);
+</script>
+</body>
+</html>
