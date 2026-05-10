@@ -466,6 +466,107 @@ footer { flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
    Adaptive Quality
 ═══════════════════════════════════════════════════════════ */
 
+// ─── UI ────────────────────────────────────────────────────────
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function setW(id,pct){
+  const el=document.getElementById(id); if(el) el.style.width=clamp(pct*100,0,100).toFixed(1)+'%';
+}
+function setT(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
+
+// ═══════════════════════════════════════════════════════════
+// SAFETY LAYER — Sound Forge
+// All AudioParam writes route through safeParam.
+// Territory influence capped at TERRITORY_INFLUENCE_MAX.
+// Trigger wrapped in fail-soft try/catch.
+// Watchdog checks AC state every 2s.
+// ═══════════════════════════════════════════════════════════
+
+// ─── DEBUG FLAGS ────────────────────────────────────────────
+const DEBUG={
+  audio:       false,  // AudioParam writes and clamp violations
+  territory:   false,  // Territory claim/yield events
+  emf:         false,  // Event Memory Field updates
+  performance: false   // Frame time warnings
+};
+function dbg(subsystem,...args){
+  if(DEBUG[subsystem]) console.log(`[SF:${subsystem}]`,...args);
+}
+
+// ─── AUDIO PARAM SAFETY ─────────────────────────────────────
+// Ranges enforced on every AudioParam write.
+const AP={
+  FREQ_MIN:  24,    FREQ_MAX:  18000,
+  GAIN_MIN:  0,     GAIN_MAX:  1.2,
+  Q_MIN:     0.0001,Q_MAX:     24,
+  PAN_MIN:  -1,     PAN_MAX:   1
+};
+
+// Returns v if finite, else fallback.
+function safe(v, fallback=0){
+  return (typeof v==='number' && isFinite(v)) ? v : fallback;
+}
+
+// Clamp with NaN guard.
+function clampAudio(v, min, max, fallback=0){
+  const s=safe(v,fallback);
+  return Math.max(min, Math.min(max, s));
+}
+
+// Write safely to an AudioParam. Never throws.
+function safeParam(param, v, min, max, fallback=0){
+  try{
+    const val=clampAudio(v, min, max, fallback);
+    if(param && typeof param.value!=='undefined') param.value=val;
+    dbg('audio','safeParam →',val,'range:',min,max);
+  } catch(e){
+    dbg('audio','safeParam FAIL:',e.message,'v=',v);
+  }
+}
+
+// Convenience wrappers for common param types.
+function safeFreq(param, v, fallback=440){
+  safeParam(param, v, AP.FREQ_MIN, AP.FREQ_MAX, fallback);
+}
+function safeGain(param, v, fallback=0){
+  safeParam(param, v, AP.GAIN_MIN, AP.GAIN_MAX, fallback);
+}
+function safeQ(param, v, fallback=1){
+  safeParam(param, v, AP.Q_MIN, AP.Q_MAX, fallback);
+}
+
+// Safe setValueAtTime — never sends NaN/Inf to the scheduler.
+function safeSetValue(param, v, t, min, max, fallback=0){
+  try{
+    const val=clampAudio(v, min, max, fallback);
+    const time=clampAudio(t, 0, 3600, 0);
+    param.setValueAtTime(val, time);
+  } catch(e){
+    dbg('audio','safeSetValue FAIL:',e.message);
+  }
+}
+function safeLinearRamp(param, v, t, min, max, fallback=0){
+  try{
+    const val=clampAudio(v, min, max, fallback);
+    const time=clampAudio(t, 0, 3600, 0);
+    param.linearRampToValueAtTime(val, time);
+  } catch(e){
+    dbg('audio','safeLinearRamp FAIL:',e.message);
+  }
+}
+function safeExpRamp(param, v, t, min, max, fallback=0.001){
+  try{
+    // exponentialRamp requires value > 0
+    const val=Math.max(0.00001, clampAudio(v, min, max, fallback));
+    const time=clampAudio(t, 0, 3600, 0);
+    param.exponentialRampToValueAtTime(val, time);
+  } catch(e){
+    dbg('audio','safeExpRamp FAIL:',e.message);
+  }
+}
+
+// ─── TERRITORY SAFETY CONSTANT ──────────────────────────────
+const TERRITORY_INFLUENCE_MAX = 0.42; // max spectral yield per band
+
 // ─── AUDIO CONTEXT ─────────────────────────────────────────
 let AC=null, masterGain, compressor, masterSat, masterAnalyser;
 let noiseBuffer=null, FFT_SIZE=2048;
@@ -487,6 +588,7 @@ function initAC(){
   masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
+  startWatchdog();
 }
 
 function satCurve(k){
@@ -498,6 +600,31 @@ function genNoise(dur){
   const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);
   for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
   return buf;
+}
+
+// ─── AUDIO CONTEXT WATCHDOG ─────────────────────────────────
+// Checks AC state every 2s. Resumes if suspended.
+// Detects audio stall (active voices + silence) but does NOT restart engine.
+let _watchdogInterval=null;
+function startWatchdog(){
+  if(_watchdogInterval) return;
+  _watchdogInterval=setInterval(()=>{
+    if(!AC) return;
+    // Resume if suspended (common after iOS background/lock)
+    if(AC.state!=='running'){
+      AC.resume().then(()=>dbg('audio','Watchdog: AC resumed from',AC.state));
+    }
+    // Stall detection: active voices but near-silence on analyser
+    if(masterAnalyser){
+      const buf=new Uint8Array(masterAnalyser.fftSize);
+      masterAnalyser.getByteTimeDomainData(buf);
+      const rms=Math.sqrt(buf.reduce((s,v)=>s+(v/128-1)**2,0)/buf.length);
+      const activeVoices=pool.filter(v=>!v.free&&AC.currentTime<v.freeAt).length;
+      if(activeVoices>0 && rms<0.002){
+        console.warn('[SF:watchdog] AUDIO STALL DETECTED — voices:',activeVoices,'rms:',rms.toFixed(4));
+      }
+    }
+  },2000);
 }
 
 // ─── PERFORMANCE MONITOR ───────────────────────────────────
@@ -765,19 +892,32 @@ const Territory={
     const org=ORGANISMS[orgIdx];
     const key=['kick','debris','ghost'][orgIdx];
 
-    // Claim territory for this organism
-    this.claimed[key].low  = org.spectralClaim.low;
-    this.claimed[key].mid  = org.spectralClaim.mid;
-    this.claimed[key].high = org.spectralClaim.high;
+    // Smooth claim toward target (no abrupt jump)
+    const smooth=0.08;
+    const tgt=org.spectralClaim;
+    this.claimed[key].low  += (tgt.low  - this.claimed[key].low)  * smooth + (1-smooth)*tgt.low*0.3;
+    this.claimed[key].mid  += (tgt.mid  - this.claimed[key].mid)  * smooth + (1-smooth)*tgt.mid*0.3;
+    this.claimed[key].high += (tgt.high - this.claimed[key].high) * smooth + (1-smooth)*tgt.high*0.3;
+    // Hard cap — never exceed max claim
+    for(const b of['low','mid','high'])
+      this.claimed[key][b]=Math.min(TERRITORY_INFLUENCE_MAX*2, this.claimed[key][b]);
 
-    // Others yield: reduce their claim proportionally to this org's claim
+    // Others yield — capped at TERRITORY_INFLUENCE_MAX per band, smoothed
     const others=[[0,'kick'],[1,'debris'],[2,'ghost']].filter(([i])=>i!==orgIdx);
-    for(const [oi, ok] of others){
-      const yieldFactor=1-org.spectralClaim.low*0.4;
-      this.claimed[ok].low   *= yieldFactor;
-      this.claimed[ok].mid   *= (1-org.spectralClaim.mid*0.35);
-      this.claimed[ok].high  *= (1-org.spectralClaim.high*0.3);
+    for(const [, ok] of others){
+      // yield = partial, never complete muting
+      const yieldLo = Math.min(org.spectralClaim.low  * 0.36, TERRITORY_INFLUENCE_MAX);
+      const yieldMi = Math.min(org.spectralClaim.mid  * 0.30, TERRITORY_INFLUENCE_MAX);
+      const yieldHi = Math.min(org.spectralClaim.high * 0.26, TERRITORY_INFLUENCE_MAX);
+      this.claimed[ok].low  = this.claimed[ok].low  * (1-yieldLo*smooth);
+      this.claimed[ok].mid  = this.claimed[ok].mid  * (1-yieldMi*smooth);
+      this.claimed[ok].high = this.claimed[ok].high * (1-yieldHi*smooth);
+      // Floor: never mute another organism completely
+      for(const b of['low','mid','high'])
+        this.claimed[ok][b]=Math.max(0.04, this.claimed[ok][b]);
     }
+
+    dbg('territory','onTrigger org',orgIdx,'claimed:',JSON.stringify(this.claimed[key]));
 
     this.negotiating=true;
     clearTimeout(this._negTimer);
@@ -798,17 +938,17 @@ const Territory={
   // Returns filter freq modifier for a given organism and its noise layer
   // Used in trigger() to adjust noise filter freqs dynamically
   getFilterMod(orgIdx){
-    const key=['kick','debris','ghost'][orgIdx];
     const otherClaims=[0,1,2].filter(i=>i!==orgIdx).map(i=>{
       const ok=['kick','debris','ghost'][i];
       return this.claimed[ok];
     });
-    // Total yield pressure from others on this org's dominant band
     const org=ORGANISMS[orgIdx];
     const dominantBand=org.spectralClaim.low>org.spectralClaim.mid?'low':'mid';
-    const pressure=otherClaims.reduce((sum,c)=>sum+c[dominantBand],0);
-    // Filter mod: 1.0 = no change, <1.0 = yield (shift down), >1.0 = claim (shift up)
-    return clamp(1-pressure*0.18, 0.55, 1.15);
+    // Cap total pressure at TERRITORY_INFLUENCE_MAX
+    const rawPressure=otherClaims.reduce((sum,c)=>sum+c[dominantBand],0);
+    const pressure=Math.min(rawPressure, TERRITORY_INFLUENCE_MAX);
+    // Filter mod: never below 0.68 (organism always audible)
+    return clamp(1-pressure*0.22, 0.68, 1.08);
   },
 
   updateUI(){
@@ -828,23 +968,43 @@ const Territory={
 
 // ─── CROSS-ORGANISM INFLUENCE ────────────────────────────────
 const Influence={
-  kickEnergy:0, _kd:null,
+  kickEnergy:0, _kickTarget:0, _kd:null,
   onKickTrigger(){
-    this.kickEnergy=1;
+    this._kickTarget=1;
     clearTimeout(this._kd);
     this._kd=setTimeout(()=>{
-      const dec=()=>{ this.kickEnergy*=0.88; if(this.kickEnergy>0.01) setTimeout(dec,80); else this.kickEnergy=0; };
+      const dec=()=>{
+        this._kickTarget*=0.85;
+        if(this._kickTarget>0.01) setTimeout(dec,80);
+        else this._kickTarget=0;
+      };
       dec();
     },40);
   },
+  // Smooth kickEnergy toward target each call (call from selfEvolve or inline)
+  _smooth(){
+    this.kickEnergy+=(this._kickTarget-this.kickEnergy)*0.10;
+    if(this.kickEnergy<0.001) this.kickEnergy=0;
+  },
   apply(orgIdx,params){
-    const T=GlobalState.tension, D=GlobalState.density;
+    this._smooth();
+    const T=clamp(safe(GlobalState.tension,0),0,1);
+    const D=clamp(safe(GlobalState.density,0),0,1);
     params.airGainBoost=0; params.noiseFreqMult=1; params.satBoost=0;
-    if(orgIdx===2&&this.kickEnergy>0.3){ params.airGainBoost=this.kickEnergy*0.12; setInf('inf-kg',true); }
-    else if(orgIdx===2) setInf('inf-kg',false);
-    if(orgIdx===1&&T>0.6){ params.noiseFreqMult=1-(T-0.6)*0.9; setInf('inf-td',true); }
-    else if(orgIdx===1) setInf('inf-td',false);
-    params.satBoost=D*18; setInf('inf-ds',D>0.4);
+    // K→GHOST: smoothed air gain boost, capped
+    if(orgIdx===2&&this.kickEnergy>0.25){
+      params.airGainBoost=clampAudio(this.kickEnergy*0.10, 0, 0.15);
+      setInf('inf-kg',true);
+    } else if(orgIdx===2) setInf('inf-kg',false);
+    // T→DEBRIS: smoothed filter sweep, never to zero
+    if(orgIdx===1&&T>0.6){
+      params.noiseFreqMult=clampAudio(1-(T-0.6)*0.65, 0.34, 1.0);
+      setInf('inf-td',true);
+    } else if(orgIdx===1) setInf('inf-td',false);
+    // D→SAT: density drives saturation, capped
+    params.satBoost=clampAudio(D*14, 0, 28);
+    setInf('inf-ds',D>0.4);
+    dbg('emf','influence org',orgIdx,'airBoost',params.airGainBoost.toFixed(3),'noiseM',params.noiseFreqMult.toFixed(3));
     return params;
   }
 };
@@ -964,6 +1124,16 @@ function calcMut(org,mem){
 let currentOrg=0;
 
 function trigger(){
+  // ── Fail soft: if anything throws, log and abort this trigger only ──
+  try {
+    _triggerInner();
+  } catch(e) {
+    console.warn('[SF:trigger] FAIL SOFT — trigger cancelled:',e.message);
+    // Engine continues, master chain intact
+  }
+}
+
+function _triggerInner(){
   if(!AC) initAC();
   AC.resume();
 
@@ -972,8 +1142,8 @@ function trigger(){
   const mut=calcMut(org,mem);
   const drift=calcDrift(mem);
   const now=AC.currentTime;
-  const t=now+Math.max(0,drift);
-  const pR=Math.pow(2,mut.pitchDrift/12);
+  const t=clampAudio(now+Math.max(0,drift), now, now+0.05);
+  const pR=clampAudio(Math.pow(2,safe(mut.pitchDrift,0)/12), 0.5, 2.0);
 
   // ③ Territory system
   Territory.onTrigger(currentOrg);
@@ -991,11 +1161,14 @@ function trigger(){
     const L=org.layers.transient;
     const osc=AC.createOscillator(),g=AC.createGain();
     osc.type=L.waveform;
-    osc.frequency.setValueAtTime(L.baseFreq*pR,t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(12,L.baseFreq*L.freqFloor*pR),t+L.freqDecay);
-    const atk=Math.max(.00005,mut.transAtk);
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(L.gain,t+atk);
-    g.gain.exponentialRampToValueAtTime(.001,t+L.ampDecay);
+    const f0=clampAudio(L.baseFreq*pR, AP.FREQ_MIN, AP.FREQ_MAX, 80);
+    const f1=clampAudio(Math.max(L.baseFreq*L.freqFloor*pR, AP.FREQ_MIN), AP.FREQ_MIN, AP.FREQ_MAX, AP.FREQ_MIN);
+    safeSetValue(osc.frequency, f0, t, AP.FREQ_MIN, AP.FREQ_MAX, 80);
+    safeExpRamp(osc.frequency, f1, t+L.freqDecay, AP.FREQ_MIN, AP.FREQ_MAX, AP.FREQ_MIN);
+    const atk=clampAudio(mut.transAtk, 0.00005, 0.05, 0.001);
+    safeSetValue(g.gain, 0, t, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeLinearRamp(g.gain, clampAudio(L.gain,0,1.2), t+atk, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeExpRamp(g.gain, 0.001, t+L.ampDecay, 0.00001, AP.GAIN_MAX);
     osc.connect(g); g.connect(v.bus);
     osc.start(t); osc.stop(t+L.ampDecay+.05);
     maxDur=Math.max(maxDur,L.ampDecay);
@@ -1006,11 +1179,16 @@ function trigger(){
     const L=org.layers.body;
     const osc=AC.createOscillator(),flt=AC.createBiquadFilter(),g=AC.createGain();
     osc.type=L.waveform;
-    osc.frequency.setValueAtTime(L.baseFreq*pR,t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(8,L.baseFreq*L.freqFloor*pR),t+L.freqDecay);
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(L.gain,t+.003);
-    g.gain.exponentialRampToValueAtTime(.001,t+L.ampDecay);
-    flt.type='lowpass'; flt.frequency.value=Math.max(18,mut.bodyRes); flt.Q.value=2.4;
+    const f0=clampAudio(L.baseFreq*pR, AP.FREQ_MIN, AP.FREQ_MAX, 60);
+    const f1=clampAudio(Math.max(L.baseFreq*L.freqFloor*pR, AP.FREQ_MIN), AP.FREQ_MIN, AP.FREQ_MAX, AP.FREQ_MIN);
+    safeSetValue(osc.frequency, f0, t, AP.FREQ_MIN, AP.FREQ_MAX, 60);
+    safeExpRamp(osc.frequency, f1, t+L.freqDecay, AP.FREQ_MIN, AP.FREQ_MAX, AP.FREQ_MIN);
+    safeSetValue(g.gain, 0, t, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeLinearRamp(g.gain, clampAudio(L.gain,0,1.2), t+0.003, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeExpRamp(g.gain, 0.001, t+L.ampDecay, 0.00001, AP.GAIN_MAX);
+    flt.type='lowpass';
+    safeFreq(flt.frequency, safe(mut.bodyRes,120));
+    safeQ(flt.Q, 2.4);
     osc.connect(flt); flt.connect(g); g.connect(v.bus);
     osc.start(t); osc.stop(t+L.ampDecay+.05);
     maxDur=Math.max(maxDur,L.ampDecay);
@@ -1021,10 +1199,11 @@ function trigger(){
     const L=org.layers.noise;
     const src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
     src.buffer=noiseBuffer; flt.type=L.filterType;
-    flt.frequency.value=L.filterFreq*pR*inf.noiseFreqMult*filterMod;
-    flt.Q.value=L.filterQ;
-    g.gain.setValueAtTime(L.gain,t);
-    g.gain.exponentialRampToValueAtTime(.001,t+L.dur);
+    const nf=clampAudio(L.filterFreq*pR*safe(inf.noiseFreqMult,1)*safe(filterMod,1), AP.FREQ_MIN, AP.FREQ_MAX, L.filterFreq);
+    safeFreq(flt.frequency, nf);
+    safeQ(flt.Q, L.filterQ);
+    safeSetValue(g.gain, clampAudio(L.gain,0,1.2), t, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeExpRamp(g.gain, 0.001, t+L.dur, 0.00001, AP.GAIN_MAX);
     src.connect(flt); flt.connect(g); g.connect(v.bus);
     src.start(t); src.stop(t+L.dur+.05);
     maxDur=Math.max(maxDur,L.dur);
@@ -1034,18 +1213,21 @@ function trigger(){
   if(org.layers.air&&org.layers.air.on){
     const L=org.layers.air;
     const src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
-    src.buffer=noiseBuffer; flt.type='lowpass'; flt.frequency.value=L.filterFreq; flt.Q.value=L.filterQ;
-    const ag=L.gain+inf.airGainBoost;
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(ag,t+.09);
-    g.gain.exponentialRampToValueAtTime(.001,t+L.dur);
+    src.buffer=noiseBuffer; flt.type='lowpass';
+    safeFreq(flt.frequency, L.filterFreq);
+    safeQ(flt.Q, L.filterQ);
+    const ag=clampAudio(L.gain+safe(inf.airGainBoost,0), 0, 0.5);
+    safeSetValue(g.gain, 0, t, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeLinearRamp(g.gain, ag, t+0.09, AP.GAIN_MIN, AP.GAIN_MAX);
+    safeExpRamp(g.gain, 0.001, t+L.dur, 0.00001, AP.GAIN_MAX);
     src.connect(flt); flt.connect(g); g.connect(v.bus);
     src.start(t); src.stop(t+L.dur+.05);
     maxDur=Math.max(maxDur,L.dur);
   }
 
-  v.sat.curve=satCurve(clamp(mut.saturation+inf.satBoost,1,220));
-  v.panner.pan.setValueAtTime(clamp(mut.pan,-1,1),t);
-  v.bus.gain.setValueAtTime(1,t);
+  v.sat.curve=satCurve(clampAudio(mut.saturation+safe(inf.satBoost,0), 1, 200));
+  v.panner.pan.setValueAtTime(clampAudio(mut.pan, AP.PAN_MIN, AP.PAN_MAX), t);
+  v.bus.gain.setValueAtTime(1, t);
   v.claim(maxDur);
 
   // Memory update
@@ -1076,13 +1258,7 @@ function trigger(){
   }
 }
 
-// ─── UI ────────────────────────────────────────────────────────
-function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
-function setW(id,pct){
-  const el=document.getElementById(id); if(el) el.style.width=clamp(pct*100,0,100).toFixed(1)+'%';
-}
-function setT(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
-
+// ─── UI UPDATES ───────────────────────────────────────────
 function updateMutUI(mut,mem,org,drift){
   setW('pf-pitch',mut.pN); setW('pf-trans',mut.tN); setW('pf-sat',mut.sN);
   setW('pf-res',mut.rN); setW('pf-fat',mem.fatigue);
