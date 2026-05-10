@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOUND FORGE 1.6 — SpukLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@0,400;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      linear-gradient(155deg, #13111f 0%, #1b1726 100%);
+  --violet:  #9944ff;
+  --vdim:    rgba(153,68,255,0.18);
+  --vglow:   rgba(153,68,255,0.07);
+  --vact:    rgba(153,68,255,0.22);
+  --cyan:    #00ffff;
+  --mag:     #ff00ff;
+  --white:   #fff;
+  --gray:    rgba(255,255,255,0.38);
+  --mono:    'JetBrains Mono', monospace;
+}
+html,body { width:100%;height:100%;overflow:hidden;background:#0d0b18;color:var(--white);
+  font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;touch-action:none; }
+#app { width:100%;height:100%;display:flex;flex-direction:column;background:var(--bg); }
+
+/* HEADER */
+header { display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid var(--vdim);
+  background:rgba(10,8,20,.65);flex-shrink:0;gap:10px;min-height:42px; }
+.logo .sp { font-weight:800;font-size:15px;color:var(--white);letter-spacing:.04em; }
+.logo .lb { font-weight:300;font-size:15px;color:var(--cyan);letter-spacing:.04em; }
+.sep { width:1px;height:18px;background:var(--vdim);flex-shrink:0; }
+.appid { display:flex;flex-direction:column;line-height:1.1; }
+.appid-n { font-family:var(--mono);font-style:italic;font-weight:700;font-size:11px;
+  color:var(--violet);letter-spacing:.14em; }
+.appid-p { font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em; }
+.hsp { flex:1; }
+.hstrip { display:flex;align-items:center;gap:12px; }
+.hi { display:flex;flex-direction:column;align-items:flex-end;line-height:1.1; }
+.hl { font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.08em; }
+.hv { font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan); }
+.hv.warn   { color:#ffcc00; }
+.hv.danger { color:#ff3333; }
+.hv.ph     { font-size:11px;padding-top:2px; }
+.ph-intro    { color:var(--gray)!important; }
+.ph-build    { color:#88aaff!important; }
+.ph-peak     { color:var(--cyan)!important; }
+.ph-tension  { color:#ffcc00!important; }
+.ph-rupture  { color:var(--mag)!important; }
+.ph-recovery { color:#44ff99!important; }
+.ph-void     { color:#333355!important; }
+.ph-aftershock{ color:#ff6600!important; }
+
+/* MAIN */
+main { flex:1;display:flex;overflow:hidden;min-height:0; }
+
+/* CANVAS */
+.cvp { flex:1.35;position:relative;border-right:1px solid var(--vdim);
+  background:#060410;overflow:hidden; }
+#scope { display:block;width:100%;height:100%; }
+.cov { position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none; }
+.cl { position:absolute;font-family:var(--mono);font-size:11px;letter-spacing:.11em; }
+.cl.osc  { top:9px;left:11px;color:rgba(153,68,255,.4); }
+.cl.fft  { bottom:9px;left:11px;color:rgba(153,68,255,.4); }
+.cl.pack { top:9px;right:11px;color:rgba(0,255,255,.3); }
+
+/* Voice dots */
+.vgrid { position:absolute;bottom:30px;right:9px;
+  display:grid;grid-template-columns:repeat(8,9px);gap:3px; }
+.vdot { width:7px;height:7px;border-radius:50%;
+  background:rgba(153,68,255,.12);border:1px solid rgba(153,68,255,.2);transition:background .07s; }
+.vdot.active { background:var(--cyan);border-color:var(--cyan); }
+.vdot.hot    { background:var(--mag);border-color:var(--mag); }
+
+/* Influence indicators */
+.infstrip { position:absolute;top:36px;right:11px;
+  display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:11px; }
+.infitem { color:rgba(153,68,255,.45);transition:color .25s; }
+.infitem.on { color:var(--cyan); }
+.infitem.ter { color:#ff9900; }
+
+/* Territory map — 3 bands × 3 organisms, mini grid */
+.termap { position:absolute;bottom:50px;left:10px;
+  display:flex;flex-direction:column;gap:2px; }
+.terrow { display:flex;gap:2px;align-items:center; }
+.ter-label { font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.4);
+  width:26px;letter-spacing:.06em; }
+.terbar { width:52px;height:5px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;position:relative; }
+.terfill { height:100%;border-radius:2px;transition:width .2s; }
+
+/* Event memory field — canvas label */
+.emf-strip { position:absolute;top:36px;left:11px;
+  display:flex;flex-direction:column;gap:2px; }
+.emf-item { font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.38); }
+.emf-val  { font-style:italic;color:rgba(0,255,255,.7); }
+
+/* Drift badge */
+.driftbadge { position:absolute;bottom:9px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:11px;color:rgba(255,200,0,.5);
+  letter-spacing:.1em;opacity:0;transition:opacity .35s; }
+.driftbadge.show { opacity:1; }
+
+/* CONTROLS */
+.cpanel { width:316px;flex-shrink:0;display:flex;flex-direction:column;
+  overflow-y:auto;overflow-x:hidden;padding:11px;gap:9px; }
+.cpanel::-webkit-scrollbar { width:2px; }
+.cpanel::-webkit-scrollbar-thumb { background:var(--vdim); }
+
+.orgsel { display:flex;gap:4px; }
+.obtn { flex:1;padding:8px 4px;background:var(--vglow);border:1px solid var(--vdim);
+  border-radius:4px;color:var(--gray);font-family:var(--mono);font-style:italic;
+  font-size:11px;cursor:pointer;text-align:center;
+  transition:background .1s,border-color .1s,color .1s;
+  -webkit-tap-highlight-color:transparent; }
+.obtn.active { background:var(--vact);border-color:var(--violet);color:var(--cyan); }
+
+.sec { background:rgba(153,68,255,.05);border:1px solid var(--vdim);
+  border-radius:5px;padding:9px 11px; }
+.st { font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.12em;
+  color:var(--violet);text-transform:uppercase;margin-bottom:7px;
+  padding-bottom:4px;border-bottom:1px solid var(--vdim); }
+.stress-sec { border-color:rgba(255,80,0,.28); }
+.stress-sec .st { color:#ff6633; }
+.mem-sec { border-color:rgba(255,180,0,.22); }
+.mem-sec .st { color:#ffcc00; }
+.ter-sec { border-color:rgba(255,150,0,.22); }
+.ter-sec .st { color:#ff9900; }
+
+.orgname { font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:13px;color:var(--white);margin-bottom:5px; }
+.orgtags { display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px; }
+.otag { font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:2px; }
+.otag.t  { background:rgba(0,255,255,.1);color:var(--cyan); }
+.otag.pk { background:rgba(153,68,255,.15);color:#b580ff; }
+.otag.ro { background:rgba(255,0,255,.1);color:var(--mag); }
+.otag.fp { background:rgba(255,150,0,.15);color:#ff9900; }
+.orgmood { font-family:var(--mono);font-size:11px;color:var(--gray);font-style:italic; }
+
+.prow { display:flex;align-items:center;gap:7px;margin-bottom:5px; }
+.prow:last-child { margin-bottom:0; }
+.plbl { font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+  color:var(--gray);width:70px;flex-shrink:0; }
+.ptr { flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;position:relative; }
+.pf { height:100%;border-radius:2px;position:absolute;left:0;top:0;
+  transition:width .15s ease,left .15s ease; }
+.pf.pitch     { background:var(--cyan); }
+.pf.trans     { background:#ff6633; }
+.pf.sat       { background:var(--mag); }
+.pf.res       { background:#44ff99; }
+.pf.pan       { background:#ffcc00; }
+.pf.fat       { background:linear-gradient(90deg,#44ff99,#ff3300); }
+.pf.tens      { background:linear-gradient(90deg,var(--violet),var(--mag)); }
+.pf.ener      { background:linear-gradient(90deg,#0055ff,var(--cyan)); }
+.pf.dens      { background:linear-gradient(90deg,#44ff99,var(--cyan)); }
+.pf.drift     { background:linear-gradient(90deg,#ff9900,#ffff00); }
+.pf.recovery  { background:linear-gradient(90deg,#44ff99,#88ffaa); }
+.pval { font-family:var(--mono);font-style:italic;font-size:11px;
+  color:var(--white);width:44px;text-align:right;flex-shrink:0; }
+
+.srow { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px; }
+.srow:last-child { margin-bottom:0; }
+.slbl { font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.08em; }
+.sval { font-family:var(--mono);font-style:italic;font-size:12px;color:var(--cyan); }
+.sval.warn   { color:#ffcc00; }
+.sval.danger { color:#ff3333; }
+.sval.mutx   { color:var(--mag); }
+.sval.orn    { color:#ff9900; }
+
+/* Stress grid */
+.sgrid { display:grid;grid-template-columns:1fr 1fr;gap:4px; }
+.sgi { font-family:var(--mono);font-size:11px; }
+.sgi .slbl { display:block;margin-bottom:1px; }
+.sgi .sval { font-size:12px; }
+
+/* Fatigue personality badge */
+.fp-badge { display:inline-block;font-family:var(--mono);font-size:11px;
+  padding:2px 8px;border-radius:2px;letter-spacing:.08em;margin-top:3px; }
+.fp-stable    { background:rgba(68,255,153,.15);color:#44ff99; }
+.fp-unstable  { background:rgba(255,80,0,.15);color:#ff6633; }
+.fp-explosive { background:rgba(255,0,255,.15);color:var(--mag); }
+.fp-ghost     { background:rgba(80,80,120,.25);color:#8888cc; }
+
+/* GS phase display */
+.gspd { margin-top:6px;text-align:center;font-family:var(--mono);font-style:italic;
+  font-size:12px;color:var(--violet);letter-spacing:.12em;transition:color .5s; }
+
+/* Memory field grid */
+.memgrid { display:grid;grid-template-columns:1fr 1fr;gap:4px; }
+.mgi { font-family:var(--mono);font-size:11px; }
+.mgi .mlbl { color:var(--gray); }
+.mgi .mval { color:var(--cyan);font-style:italic;font-size:12px; }
+
+/* Territory control panel */
+.tergrid { display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:3px 6px;
+  align-items:center; }
+.tgh { font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.6);
+  letter-spacing:.08em;text-align:center; }
+.tgl { font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.06em; }
+.tgb { height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden; }
+.tgf { height:100%;border-radius:2px;transition:width .2s; }
+.tgf.kick    { background:linear-gradient(90deg,#0088ff,var(--cyan)); }
+.tgf.debris  { background:linear-gradient(90deg,#ff6633,#ffcc00); }
+.tgf.ghost   { background:linear-gradient(90deg,#8844ff,#cc88ff); }
+
+/* FOOTER */
+footer { flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
+  background:rgba(10,8,20,.7);height:72px; }
+#tbtn { flex:1;background:rgba(153,68,255,.1);border:none;
+  border-right:1px solid var(--vdim);color:var(--white);
+  font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:24px;letter-spacing:.22em;cursor:pointer;transition:background .06s;
+  -webkit-tap-highlight-color:transparent; }
+#tbtn.fire { background:rgba(153,68,255,.38); }
+.fstats { width:185px;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;gap:4px;padding:9px; }
+.frow { display:flex;align-items:center;gap:6px; }
+.flbl { font-family:var(--mono);font-size:11px;color:var(--gray); }
+.fval { font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan); }
+#fdot { width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  background:#44ff99;transition:background .5s; }
+#flbl { font-family:var(--mono);font-size:11px;color:var(--gray); }
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+  <div class="logo"><span class="sp">SPUK</span><span class="lb">LAB</span></div>
+  <div class="sep"></div>
+  <div class="appid">
+    <span class="appid-n">SOUND FORGE</span>
+    <span class="appid-p">PHASE 1.6 — BEHAVIORAL DEEPENING</span>
+  </div>
+  <div class="hsp"></div>
+  <div class="hstrip">
+    <div class="hi"><span class="hl">TENSION</span><span class="hv" id="h-t">0.00</span></div>
+    <div class="hi"><span class="hl">ENERGY</span><span class="hv" id="h-e">0.00</span></div>
+    <div class="hi"><span class="hl">PHASE</span><span class="hv ph" id="h-ph">intro</span></div>
+    <div class="hi"><span class="hl">FPS</span><span class="hv" id="h-fps">--</span></div>
+    <div class="hi"><span class="hl">VOICES</span><span class="hv" id="h-vc">0/16</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- CANVAS -->
+  <div class="cvp">
+    <canvas id="scope"></canvas>
+    <div class="cov">
+      <span class="cl osc">OSC</span>
+      <span class="cl fft">FFT</span>
+      <span class="cl pack" id="cl-pk">rust_ritual</span>
+
+      <!-- Event Memory Field (top-left, below OSC) -->
+      <div class="emf-strip">
+        <span class="emf-item">INT <span class="emf-val" id="emf-int">0.00</span></span>
+        <span class="emf-item">SIL <span class="emf-val" id="emf-sil">0.0s</span></span>
+        <span class="emf-item">RUP <span class="emf-val" id="emf-rup">0</span></span>
+        <span class="emf-item">DOM <span class="emf-val" id="emf-dom">--</span></span>
+        <span class="emf-item">TRD <span class="emf-val" id="emf-trd">flat</span></span>
+      </div>
+
+      <!-- Cross-organism influence -->
+      <div class="infstrip">
+        <span class="infitem" id="inf-kg">K→GHOST</span>
+        <span class="infitem" id="inf-td">T→DEBRIS</span>
+        <span class="infitem" id="inf-ds">D→SAT</span>
+        <span class="infitem" id="inf-ter">TERRITORY</span>
+      </div>
+
+      <!-- Voice grid -->
+      <div class="vgrid" id="vgrid"></div>
+
+      <div class="driftbadge" id="driftbadge">DRIFT</div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="cpanel">
+
+    <div class="orgsel">
+      <button class="obtn active" data-org="0">RUST KICK</button>
+      <button class="obtn"        data-org="1">DEBRIS HIT</button>
+      <button class="obtn"        data-org="2">SPECTRAL GHOST</button>
+    </div>
+
+    <!-- Organism info -->
+    <div class="sec">
+      <div class="orgname" id="org-name">Rust Ritual Kick</div>
+      <div class="orgtags">
+        <span class="otag t"  id="org-type">kick_cluster</span>
+        <span class="otag pk" id="org-pack">rust_ritual</span>
+        <span class="otag ro" id="org-role">low_anchor</span>
+        <span class="otag fp" id="org-fp">explosive</span>
+      </div>
+      <div class="orgmood" id="org-mood">ritual · agg 0.71 · instability 0.68</div>
+      <div style="margin-top:5px;">
+        <span class="fp-badge" id="fp-badge">EXPLOSIVE</span>
+      </div>
+    </div>
+
+    <!-- Mutation -->
+    <div class="sec">
+      <div class="st">MUTATION STATE</div>
+      <div class="prow">
+        <span class="plbl">PITCH</span>
+        <div class="ptr"><div class="pf pitch" id="pf-pitch"></div></div>
+        <span class="pval" id="pv-pitch">0.00</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">TRANSIENT</span>
+        <div class="ptr"><div class="pf trans" id="pf-trans"></div></div>
+        <span class="pval" id="pv-trans">0ms</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">SATURATION</span>
+        <div class="ptr"><div class="pf sat" id="pf-sat"></div></div>
+        <span class="pval" id="pv-sat">0</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">RESONANCE</span>
+        <div class="ptr"><div class="pf res" id="pf-res"></div></div>
+        <span class="pval" id="pv-res">0hz</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">PAN</span>
+        <div class="ptr"><div class="pf pan" id="pf-pan" style="position:absolute;height:100%;top:0;"></div></div>
+        <span class="pval" id="pv-pan">0.00</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">T.DRIFT</span>
+        <div class="ptr"><div class="pf drift" id="pf-drift"></div></div>
+        <span class="pval" id="pv-drift">0ms</span>
+      </div>
+      <div class="prow">
+        <span class="plbl">RECOVERY</span>
+        <div class="ptr"><div class="pf recovery" id="pf-recovery"></div></div>
+        <span class="pval" id="pv-recovery">0.00</span>
+      </div>
+    </div>
+
+    <!-- Global state -->
+    <div class="sec">
+      <div class="st">GLOBAL STATE</div>
+      <div class="prow">
+        <span class="plbl">TENSION</span>
+        <div class="ptr"><div class="pf tens" id="gf-t"></div></div>
+      </div>
+      <div class="prow">
+        <span class="plbl">ENERGY</span>
+        <div class="ptr"><div class="pf ener" id="gf-e"></div></div>
+      </div>
+      <div class="prow">
+        <span class="plbl">DENSITY</span>
+        <div class="ptr"><div class="pf dens" id="gf-d"></div></div>
+      </div>
+      <div class="gspd">NARRATIVE: <span id="gs-ph">INTRO</span></div>
+    </div>
+
+    <!-- Event Memory Field -->
+    <div class="sec mem-sec">
+      <div class="st">EVENT MEMORY FIELD</div>
+      <div class="memgrid">
+        <div class="mgi"><span class="mlbl">RECENT INT.</span><br><span class="mval" id="mem-int">0.00</span></div>
+        <div class="mgi"><span class="mlbl">SILENCE</span><br><span class="mval" id="mem-sil">0.0s</span></div>
+        <div class="mgi"><span class="mlbl">RUPTURES</span><br><span class="mval" id="mem-rup">0</span></div>
+        <div class="mgi"><span class="mlbl">DOMINANT</span><br><span class="mval" id="mem-dom">--</span></div>
+        <div class="mgi"><span class="mlbl">DENSITY TRD</span><br><span class="mval" id="mem-trd">flat</span></div>
+        <div class="mgi"><span class="mlbl">ANTICIPATION</span><br><span class="mval" id="mem-ant">0.00</span></div>
+      </div>
+    </div>
+
+    <!-- Spectral Territory -->
+    <div class="sec ter-sec">
+      <div class="st">SPECTRAL TERRITORY</div>
+      <div class="tergrid">
+        <span class="tgh"></span>
+        <span class="tgh">LOW</span>
+        <span class="tgh">MID</span>
+        <span class="tgh">HIGH</span>
+        <span class="tgl">KICK</span>
+        <div class="tgb"><div class="tgf kick" id="ter-k-lo"></div></div>
+        <div class="tgb"><div class="tgf kick" id="ter-k-mi"></div></div>
+        <div class="tgb"><div class="tgf kick" id="ter-k-hi"></div></div>
+        <span class="tgl">DEBRIS</span>
+        <div class="tgb"><div class="tgf debris" id="ter-d-lo"></div></div>
+        <div class="tgb"><div class="tgf debris" id="ter-d-mi"></div></div>
+        <div class="tgb"><div class="tgf debris" id="ter-d-hi"></div></div>
+        <span class="tgl">GHOST</span>
+        <div class="tgb"><div class="tgf ghost" id="ter-g-lo"></div></div>
+        <div class="tgb"><div class="tgf ghost" id="ter-g-mi"></div></div>
+        <div class="tgb"><div class="tgf ghost" id="ter-g-hi"></div></div>
+      </div>
+      <div class="srow" style="margin-top:7px;">
+        <span class="slbl">NEGOTIATION</span>
+        <span class="sval orn" id="ter-neg">idle</span>
+      </div>
+    </div>
+
+    <!-- Organism stats -->
+    <div class="sec">
+      <div class="st">ORGANISM STATS</div>
+      <div class="srow"><span class="slbl">PLAY COUNT</span><span class="sval" id="st-cnt">0</span></div>
+      <div class="prow" style="margin-top:4px;">
+        <span class="plbl">FATIGUE</span>
+        <div class="ptr"><div class="pf fat" id="pf-fat"></div></div>
+        <span class="pval" id="pv-fat">0.00</span>
+      </div>
+      <div class="srow" style="margin-top:3px;">
+        <span class="slbl">MUTATION X</span><span class="sval mutx" id="st-mx">1.00x</span>
+      </div>
+      <div class="srow"><span class="slbl">INST.MOMENTUM</span><span class="sval" id="st-im">0.00</span></div>
+      <div class="srow"><span class="slbl">RECOVERY RATE</span><span class="sval" id="st-rr">--</span></div>
+    </div>
+
+    <!-- Stress monitor -->
+    <div class="sec stress-sec">
+      <div class="st">STRESS MONITOR</div>
+      <div class="sgrid">
+        <div class="sgi"><span class="slbl">ACTIVE VOICES</span><span class="sval" id="sv-ac">0/16</span></div>
+        <div class="sgi"><span class="slbl">PEAK VOICES</span><span class="sval" id="sv-pk">0</span></div>
+        <div class="sgi"><span class="slbl">FRAME TIME</span><span class="sval" id="sv-ft">0ms</span></div>
+        <div class="sgi"><span class="slbl">QUALITY</span><span class="sval" id="sv-ql">FULL</span></div>
+        <div class="sgi"><span class="slbl">EVICTIONS</span><span class="sval" id="sv-ev">0</span></div>
+        <div class="sgi"><span class="slbl">TOTAL</span><span class="sval" id="sv-tot">0</span></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <button id="tbtn">TRIGGER</button>
+  <div class="fstats">
+    <div class="frow">
+      <span class="flbl">TRIGGERS</span>
+      <span class="fval" id="fi-tot">0</span>
+    </div>
+    <div class="frow">
+      <span id="fdot"></span>
+      <span id="flbl">FRESH</span>
+    </div>
+  </div>
+</footer>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SOUND FORGE — Phase 1.6: Behavioral Deepening
+   SpukLab 2025
+
+   New systems:
+   ① Event Memory Field — GlobalState.eventMemory with
+     recentIntensity, silenceDuration, ruptureCount,
+     dominantOrganism, densityTrend, anticipationLevel
+   ② Fatigue Recovery Personalities — stable / unstable /
+     explosive / ghost — each with distinct recovery curve
+   ③ Spectral Territory System — 3 organisms negotiate
+     low/mid/high bands; active organism claims territory,
+     others yield proportionally
+   Carried from 1.5: Voice Pool, Temporal Drift, Organism
+   Memory, Cross-Organism Influence, Narrative Recovery,
+   Adaptive Quality
+═══════════════════════════════════════════════════════════ */
+
+// ─── AUDIO CONTEXT ─────────────────────────────────────────
+let AC=null, masterGain, compressor, masterSat, masterAnalyser;
+let noiseBuffer=null, FFT_SIZE=2048;
+
+function initAC(){
+  if(AC) return;
+  AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
+  masterGain=AC.createGain(); masterGain.gain.value=0.82;
+  compressor=AC.createDynamicsCompressor();
+  Object.assign(compressor,{threshold:{value:-16},knee:{value:8},
+    ratio:{value:4},attack:{value:.003},release:{value:.18}});
+  compressor.threshold.value=-16; compressor.knee.value=8;
+  compressor.ratio.value=4; compressor.attack.value=.003; compressor.release.value=.18;
+  masterSat=AC.createWaveShaper();
+  masterSat.curve=satCurve(28); masterSat.oversample='4x';
+  masterAnalyser=AC.createAnalyser();
+  masterAnalyser.fftSize=FFT_SIZE; masterAnalyser.smoothingTimeConstant=.88;
+  masterGain.connect(compressor);
+  compressor.connect(masterSat);
+  masterSat.connect(masterAnalyser);
+  masterAnalyser.connect(AC.destination);
+  noiseBuffer=genNoise(2);
+  initPool();
+}
+
+function satCurve(k){
+  const n=512,c=new Float32Array(n);
+  for(let i=0;i<n;i++){const x=(i*2)/n-1;c[i]=((Math.PI+k)*x)/(Math.PI+k*Math.abs(x));}
+  return c;
+}
+function genNoise(dur){
+  const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
+  return buf;
+}
+
+// ─── PERFORMANCE MONITOR ───────────────────────────────────
+const Perf={
+  fps:60, frameTime:0, quality:'full', evictions:0, totalTriggers:0, peakVoices:0,
+  _fh:[], _lf:0,
+  tick(now){
+    const dt=now-this._lf; this._lf=now;
+    if(dt>0&&dt<500){
+      this._fh.push(dt); if(this._fh.length>20) this._fh.shift();
+      const avg=this._fh.reduce((a,b)=>a+b,0)/this._fh.length;
+      this.frameTime=avg; this.fps=Math.round(1000/avg);
+    }
+    this.quality=this.frameTime>28?'minimal':this.frameTime>18?'reduced':'full';
+    if(masterAnalyser){
+      const tgt=this.quality==='minimal'?512:this.quality==='reduced'?1024:2048;
+      if(masterAnalyser.fftSize!==tgt){masterAnalyser.fftSize=tgt;FFT_SIZE=tgt;}
+    }
+  },
+  updateUI(){
+    const active=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
+    if(active>this.peakVoices) this.peakVoices=active;
+    setT('h-fps',this.fps); setT('h-vc',`${active}/16`);
+    setT('sv-ac',`${active}/16`); setT('sv-pk',this.peakVoices);
+    setT('sv-ft',this.frameTime.toFixed(1)+'ms');
+    setT('sv-ql',this.quality.toUpperCase());
+    setT('sv-ev',this.evictions); setT('sv-tot',this.totalTriggers);
+    const fEl=document.getElementById('h-fps');
+    if(fEl) fEl.className='hv'+(this.fps<40?' danger':this.fps<55?' warn':'');
+    const ftEl=document.getElementById('sv-ft');
+    if(ftEl) ftEl.className='sval'+(this.frameTime>28?' danger':this.frameTime>18?' warn':'');
+    const dots=document.querySelectorAll('.vdot');
+    dots.forEach((d,i)=>{
+      if(i<pool.length){
+        const v=pool[i];
+        const isAct=!v.free&&AC&&AC.currentTime<v.freeAt;
+        const isHot=isAct&&(v.freeAt-AC.currentTime)>0.5;
+        d.className='vdot'+(isHot?' hot':isAct?' active':'');
+      }
+    });
+  }
+};
+
+// ─── VOICE POOL ─────────────────────────────────────────────
+const POOL_SIZE=16; const pool=[];
+class Voice{
+  constructor(){
+    this.free=true; this.freeAt=0;
+    this.bus=AC.createGain(); this.panner=AC.createStereoPanner();
+    this.sat=AC.createWaveShaper();
+    this.bus.gain.value=0;
+    this.bus.connect(this.panner); this.panner.connect(this.sat); this.sat.connect(masterGain);
+  }
+  available(){ return this.free||(AC&&AC.currentTime>=this.freeAt); }
+  claim(dur){ this.free=false; this.freeAt=AC.currentTime+dur+0.12;
+    setTimeout(()=>{this.free=true;},(dur+0.16)*1000); }
+}
+function initPool(){
+  for(let i=0;i<POOL_SIZE;i++) pool.push(new Voice());
+  const g=document.getElementById('vgrid');
+  if(g) g.innerHTML=Array.from({length:16},()=>'<div class="vdot"></div>').join('');
+}
+function getVoice(){
+  for(const v of pool) if(v.available()) return v;
+  Perf.evictions++;
+  return pool.reduce((a,b)=>a.freeAt<b.freeAt?a:b);
+}
+
+// ─── ORGANISM DEFINITIONS ───────────────────────────────────
+// fatiguePersonality: stable | unstable | explosive | ghost
+const ORGANISMS=[
+  {
+    id:'rust_kick',name:'Rust Ritual Kick',pack:'rust_ritual',
+    type:'kick_cluster',role:'low_anchor',
+    mood:'ritual · agg 0.71 · instability 0.68',
+    fatiguePersonality:'explosive',
+    // Spectral territory claim: how strongly this org claims each band
+    spectralClaim:{low:0.92, mid:0.35, high:0.08},
+    layers:{
+      transient:{on:true,waveform:'sine',baseFreq:88,freqDecay:.068,freqFloor:.12,ampDecay:.085,gain:.98},
+      body:{on:true,waveform:'sine',baseFreq:52,freqDecay:.28,freqFloor:.42,ampDecay:.52,gain:.72},
+      noise:{on:true,filterType:'bandpass',filterFreq:115,filterQ:3.2,dur:.14,gain:.24},
+      air:{on:false}
+    },
+    mut:{pitchRange:[-0.14,.10],transAtk:[.00015,.0024],satRange:[18,88],resonRange:[65,165],panRange:[-.28,.28],fatigueScale:.88}
+  },
+  {
+    id:'debris',name:'Debris Hit',pack:'rust_ritual',
+    type:'percussive_debris',role:'mid_body',
+    mood:'industrial · agg 0.55 · instability 0.82',
+    fatiguePersonality:'unstable',
+    spectralClaim:{low:0.28, mid:0.88, high:0.55},
+    layers:{
+      transient:{on:true,waveform:'triangle',baseFreq:420,freqDecay:.038,freqFloor:.16,ampDecay:.062,gain:.88},
+      body:{on:true,waveform:'sine',baseFreq:145,freqDecay:.11,freqFloor:.48,ampDecay:.21,gain:.42},
+      noise:{on:true,filterType:'bandpass',filterFreq:870,filterQ:1.8,dur:.09,gain:.48},
+      air:{on:false}
+    },
+    mut:{pitchRange:[-0.32,.32],transAtk:[.00008,.0009],satRange:[35,130],resonRange:[110,320],panRange:[-.52,.52],fatigueScale:1.12}
+  },
+  {
+    id:'ghost',name:'Spectral Ghost',pack:'rust_ritual',
+    type:'ghost_impact',role:'ghost',
+    mood:'void · agg 0.12 · instability 0.92',
+    fatiguePersonality:'ghost',
+    spectralClaim:{low:0.22, mid:0.18, high:0.12},
+    layers:{
+      transient:{on:false},
+      body:{on:true,waveform:'sine',baseFreq:36,freqDecay:1.1,freqFloor:.78,ampDecay:1.6,gain:.28},
+      noise:{on:true,filterType:'lowpass',filterFreq:85,filterQ:.55,dur:1.1,gain:.17},
+      air:{on:true,filterFreq:175,filterQ:.4,dur:2.0,gain:.09}
+    },
+    mut:{pitchRange:[-0.55,.55],transAtk:[0,0],satRange:[4,22],resonRange:[28,68],panRange:[-.65,.65],fatigueScale:.38}
+  }
+];
+
+// ─── FATIGUE RECOVERY PERSONALITIES ───────────────────────
+// Each personality defines how fatigue recovers between triggers.
+// Called by the idle timer every 2s.
+const RECOVERY_PROFILES={
+  stable:{
+    // Recovers quickly and reliably. Low drama.
+    rate: 0.045,
+    curve: f => f * (1 - 0.045),  // linear decay
+    label: 'STABLE',
+    badgeClass: 'fp-stable'
+  },
+  unstable:{
+    // Retains fatigue. High instability means mutations persist.
+    rate: 0.012,
+    curve: f => f * (1 - 0.012),
+    label: 'UNSTABLE',
+    badgeClass: 'fp-unstable'
+  },
+  explosive:{
+    // Fatigue builds slowly but resets abruptly at high levels.
+    // At fatigue > 0.85: rapid collapse to 0.
+    rate: 0.008,
+    curve: f => {
+      if(f > 0.85) return Math.max(0, f - 0.22); // abrupt collapse
+      return f * (1 - 0.008);
+    },
+    label: 'EXPLOSIVE',
+    badgeClass: 'fp-explosive'
+  },
+  ghost:{
+    // Never fully recovers. Retains a permanent residue.
+    rate: 0.018,
+    curve: f => Math.max(0.12, f * (1 - 0.018)), // floor at 0.12
+    label: 'GHOST',
+    badgeClass: 'fp-ghost'
+  }
+};
+
+// ─── ORGANISM MEMORY ────────────────────────────────────────
+const MEM=ORGANISMS.map(()=>({
+  lastPitchDrift:0, instabilityMomentum:0, playCount:0, fatigue:0, recoveryLevel:1
+}));
+
+// Recovery idle timer — runs when no triggers
+let _recoveryInterval=null;
+function startRecovery(){
+  if(_recoveryInterval) return;
+  _recoveryInterval=setInterval(()=>{
+    MEM.forEach((m,i)=>{
+      const prof=RECOVERY_PROFILES[ORGANISMS[i].fatiguePersonality];
+      if(m.fatigue>0){
+        m.fatigue=Math.max(0,prof.curve(m.fatigue));
+        m.recoveryLevel=clamp(1-m.fatigue,0,1);
+        m.instabilityMomentum*=0.94;
+      }
+    });
+    updateRecoveryUI();
+  },2000);
+}
+
+// ─── ① EVENT MEMORY FIELD ───────────────────────────────────
+// GlobalState contextual memory — enables anticipation & reaction
+const EMF={
+  recentIntensity:     0,  // rolling average of energy at trigger time
+  silenceDuration:     0,  // seconds since last trigger
+  ruptureCount:        0,  // how many rupture phases crossed
+  dominantOrganism:    -1, // which org was triggered most recently
+  densityTrend:        0,  // +1=increasing, 0=flat, -1=decreasing
+  anticipationLevel:   0,  // derived: how much the system "expects" a trigger
+
+  _lastTriggerTime: 0,
+  _densityHistory:  [],
+  _triggerCounts:   [0,0,0], // per organism
+
+  onTrigger(orgIdx, energy){
+    const now=Date.now()/1000;
+    this.silenceDuration=0;
+    this._lastTriggerTime=now;
+    this.dominantOrganism=orgIdx;
+    this._triggerCounts[orgIdx]++;
+    // Rolling intensity (EMA)
+    this.recentIntensity=this.recentIntensity*.82+energy*.18;
+    // Density history (1 entry per trigger, max 20)
+    this._densityHistory.push(GlobalState.density);
+    if(this._densityHistory.length>20) this._densityHistory.shift();
+  },
+
+  onRupture(){ this.ruptureCount++; },
+
+  selfUpdate(){
+    const now=Date.now()/1000;
+    // Silence duration
+    this.silenceDuration=this._lastTriggerTime>0 ? now-this._lastTriggerTime : 0;
+
+    // Density trend: compare first half vs second half of history
+    if(this._densityHistory.length>=6){
+      const mid=Math.floor(this._densityHistory.length/2);
+      const early=this._densityHistory.slice(0,mid).reduce((a,b)=>a+b,0)/mid;
+      const late=this._densityHistory.slice(mid).reduce((a,b)=>a+b,0)/(this._densityHistory.length-mid);
+      const diff=late-early;
+      this.densityTrend=diff>0.06?1:diff<-0.06?-1:0;
+    }
+
+    // Anticipation: rises with silence after high tension, falls when idle too long
+    if(GlobalState.tension>0.5 && this.silenceDuration>0.5 && this.silenceDuration<8){
+      this.anticipationLevel=clamp(this.anticipationLevel+0.025,0,1);
+    } else {
+      this.anticipationLevel*=0.96;
+    }
+
+    this.updateUI();
+  },
+
+  updateUI(){
+    const domNames=['KICK','DEBRIS','GHOST'];
+    const trdLabels=['falling','flat','rising'];
+    setT('emf-int',this.recentIntensity.toFixed(2));
+    setT('emf-sil',this.silenceDuration.toFixed(1)+'s');
+    setT('emf-rup',this.ruptureCount);
+    setT('emf-dom',this.dominantOrganism>=0?domNames[this.dominantOrganism]:'--');
+    setT('emf-trd',trdLabels[this.densityTrend+1]);
+    setT('mem-int',this.recentIntensity.toFixed(2));
+    setT('mem-sil',this.silenceDuration.toFixed(1)+'s');
+    setT('mem-rup',this.ruptureCount);
+    setT('mem-dom',this.dominantOrganism>=0?domNames[this.dominantOrganism]:'--');
+    setT('mem-trd',trdLabels[this.densityTrend+1]);
+    setT('mem-ant',this.anticipationLevel.toFixed(2));
+  }
+};
+
+// ─── ③ SPECTRAL TERRITORY SYSTEM ────────────────────────────
+// Three frequency bands: LOW (20–250hz), MID (250–3khz), HIGH (3k–20khz)
+// Each organism has a spectralClaim per band.
+// When an organism triggers, it claims its territory.
+// Others must yield proportionally (their effective filter freqs shift).
+const Territory={
+  // Current claimed territory per organism per band (0–1)
+  claimed:{
+    kick:    {low:0,mid:0,high:0},
+    debris:  {low:0,mid:0,high:0},
+    ghost:   {low:0,mid:0,high:0}
+  },
+
+  // Negotiation active flag
+  negotiating: false,
+  _negTimer: null,
+
+  onTrigger(orgIdx){
+    const org=ORGANISMS[orgIdx];
+    const key=['kick','debris','ghost'][orgIdx];
+
+    // Claim territory for this organism
+    this.claimed[key].low  = org.spectralClaim.low;
+    this.claimed[key].mid  = org.spectralClaim.mid;
+    this.claimed[key].high = org.spectralClaim.high;
+
+    // Others yield: reduce their claim proportionally to this org's claim
+    const others=[[0,'kick'],[1,'debris'],[2,'ghost']].filter(([i])=>i!==orgIdx);
+    for(const [oi, ok] of others){
+      const yieldFactor=1-org.spectralClaim.low*0.4;
+      this.claimed[ok].low   *= yieldFactor;
+      this.claimed[ok].mid   *= (1-org.spectralClaim.mid*0.35);
+      this.claimed[ok].high  *= (1-org.spectralClaim.high*0.3);
+    }
+
+    this.negotiating=true;
+    clearTimeout(this._negTimer);
+    this._negTimer=setTimeout(()=>{
+      this.negotiating=false;
+      // Natural decay of all claims
+      for(const k of['kick','debris','ghost']){
+        this.claimed[k].low  *=0.78;
+        this.claimed[k].mid  *=0.72;
+        this.claimed[k].high *=0.68;
+      }
+      this.updateUI();
+    }, 600);
+
+    this.updateUI();
+  },
+
+  // Returns filter freq modifier for a given organism and its noise layer
+  // Used in trigger() to adjust noise filter freqs dynamically
+  getFilterMod(orgIdx){
+    const key=['kick','debris','ghost'][orgIdx];
+    const otherClaims=[0,1,2].filter(i=>i!==orgIdx).map(i=>{
+      const ok=['kick','debris','ghost'][i];
+      return this.claimed[ok];
+    });
+    // Total yield pressure from others on this org's dominant band
+    const org=ORGANISMS[orgIdx];
+    const dominantBand=org.spectralClaim.low>org.spectralClaim.mid?'low':'mid';
+    const pressure=otherClaims.reduce((sum,c)=>sum+c[dominantBand],0);
+    // Filter mod: 1.0 = no change, <1.0 = yield (shift down), >1.0 = claim (shift up)
+    return clamp(1-pressure*0.18, 0.55, 1.15);
+  },
+
+  updateUI(){
+    const orgs=['kick','debris','ghost'];
+    const bands=['lo','mi','hi'];
+    const keys=['low','mid','high'];
+    for(const org of orgs){
+      for(let b=0;b<3;b++){
+        setW(`ter-${org[0]}-${bands[b]}`, this.claimed[org][keys[b]]);
+      }
+    }
+    setT('ter-neg', this.negotiating ? 'active' : 'idle');
+    const infEl=document.getElementById('inf-ter');
+    if(infEl) infEl.className='infitem'+(this.negotiating?' ter':'');
+  }
+};
+
+// ─── CROSS-ORGANISM INFLUENCE ────────────────────────────────
+const Influence={
+  kickEnergy:0, _kd:null,
+  onKickTrigger(){
+    this.kickEnergy=1;
+    clearTimeout(this._kd);
+    this._kd=setTimeout(()=>{
+      const dec=()=>{ this.kickEnergy*=0.88; if(this.kickEnergy>0.01) setTimeout(dec,80); else this.kickEnergy=0; };
+      dec();
+    },40);
+  },
+  apply(orgIdx,params){
+    const T=GlobalState.tension, D=GlobalState.density;
+    params.airGainBoost=0; params.noiseFreqMult=1; params.satBoost=0;
+    if(orgIdx===2&&this.kickEnergy>0.3){ params.airGainBoost=this.kickEnergy*0.12; setInf('inf-kg',true); }
+    else if(orgIdx===2) setInf('inf-kg',false);
+    if(orgIdx===1&&T>0.6){ params.noiseFreqMult=1-(T-0.6)*0.9; setInf('inf-td',true); }
+    else if(orgIdx===1) setInf('inf-td',false);
+    params.satBoost=D*18; setInf('inf-ds',D>0.4);
+    return params;
+  }
+};
+function setInf(id,on){ const el=document.getElementById(id); if(el) el.className='infitem'+(on?' on':''); }
+
+// ─── GLOBAL STATE ────────────────────────────────────────────
+const GlobalState={
+  tension:0, energy:0, density:0, phase:'intro',
+  _stamps:[], _recTimer:null, _voidTimer:null, _prevPhase:'intro',
+
+  record(){
+    const now=Date.now();
+    this._stamps.push(now);
+    this._stamps=this._stamps.filter(t=>t>now-20000);
+    if(this.phase==='void') this.phase='aftershock';
+  },
+
+  selfEvolve(){
+    const now=Date.now();
+    const recent=this._stamps.filter(t=>t>now-5000).length;
+    const idle=recent===0;
+    const targetD=Math.min(1,recent/12);
+    this.density+=(targetD-this.density)*0.14;
+
+    if(this.phase==='recovery'||this.phase==='void'){
+      this.tension*=0.93; this.energy*=0.91; this.density*=0.89;
+    } else if(this.phase==='aftershock'){
+      this.tension=Math.min(1,this.tension*1.06);
+      setTimeout(()=>{ if(this.phase==='aftershock') this.phase='recovery'; },800);
+    } else {
+      this.tension+=((this.density*0.82+this.energy*0.18)-this.tension)*0.07;
+      this.energy+=(this.density*0.88-this.energy)*0.05;
+    }
+
+    if(idle){ this.tension*=0.982; this.energy*=0.975; this.density*=0.968; }
+    this.tension=clamp(this.tension,0,1);
+    this.energy=clamp(this.energy,0,1);
+    this.density=clamp(this.density,0,1);
+
+    const prev=this.phase;
+    if(!['recovery','void','aftershock'].includes(this.phase)){
+      const t=this.tension;
+      if(t<.14) this.phase='intro';
+      else if(t<.38) this.phase='build';
+      else if(t<.62) this.phase='peak';
+      else if(t<.82) this.phase='tension';
+      else this.phase='rupture';
+    }
+
+    // Track rupture crossings for EMF
+    if(prev!=='rupture'&&this.phase==='rupture'){ EMF.onRupture(); }
+
+    if(prev==='rupture'&&idle&&this.phase==='rupture'){
+      clearTimeout(this._recTimer);
+      this._recTimer=setTimeout(()=>{
+        if(this.tension>.7&&this._stamps.filter(s=>s>Date.now()-3000).length===0){
+          this.phase='recovery';
+          this._voidTimer=setTimeout(()=>{
+            if(this._stamps.filter(s=>s>Date.now()-4000).length===0) this.phase='void';
+          },4000);
+        }
+      },2500);
+    }
+
+    EMF.selfUpdate();
+    this.updateUI();
+  },
+
+  updateUI(){
+    setW('gf-t',this.tension); setW('gf-e',this.energy); setW('gf-d',this.density);
+    setT('gs-ph',this.phase.toUpperCase());
+    setT('h-t',this.tension.toFixed(2)); setT('h-e',this.energy.toFixed(2));
+    setT('h-ph',this.phase);
+    const phEl=document.getElementById('h-ph');
+    const gsEl=document.getElementById('gs-ph');
+    const cls='ph-'+this.phase;
+    if(phEl) phEl.className='hv ph '+cls;
+    if(gsEl) gsEl.className=cls;
+  },
+
+  start(){ setInterval(()=>this.selfEvolve(),380); }
+};
+
+// ─── TEMPORAL DRIFT ─────────────────────────────────────────
+function calcDrift(mem){
+  const base=-0.008+Math.random()*0.024;
+  const extra=mem.instabilityMomentum*0.018;
+  return clamp(base+extra,-0.012,0.038);
+}
+
+// ─── MUTATION CALCULATOR ─────────────────────────────────────
+function calcMut(org,mem){
+  const M=org.mut;
+  const fm=1+mem.fatigue*M.fatigueScale;
+  function rand(lo,hi){ return lo+Math.random()*(hi-lo); }
+  function randF(lo,hi){ const c=(lo+hi)/2,s=(hi-lo)/2*fm; return c+(Math.random()*2-1)*s; }
+
+  // EMF-influenced pitch: anticipation bends pitch upward slightly
+  const antiBias=EMF.anticipationLevel*0.08;
+  const rawP=randF(M.pitchRange[0],M.pitchRange[1])+antiBias;
+  const pitchDrift=rawP*0.65+mem.lastPitchDrift*0.35;
+
+  const transAtk=M.transAtk[1]>0?rand(M.transAtk[0],M.transAtk[1]):0;
+  const saturation=rand(M.satRange[0],M.satRange[1])*(1+GlobalState.tension*0.38);
+  const bodyRes=randF(M.resonRange[0],M.resonRange[1]);
+  const pan=randF(M.panRange[0],M.panRange[1])*(1+GlobalState.density*0.18);
+
+  const pN=clamp((pitchDrift-M.pitchRange[0])/(M.pitchRange[1]-M.pitchRange[0]),0,1);
+  const tN=M.transAtk[1]>0?clamp((transAtk-M.transAtk[0])/(M.transAtk[1]-M.transAtk[0]),0,1):0;
+  const sN=clamp((saturation-M.satRange[0])/(M.satRange[1]-M.satRange[0]),0,1);
+  const rN=clamp((bodyRes-M.resonRange[0])/(M.resonRange[1]-M.resonRange[0]),0,1);
+  const panN=(pan-M.panRange[0])/(M.panRange[1]-M.panRange[0]);
+  return {pitchDrift,transAtk,saturation,bodyRes,pan,pN,tN,sN,rN,panN};
+}
+
+// ─── TRIGGER ──────────────────────────────────────────────────
+let currentOrg=0;
+
+function trigger(){
+  if(!AC) initAC();
+  AC.resume();
+
+  const org=ORGANISMS[currentOrg];
+  const mem=MEM[currentOrg];
+  const mut=calcMut(org,mem);
+  const drift=calcDrift(mem);
+  const now=AC.currentTime;
+  const t=now+Math.max(0,drift);
+  const pR=Math.pow(2,mut.pitchDrift/12);
+
+  // ③ Territory system
+  Territory.onTrigger(currentOrg);
+  const filterMod=Territory.getFilterMod(currentOrg);
+
+  // Cross-organism influence
+  let inf={airGainBoost:0,noiseFreqMult:1,satBoost:0};
+  inf=Influence.apply(currentOrg,inf);
+  if(currentOrg===0) Influence.onKickTrigger();
+
+  const v=getVoice(); let maxDur=0;
+
+  // TRANSIENT
+  if(org.layers.transient.on){
+    const L=org.layers.transient;
+    const osc=AC.createOscillator(),g=AC.createGain();
+    osc.type=L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq*pR,t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(12,L.baseFreq*L.freqFloor*pR),t+L.freqDecay);
+    const atk=Math.max(.00005,mut.transAtk);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(L.gain,t+atk);
+    g.gain.exponentialRampToValueAtTime(.001,t+L.ampDecay);
+    osc.connect(g); g.connect(v.bus);
+    osc.start(t); osc.stop(t+L.ampDecay+.05);
+    maxDur=Math.max(maxDur,L.ampDecay);
+  }
+
+  // BODY
+  if(org.layers.body.on){
+    const L=org.layers.body;
+    const osc=AC.createOscillator(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    osc.type=L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq*pR,t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(8,L.baseFreq*L.freqFloor*pR),t+L.freqDecay);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(L.gain,t+.003);
+    g.gain.exponentialRampToValueAtTime(.001,t+L.ampDecay);
+    flt.type='lowpass'; flt.frequency.value=Math.max(18,mut.bodyRes); flt.Q.value=2.4;
+    osc.connect(flt); flt.connect(g); g.connect(v.bus);
+    osc.start(t); osc.stop(t+L.ampDecay+.05);
+    maxDur=Math.max(maxDur,L.ampDecay);
+  }
+
+  // NOISE — territory filterMod applied
+  if(org.layers.noise.on){
+    const L=org.layers.noise;
+    const src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    src.buffer=noiseBuffer; flt.type=L.filterType;
+    flt.frequency.value=L.filterFreq*pR*inf.noiseFreqMult*filterMod;
+    flt.Q.value=L.filterQ;
+    g.gain.setValueAtTime(L.gain,t);
+    g.gain.exponentialRampToValueAtTime(.001,t+L.dur);
+    src.connect(flt); flt.connect(g); g.connect(v.bus);
+    src.start(t); src.stop(t+L.dur+.05);
+    maxDur=Math.max(maxDur,L.dur);
+  }
+
+  // AIR
+  if(org.layers.air&&org.layers.air.on){
+    const L=org.layers.air;
+    const src=AC.createBufferSource(),flt=AC.createBiquadFilter(),g=AC.createGain();
+    src.buffer=noiseBuffer; flt.type='lowpass'; flt.frequency.value=L.filterFreq; flt.Q.value=L.filterQ;
+    const ag=L.gain+inf.airGainBoost;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(ag,t+.09);
+    g.gain.exponentialRampToValueAtTime(.001,t+L.dur);
+    src.connect(flt); flt.connect(g); g.connect(v.bus);
+    src.start(t); src.stop(t+L.dur+.05);
+    maxDur=Math.max(maxDur,L.dur);
+  }
+
+  v.sat.curve=satCurve(clamp(mut.saturation+inf.satBoost,1,220));
+  v.panner.pan.setValueAtTime(clamp(mut.pan,-1,1),t);
+  v.bus.gain.setValueAtTime(1,t);
+  v.claim(maxDur);
+
+  // Memory update
+  mem.lastPitchDrift=mut.pitchDrift;
+  mem.instabilityMomentum=clamp(mem.instabilityMomentum*.82+Math.abs(mut.pitchDrift)*.3+mem.fatigue*.15,0,1);
+  mem.playCount++;
+
+  // Fatigue: personality-aware accumulation
+  const prof=RECOVERY_PROFILES[org.fatiguePersonality];
+  if(org.fatiguePersonality==='explosive'&&mem.fatigue>0.85){
+    mem.fatigue=0.02; // abrupt reset
+  } else {
+    mem.fatigue=clamp(mem.fatigue+0.013*org.mut.fatigueScale,0,1);
+  }
+  mem.recoveryLevel=clamp(1-mem.fatigue,0,1);
+
+  GlobalState.record();
+  EMF.onTrigger(currentOrg, GlobalState.energy);
+  Perf.totalTriggers++;
+
+  updateMutUI(mut,mem,org,drift);
+  flashTrigger();
+
+  if(Math.abs(drift)>0.006){
+    const b=document.getElementById('driftbadge');
+    if(b){ b.textContent=(drift*1000).toFixed(0)+'ms'; b.classList.add('show');
+      setTimeout(()=>b.classList.remove('show'),300); }
+  }
+}
+
+// ─── UI ────────────────────────────────────────────────────────
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function setW(id,pct){
+  const el=document.getElementById(id); if(el) el.style.width=clamp(pct*100,0,100).toFixed(1)+'%';
+}
+function setT(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
+
+function updateMutUI(mut,mem,org,drift){
+  setW('pf-pitch',mut.pN); setW('pf-trans',mut.tN); setW('pf-sat',mut.sN);
+  setW('pf-res',mut.rN); setW('pf-fat',mem.fatigue);
+  setW('pf-recovery',mem.recoveryLevel);
+  const dN=clamp((drift+.012)/.050,0,1); setW('pf-drift',dN);
+
+  const panEl=document.getElementById('pf-pan');
+  const p=clamp(mut.pan,-1,1);
+  if(panEl){
+    if(p>=0){ panEl.style.left='50%'; panEl.style.width=(p*50).toFixed(1)+'%'; }
+    else { panEl.style.left=(50+p*50).toFixed(1)+'%'; panEl.style.width=(Math.abs(p)*50).toFixed(1)+'%'; }
+  }
+
+  setT('pv-pitch',mut.pitchDrift.toFixed(2)+'st');
+  setT('pv-trans',(mut.transAtk*1000).toFixed(1)+'ms');
+  setT('pv-sat',mut.saturation.toFixed(0));
+  setT('pv-res',mut.bodyRes.toFixed(0)+'hz');
+  setT('pv-pan',mut.pan.toFixed(2));
+  setT('pv-drift',(drift*1000).toFixed(1)+'ms');
+  setT('pv-fat',mem.fatigue.toFixed(2));
+  setT('pv-recovery',mem.recoveryLevel.toFixed(2));
+  setT('st-cnt',mem.playCount);
+  setT('st-mx',(1+mem.fatigue*org.mut.fatigueScale).toFixed(2)+'x');
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+
+  const prof=RECOVERY_PROFILES[org.fatiguePersonality];
+  setT('st-rr',prof.label);
+  const fpBadge=document.getElementById('fp-badge');
+  if(fpBadge){ fpBadge.textContent=prof.label; fpBadge.className='fp-badge '+prof.badgeClass; }
+  const fpTag=document.getElementById('org-fp');
+  if(fpTag) fpTag.textContent=org.fatiguePersonality;
+
+  setT('fi-tot',Perf.totalTriggers);
+  const dot=document.getElementById('fdot'), lbl=document.getElementById('flbl');
+  const f=mem.fatigue;
+  if(dot&&lbl){
+    if(f<.25){ dot.style.background='#44ff99'; lbl.textContent='FRESH'; }
+    else if(f<.50){ dot.style.background='#ffcc00'; lbl.textContent='WORN'; }
+    else if(f<.75){ dot.style.background='#ff6600'; lbl.textContent='FATIGUED'; }
+    else { dot.style.background='#ff0033'; lbl.textContent='ERODED'; }
+  }
+}
+
+function updateRecoveryUI(){
+  const i=currentOrg;
+  const mem=MEM[i];
+  setW('pf-fat',mem.fatigue); setT('pv-fat',mem.fatigue.toFixed(2));
+  setW('pf-recovery',mem.recoveryLevel); setT('pv-recovery',mem.recoveryLevel.toFixed(2));
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+}
+
+function selectOrg(idx){
+  currentOrg=idx;
+  const org=ORGANISMS[idx],mem=MEM[idx];
+  setT('org-name',org.name); setT('org-type',org.type);
+  setT('org-pack',org.pack); setT('org-role',org.role);
+  setT('org-mood',org.mood); setT('cl-pk',org.pack);
+  setT('org-fp',org.fatiguePersonality);
+  setT('st-cnt',mem.playCount);
+  setT('st-mx',(1+mem.fatigue*org.mut.fatigueScale).toFixed(2)+'x');
+  setT('st-im',mem.instabilityMomentum.toFixed(2));
+  const prof=RECOVERY_PROFILES[org.fatiguePersonality];
+  setT('st-rr',prof.label);
+  const fpBadge=document.getElementById('fp-badge');
+  if(fpBadge){ fpBadge.textContent=prof.label; fpBadge.className='fp-badge '+prof.badgeClass; }
+  setW('pf-fat',mem.fatigue); setT('pv-fat',mem.fatigue.toFixed(2));
+  setW('pf-recovery',mem.recoveryLevel); setT('pv-recovery',mem.recoveryLevel.toFixed(2));
+  document.querySelectorAll('.obtn').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  ['pf-pitch','pf-trans','pf-sat','pf-res','pf-drift'].forEach(id=>setW(id,0));
+  const panEl=document.getElementById('pf-pan');
+  if(panEl){ panEl.style.left='50%'; panEl.style.width='0%'; }
+}
+
+let flashAmt=0;
+function flashTrigger(){
+  const btn=document.getElementById('tbtn');
+  btn.classList.add('fire'); setTimeout(()=>btn.classList.remove('fire'),70);
+  flashAmt=1;
+}
+
+// ─── CANVAS ────────────────────────────────────────────────────
+function initCanvas(){
+  const canvas=document.getElementById('scope');
+  const panel=canvas.parentElement;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  let W,H;
+
+  function resize(){
+    W=panel.clientWidth; H=panel.clientHeight;
+    canvas.width=W*dpr; canvas.height=H*dpr;
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  requestAnimationFrame(()=>{ resize(); window.addEventListener('resize',()=>{ctx.setTransform(1,0,0,1,0,0);resize();}); });
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    Perf.tick(now);
+    if(!W||!H) return;
+    const q=Perf.quality;
+
+    ctx.fillStyle='#060410'; ctx.fillRect(0,0,W,H);
+    if(flashAmt>.01){
+      ctx.fillStyle=`rgba(153,68,255,${flashAmt*.26})`; ctx.fillRect(0,0,W,H); flashAmt*=.80;
+    }
+    ctx.strokeStyle='rgba(153,68,255,0.05)'; ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){
+      ctx.beginPath(); ctx.moveTo(0,H*i/4); ctx.lineTo(W,H*i/4); ctx.stroke();
+    }
+
+    if(!masterAnalyser){ Perf.updateUI(); return; }
+    const fft=masterAnalyser.fftSize;
+    const tBuf=new Uint8Array(fft), fBuf=new Uint8Array(fft/2);
+    const oscH=H*.64;
+    masterAnalyser.getByteTimeDomainData(tBuf);
+
+    ctx.strokeStyle='rgba(153,68,255,0.10)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,oscH*.5); ctx.lineTo(W,oscH*.5); ctx.stroke();
+
+    if(q!=='minimal'){
+      ctx.beginPath(); ctx.strokeStyle='rgba(0,255,255,0.18)'; ctx.lineWidth=5;
+      for(let i=0;i<fft;i++){const x=(i/fft)*W,y=(tBuf[i]/255)*oscH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.strokeStyle='#00ffff'; ctx.lineWidth=1.5;
+    for(let i=0;i<fft;i++){const x=(i/fft)*W,y=(tBuf[i]/255)*oscH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();
+
+    ctx.strokeStyle='rgba(153,68,255,0.12)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,H*.68); ctx.lineTo(W,H*.68); ctx.stroke();
+
+    const sTop=H*.70,sH=H-sTop-4;
+    masterAnalyser.getByteFrequencyData(fBuf);
+    const bars=q==='minimal'?32:q==='reduced'?48:72;
+    const bw=W/bars;
+    for(let i=0;i<bars;i++){
+      const idx=Math.floor(Math.pow(i/bars,1.7)*fBuf.length);
+      const v=fBuf[Math.min(idx,fBuf.length-1)]/255, bh=v*sH, t=i/bars;
+      let r,g,b;
+      if(t<.5){r=Math.round(t*2*153);g=Math.round((1-t*2)*255);b=255;}
+      else{r=Math.round(153+(t-.5)*2*102);g=0;b=Math.round(255-(t-.5)*2*255);}
+      ctx.fillStyle=`rgba(${r},${g},${b},${.6+v*.4})`;
+      ctx.fillRect(i*bw+.5,sTop+sH-bh,bw-1,bh);
+    }
+    Perf.updateUI();
+  }
+  draw(performance.now());
+}
+
+// ─── EVENTS ────────────────────────────────────────────────────
+document.getElementById('tbtn').addEventListener('touchstart',e=>{e.preventDefault();trigger();},{passive:false});
+document.getElementById('tbtn').addEventListener('mousedown',e=>{e.preventDefault();trigger();});
+document.querySelectorAll('.obtn').forEach((btn,i)=>{
+  btn.addEventListener('touchstart',e=>{e.preventDefault();selectOrg(i);},{passive:false});
+  btn.addEventListener('click',()=>selectOrg(i));
+});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();trigger();}
+  if(e.code==='Digit1') selectOrg(0);
+  if(e.code==='Digit2') selectOrg(1);
+  if(e.code==='Digit3') selectOrg(2);
+});
+
+initCanvas();
+GlobalState.start();
+startRecovery();
+</script>
+</body>
+</html>
