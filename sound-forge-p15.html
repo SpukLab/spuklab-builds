@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOUND FORGE 1.5 — SpukLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@0,400;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+
+/* ═══════════════════════════════════════════
+   SOUND FORGE — Phase 1.5 / SpukLab
+   Runtime Stabilization
+═══════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-base:       #0d0b18;
+  --bg-grad:       linear-gradient(155deg, #13111f 0%, #1b1726 100%);
+  --violet:        #9944ff;
+  --violet-dim:    rgba(153, 68, 255, 0.18);
+  --violet-glow:   rgba(153, 68, 255, 0.07);
+  --violet-active: rgba(153, 68, 255, 0.22);
+  --cyan:          #00ffff;
+  --magenta:       #ff00ff;
+  --white:         #ffffff;
+  --gray:          rgba(255, 255, 255, 0.38);
+  --font-body:     'Inter', sans-serif;
+  --font-mono:     'JetBrains Mono', monospace;
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg-base); color: var(--white);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none;
+  touch-action: none;
+}
+
+#app { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--bg-grad); }
+
+/* ─── HEADER ─── */
+header {
+  display: flex; align-items: center;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--violet-dim);
+  background: rgba(10, 8, 20, 0.65);
+  flex-shrink: 0; gap: 12px; min-height: 44px;
+}
+.logo .spuk { font-weight: 800; font-size: 16px; color: var(--white); letter-spacing: 0.04em; }
+.logo .lab  { font-weight: 300; font-size: 16px; color: var(--cyan);  letter-spacing: 0.04em; }
+.sep { width: 1px; height: 20px; background: var(--violet-dim); flex-shrink: 0; }
+.app-id { display: flex; flex-direction: column; line-height: 1.1; }
+.app-id-name  { font-family: var(--font-mono); font-style: italic; font-weight: 700;
+                font-size: 12px; color: var(--violet); letter-spacing: 0.14em; }
+.app-id-phase { font-family: var(--font-mono); font-size: 11px; color: var(--gray); letter-spacing: 0.08em; }
+.hdr-spacer { flex: 1; }
+
+/* Perf monitor in header */
+.perf-strip {
+  display: flex; align-items: center; gap: 14px;
+}
+.perf-item { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.perf-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray); letter-spacing: 0.1em; }
+.perf-val   { font-family: var(--font-mono); font-style: italic; font-size: 15px; color: var(--cyan); }
+.perf-val.warn   { color: #ffcc00; }
+.perf-val.danger { color: #ff3333; }
+.perf-val.phase  { font-size: 12px; padding-top: 2px; }
+
+/* Phase color states */
+.phase-intro    { color: var(--gray)    !important; }
+.phase-build    { color: #88aaff        !important; }
+.phase-peak     { color: var(--cyan)    !important; }
+.phase-tension  { color: #ffcc00        !important; }
+.phase-rupture  { color: var(--magenta) !important; }
+.phase-recovery { color: #44ff99        !important; }
+.phase-void     { color: #333355        !important; }
+.phase-aftershock { color: #ff6600      !important; }
+
+/* ─── MAIN ─── */
+main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* ─── CANVAS PANEL ─── */
+.canvas-panel {
+  flex: 1.4; position: relative;
+  border-right: 1px solid var(--violet-dim);
+  background: #06040e; overflow: hidden;
+}
+#scope { display: block; width: 100%; height: 100%; }
+.canvas-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.clabel {
+  position: absolute; font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.12em;
+}
+.clabel.osc  { top: 10px; left: 12px; color: rgba(153,68,255,0.4); }
+.clabel.fft  { bottom: 10px; left: 12px; color: rgba(153,68,255,0.4); }
+.clabel.pack { top: 10px; right: 12px; color: rgba(0,255,255,0.3); }
+
+/* Voice activity dots */
+.voice-grid {
+  position: absolute; bottom: 30px; right: 10px;
+  display: grid; grid-template-columns: repeat(8, 10px); gap: 3px;
+}
+.vdot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(153,68,255,0.15);
+  border: 1px solid rgba(153,68,255,0.2);
+  transition: background 0.08s;
+}
+.vdot.active { background: var(--cyan); border-color: var(--cyan); }
+.vdot.hot    { background: var(--magenta); border-color: var(--magenta); }
+
+/* Cross-influence indicator */
+.influence-strip {
+  position: absolute; top: 38px; right: 12px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-family: var(--font-mono); font-size: 11px;
+}
+.inf-item { color: rgba(153,68,255,0.5); transition: color 0.3s; }
+.inf-item.active { color: var(--cyan); }
+
+/* ─── CONTROLS PANEL ─── */
+.controls-panel {
+  width: 320px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 12px; gap: 10px;
+}
+.controls-panel::-webkit-scrollbar { width: 2px; }
+.controls-panel::-webkit-scrollbar-thumb { background: var(--violet-dim); }
+
+/* ─── ORG SELECTOR ─── */
+.org-selector { display: flex; gap: 5px; }
+.org-btn {
+  flex: 1; padding: 9px 4px;
+  background: var(--violet-glow); border: 1px solid var(--violet-dim);
+  border-radius: 4px; color: var(--gray);
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; letter-spacing: 0.05em;
+  cursor: pointer; text-align: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.org-btn.active { background: var(--violet-active); border-color: var(--violet); color: var(--cyan); }
+
+/* ─── SECTION ─── */
+.section {
+  background: rgba(153,68,255,0.05);
+  border: 1px solid var(--violet-dim);
+  border-radius: 5px; padding: 10px 12px;
+}
+.sec-title {
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; letter-spacing: 0.13em;
+  color: var(--violet); text-transform: uppercase;
+  margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--violet-dim);
+}
+
+/* ─── ORG INFO ─── */
+.org-name-display {
+  font-family: var(--font-mono); font-style: italic;
+  font-weight: 700; font-size: 14px; color: var(--white);
+  margin-bottom: 6px;
+}
+.org-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.org-tag { font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 2px; }
+.org-tag.t  { background: rgba(0,255,255,0.1);   color: var(--cyan); }
+.org-tag.pk { background: rgba(153,68,255,0.15); color: #b580ff; }
+.org-tag.ro { background: rgba(255,0,255,0.1);   color: var(--magenta); }
+.org-mood-display { font-family: var(--font-mono); font-size: 11px; color: var(--gray); font-style: italic; }
+
+/* Memory state */
+.memory-row {
+  margin-top: 7px; display: flex; gap: 10px; flex-wrap: wrap;
+}
+.mem-item { font-family: var(--font-mono); font-size: 11px; color: var(--gray); }
+.mem-val  { color: var(--cyan); font-style: italic; }
+
+/* ─── PARAM ROWS ─── */
+.param-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.param-row:last-child { margin-bottom: 0; }
+.param-label {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.08em; color: var(--gray);
+  width: 72px; flex-shrink: 0;
+}
+.param-track {
+  flex: 1; height: 3px; background: rgba(255,255,255,0.06);
+  border-radius: 2px; overflow: hidden; position: relative;
+}
+.param-fill {
+  height: 100%; width: 0%; border-radius: 2px;
+  position: absolute; left: 0; top: 0;
+  transition: width 0.16s ease, left 0.16s ease;
+}
+.param-fill.pitch    { background: var(--cyan); }
+.param-fill.transient{ background: #ff6633; }
+.param-fill.sat      { background: var(--magenta); }
+.param-fill.resonance{ background: #44ff99; }
+.param-fill.pan      { background: #ffcc00; }
+.param-fill.fatigue  { background: linear-gradient(90deg, #44ff99, #ff3300); }
+.param-fill.tension  { background: linear-gradient(90deg, var(--violet), var(--magenta)); }
+.param-fill.energy   { background: linear-gradient(90deg, #0055ff, var(--cyan)); }
+.param-fill.density  { background: linear-gradient(90deg, #44ff99, var(--cyan)); }
+.param-fill.drift    { background: linear-gradient(90deg, #ff9900, #ffff00); }
+.param-val {
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; color: var(--white);
+  width: 44px; text-align: right; flex-shrink: 0;
+}
+
+/* ─── STAT ROWS ─── */
+.stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.stat-row:last-child { margin-bottom: 0; }
+.stat-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray); letter-spacing: 0.08em; }
+.stat-val   { font-family: var(--font-mono); font-style: italic; font-size: 13px; color: var(--cyan); }
+.stat-val.warn   { color: #ffcc00; }
+.stat-val.danger { color: #ff3333; }
+.stat-val.mutx   { color: var(--magenta); }
+
+.gs-phase-display {
+  margin-top: 7px; text-align: center;
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 13px; color: var(--violet); letter-spacing: 0.12em;
+  transition: color 0.5s;
+}
+
+/* ─── STRESS PANEL ─── */
+.stress-section { border-color: rgba(255,80,0,0.3); }
+.stress-section .sec-title { color: #ff6633; }
+.stress-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.stress-item { font-family: var(--font-mono); font-size: 11px; }
+.stress-label { color: var(--gray); }
+.stress-val   { color: var(--cyan); font-style: italic; }
+.stress-val.warn   { color: #ffcc00; }
+.stress-val.danger { color: #ff3333; }
+
+/* ─── FOOTER / TRIGGER ─── */
+footer {
+  flex-shrink: 0; display: flex;
+  border-top: 1px solid var(--violet-dim);
+  background: rgba(10,8,20,0.7);
+  height: 74px;
+}
+#trigger-btn {
+  flex: 1; background: rgba(153,68,255,0.1);
+  border: none; border-right: 1px solid var(--violet-dim);
+  color: var(--white);
+  font-family: var(--font-mono); font-style: italic;
+  font-weight: 700; font-size: 26px; letter-spacing: 0.22em;
+  cursor: pointer; transition: background 0.06s;
+  -webkit-tap-highlight-color: transparent;
+}
+#trigger-btn.fire { background: rgba(153,68,255,0.38); }
+
+.footer-stats {
+  width: 190px; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  gap: 5px; padding: 10px;
+}
+.fstat-row { display: flex; align-items: center; gap: 7px; }
+.fstat-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray); }
+.fstat-val   { font-family: var(--font-mono); font-style: italic; font-size: 15px; color: var(--cyan); }
+#fatigue-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  background: #44ff99; transition: background 0.6s;
+}
+#fatigue-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray); }
+
+/* Drift indicator */
+.drift-badge {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 11px;
+  color: rgba(255,200,0,0.5);
+  letter-spacing: 0.1em;
+  transition: opacity 0.4s;
+  opacity: 0;
+}
+.drift-badge.show { opacity: 1; }
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo"><span class="spuk">SPUK</span><span class="lab">LAB</span></div>
+    <div class="sep"></div>
+    <div class="app-id">
+      <span class="app-id-name">SOUND FORGE</span>
+      <span class="app-id-phase">PHASE 1.5 — RUNTIME STABILIZATION</span>
+    </div>
+    <div class="hdr-spacer"></div>
+    <div class="perf-strip">
+      <div class="perf-item">
+        <span class="perf-label">TENSION</span>
+        <span class="perf-val" id="h-tension">0.00</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">ENERGY</span>
+        <span class="perf-val" id="h-energy">0.00</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">PHASE</span>
+        <span class="perf-val phase" id="h-phase">intro</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">FPS</span>
+        <span class="perf-val" id="h-fps">--</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">VOICES</span>
+        <span class="perf-val" id="h-voices">0/16</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- CANVAS -->
+    <div class="canvas-panel">
+      <canvas id="scope"></canvas>
+      <div class="canvas-overlay">
+        <span class="clabel osc">OSC</span>
+        <span class="clabel fft">FFT</span>
+        <span class="clabel pack" id="cl-pack">rust_ritual</span>
+
+        <!-- Voice activity grid (16 dots = 16 voices) -->
+        <div class="voice-grid" id="voice-grid">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Cross-organism influence indicators -->
+        <div class="influence-strip" id="inf-strip">
+          <span class="inf-item" id="inf-kick-ghost">K → GHOST</span>
+          <span class="inf-item" id="inf-tension-debris">T → DEBRIS</span>
+          <span class="inf-item" id="inf-density-sat">D → SAT</span>
+        </div>
+
+        <!-- Temporal drift badge -->
+        <div class="drift-badge" id="drift-badge">DRIFT</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls-panel">
+
+      <!-- Organism selector -->
+      <div class="org-selector">
+        <button class="org-btn active" data-org="0">RUST KICK</button>
+        <button class="org-btn"        data-org="1">DEBRIS HIT</button>
+        <button class="org-btn"        data-org="2">SPECTRAL GHOST</button>
+      </div>
+
+      <!-- Organism info + memory -->
+      <div class="section">
+        <div class="org-name-display" id="org-name">Rust Ritual Kick</div>
+        <div class="org-tags">
+          <span class="org-tag t"  id="org-type">kick_cluster</span>
+          <span class="org-tag pk" id="org-pack">rust_ritual</span>
+          <span class="org-tag ro" id="org-role">low_anchor</span>
+        </div>
+        <div class="org-mood-display" id="org-mood">ritual · agg 0.71 · instability 0.68</div>
+        <div class="memory-row">
+          <span class="mem-item">PITCH DRIFT <span class="mem-val" id="mem-pitch">0.00</span></span>
+          <span class="mem-item">MOMENTUM <span class="mem-val" id="mem-momentum">0.00</span></span>
+        </div>
+      </div>
+
+      <!-- Mutation state -->
+      <div class="section">
+        <div class="sec-title">MUTATION STATE</div>
+        <div class="param-row">
+          <span class="param-label">PITCH</span>
+          <div class="param-track"><div class="param-fill pitch" id="pf-pitch"></div></div>
+          <span class="param-val" id="pv-pitch">0.00</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">TRANSIENT</span>
+          <div class="param-track"><div class="param-fill transient" id="pf-trans"></div></div>
+          <span class="param-val" id="pv-trans">0.0ms</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">SATURATION</span>
+          <div class="param-track"><div class="param-fill sat" id="pf-sat"></div></div>
+          <span class="param-val" id="pv-sat">0</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">RESONANCE</span>
+          <div class="param-track"><div class="param-fill resonance" id="pf-res"></div></div>
+          <span class="param-val" id="pv-res">0hz</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">PAN</span>
+          <div class="param-track"><div class="param-fill pan" id="pf-pan" style="position:absolute;height:100%;top:0;"></div></div>
+          <span class="param-val" id="pv-pan">0.00</span>
+        </div>
+        <div class="param-row" style="margin-top:5px;">
+          <span class="param-label">T.DRIFT</span>
+          <div class="param-track"><div class="param-fill drift" id="pf-drift"></div></div>
+          <span class="param-val" id="pv-drift">0ms</span>
+        </div>
+      </div>
+
+      <!-- Global state -->
+      <div class="section">
+        <div class="sec-title">GLOBAL STATE</div>
+        <div class="param-row">
+          <span class="param-label">TENSION</span>
+          <div class="param-track"><div class="param-fill tension" id="gf-tension"></div></div>
+        </div>
+        <div class="param-row">
+          <span class="param-label">ENERGY</span>
+          <div class="param-track"><div class="param-fill energy" id="gf-energy"></div></div>
+        </div>
+        <div class="param-row">
+          <span class="param-label">DENSITY</span>
+          <div class="param-track"><div class="param-fill density" id="gf-density"></div></div>
+        </div>
+        <div class="gs-phase-display" id="gs-phase-display">NARRATIVE: <span id="gs-phase">INTRO</span></div>
+      </div>
+
+      <!-- Organism stats + fatigue -->
+      <div class="section">
+        <div class="sec-title">ORGANISM STATS</div>
+        <div class="stat-row">
+          <span class="stat-label">PLAY COUNT</span>
+          <span class="stat-val" id="st-count">0</span>
+        </div>
+        <div class="param-row" style="margin-top:4px;">
+          <span class="param-label">FATIGUE</span>
+          <div class="param-track"><div class="param-fill fatigue" id="pf-fatigue"></div></div>
+          <span class="param-val" id="pv-fatigue">0.00</span>
+        </div>
+        <div class="stat-row" style="margin-top:4px;">
+          <span class="stat-label">MUTATION X</span>
+          <span class="stat-val mutx" id="st-mutx">1.00x</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">INSTABILITY M.</span>
+          <span class="stat-val" id="st-instmom">0.00</span>
+        </div>
+      </div>
+
+      <!-- Voice stress monitor -->
+      <div class="section stress-section">
+        <div class="sec-title">STRESS MONITOR</div>
+        <div class="stress-grid">
+          <div class="stress-item">
+            <span class="stress-label">ACTIVE VOICES</span><br>
+            <span class="stress-val" id="sv-active">0 / 16</span>
+          </div>
+          <div class="stress-item">
+            <span class="stress-label">PEAK VOICES</span><br>
+            <span class="stress-val" id="sv-peak">0</span>
+          </div>
+          <div class="stress-item">
+            <span class="stress-label">FRAME TIME</span><br>
+            <span class="stress-val" id="sv-frame">0ms</span>
+          </div>
+          <div class="stress-item">
+            <span class="stress-label">QUALITY</span><br>
+            <span class="stress-val" id="sv-quality">FULL</span>
+          </div>
+          <div class="stress-item">
+            <span class="stress-label">EVICTIONS</span><br>
+            <span class="stress-val" id="sv-evict">0</span>
+          </div>
+          <div class="stress-item">
+            <span class="stress-label">TOTAL TRIGGERS</span><br>
+            <span class="stress-val" id="sv-total">0</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- TRIGGER -->
+  <footer>
+    <button id="trigger-btn">TRIGGER</button>
+    <div class="footer-stats">
+      <div class="fstat-row">
+        <span class="fstat-label">TRIGGERS</span>
+        <span class="fstat-val" id="fi-total">0</span>
+      </div>
+      <div class="fstat-row">
+        <span id="fatigue-dot"></span>
+        <span id="fatigue-label">FRESH</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SOUND FORGE — Phase 1.5: Runtime Stabilization
+   SpukLab 2025
+
+   New in 1.5:
+   - Performance Monitor (FPS, frame time, CPU adaptive quality)
+   - Voice stress tracking (active count, peak, eviction counter)
+   - Temporal Drift (microtiming humanization, -8ms to +16ms)
+   - Organism Memory (lastPitchDrift, instabilityMomentum)
+   - Cross-Organism Influence (3 links: kick→ghost, tension→debris, density→sat)
+   - Narrative Recovery (recovery / void / aftershock phases)
+   - Voice activity grid (16 dots, live)
+   iOS Safari canonical audio fix applied.
+═══════════════════════════════════════════════════════════ */
+
+// ─── AUDIO CONTEXT ───────────────────────────────────────
+let AC = null;
+let masterGain, compressor, masterSat, masterAnalyser;
+let noiseBuffer = null;
+let FFT_SIZE = 2048; // adaptive
+
+function initAC() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+
+  masterGain = AC.createGain();
+  masterGain.gain.value = 0.82;
+
+  compressor = AC.createDynamicsCompressor();
+  compressor.threshold.value = -16;
+  compressor.knee.value      = 8;
+  compressor.ratio.value     = 4;
+  compressor.attack.value    = 0.003;
+  compressor.release.value   = 0.18;
+
+  masterSat = AC.createWaveShaper();
+  masterSat.curve      = makeSatCurve(28);
+  masterSat.oversample = '4x';
+
+  masterAnalyser = AC.createAnalyser();
+  masterAnalyser.fftSize               = FFT_SIZE;
+  masterAnalyser.smoothingTimeConstant = 0.88;
+
+  masterGain.connect(compressor);
+  compressor.connect(masterSat);
+  masterSat.connect(masterAnalyser);
+  masterAnalyser.connect(AC.destination);
+
+  noiseBuffer = genNoise(2.0);
+  initPool();
+}
+
+function makeSatCurve(amount) {
+  const n = 512, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    c[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return c;
+}
+
+function genNoise(dur) {
+  const sr = AC.sampleRate, len = Math.floor(sr * dur);
+  const buf = AC.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return buf;
+}
+
+// ─── PERFORMANCE MONITOR ─────────────────────────────────
+const Perf = {
+  fps: 60,
+  frameTime: 0,
+  quality: 'full',     // full | reduced | minimal
+  evictions: 0,
+  totalTriggers: 0,
+  peakVoices: 0,
+
+  _lastFrame: 0,
+  _frameHistory: [],
+
+  tick(now) {
+    const dt = now - this._lastFrame;
+    this._lastFrame = now;
+    if (dt > 0 && dt < 500) {
+      this._frameHistory.push(dt);
+      if (this._frameHistory.length > 20) this._frameHistory.shift();
+      const avg = this._frameHistory.reduce((a,b)=>a+b,0) / this._frameHistory.length;
+      this.frameTime = avg;
+      this.fps = Math.round(1000 / avg);
+    }
+
+    // Adaptive quality
+    if (this.frameTime > 28) {
+      this.quality = 'minimal';
+    } else if (this.frameTime > 18) {
+      this.quality = 'reduced';
+    } else {
+      this.quality = 'full';
+    }
+
+    // Adapt FFT if needed
+    if (masterAnalyser) {
+      const targetFFT = this.quality === 'minimal' ? 512 :
+                        this.quality === 'reduced' ? 1024 : 2048;
+      if (masterAnalyser.fftSize !== targetFFT) {
+        masterAnalyser.fftSize = targetFFT;
+        FFT_SIZE = targetFFT;
+      }
+    }
+  },
+
+  updateUI() {
+    const active = pool.filter(v => !v.free && AC && AC.currentTime < v.freeAt).length;
+    if (active > this.peakVoices) this.peakVoices = active;
+
+    setT('h-fps',    this.fps);
+    setT('h-voices', `${active}/16`);
+    setT('sv-active', `${active} / 16`);
+    setT('sv-peak',   this.peakVoices);
+    setT('sv-frame',  this.frameTime.toFixed(1) + 'ms');
+    setT('sv-quality',this.quality.toUpperCase());
+    setT('sv-evict',  this.evictions);
+    setT('sv-total',  this.totalTriggers);
+
+    // FPS color
+    const fpsEl = document.getElementById('h-fps');
+    if (fpsEl) {
+      fpsEl.className = 'perf-val' + (this.fps < 40 ? ' danger' : this.fps < 55 ? ' warn' : '');
+    }
+    const svFrame = document.getElementById('sv-frame');
+    if (svFrame) {
+      svFrame.className = 'stress-val' + (this.frameTime > 28 ? ' danger' : this.frameTime > 18 ? ' warn' : '');
+    }
+
+    // Voice dots
+    const dots = document.querySelectorAll('.vdot');
+    dots.forEach((d, i) => {
+      if (i < pool.length) {
+        const v = pool[i];
+        const isActive = !v.free && AC && AC.currentTime < v.freeAt;
+        const isHot = isActive && (v.freeAt - AC.currentTime) > 0.5;
+        d.className = 'vdot' + (isHot ? ' hot' : isActive ? ' active' : '');
+      }
+    });
+  }
+};
+
+// ─── VOICE POOL ──────────────────────────────────────────
+const POOL_SIZE = 16;
+const pool = [];
+
+class Voice {
+  constructor() {
+    this.free   = true;
+    this.freeAt = 0;
+    this.bus     = AC.createGain();
+    this.panner  = AC.createStereoPanner();
+    this.sat     = AC.createWaveShaper();
+    this.bus.gain.value = 0;
+    this.bus.connect(this.panner);
+    this.panner.connect(this.sat);
+    this.sat.connect(masterGain);
+  }
+  available() { return this.free || (AC && AC.currentTime >= this.freeAt); }
+  claim(dur)  {
+    this.free   = false;
+    this.freeAt = AC.currentTime + dur + 0.12;
+    setTimeout(() => { this.free = true; }, (dur + 0.16) * 1000);
+  }
+}
+
+function initPool() {
+  for (let i = 0; i < POOL_SIZE; i++) pool.push(new Voice());
+  // Build voice grid dots
+  const grid = document.getElementById('voice-grid');
+  if (grid) grid.innerHTML = Array.from({length:16}, () => '<div class="vdot"></div>').join('');
+}
+
+function getVoice() {
+  for (const v of pool) if (v.available()) return v;
+  // Evict: voice with smallest freeAt (most overdue)
+  Perf.evictions++;
+  return pool.reduce((a,b) => a.freeAt < b.freeAt ? a : b);
+}
+
+// ─── ORGANISM DEFINITIONS ────────────────────────────────
+const ORGANISMS = [
+  {
+    id: 'rust_ritual_kick_001', name: 'Rust Ritual Kick',
+    pack: 'rust_ritual', type: 'kick_cluster', role: 'low_anchor',
+    mood: 'ritual · agg 0.71 · instability 0.68',
+    layers: {
+      transient: { on:true, waveform:'sine',     baseFreq:88,  freqDecay:0.068, freqFloor:0.12, ampDecay:0.085, gain:0.98 },
+      body:      { on:true, waveform:'sine',     baseFreq:52,  freqDecay:0.28,  freqFloor:0.42, ampDecay:0.52,  gain:0.72 },
+      noise:     { on:true, filterType:'bandpass', filterFreq:115, filterQ:3.2, dur:0.14, gain:0.24 },
+      air:       { on:false }
+    },
+    mut: { pitchRange:[-0.14,0.10], transAtk:[0.00015,0.0024], satRange:[18,88],   resonRange:[65,165],  panRange:[-0.28,0.28], fatigueScale:0.88 }
+  },
+  {
+    id: 'rust_debris_001', name: 'Debris Hit',
+    pack: 'rust_ritual', type: 'percussive_debris', role: 'mid_body',
+    mood: 'industrial · agg 0.55 · instability 0.82',
+    layers: {
+      transient: { on:true, waveform:'triangle', baseFreq:420, freqDecay:0.038, freqFloor:0.16, ampDecay:0.062, gain:0.88 },
+      body:      { on:true, waveform:'sine',     baseFreq:145, freqDecay:0.11,  freqFloor:0.48, ampDecay:0.21,  gain:0.42 },
+      noise:     { on:true, filterType:'bandpass', filterFreq:870, filterQ:1.8,  dur:0.09, gain:0.48 },
+      air:       { on:false }
+    },
+    mut: { pitchRange:[-0.32,0.32], transAtk:[0.00008,0.0009], satRange:[35,130],  resonRange:[110,320], panRange:[-0.52,0.52], fatigueScale:1.12 }
+  },
+  {
+    id: 'spectral_ghost_001', name: 'Spectral Ghost',
+    pack: 'rust_ritual', type: 'ghost_impact', role: 'ghost',
+    mood: 'void · agg 0.12 · instability 0.92',
+    layers: {
+      transient: { on:false },
+      body:      { on:true, waveform:'sine', baseFreq:36, freqDecay:1.1, freqFloor:0.78, ampDecay:1.6, gain:0.28 },
+      noise:     { on:true, filterType:'lowpass', filterFreq:85, filterQ:0.55, dur:1.1, gain:0.17 },
+      air:       { on:true, filterFreq:175, filterQ:0.4, dur:2.0, gain:0.09 }
+    },
+    mut: { pitchRange:[-0.55,0.55], transAtk:[0,0], satRange:[4,22], resonRange:[28,68], panRange:[-0.65,0.65], fatigueScale:0.38 }
+  }
+];
+
+// ─── ORGANISM MEMORY ─────────────────────────────────────
+// Lightweight: lastPitchDrift + instabilityMomentum per organism
+const MEM = ORGANISMS.map(() => ({
+  lastPitchDrift:       0,      // for pitch continuity
+  instabilityMomentum:  0,      // grows with fatigue, shrinks with recovery
+  playCount:            0,
+  fatigue:              0
+}));
+
+// ─── CROSS-ORGANISM INFLUENCE ─────────────────────────────
+// Three influence links that transform isolated sounds into an ecosystem
+const Influence = {
+  kickEnergy:    0,   // decays after each kick trigger
+  _kickDecay:    null,
+
+  onKickTrigger() {
+    this.kickEnergy = 1.0;
+    clearTimeout(this._kickDecay);
+    this._kickDecay = setTimeout(() => {
+      const dec = () => {
+        this.kickEnergy *= 0.88;
+        if (this.kickEnergy > 0.01) setTimeout(dec, 80);
+        else this.kickEnergy = 0;
+      };
+      dec();
+    }, 40);
+  },
+
+  // Called before building each organism's audio nodes
+  // Modifies the base parameters by reference
+  apply(orgIndex, params) {
+    const GS_T = GlobalState.tension;
+    const GS_D = GlobalState.density;
+
+    // 1. Kick energy → Ghost air gain boost
+    if (orgIndex === 2 && this.kickEnergy > 0.3) {
+      params.airGainBoost = this.kickEnergy * 0.12;
+      setInfActive('inf-kick-ghost', true);
+    } else {
+      params.airGainBoost = 0;
+      if (orgIndex === 2) setInfActive('inf-kick-ghost', false);
+    }
+
+    // 2. Tension → Debris filter sweep down (darker under tension)
+    if (orgIndex === 1 && GS_T > 0.6) {
+      params.noiseFreqMult = 1 - (GS_T - 0.6) * 0.9; // max -36% at tension=1
+      setInfActive('inf-tension-debris', true);
+    } else {
+      params.noiseFreqMult = 1;
+      if (orgIndex === 1) setInfActive('inf-tension-debris', false);
+    }
+
+    // 3. Density → Global saturation floor boost
+    params.satBoost = GS_D * 18;
+    setInfActive('inf-density-sat', GS_D > 0.4);
+
+    return params;
+  }
+};
+
+function setInfActive(id, active) {
+  const el = document.getElementById(id);
+  if (el) el.className = 'inf-item' + (active ? ' active' : '');
+}
+
+// ─── GLOBAL STATE ─────────────────────────────────────────
+const GlobalState = {
+  tension: 0, energy: 0, density: 0,
+  phase: 'intro',
+  _stamps: [],
+  _recoveryTimer: null,
+  _voidTimer: null,
+
+  record() {
+    const now = Date.now();
+    this._stamps.push(now);
+    this._stamps = this._stamps.filter(t => t > now - 20000);
+    // Entering rupture clears void state
+    if (this.phase === 'void') this.phase = 'aftershock';
+  },
+
+  selfEvolve() {
+    const now    = Date.now();
+    const recent = this._stamps.filter(t => t > now - 5000).length;
+    const idle   = recent === 0;
+
+    // Density
+    const targetD = Math.min(1, recent / 12);
+    this.density += (targetD - this.density) * 0.14;
+
+    // Tension — different evolution per phase
+    if (this.phase === 'recovery' || this.phase === 'void') {
+      // Recovery: tension drops faster, energy dissipates
+      this.tension *= 0.94;
+      this.energy  *= 0.92;
+      this.density *= 0.90;
+    } else if (this.phase === 'aftershock') {
+      // Aftershock: brief spike then rapid decay
+      this.tension = Math.min(1, this.tension * 1.05);
+      setTimeout(() => { this.phase = 'recovery'; }, 800);
+    } else {
+      // Normal evolution
+      this.tension += ((this.density * 0.82 + this.energy * 0.18) - this.tension) * 0.07;
+      this.energy  += (this.density * 0.88 - this.energy) * 0.05;
+    }
+
+    if (idle) {
+      this.tension *= 0.982;
+      this.energy  *= 0.975;
+      this.density *= 0.968;
+    }
+
+    this.tension = clamp(this.tension, 0, 1);
+    this.energy  = clamp(this.energy,  0, 1);
+    this.density = clamp(this.density, 0, 1);
+
+    // Narrative phase transitions
+    const prev = this.phase;
+    const t = this.tension;
+
+    if (this.phase !== 'recovery' && this.phase !== 'void' && this.phase !== 'aftershock') {
+      if      (t < 0.14) this.phase = 'intro';
+      else if (t < 0.38) this.phase = 'build';
+      else if (t < 0.62) this.phase = 'peak';
+      else if (t < 0.82) this.phase = 'tension';
+      else               this.phase = 'rupture';
+    }
+
+    // Rupture → Recovery after sustained high tension + silence
+    if (prev === 'rupture' && idle && this.phase === 'rupture') {
+      clearTimeout(this._recoveryTimer);
+      this._recoveryTimer = setTimeout(() => {
+        if (this.tension > 0.7 && this._stamps.filter(s => s > Date.now()-3000).length === 0) {
+          this.phase = 'recovery';
+          // After recovery, enter void if still idle
+          this._voidTimer = setTimeout(() => {
+            if (this._stamps.filter(s => s > Date.now()-4000).length === 0) {
+              this.phase = 'void';
+            }
+          }, 4000);
+        }
+      }, 2500);
+    }
+
+    updateGSUI();
+  },
+
+  start() { setInterval(() => this.selfEvolve(), 380); }
+};
+
+// ─── TEMPORAL DRIFT ───────────────────────────────────────
+// Microtiming humanization: each trigger fires slightly off-grid
+// Range: -8ms to +16ms, biased positive (human feel)
+// Increases with instabilityMomentum
+function calcDrift(mem) {
+  const base  = -0.008 + Math.random() * 0.024;   // -8ms to +16ms
+  const extra = mem.instabilityMomentum * 0.018;   // momentum adds up to +18ms
+  return clamp(base + extra, -0.012, 0.038);
+}
+
+// ─── MUTATION CALCULATOR ──────────────────────────────────
+function calcMut(org, mem) {
+  const M  = org.mut;
+  const fm = 1 + mem.fatigue * M.fatigueScale; // fatigue expands range
+
+  function rand(lo, hi)  { return lo + Math.random() * (hi - lo); }
+  function randF(lo, hi) { // fatigue-expanded
+    const c = (lo + hi) / 2, s = (hi - lo) / 2 * fm;
+    return c + (Math.random() * 2 - 1) * s;
+  }
+
+  // Pitch: biased toward lastPitchDrift (memory continuity)
+  const rawPitch  = randF(M.pitchRange[0], M.pitchRange[1]);
+  const pitchDrift = rawPitch * 0.65 + mem.lastPitchDrift * 0.35; // 35% memory
+
+  const transAtk   = M.transAtk[1] > 0 ? rand(M.transAtk[0], M.transAtk[1]) : 0;
+  const saturation = rand(M.satRange[0], M.satRange[1]) * (1 + GlobalState.tension * 0.38);
+  const bodyRes    = randF(M.resonRange[0], M.resonRange[1]);
+  const pan        = randF(M.panRange[0], M.panRange[1]) * (1 + GlobalState.density * 0.18);
+
+  // Normalized 0–1 for UI
+  const pN  = clamp((pitchDrift - M.pitchRange[0]) / (M.pitchRange[1] - M.pitchRange[0]), 0, 1);
+  const tN  = M.transAtk[1] > 0 ? clamp((transAtk - M.transAtk[0]) / (M.transAtk[1] - M.transAtk[0]), 0, 1) : 0;
+  const sN  = clamp((saturation - M.satRange[0]) / (M.satRange[1] - M.satRange[0]), 0, 1);
+  const rN  = clamp((bodyRes - M.resonRange[0]) / (M.resonRange[1] - M.resonRange[0]), 0, 1);
+  const panN = (pan - M.panRange[0]) / (M.panRange[1] - M.panRange[0]);
+
+  return { pitchDrift, transAtk, saturation, bodyRes, pan, pN, tN, sN, rN, panN };
+}
+
+// ─── TRIGGER ──────────────────────────────────────────────
+let currentOrg = 0;
+
+function trigger() {
+  if (!AC) initAC();
+  AC.resume(); // iOS canonical fix
+
+  const org  = ORGANISMS[currentOrg];
+  const mem  = MEM[currentOrg];
+  const mut  = calcMut(org, mem);
+  const drift = calcDrift(mem);
+  const now   = AC.currentTime;
+  const t     = now + Math.max(0, drift); // temporal drift: never fire in the past
+  const pR    = Math.pow(2, mut.pitchDrift / 12);
+
+  // Apply cross-organism influence
+  let inf = { airGainBoost: 0, noiseFreqMult: 1, satBoost: 0 };
+  inf = Influence.apply(currentOrg, inf);
+  if (currentOrg === 0) Influence.onKickTrigger();
+
+  const v = getVoice();
+  let maxDur = 0;
+
+  // ── TRANSIENT ──
+  if (org.layers.transient.on) {
+    const L = org.layers.transient;
+    const osc = AC.createOscillator();
+    const g   = AC.createGain();
+    osc.type = L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq * pR, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(12, L.baseFreq * L.freqFloor * pR), t + L.freqDecay);
+    const atk = Math.max(0.00005, mut.transAtk);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(L.gain, t + atk);
+    g.gain.exponentialRampToValueAtTime(0.001, t + L.ampDecay);
+    osc.connect(g); g.connect(v.bus);
+    osc.start(t); osc.stop(t + L.ampDecay + 0.05);
+    maxDur = Math.max(maxDur, L.ampDecay);
+  }
+
+  // ── BODY ──
+  if (org.layers.body.on) {
+    const L   = org.layers.body;
+    const osc  = AC.createOscillator();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    osc.type = L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq * pR, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(8, L.baseFreq * L.freqFloor * pR), t + L.freqDecay);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(L.gain, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, t + L.ampDecay);
+    filt.type = 'lowpass';
+    filt.frequency.value = Math.max(18, mut.bodyRes);
+    filt.Q.value = 2.4;
+    osc.connect(filt); filt.connect(g); g.connect(v.bus);
+    osc.start(t); osc.stop(t + L.ampDecay + 0.05);
+    maxDur = Math.max(maxDur, L.ampDecay);
+  }
+
+  // ── NOISE ──
+  if (org.layers.noise.on) {
+    const L    = org.layers.noise;
+    const src  = AC.createBufferSource();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    src.buffer = noiseBuffer;
+    filt.type  = L.filterType;
+    filt.frequency.value = L.filterFreq * pR * inf.noiseFreqMult;
+    filt.Q.value = L.filterQ;
+    g.gain.setValueAtTime(L.gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + L.dur);
+    src.connect(filt); filt.connect(g); g.connect(v.bus);
+    src.start(t); src.stop(t + L.dur + 0.05);
+    maxDur = Math.max(maxDur, L.dur);
+  }
+
+  // ── AIR ──
+  if (org.layers.air && org.layers.air.on) {
+    const L    = org.layers.air;
+    const src  = AC.createBufferSource();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    src.buffer = noiseBuffer;
+    filt.type  = 'lowpass';
+    filt.frequency.value = L.filterFreq;
+    filt.Q.value = L.filterQ;
+    const airGain = L.gain + inf.airGainBoost;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(airGain, t + 0.09);
+    g.gain.exponentialRampToValueAtTime(0.001, t + L.dur);
+    src.connect(filt); filt.connect(g); g.connect(v.bus);
+    src.start(t); src.stop(t + L.dur + 0.05);
+    maxDur = Math.max(maxDur, L.dur);
+  }
+
+  // ── APPLY VOICE ──
+  const finalSat = clamp(mut.saturation + inf.satBoost, 1, 220);
+  v.sat.curve = makeSatCurve(finalSat);
+  v.panner.pan.setValueAtTime(clamp(mut.pan, -1, 1), t);
+  v.bus.gain.setValueAtTime(1.0, t);
+  v.claim(maxDur);
+
+  // ── UPDATE MEMORY ──
+  mem.lastPitchDrift      = mut.pitchDrift;
+  mem.instabilityMomentum = clamp(
+    mem.instabilityMomentum * 0.82 + Math.abs(mut.pitchDrift) * 0.3 + mem.fatigue * 0.15,
+    0, 1
+  );
+  mem.playCount++;
+  mem.fatigue = clamp(mem.playCount / 75 * org.mut.fatigueScale, 0, 1);
+
+  GlobalState.record();
+  Perf.totalTriggers++;
+
+  updateMutUI(mut, mem, org, drift);
+  flashTrigger();
+
+  // Temporal drift badge
+  if (Math.abs(drift) > 0.006) {
+    const badge = document.getElementById('drift-badge');
+    if (badge) {
+      badge.textContent = (drift * 1000).toFixed(0) + 'ms';
+      badge.classList.add('show');
+      setTimeout(() => badge.classList.remove('show'), 300);
+    }
+  }
+}
+
+// ─── UTILS ────────────────────────────────────────────────
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function setW(id, pct) {
+  const el = document.getElementById(id);
+  if (el) el.style.width = clamp(pct * 100, 0, 100).toFixed(1) + '%';
+}
+function setT(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+// ─── UI UPDATES ───────────────────────────────────────────
+function updateMutUI(mut, mem, org, drift) {
+  setW('pf-pitch',   mut.pN);
+  setW('pf-trans',   mut.tN);
+  setW('pf-sat',     mut.sN);
+  setW('pf-res',     mut.rN);
+  setW('pf-fatigue', mem.fatigue);
+
+  // Temporal drift bar (0–38ms range → 0–1)
+  const driftNorm = clamp((drift + 0.012) / 0.050, 0, 1);
+  setW('pf-drift', driftNorm);
+
+  // Pan (center-based)
+  const panEl = document.getElementById('pf-pan');
+  const p = clamp(mut.pan, -1, 1);
+  if (panEl) {
+    if (p >= 0) { panEl.style.left = '50%';                         panEl.style.width = (p*50).toFixed(1)+'%'; }
+    else        { panEl.style.left = (50+p*50).toFixed(1)+'%'; panEl.style.width = (Math.abs(p)*50).toFixed(1)+'%'; }
+  }
+
+  setT('pv-pitch',   mut.pitchDrift.toFixed(2) + 'st');
+  setT('pv-trans',   (mut.transAtk * 1000).toFixed(1) + 'ms');
+  setT('pv-sat',     mut.saturation.toFixed(0));
+  setT('pv-res',     mut.bodyRes.toFixed(0) + 'hz');
+  setT('pv-pan',     mut.pan.toFixed(2));
+  setT('pv-drift',   (drift * 1000).toFixed(1) + 'ms');
+  setT('pv-fatigue', mem.fatigue.toFixed(2));
+  setT('st-count',   mem.playCount);
+  setT('st-mutx',    (1 + mem.fatigue * org.mut.fatigueScale).toFixed(2) + 'x');
+  setT('st-instmom', mem.instabilityMomentum.toFixed(2));
+  setT('fi-total',   Perf.totalTriggers);
+  setT('mem-pitch',  mem.lastPitchDrift.toFixed(2));
+  setT('mem-momentum', mem.instabilityMomentum.toFixed(2));
+
+  // Fatigue dot
+  const dot = document.getElementById('fatigue-dot');
+  const lbl = document.getElementById('fatigue-label');
+  const f = mem.fatigue;
+  if (dot && lbl) {
+    if      (f < 0.25) { dot.style.background = '#44ff99'; lbl.textContent = 'FRESH'; }
+    else if (f < 0.50) { dot.style.background = '#ffcc00'; lbl.textContent = 'WORN'; }
+    else if (f < 0.75) { dot.style.background = '#ff6600'; lbl.textContent = 'FATIGUED'; }
+    else               { dot.style.background = '#ff0033'; lbl.textContent = 'ERODED'; }
+  }
+}
+
+function updateGSUI() {
+  setW('gf-tension', GlobalState.tension);
+  setW('gf-energy',  GlobalState.energy);
+  setW('gf-density', GlobalState.density);
+
+  const ph = GlobalState.phase;
+  setT('gs-phase', ph.toUpperCase());
+  setT('h-tension', GlobalState.tension.toFixed(2));
+  setT('h-energy',  GlobalState.energy.toFixed(2));
+  setT('h-phase',   ph);
+
+  // Phase colors
+  const phEl  = document.getElementById('h-phase');
+  const phEl2 = document.getElementById('gs-phase');
+  const cls   = 'phase-' + ph;
+  if (phEl)  phEl.className  = 'perf-val phase ' + cls;
+  if (phEl2) phEl2.className = cls;
+}
+
+// ─── ORGANISM SELECTOR ────────────────────────────────────
+function selectOrg(idx) {
+  currentOrg = idx;
+  const org = ORGANISMS[idx];
+  const mem = MEM[idx];
+  setT('org-name',  org.name);
+  setT('org-type',  org.type);
+  setT('org-pack',  org.pack);
+  setT('org-role',  org.role);
+  setT('org-mood',  org.mood);
+  setT('cl-pack',   org.pack);
+  setT('st-count',  mem.playCount);
+  setT('st-mutx',   (1 + mem.fatigue * org.mut.fatigueScale).toFixed(2) + 'x');
+  setT('st-instmom',mem.instabilityMomentum.toFixed(2));
+  setT('mem-pitch', mem.lastPitchDrift.toFixed(2));
+  setT('mem-momentum', mem.instabilityMomentum.toFixed(2));
+  setW('pf-fatigue',mem.fatigue);
+  setT('pv-fatigue',mem.fatigue.toFixed(2));
+
+  document.querySelectorAll('.org-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+
+  // Clear mutation bars
+  ['pf-pitch','pf-trans','pf-sat','pf-res','pf-drift'].forEach(id => setW(id, 0));
+  const panEl = document.getElementById('pf-pan');
+  if (panEl) { panEl.style.left='50%'; panEl.style.width='0%'; }
+}
+
+// ─── TRIGGER FLASH ────────────────────────────────────────
+let flashAmt = 0;
+function flashTrigger() {
+  const btn = document.getElementById('trigger-btn');
+  btn.classList.add('fire');
+  setTimeout(() => btn.classList.remove('fire'), 72);
+  flashAmt = 1.0;
+}
+
+// ─── CANVAS VISUALIZATION ─────────────────────────────────
+function initCanvas() {
+  const canvas = document.getElementById('scope');
+  const panel  = canvas.parentElement;
+  const ctx    = canvas.getContext('2d');
+  const dpr    = window.devicePixelRatio || 1;
+  let W, H;
+
+  function resize() {
+    W = panel.clientWidth; H = panel.clientHeight;
+    canvas.width  = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  requestAnimationFrame(() => {
+    resize();
+    window.addEventListener('resize', () => { ctx.setTransform(1,0,0,1,0,0); resize(); });
+  });
+
+  let lastDrawTime = performance.now();
+
+  function draw(now) {
+    requestAnimationFrame(draw);
+    Perf.tick(now);
+
+    if (!W || !H) return;
+    const quality = Perf.quality;
+
+    // Background
+    ctx.fillStyle = '#06040e';
+    ctx.fillRect(0, 0, W, H);
+
+    // Flash
+    if (flashAmt > 0.01) {
+      ctx.fillStyle = `rgba(153,68,255,${flashAmt * 0.28})`;
+      ctx.fillRect(0, 0, W, H);
+      flashAmt *= 0.80;
+    }
+
+    // Grid
+    ctx.strokeStyle = 'rgba(153,68,255,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath(); ctx.moveTo(0, H*i/4); ctx.lineTo(W, H*i/4); ctx.stroke();
+    }
+
+    if (!masterAnalyser) { Perf.updateUI(); return; }
+
+    const fft = masterAnalyser.fftSize;
+    const timeBuf = new Uint8Array(fft);
+    const freqBuf = new Uint8Array(fft / 2);
+
+    // ── OSCILLOSCOPE — top 64% ──
+    const oscH = H * 0.64;
+    masterAnalyser.getByteTimeDomainData(timeBuf);
+
+    // Center line
+    ctx.strokeStyle = 'rgba(153,68,255,0.10)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, oscH*0.5); ctx.lineTo(W, oscH*0.5); ctx.stroke();
+
+    // Glow pass (skip in minimal quality)
+    if (quality !== 'minimal') {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(0,255,255,0.2)';
+      ctx.lineWidth = 5;
+      for (let i = 0; i < fft; i++) {
+        const x = (i/fft)*W, y = (timeBuf[i]/255)*oscH;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    // Sharp pass
+    ctx.beginPath();
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < fft; i++) {
+      const x = (i/fft)*W, y = (timeBuf[i]/255)*oscH;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // Divider
+    ctx.strokeStyle = 'rgba(153,68,255,0.13)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, H*0.68); ctx.lineTo(W, H*0.68); ctx.stroke();
+
+    // ── SPECTRUM — bottom 28% ──
+    const specTop = H * 0.70, specH = H - specTop - 4;
+    masterAnalyser.getByteFrequencyData(freqBuf);
+
+    const bars = quality === 'minimal' ? 32 : quality === 'reduced' ? 48 : 72;
+    const bw = W / bars;
+    for (let i = 0; i < bars; i++) {
+      const idx = Math.floor(Math.pow(i/bars, 1.7) * freqBuf.length);
+      const v   = freqBuf[Math.min(idx, freqBuf.length-1)] / 255;
+      const bh  = v * specH;
+      const t   = i / bars;
+      let r, g, b;
+      if (t < 0.5) { r = Math.round(t*2*153); g = Math.round((1-t*2)*255); b = 255; }
+      else { r = Math.round(153+(t-0.5)*2*102); g = 0; b = Math.round(255-(t-0.5)*2*255); }
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.6+v*0.4})`;
+      ctx.fillRect(i*bw+0.5, specTop+specH-bh, bw-1, bh);
+    }
+
+    Perf.updateUI();
+  }
+
+  draw(performance.now());
+}
+
+// ─── EVENT BINDINGS ───────────────────────────────────────
+document.getElementById('trigger-btn').addEventListener('touchstart', e => {
+  e.preventDefault(); trigger();
+}, { passive: false });
+
+document.getElementById('trigger-btn').addEventListener('mousedown', e => {
+  e.preventDefault(); trigger();
+});
+
+document.querySelectorAll('.org-btn').forEach((btn, i) => {
+  btn.addEventListener('touchstart', e => { e.preventDefault(); selectOrg(i); }, { passive: false });
+  btn.addEventListener('click', () => selectOrg(i));
+});
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space')  { e.preventDefault(); trigger(); }
+  if (e.code === 'Digit1') selectOrg(0);
+  if (e.code === 'Digit2') selectOrg(1);
+  if (e.code === 'Digit3') selectOrg(2);
+});
+
+// ─── INIT ─────────────────────────────────────────────────
+initCanvas();
+GlobalState.start();
+
+</script>
+</body>
+</html>
