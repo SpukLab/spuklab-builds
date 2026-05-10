@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOUND FORGE — SpukLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@0,400;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+
+/* ═══════════════════════════════════════
+   SOUND FORGE — Phase 1 / SpukLab
+   Canonical Skin v1
+═══════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-base:      #0d0b18;
+  --bg-grad:      linear-gradient(155deg, #13111f 0%, #1b1726 100%);
+  --violet:       #9944ff;
+  --violet-dim:   rgba(153, 68, 255, 0.18);
+  --violet-glow:  rgba(153, 68, 255, 0.07);
+  --violet-active:rgba(153, 68, 255, 0.22);
+  --cyan:         #00ffff;
+  --magenta:      #ff00ff;
+  --white:        #ffffff;
+  --gray:         rgba(255, 255, 255, 0.38);
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg-base);
+  color: var(--white);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#app {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--bg-grad);
+}
+
+/* ─── HEADER ─── */
+header {
+  display: flex; align-items: center;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--violet-dim);
+  background: rgba(10, 8, 20, 0.65);
+  flex-shrink: 0; gap: 14px;
+  min-height: 46px;
+}
+
+.logo { line-height: 1; }
+.logo .spuk { font-weight: 800; font-size: 17px; color: var(--white); letter-spacing: 0.04em; }
+.logo .lab  { font-weight: 300; font-size: 17px; color: var(--cyan);  letter-spacing: 0.04em; }
+
+.sep { width: 1px; height: 22px; background: var(--violet-dim); flex-shrink: 0; }
+
+.app-title-block { display: flex; flex-direction: column; line-height: 1.1; }
+.app-title-name  { font-family: var(--font-mono); font-style: italic; font-weight: 700;
+                   font-size: 12px; color: var(--violet); letter-spacing: 0.14em; }
+.app-title-phase { font-family: var(--font-mono); font-size: 11px; color: var(--gray);
+                   letter-spacing: 0.08em; }
+
+.hdr-spacer { flex: 1; }
+
+.hdr-gs { display: flex; gap: 18px; }
+.hdr-gs-item { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.hdr-gs-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray);
+                letter-spacing: 0.1em; }
+.hdr-gs-val   { font-family: var(--font-mono); font-style: italic; font-size: 16px;
+                color: var(--cyan); }
+.hdr-gs-val.phase { font-size: 12px; padding-top: 2px; color: var(--violet); }
+
+/* ─── MAIN ─── */
+main {
+  flex: 1; display: flex; overflow: hidden; min-height: 0;
+}
+
+/* ─── CANVAS PANEL ─── */
+.canvas-panel {
+  flex: 1.4; position: relative;
+  border-right: 1px solid var(--violet-dim);
+  background: #06040e;
+  overflow: hidden;
+}
+#scope { display: block; width: 100%; height: 100%; }
+
+.canvas-labels {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.clabel {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgba(153, 68, 255, 0.45);
+  letter-spacing: 0.12em;
+}
+.clabel.osc  { top: 10px; left: 12px; }
+.clabel.fft  { bottom: 10px; left: 12px; }
+.clabel.pack { top: 10px; right: 12px; color: rgba(0, 255, 255, 0.3); }
+
+/* ─── CONTROLS PANEL ─── */
+.controls-panel {
+  width: 320px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 13px;
+  gap: 11px;
+}
+.controls-panel::-webkit-scrollbar { width: 2px; }
+.controls-panel::-webkit-scrollbar-thumb { background: var(--violet-dim); }
+
+/* ─── ORG SELECTOR ─── */
+.org-selector { display: flex; gap: 5px; }
+.org-btn {
+  flex: 1; padding: 9px 4px;
+  background: var(--violet-glow);
+  border: 1px solid var(--violet-dim);
+  border-radius: 4px;
+  color: var(--gray);
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; letter-spacing: 0.05em;
+  cursor: pointer; text-align: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.org-btn.active {
+  background: var(--violet-active);
+  border-color: var(--violet);
+  color: var(--cyan);
+}
+
+/* ─── SECTION ─── */
+.section {
+  background: rgba(153, 68, 255, 0.05);
+  border: 1px solid var(--violet-dim);
+  border-radius: 5px;
+  padding: 11px 12px;
+}
+.sec-title {
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; letter-spacing: 0.13em;
+  color: var(--violet); text-transform: uppercase;
+  margin-bottom: 9px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--violet-dim);
+}
+
+/* ─── ORG INFO ─── */
+.org-name-display {
+  font-family: var(--font-mono); font-style: italic;
+  font-weight: 700; font-size: 14px;
+  color: var(--white); margin-bottom: 7px;
+}
+.org-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }
+.org-tag {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 2px 7px; border-radius: 2px;
+  letter-spacing: 0.06em;
+}
+.org-tag.t  { background: rgba(0,255,255,0.1);   color: var(--cyan); }
+.org-tag.pk { background: rgba(153,68,255,0.15); color: #b580ff; }
+.org-tag.ro { background: rgba(255,0,255,0.1);   color: var(--magenta); }
+.org-mood-display {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gray); font-style: italic; line-height: 1.3;
+}
+
+/* ─── PARAM ROWS ─── */
+.param-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 7px;
+}
+.param-row:last-child { margin-bottom: 0; }
+.param-label {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.09em; color: var(--gray);
+  width: 72px; flex-shrink: 0;
+}
+.param-track {
+  flex: 1; height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px; overflow: hidden;
+  position: relative;
+}
+.param-fill {
+  height: 100%; width: 0%;
+  border-radius: 2px;
+  transition: width 0.18s ease, left 0.18s ease;
+  position: absolute; left: 0; top: 0;
+}
+.param-fill.pitch    { background: var(--cyan); }
+.param-fill.transient{ background: #ff6633; }
+.param-fill.sat      { background: var(--magenta); }
+.param-fill.resonance{ background: #44ff99; }
+.param-fill.pan      { background: #ffcc00; }
+.param-fill.fatigue  { background: linear-gradient(90deg, #44ff99, #ff3300); }
+.param-fill.tension  { background: linear-gradient(90deg, var(--violet), var(--magenta)); }
+.param-fill.energy   { background: linear-gradient(90deg, #0055ff, var(--cyan)); }
+.param-fill.density  { background: linear-gradient(90deg, #44ff99, var(--cyan)); }
+
+.param-val {
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 11px; color: var(--white);
+  width: 44px; text-align: right; flex-shrink: 0;
+}
+
+/* ─── STATS ROW ─── */
+.stat-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.stat-row:last-child { margin-bottom: 0; }
+.stat-label {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gray); letter-spacing: 0.09em;
+}
+.stat-val {
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 13px; color: var(--cyan);
+}
+.stat-val.warn  { color: #ff6633; }
+.stat-val.mutx  { color: var(--magenta); }
+
+.gs-phase-display {
+  margin-top: 8px; text-align: center;
+  font-family: var(--font-mono); font-style: italic;
+  font-size: 12px; color: var(--violet); letter-spacing: 0.12em;
+}
+
+/* ─── FOOTER / TRIGGER ─── */
+footer {
+  flex-shrink: 0; display: flex;
+  border-top: 1px solid var(--violet-dim);
+  background: rgba(10, 8, 20, 0.7);
+  height: 76px;
+}
+#trigger-btn {
+  flex: 1;
+  background: rgba(153, 68, 255, 0.1);
+  border: none; border-right: 1px solid var(--violet-dim);
+  color: var(--white);
+  font-family: var(--font-mono); font-style: italic;
+  font-weight: 700; font-size: 26px; letter-spacing: 0.22em;
+  cursor: pointer;
+  transition: background 0.06s;
+  -webkit-tap-highlight-color: transparent;
+}
+#trigger-btn.fire { background: rgba(153, 68, 255, 0.38); }
+
+.footer-stats {
+  width: 190px; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  gap: 5px; padding: 10px;
+}
+.fstat-row { display: flex; align-items: center; gap: 7px; }
+.fstat-label { font-family: var(--font-mono); font-size: 11px; color: var(--gray); }
+.fstat-val   { font-family: var(--font-mono); font-style: italic; font-size: 15px; color: var(--cyan); }
+#fatigue-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #44ff99; flex-shrink: 0;
+  transition: background 0.6s;
+  box-shadow: 0 0 6px currentColor;
+}
+#fatigue-label {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gray); letter-spacing: 0.08em;
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo"><span class="spuk">SPUK</span><span class="lab">LAB</span></div>
+    <div class="sep"></div>
+    <div class="app-title-block">
+      <span class="app-title-name">SOUND FORGE</span>
+      <span class="app-title-phase">PHASE 1 — AUDIO ENGINE CORE</span>
+    </div>
+    <div class="hdr-spacer"></div>
+    <div class="hdr-gs">
+      <div class="hdr-gs-item">
+        <span class="hdr-gs-label">TENSION</span>
+        <span class="hdr-gs-val" id="h-tension">0.00</span>
+      </div>
+      <div class="hdr-gs-item">
+        <span class="hdr-gs-label">ENERGY</span>
+        <span class="hdr-gs-val" id="h-energy">0.00</span>
+      </div>
+      <div class="hdr-gs-item">
+        <span class="hdr-gs-label">PHASE</span>
+        <span class="hdr-gs-val phase" id="h-phase">intro</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- OSCILLOSCOPE + SPECTRUM -->
+    <div class="canvas-panel">
+      <canvas id="scope"></canvas>
+      <div class="canvas-labels">
+        <span class="clabel osc">OSC</span>
+        <span class="clabel fft">FFT</span>
+        <span class="clabel pack" id="cl-pack">rust_ritual</span>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls-panel">
+
+      <!-- Organism selector -->
+      <div class="org-selector">
+        <button class="org-btn active" data-org="0">RUST KICK</button>
+        <button class="org-btn"        data-org="1">DEBRIS HIT</button>
+        <button class="org-btn"        data-org="2">SPECTRAL GHOST</button>
+      </div>
+
+      <!-- Organism info -->
+      <div class="section">
+        <div class="org-name-display" id="org-name">Rust Ritual Kick</div>
+        <div class="org-tags">
+          <span class="org-tag t"  id="org-type">kick_cluster</span>
+          <span class="org-tag pk" id="org-pack">rust_ritual</span>
+          <span class="org-tag ro" id="org-role">low_anchor</span>
+        </div>
+        <div class="org-mood-display" id="org-mood">ritual · agg 0.71 · instability 0.68</div>
+      </div>
+
+      <!-- Mutation state -->
+      <div class="section">
+        <div class="sec-title">MUTATION STATE</div>
+
+        <div class="param-row">
+          <span class="param-label">PITCH</span>
+          <div class="param-track"><div class="param-fill pitch" id="pf-pitch"></div></div>
+          <span class="param-val" id="pv-pitch">0.00</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">TRANSIENT</span>
+          <div class="param-track"><div class="param-fill transient" id="pf-trans"></div></div>
+          <span class="param-val" id="pv-trans">0.0ms</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">SATURATION</span>
+          <div class="param-track"><div class="param-fill sat" id="pf-sat"></div></div>
+          <span class="param-val" id="pv-sat">0</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">RESONANCE</span>
+          <div class="param-track"><div class="param-fill resonance" id="pf-res"></div></div>
+          <span class="param-val" id="pv-res">0hz</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">PAN</span>
+          <div class="param-track" id="pan-track">
+            <div class="param-fill pan" id="pf-pan" style="position:absolute;height:100%;top:0;"></div>
+          </div>
+          <span class="param-val" id="pv-pan">0.00</span>
+        </div>
+      </div>
+
+      <!-- Global state -->
+      <div class="section">
+        <div class="sec-title">GLOBAL STATE</div>
+
+        <div class="param-row">
+          <span class="param-label">TENSION</span>
+          <div class="param-track"><div class="param-fill tension" id="gf-tension"></div></div>
+        </div>
+        <div class="param-row">
+          <span class="param-label">ENERGY</span>
+          <div class="param-track"><div class="param-fill energy" id="gf-energy"></div></div>
+        </div>
+        <div class="param-row">
+          <span class="param-label">DENSITY</span>
+          <div class="param-track"><div class="param-fill density" id="gf-density"></div></div>
+        </div>
+        <div class="gs-phase-display">NARRATIVE: <span id="gs-phase">INTRO</span></div>
+      </div>
+
+      <!-- Organism runtime stats -->
+      <div class="section">
+        <div class="sec-title">ORGANISM STATS</div>
+
+        <div class="stat-row">
+          <span class="stat-label">PLAY COUNT</span>
+          <span class="stat-val" id="st-count">0</span>
+        </div>
+        <div class="param-row" style="margin-top:4px;">
+          <span class="param-label">FATIGUE</span>
+          <div class="param-track"><div class="param-fill fatigue" id="pf-fatigue"></div></div>
+          <span class="param-val" id="pv-fatigue">0.00</span>
+        </div>
+        <div class="stat-row" style="margin-top:5px;">
+          <span class="stat-label">MUTATION X</span>
+          <span class="stat-val mutx" id="st-mutx">1.00x</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">TOTAL TRIGGERS</span>
+          <span class="stat-val" id="st-total">0</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- TRIGGER -->
+  <footer>
+    <button id="trigger-btn">TRIGGER</button>
+    <div class="footer-stats">
+      <div class="fstat-row">
+        <span class="fstat-label">TRIGGERS</span>
+        <span class="fstat-val" id="fi-total">0</span>
+      </div>
+      <div class="fstat-row">
+        <span id="fatigue-dot"></span>
+        <span id="fatigue-label">FRESH</span>
+      </div>
+    </div>
+  </footer>
+
+</div><!-- #app -->
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   SOUND FORGE — Phase 1: Audio Engine Core
+   SpukLab 2025
+   
+   Architecture:
+   - Voice Pool (16 permanent voices, no per-trigger graph creation)
+   - Three organisms: RUST KICK / DEBRIS HIT / SPECTRAL GHOST
+   - Mutation Engine: pitch drift, transient, saturation, resonance, pan
+   - GlobalState.selfEvolve() autonomous director
+   - Canvas: oscilloscope (top 65%) + spectrum (bottom 30%)
+   iOS Safari canonical audio fix applied.
+═══════════════════════════════════════════════════════ */
+
+// ─── AUDIO CONTEXT ───────────────────────────────────
+let AC = null;
+let masterGain, compressor, masterSat, masterAnalyser;
+let noiseBuffer = null;
+const FFT_SIZE = 2048;
+
+function initAC() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+
+  masterGain = AC.createGain();
+  masterGain.gain.value = 0.82;
+
+  compressor = AC.createDynamicsCompressor();
+  compressor.threshold.value = -16;
+  compressor.knee.value      = 8;
+  compressor.ratio.value     = 4;
+  compressor.attack.value    = 0.003;
+  compressor.release.value   = 0.18;
+
+  masterSat = AC.createWaveShaper();
+  masterSat.curve      = makeSatCurve(28);
+  masterSat.oversample = '4x';
+
+  masterAnalyser = AC.createAnalyser();
+  masterAnalyser.fftSize               = FFT_SIZE;
+  masterAnalyser.smoothingTimeConstant = 0.88;
+
+  // Chain: masterGain → compressor → masterSat → masterAnalyser → destination
+  masterGain.connect(compressor);
+  compressor.connect(masterSat);
+  masterSat.connect(masterAnalyser);
+  masterAnalyser.connect(AC.destination);
+
+  noiseBuffer = genNoise(2.0);
+  initPool();
+}
+
+function makeSatCurve(amount) {
+  const n = 512, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+function genNoise(dur) {
+  const sr = AC.sampleRate;
+  const len = Math.floor(sr * dur);
+  const buf = AC.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return buf;
+}
+
+// ─── VOICE POOL ──────────────────────────────────────
+const POOL_SIZE = 16;
+const pool = [];
+
+class Voice {
+  constructor() {
+    this.free    = true;
+    this.freeAt  = 0;
+    // Permanent nodes — never destroyed
+    this.bus     = AC.createGain();
+    this.panner  = AC.createStereoPanner();
+    this.sat     = AC.createWaveShaper();
+    this.bus.gain.value = 0;
+    this.bus.connect(this.panner);
+    this.panner.connect(this.sat);
+    this.sat.connect(masterGain);
+  }
+  available() {
+    return this.free || AC.currentTime >= this.freeAt;
+  }
+  claim(dur) {
+    this.free   = false;
+    this.freeAt = AC.currentTime + dur + 0.12;
+    setTimeout(() => { this.free = true; }, (dur + 0.15) * 1000);
+  }
+}
+
+function initPool() {
+  for (let i = 0; i < POOL_SIZE; i++) pool.push(new Voice());
+}
+
+function getVoice() {
+  for (const v of pool) if (v.available()) return v;
+  // Evict: voice with the earliest freeAt
+  return pool.reduce((a, b) => a.freeAt < b.freeAt ? a : b);
+}
+
+// ─── ORGANISM DEFINITIONS ────────────────────────────
+// Layers: transient, body, noise, air
+// Synthesis: all layers generated from oscillators + filtered noise
+// No sample files required.
+
+const ORGANISMS = [
+  // ── 0: RUST RITUAL KICK ──────────────────────────
+  {
+    id: 'rust_ritual_kick_001',
+    name: 'Rust Ritual Kick',
+    pack: 'rust_ritual',
+    type: 'kick_cluster',
+    role: 'low_anchor',
+    mood: 'ritual · agg 0.71 · instability 0.68',
+    layers: {
+      transient: {
+        on: true,
+        waveform: 'sine',
+        baseFreq: 88, freqDecay: 0.068, freqFloor: 0.12,
+        ampDecay: 0.085, gain: 0.98
+      },
+      body: {
+        on: true,
+        waveform: 'sine',
+        baseFreq: 52, freqDecay: 0.28, freqFloor: 0.42,
+        ampDecay: 0.52, gain: 0.72
+      },
+      noise: {
+        on: true,
+        filterType: 'bandpass', filterFreq: 115, filterQ: 3.2,
+        dur: 0.14, gain: 0.24
+      },
+      air: { on: false }
+    },
+    mut: {
+      pitchRange:    [-0.14, 0.10],
+      transAtk:      [0.00015, 0.0024],
+      satRange:      [18, 88],
+      resonRange:    [65, 165],
+      panRange:      [-0.28, 0.28],
+      fatigueScale:  0.88
+    }
+  },
+
+  // ── 1: DEBRIS HIT ────────────────────────────────
+  {
+    id: 'rust_debris_001',
+    name: 'Debris Hit',
+    pack: 'rust_ritual',
+    type: 'percussive_debris',
+    role: 'mid_body',
+    mood: 'industrial · agg 0.55 · instability 0.82',
+    layers: {
+      transient: {
+        on: true,
+        waveform: 'triangle',
+        baseFreq: 420, freqDecay: 0.038, freqFloor: 0.16,
+        ampDecay: 0.062, gain: 0.88
+      },
+      body: {
+        on: true,
+        waveform: 'sine',
+        baseFreq: 145, freqDecay: 0.11, freqFloor: 0.48,
+        ampDecay: 0.21, gain: 0.42
+      },
+      noise: {
+        on: true,
+        filterType: 'bandpass', filterFreq: 870, filterQ: 1.8,
+        dur: 0.09, gain: 0.48
+      },
+      air: { on: false }
+    },
+    mut: {
+      pitchRange:    [-0.32, 0.32],
+      transAtk:      [0.00008, 0.0009],
+      satRange:      [35, 130],
+      resonRange:    [110, 320],
+      panRange:      [-0.52, 0.52],
+      fatigueScale:  1.12
+    }
+  },
+
+  // ── 2: SPECTRAL GHOST ────────────────────────────
+  {
+    id: 'spectral_ghost_001',
+    name: 'Spectral Ghost',
+    pack: 'rust_ritual',
+    type: 'ghost_impact',
+    role: 'ghost',
+    mood: 'void · agg 0.12 · instability 0.92',
+    layers: {
+      transient: { on: false },
+      body: {
+        on: true,
+        waveform: 'sine',
+        baseFreq: 36, freqDecay: 1.1, freqFloor: 0.78,
+        ampDecay: 1.6, gain: 0.28
+      },
+      noise: {
+        on: true,
+        filterType: 'lowpass', filterFreq: 85, filterQ: 0.55,
+        dur: 1.1, gain: 0.17
+      },
+      air: {
+        on: true,
+        filterFreq: 175, filterQ: 0.4,
+        dur: 2.0, gain: 0.09
+      }
+    },
+    mut: {
+      pitchRange:    [-0.55, 0.55],
+      transAtk:      [0, 0],
+      satRange:      [4, 22],
+      resonRange:    [28, 68],
+      panRange:      [-0.65, 0.65],
+      fatigueScale:  0.38
+    }
+  }
+];
+
+// Per-organism runtime state
+const RT = ORGANISMS.map(() => ({ playCount: 0, fatigue: 0 }));
+
+// ─── GLOBAL STATE ─────────────────────────────────────
+const GS = {
+  tension: 0, energy: 0, density: 0,
+  phase: 'intro',
+  _stamps: [],
+
+  record() {
+    const now = Date.now();
+    this._stamps.push(now);
+    const cut = now - 20000;
+    this._stamps = this._stamps.filter(t => t > cut);
+  },
+
+  selfEvolve() {
+    const now = Date.now();
+    const window5 = this._stamps.filter(t => t > now - 5000).length;
+
+    // Density: 0–1 normalized over 5s window (12 hits = 1.0)
+    const targetDensity = Math.min(1, window5 / 12);
+    this.density += (targetDensity - this.density) * 0.14;
+
+    // Tension: lags density
+    this.tension += ((this.density * 0.82 + this.energy * 0.18) - this.tension) * 0.07;
+
+    // Energy: smooth follower
+    this.energy += (this.density * 0.88 - this.energy) * 0.05;
+
+    // Natural decay when idle
+    if (window5 === 0) {
+      this.tension *= 0.982;
+      this.energy  *= 0.975;
+      this.density *= 0.968;
+    }
+
+    this.tension = clamp(this.tension, 0, 1);
+    this.energy  = clamp(this.energy,  0, 1);
+    this.density = clamp(this.density, 0, 1);
+
+    // Narrative phase
+    const t = this.tension;
+    if      (t < 0.14) this.phase = 'intro';
+    else if (t < 0.38) this.phase = 'build';
+    else if (t < 0.64) this.phase = 'peak';
+    else if (t < 0.85) this.phase = 'tension';
+    else               this.phase = 'rupture';
+
+    updateGSUI();
+  },
+
+  start() { setInterval(() => this.selfEvolve(), 380); }
+};
+
+// ─── MUTATION CALCULATOR ─────────────────────────────
+function calcMut(org, rt) {
+  const M  = org.mut;
+  const fm = 1 + rt.fatigue * M.fatigueScale; // fatigue multiplier expands range
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function rand(lo, hi)  { return lo + Math.random() * (hi - lo); }
+  function randF(lo, hi) { // fatigue-expanded random
+    const c = (lo + hi) / 2, s = (hi - lo) / 2 * fm;
+    return c + (Math.random() * 2 - 1) * s;
+  }
+
+  const pitchDrift  = randF(M.pitchRange[0],  M.pitchRange[1]);
+  const transAtk    = M.transAtk[1] > 0 ? rand(M.transAtk[0], M.transAtk[1]) : 0;
+  const saturation  = rand(M.satRange[0], M.satRange[1]) * (1 + GS.tension * 0.38);
+  const bodyRes     = randF(M.resonRange[0], M.resonRange[1]);
+  const pan         = randF(M.panRange[0], M.panRange[1]) * (1 + GS.density * 0.18);
+
+  // Normalized 0–1 for UI bars
+  const pN = (pitchDrift - M.pitchRange[0]) / (M.pitchRange[1] - M.pitchRange[0]);
+  const tN = M.transAtk[1] > 0 ? (transAtk - M.transAtk[0]) / (M.transAtk[1] - M.transAtk[0]) : 0;
+  const sN = clamp((saturation - M.satRange[0]) / (M.satRange[1] - M.satRange[0]), 0, 1);
+  const rN = clamp((bodyRes - M.resonRange[0]) / (M.resonRange[1] - M.resonRange[0]), 0, 1);
+  const panN = (pan - M.panRange[0]) / (M.panRange[1] - M.panRange[0]);
+
+  return { pitchDrift, transAtk, saturation, bodyRes, pan, pN, tN, sN, rN, panN };
+}
+
+// ─── TRIGGER ─────────────────────────────────────────
+let currentOrg  = 0;
+let totalTriggers = 0;
+
+function trigger() {
+  if (!AC) initAC();
+  AC.resume(); // iOS canonical fix: resume synchronously in gesture handler
+
+  const org  = ORGANISMS[currentOrg];
+  const rt   = RT[currentOrg];
+  const mut  = calcMut(org, rt);
+  const now  = AC.currentTime;
+  const pR   = Math.pow(2, mut.pitchDrift / 12); // pitch ratio
+  const v    = getVoice();
+  let maxDur = 0;
+
+  // ── TRANSIENT ──
+  if (org.layers.transient.on) {
+    const L = org.layers.transient;
+    const osc = AC.createOscillator();
+    const g   = AC.createGain();
+    osc.type = L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq * pR, now);
+    osc.frequency.exponentialRampToValueAtTime(
+      Math.max(12, L.baseFreq * L.freqFloor * pR),
+      now + L.freqDecay
+    );
+    const atk = Math.max(0.00005, mut.transAtk);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(L.gain, now + atk);
+    g.gain.exponentialRampToValueAtTime(0.001, now + L.ampDecay);
+    osc.connect(g); g.connect(v.bus);
+    osc.start(now);
+    osc.stop(now + L.ampDecay + 0.05);
+    maxDur = Math.max(maxDur, L.ampDecay);
+  }
+
+  // ── BODY ──
+  if (org.layers.body.on) {
+    const L   = org.layers.body;
+    const osc  = AC.createOscillator();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    osc.type = L.waveform;
+    osc.frequency.setValueAtTime(L.baseFreq * pR, now);
+    osc.frequency.exponentialRampToValueAtTime(
+      Math.max(8, L.baseFreq * L.freqFloor * pR),
+      now + L.freqDecay
+    );
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(L.gain, now + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, now + L.ampDecay);
+    filt.type = 'lowpass';
+    filt.frequency.value = Math.max(18, mut.bodyRes);
+    filt.Q.value = 2.4;
+    osc.connect(filt); filt.connect(g); g.connect(v.bus);
+    osc.start(now);
+    osc.stop(now + L.ampDecay + 0.05);
+    maxDur = Math.max(maxDur, L.ampDecay);
+  }
+
+  // ── NOISE ──
+  if (org.layers.noise.on) {
+    const L    = org.layers.noise;
+    const src  = AC.createBufferSource();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    src.buffer = noiseBuffer;
+    filt.type  = L.filterType;
+    filt.frequency.value = L.filterFreq * pR;
+    filt.Q.value = L.filterQ;
+    g.gain.setValueAtTime(L.gain, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + L.dur);
+    src.connect(filt); filt.connect(g); g.connect(v.bus);
+    src.start(now);
+    src.stop(now + L.dur + 0.05);
+    maxDur = Math.max(maxDur, L.dur);
+  }
+
+  // ── AIR ──
+  if (org.layers.air.on) {
+    const L    = org.layers.air;
+    const src  = AC.createBufferSource();
+    const filt = AC.createBiquadFilter();
+    const g    = AC.createGain();
+    src.buffer = noiseBuffer;
+    filt.type  = 'lowpass';
+    filt.frequency.value = L.filterFreq;
+    filt.Q.value = L.filterQ;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(L.gain, now + 0.09);
+    g.gain.exponentialRampToValueAtTime(0.001, now + L.dur);
+    src.connect(filt); filt.connect(g); g.connect(v.bus);
+    src.start(now);
+    src.stop(now + L.dur + 0.05);
+    maxDur = Math.max(maxDur, L.dur);
+  }
+
+  // ── APPLY VOICE SETTINGS ──
+  v.sat.curve = makeSatCurve(clamp(mut.saturation, 1, 200));
+  v.panner.pan.setValueAtTime(clamp(mut.pan, -1, 1), now);
+  v.bus.gain.setValueAtTime(1.0, now);
+  v.claim(maxDur);
+
+  // ── UPDATE RUNTIME ──
+  rt.playCount++;
+  totalTriggers++;
+  rt.fatigue = clamp(rt.playCount / 75 * org.mut.fatigueScale, 0, 1);
+  GS.record();
+
+  updateMutUI(mut, rt, org);
+  flashTrigger();
+}
+
+// ─── UTILS ───────────────────────────────────────────
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function setW(id, pct) {
+  const el = document.getElementById(id);
+  if (el) el.style.width = clamp(pct * 100, 0, 100).toFixed(1) + '%';
+}
+function setT(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// ─── UI UPDATES ──────────────────────────────────────
+function updateMutUI(mut, rt, org) {
+  setW('pf-pitch',   mut.pN);
+  setW('pf-trans',   mut.tN);
+  setW('pf-sat',     mut.sN);
+  setW('pf-res',     mut.rN);
+  setW('pf-fatigue', rt.fatigue);
+
+  // Pan bar: centered
+  const panEl = document.getElementById('pf-pan');
+  const p = clamp(mut.pan, -1, 1);
+  if (panEl) {
+    if (p >= 0) {
+      panEl.style.left  = '50%';
+      panEl.style.width = (p * 50).toFixed(1) + '%';
+    } else {
+      panEl.style.left  = (50 + p * 50).toFixed(1) + '%';
+      panEl.style.width = (Math.abs(p) * 50).toFixed(1) + '%';
+    }
+  }
+
+  setT('pv-pitch',   mut.pitchDrift.toFixed(2) + 'st');
+  setT('pv-trans',   (mut.transAtk * 1000).toFixed(1) + 'ms');
+  setT('pv-sat',     mut.saturation.toFixed(0));
+  setT('pv-res',     mut.bodyRes.toFixed(0) + 'hz');
+  setT('pv-pan',     mut.pan.toFixed(2));
+  setT('pv-fatigue', rt.fatigue.toFixed(2));
+  setT('st-count',   rt.playCount);
+  setT('st-mutx',    (1 + rt.fatigue * org.mut.fatigueScale).toFixed(2) + 'x');
+  setT('st-total',   totalTriggers);
+  setT('fi-total',   totalTriggers);
+
+  // Fatigue dot + label
+  const dot = document.getElementById('fatigue-dot');
+  const lbl = document.getElementById('fatigue-label');
+  const f   = rt.fatigue;
+  if (dot && lbl) {
+    if      (f < 0.25) { dot.style.background = '#44ff99'; lbl.textContent = 'FRESH'; }
+    else if (f < 0.50) { dot.style.background = '#ffcc00'; lbl.textContent = 'WORN'; }
+    else if (f < 0.75) { dot.style.background = '#ff6600'; lbl.textContent = 'FATIGUED'; }
+    else               { dot.style.background = '#ff0033'; lbl.textContent = 'ERODED'; }
+  }
+}
+
+function updateGSUI() {
+  setW('gf-tension', GS.tension);
+  setW('gf-energy',  GS.energy);
+  setW('gf-density', GS.density);
+  setT('gs-phase',   GS.phase.toUpperCase());
+  setT('h-tension',  GS.tension.toFixed(2));
+  setT('h-energy',   GS.energy.toFixed(2));
+  setT('h-phase',    GS.phase);
+}
+
+// ─── ORGANISM SELECTOR ───────────────────────────────
+function selectOrg(idx) {
+  currentOrg = idx;
+  const org = ORGANISMS[idx];
+  setT('org-name', org.name);
+  setT('org-type', org.type);
+  setT('org-pack', org.pack);
+  setT('org-role', org.role);
+  setT('org-mood', org.mood);
+  setT('cl-pack',  org.pack);
+  document.querySelectorAll('.org-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+  });
+  // Reset mutation bars
+  ['pf-pitch','pf-trans','pf-sat','pf-res','pf-fatigue'].forEach(id => setW(id, 0));
+  const panEl = document.getElementById('pf-pan');
+  if (panEl) { panEl.style.left = '50%'; panEl.style.width = '0%'; }
+  // Show current organism's fatigue
+  const rt  = RT[idx];
+  setW('pf-fatigue', rt.fatigue);
+  setT('pv-fatigue', rt.fatigue.toFixed(2));
+  setT('st-count',   rt.playCount);
+  setT('st-mutx',    (1 + rt.fatigue * org.mut.fatigueScale).toFixed(2) + 'x');
+}
+
+// ─── TRIGGER FLASH ───────────────────────────────────
+let flashAmt = 0;
+function flashTrigger() {
+  const btn = document.getElementById('trigger-btn');
+  btn.classList.add('fire');
+  setTimeout(() => btn.classList.remove('fire'), 75);
+  flashAmt = 1.0;
+}
+
+// ─── CANVAS VISUALIZATION ────────────────────────────
+function initCanvas() {
+  const canvas = document.getElementById('scope');
+  const panel  = canvas.parentElement;
+  const dpr    = window.devicePixelRatio || 1;
+  const ctx    = canvas.getContext('2d');
+
+  let W, H;
+
+  function resize() {
+    W = panel.clientWidth;
+    H = panel.clientHeight;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+  }
+
+  requestAnimationFrame(() => {
+    resize();
+    window.addEventListener('resize', () => { ctx.setTransform(1,0,0,1,0,0); resize(); });
+  });
+
+  const timeBuf = new Uint8Array(FFT_SIZE);
+  const freqBuf = new Uint8Array(FFT_SIZE / 2);
+
+  function draw() {
+    requestAnimationFrame(draw);
+    if (!W || !H) return;
+
+    // Background
+    ctx.fillStyle = '#060410';
+    ctx.fillRect(0, 0, W, H);
+
+    // Flash overlay
+    if (flashAmt > 0.01) {
+      ctx.fillStyle = `rgba(153, 68, 255, ${flashAmt * 0.3})`;
+      ctx.fillRect(0, 0, W, H);
+      flashAmt *= 0.82;
+    }
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(153, 68, 255, 0.055)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, H * i / 4); ctx.lineTo(W, H * i / 4);
+      ctx.stroke();
+    }
+
+    if (!masterAnalyser) return;
+
+    // ── OSCILLOSCOPE — top 64% ──
+    const oscH = H * 0.64;
+    masterAnalyser.getByteTimeDomainData(timeBuf);
+
+    // Center line
+    ctx.strokeStyle = 'rgba(153, 68, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, oscH * 0.5); ctx.lineTo(W, oscH * 0.5);
+    ctx.stroke();
+
+    // Waveform — glow pass
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.25)';
+    ctx.lineWidth = 4;
+    for (let i = 0; i < FFT_SIZE; i++) {
+      const x = (i / FFT_SIZE) * W;
+      const y = (timeBuf[i] / 255.0) * oscH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Waveform — sharp pass
+    ctx.beginPath();
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < FFT_SIZE; i++) {
+      const x = (i / FFT_SIZE) * W;
+      const y = (timeBuf[i] / 255.0) * oscH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Divider
+    const divY = H * 0.68;
+    ctx.strokeStyle = 'rgba(153, 68, 255, 0.14)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, divY); ctx.lineTo(W, divY); ctx.stroke();
+
+    // ── SPECTRUM — bottom 28% ──
+    const specTop = H * 0.70;
+    const specH   = H - specTop - 4;
+    masterAnalyser.getByteFrequencyData(freqBuf);
+
+    const bars = 72;
+    const bw = W / bars;
+    for (let i = 0; i < bars; i++) {
+      const idx = Math.floor(Math.pow(i / bars, 1.7) * freqBuf.length);
+      const v   = freqBuf[Math.min(idx, freqBuf.length - 1)] / 255;
+      const bh  = v * specH;
+      const t   = i / bars;
+      // Gradient: cyan → violet → magenta
+      let r, g, b;
+      if (t < 0.5) {
+        r = Math.round(t * 2 * 153);
+        g = Math.round((1 - t * 2) * 255);
+        b = 255;
+      } else {
+        r = Math.round(153 + (t - 0.5) * 2 * 102);
+        g = 0;
+        b = Math.round(255 - (t - 0.5) * 2 * 255);
+      }
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.65 + v * 0.35})`;
+      ctx.fillRect(i * bw + 0.5, specTop + specH - bh, bw - 1, bh);
+    }
+  }
+
+  draw();
+}
+
+// ─── EVENT BINDINGS ──────────────────────────────────
+const trigBtn = document.getElementById('trigger-btn');
+
+trigBtn.addEventListener('touchstart', e => {
+  e.preventDefault();
+  trigger();
+}, { passive: false });
+
+trigBtn.addEventListener('mousedown', e => {
+  e.preventDefault();
+  trigger();
+});
+
+document.querySelectorAll('.org-btn').forEach((btn, i) => {
+  btn.addEventListener('touchstart', e => { e.preventDefault(); selectOrg(i); }, { passive: false });
+  btn.addEventListener('click', () => selectOrg(i));
+});
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space')  { e.preventDefault(); trigger(); }
+  if (e.code === 'Digit1') selectOrg(0);
+  if (e.code === 'Digit2') selectOrg(1);
+  if (e.code === 'Digit3') selectOrg(2);
+});
+
+// ─── INIT ─────────────────────────────────────────────
+initCanvas();
+GS.start();
+
+</script>
+</body>
+</html>
