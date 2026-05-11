@@ -335,7 +335,7 @@ const WEATHMEM={
     SMEM.sub=Math.min(1,SMEM.sub+this.residue.subBloom*.0005);
   }
 };
-function buildWeatherUI(){const d=document.getElementById('weather-grid');if(!d)return;d.innerHTML='';Object.values(WEATHER_TYPES).forEach(w=>{const b=document.createElement('div');b.className='wbtn'+(w.id==='CLEAR'?' on':'');b.dataset.w=w.id;b.textContent=w.id.replace('_',' ');b.style.color=w.col;b.addEventListener('click',()=>WEATHER.set(w.id));d.appendChild(b);});}
+function buildWeatherUI(){const d=document.getElementById('weather-grid');if(!d)return;d.innerHTML='';Object.entries(WEATHER_TYPES).forEach(([key,w])=>{const b=document.createElement('div');b.className='wbtn'+(key==='CLEAR'?' on':'');b.dataset.w=key;b.textContent=key.replace('_',' ');b.style.color=w.col;b.addEventListener('click',()=>WEATHER.set(key));d.appendChild(b);});}
 
 // ══════════════════════════════════════════════════════════
 // SPECTRAL MEMORY + CONTAMINATION
@@ -438,12 +438,13 @@ const DEPTH={
   },
   makeChain(depthLevel,dest){
     if(!ac)return null;
-    const g=ac.createGain();const f=ac.createBiquadFilter();
-    if(depthLevel===0){f.type='highshelf';f.frequency.value=3000;f.gain.value=1.5;g.gain.value=1.0;}
-    else if(depthLevel===1){f.type='lowpass';f.frequency.value=9000;g.gain.value=.78;}
-    else if(depthLevel===2){f.type='lowpass';f.frequency.value=3500;g.gain.value=.44;}
-    else{f.type='lowpass';f.frequency.value=900;g.gain.value=.1+(Math.random()*.06);}
-    g.connect(f);f.connect(dest||masterGain);return g;
+    const g=ac.createGain();
+    // Depth via gain only — no BiquadFilter per event (iOS node limit protection)
+    if(depthLevel===0)g.gain.value=1.0;
+    else if(depthLevel===1)g.gain.value=.75;
+    else if(depthLevel===2)g.gain.value=.42;
+    else g.gain.value=.06+Math.random()*.08; // subconscious — barely perceptible
+    g.connect(dest||masterGain);return g;
   }
 };
 
@@ -495,8 +496,6 @@ function initAC(){
   comp=ac.createDynamicsCompressor();comp.threshold.value=-14;comp.knee.value=9;comp.ratio.value=5;comp.attack.value=.003;comp.release.value=.22;
   masterGain.connect(comp);comp.connect(ac.destination);
   noiseBuf=mkNoise();
-  // Canonical ScriptProcessor recorder node — created permanently
-  REC.initNode();
 }
 function mkNoise(){const n=ac.sampleRate*2,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;return b;}
 
@@ -610,21 +609,30 @@ const FIELD={nodes:[],running:false,
 // AUDIO RECORDER — CANONICAL SPUKLAB PATTERN
 // ══════════════════════════════════════════════════════════
 const REC={
-  isRunning:false,buffers:[[],[]],recNode:null,startTime:0,_timerH:null,_printH:null,
+  isRunning:false,buffers:[[],[]],recNode:null,startTime:0,_timerH:null,_printH:null,_snapH:null,
   timeline:{weatherEvents:[],phaseTransitions:[],contaminationSnapshots:[],collapseEvents:[],dnaMorphSnapshots:[]},
-  initNode(){
-    this.recNode=ac.createScriptProcessor(4096,2,2);
-    this.recNode.onaudioprocess=(e)=>{
-      if(!this.isRunning)return;
-      this.buffers[0].push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      this.buffers[1].push(new Float32Array(e.inputBuffer.getChannelData(1)));
-    };
-    comp.connect(this.recNode);this.recNode.connect(ac.destination);
+  // Lazy init — only when recording actually starts (iOS compat)
+  _initNode(){
+    if(this.recNode)return true;
+    if(!ac)return false;
+    try{
+      this.recNode=ac.createScriptProcessor(4096,2,2);
+      this.recNode.onaudioprocess=(e)=>{
+        if(!this.isRunning)return;
+        this.buffers[0].push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        this.buffers[1].push(new Float32Array(e.inputBuffer.getChannelData(1)));
+      };
+      return true;
+    }catch(err){console.warn('SpukLab REC: ScriptProcessor unavailable',err);return false;}
   },
   start(modeLbl){
-    if(!ac)return;
+    if(!ac||!isPlaying)return;
+    if(!this._initNode()){showToast('RECORDER NOT AVAILABLE');return;}
     this.isRunning=true;this.buffers=[[],[]];this.startTime=ac.currentTime;
     this.timeline={weatherEvents:[{t:0,w:WEATHER.current}],phaseTransitions:[{t:0,phase:PE.cur.name}],contaminationSnapshots:[],collapseEvents:[],dnaMorphSnapshots:[]};
+    // Route: comp → recNode → destination (disconnect direct path)
+    try{comp.disconnect(ac.destination);}catch(e){}
+    comp.connect(this.recNode);this.recNode.connect(ac.destination);
     const btn=document.getElementById('rec-btn');if(btn)btn.classList.add('on');
     const ov=document.getElementById('rec-overlay');if(ov)ov.style.display='flex';
     const ml=document.getElementById('rec-mode-lbl');if(ml)ml.textContent=modeLbl||'REC';
@@ -632,7 +640,14 @@ const REC={
     this._snapH=setInterval(()=>this.snapshot(),4000);
   },
   stop(){
-    this.isRunning=false;clearInterval(this._timerH);clearInterval(this._snapH);
+    this.isRunning=false;
+    clearInterval(this._timerH);clearInterval(this._snapH);
+    // Restore direct routing
+    if(this.recNode){
+      try{comp.disconnect(this.recNode);}catch(e){}
+      try{this.recNode.disconnect(ac.destination);}catch(e){}
+    }
+    try{comp.connect(ac.destination);}catch(e){}
     const btn=document.getElementById('rec-btn');if(btn)btn.classList.remove('on');
     this.export();
   },
@@ -818,7 +833,7 @@ function schedStep(step,t){
 function nxtStep(){nextT+=(60/bpm)/4;curStep=(curStep+1)%16;}
 function doSched(){while(nextT<ac.currentTime+SAHEAD){schedStep(curStep,nextT);nxtStep();}schedH=setTimeout(doSched,SINT);}
 function startPlay(){initAC();ac.resume();nextT=ac.currentTime+.05;curStep=0;barCount=0;POLY5=new PolyLayer(5,4/5);POLY7=new PolyLayer(7,4/7);POLY5.nextT=nextT;POLY7.nextT=nextT;nextSublimT=nextT;FIELD.init();PE.start();DNA.startMorph();isPlaying=true;doSched();}
-function stopPlay(){isPlaying=false;clearTimeout(schedH);schedH=null;FIELD.stop();if(REC.isRunning){REC.stop();}setBeatDots(-1);setStepPip(-1);}
+function stopPlay(){isPlaying=false;clearTimeout(schedH);schedH=null;FIELD.stop();if(REC.isRunning)REC.stop();setBeatDots(-1);setStepPip(-1);}
 
 // ══════════════════════════════════════════════════════════
 // VISUAL ENGINE
@@ -1014,7 +1029,7 @@ let tapTs=[];
 document.getElementById('tap-btn').addEventListener('click',()=>{const now=Date.now();tapTs.push(now);if(tapTs.length>5)tapTs.shift();if(tapTs.length>=2){const diffs=[];for(let i=1;i<tapTs.length;i++)diffs.push(tapTs[i]-tapTs[i-1]);bpm=Math.round(Math.max(70,Math.min(185,60000/(diffs.reduce((a,b)=>a+b)/diffs.length))));document.getElementById('bpmv').textContent=bpm;}});
 document.getElementById('play-btn').addEventListener('click',()=>{if(!ac)initAC();else ac.resume();if(isPlaying){stopPlay();document.getElementById('play-btn').textContent='PLAY';document.getElementById('play-btn').classList.remove('on');}else{startPlay();document.getElementById('play-btn').textContent='STOP';document.getElementById('play-btn').classList.add('on');}});
 document.getElementById('imm-btn').addEventListener('click',function(){G.immersiveMode=!G.immersiveMode;this.classList.toggle('on',G.immersiveMode);if(G.immersiveMode){G.silenceInertia=Math.max(G.silenceInertia,.19);G.density=Math.min(G.density,.5);G.energy=Math.min(G.energy,.55);throttleSliderUpdate();}});
-document.getElementById('rec-btn').addEventListener('click',function(){if(!ac||!isPlaying){showToast('START PLAYBACK FIRST');return;}if(REC.isRunning){REC.stop();this.classList.remove('on');}else{REC.start('REC');this.classList.add('on');}});
+document.getElementById('rec-btn').addEventListener('click',function(){if(!ac||!isPlaying){showToast('START PLAYBACK FIRST');return;}if(REC.isRunning){REC.stop();}else{REC.start('REC');}});
 document.getElementById('rec-stop-btn').addEventListener('click',()=>{if(REC.isRunning)REC.stop();});
 document.getElementById('exp-capture').addEventListener('click',()=>{if(!ac||!isPlaying){showToast('START PLAYBACK FIRST');return;}if(REC.isRunning){REC.stop();}else{REC.start('CAPTURE');}});
 document.getElementById('exp-print').addEventListener('click',()=>{if(!ac||!isPlaying){showToast('START PLAYBACK FIRST');return;}if(!REC.isRunning)REC.startPrint();});
