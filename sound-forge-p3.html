@@ -623,7 +623,7 @@ let noiseBuffer=null,FFT_SIZE=2048;
 function initAC(){
   if(AC)return;
   AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
-  masterGain=AC.createGain();masterGain.gain.value=0.80;
+  masterGain=AC.createGain();masterGain.gain.value=0; // start muted
   compressor=AC.createDynamicsCompressor();
   compressor.threshold.value=-14;compressor.knee.value=8;
   compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
@@ -635,24 +635,20 @@ function initAC(){
   masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
-  playWarmup();
   startWatchdog();
 }
 
-// Warm-up: silent buffer through the FULL chain (masterGain → compressor → sat → dest)
-// This initializes every node in the pipeline before real audio arrives,
-// eliminating the iOS initialization pop.
-function playWarmup(){
+// Mute master, resume AC, fade in — absorbs any initialization pop
+function resumeSafe(onReady){
   if(!AC)return;
-  try{
-    const dur=0.12; // 120ms silent — enough to settle compressor
-    const buf=AC.createBuffer(2,Math.ceil(AC.sampleRate*dur),AC.sampleRate);
-    // Buffer is already zero-filled — genuinely silent
-    const src=AC.createBufferSource();src.buffer=buf;
-    const g=AC.createGain();g.gain.value=0; // absolute zero — no signal
-    src.connect(g);g.connect(masterGain); // through full chain
-    src.start(0);
-  }catch(e){dbg('audio','warmup fail:',e.message);}
+  masterGain.gain.cancelScheduledValues(AC.currentTime);
+  masterGain.gain.setValueAtTime(0,AC.currentTime);
+  AC.resume().then(()=>{
+    // 200ms muted window absorbs compressor init pop
+    masterGain.gain.setValueAtTime(0,AC.currentTime);
+    masterGain.gain.linearRampToValueAtTime(0.80,AC.currentTime+0.22);
+    if(onReady)setTimeout(onReady,0);
+  });
 }
 function genNoise(dur){
   const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);
@@ -664,16 +660,13 @@ function genNoise(dur){
 let _wdi=null;
 function startWatchdog(){
   if(_wdi)return;
-  // visibilitychange: when tab/app returns to foreground, resume AC + warm-up
-  // Delay 180ms to let iOS settle before sending audio through the chain
+  // visibilitychange: file picker closing returns app to foreground — AC was suspended
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible'&&AC&&AC.state!=='running'){
-      setTimeout(()=>{
-        AC.resume().then(()=>{playWarmup();dbg('audio','visibilitychange resume+warmup');});
-      },180);
+      resumeSafe();
     }
   });
-  // Stall detection only — no longer calls resume() here (visibilitychange handles it)
+  // Stall detection only
   _wdi=setInterval(()=>{
     if(!AC||document.visibilityState!=='visible')return;
     if(masterAnalyser){
@@ -732,8 +725,8 @@ document.getElementById('mat-drop').addEventListener('click',()=>{
 
 function loadMaterialDialog(){
   if(!AC)initAC();
-  AC.resume(); // Step 2: synchronous resume before click
-  matInput.click();
+  // resumeSafe: mutes master → resumes → 220ms fade in (absorbs init pop)
+  resumeSafe(()=>matInput.click());
 }
 
 matInput.addEventListener('change',e=>{
@@ -995,13 +988,19 @@ let totalTriggers=0;
 let flashAmt=0;
 
 function trigger(){
-  try{_triggerInner();}
-  catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message,e.stack);}
+  try{
+    if(!AC)initAC();
+    if(AC.state!=='running'){
+      // AC suspended (e.g. after file picker) — mute→resume→fade, then fire
+      resumeSafe(()=>{try{_triggerInner();}catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}});
+    } else {
+      _triggerInner();
+    }
+  }catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}
 }
 
 function _triggerInner(){
-  if(!AC)initAC();
-  AC.resume();
+  if(!AC)return;
 
   const fa=forgeToAudio();
   const now=AC.currentTime;
