@@ -129,9 +129,14 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
 /* ═══ MATERIAL PANE ═══ */
 .mat-drop-zone{width:100%;padding:18px 12px;border:1px dashed rgba(0,255,255,.25);
   border-radius:5px;background:rgba(0,255,255,.03);text-align:center;
-  cursor:pointer;transition:background .12s,border-color .12s;
-  -webkit-tap-highlight-color:transparent;}
+  position:relative;overflow:hidden; /* input sits inside */
+  transition:background .12s,border-color .12s;}
 .mat-drop-zone:active,.mat-drop-zone.drag{background:rgba(0,255,255,.08);border-color:rgba(0,255,255,.5);}
+/* File input covers entire drop zone — user taps it directly, no .click() needed */
+.mat-drop-zone input[type=file]{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer;font-size:0;
+  -webkit-tap-highlight-color:transparent;}
 .mat-drop-label{font-family:var(--mono);font-style:italic;font-size:12px;
   color:rgba(0,255,255,.55);letter-spacing:.12em;margin-bottom:3px;}
 .mat-drop-sub{font-family:var(--mono);font-size:11px;color:var(--gray);}
@@ -356,13 +361,12 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     </div>
 
     <div class="mat-drop-zone" id="mat-drop">
+      <input type="file" id="mat-file-input"
+        accept=".wav,.aif,.aiff,.mp3,.m4a,.caf,audio/*">
       <div class="mat-drop-label">LOAD MATERIAL</div>
       <div class="mat-drop-sub">WAV · AIFF · MP3 · M4A</div>
       <div class="mat-status" id="mat-status"></div>
     </div>
-    <input type="file" id="mat-file-input"
-      accept=".wav,.aif,.aiff,.mp3,.m4a,.caf,audio/*"
-      style="display:none">
 
     <canvas class="mat-wave-wrap" id="mat-wave-mini" height="40"></canvas>
 
@@ -623,7 +627,7 @@ let noiseBuffer=null,FFT_SIZE=2048;
 function initAC(){
   if(AC)return;
   AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
-  masterGain=AC.createGain();masterGain.gain.value=0;
+  masterGain=AC.createGain();masterGain.gain.value=0.80; // normal level — nothing playing yet
   compressor=AC.createDynamicsCompressor();
   compressor.threshold.value=-14;compressor.knee.value=8;
   compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
@@ -635,34 +639,40 @@ function initAC(){
   masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
+  // keepDACAlive called after first resume (trigger or material load)
   startWatchdog();
 }
 
-// Keep iOS DAC powered on with a subsonic inaudible oscillator.
-// Prevents hardware power-cycle pop when audio activity resumes after silence.
-let _dacKeepAlive=null;
+// Keep iOS DAC powered on: subsonic oscillator, gain 0.00003, direct to destination.
+// Must be called synchronously inside a user gesture (or inside AC.resume().then).
+let _dacAlive=null;
 function keepDACAlive(){
-  if(!AC||_dacKeepAlive)return;
-  const osc=AC.createOscillator();
-  const g=AC.createGain();
-  osc.frequency.value=1;   // 1Hz — completely subsonic, never audible
-  g.gain.value=0.00003;    // inaudible amplitude
-  osc.connect(g);
-  g.connect(AC.destination); // direct to destination — bypasses chain
-  osc.start();
-  _dacKeepAlive=osc;
+  if(!AC||_dacAlive)return;
+  try{
+    const osc=AC.createOscillator();
+    const g=AC.createGain();
+    osc.frequency.value=1;    // 1Hz — subsonic, never audible
+    g.gain.value=0.00003;     // inaudible amplitude, just enough to keep DAC active
+    osc.connect(g);g.connect(AC.destination);
+    osc.start();
+    _dacAlive=osc;
+  }catch(e){dbg('audio','keepDACAlive fail:',e.message);}
 }
 
-// resumeSafe: mute master → resume → fade in (absorbs AC init pop)
-// Only call when AC is suspended. Does NOT open file picker.
+// resumeSafe: mutes master, resumes AC, then fades in.
+// Uses AC.currentTime AFTER resume resolves — avoids frozen-time bug.
 function resumeSafe(){
   if(!AC)return;
-  masterGain.gain.cancelScheduledValues(AC.currentTime);
-  masterGain.gain.setValueAtTime(0,AC.currentTime);
+  // Cancel any pending ramps and go to 0 immediately
+  masterGain.gain.cancelScheduledValues(0);
+  masterGain.gain.value=0;
   AC.resume().then(()=>{
     keepDACAlive();
-    masterGain.gain.setValueAtTime(0,AC.currentTime);
-    masterGain.gain.linearRampToValueAtTime(0.80,AC.currentTime+0.22);
+    // currentTime is now live — schedule fade-in from this point
+    const now=AC.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setValueAtTime(0,now);
+    masterGain.gain.linearRampToValueAtTime(0.80,now+0.20);
   });
 }
 function genNoise(dur){
@@ -675,20 +685,19 @@ function genNoise(dur){
 let _wdi=null;
 function startWatchdog(){
   if(_wdi)return;
-  // visibilitychange: file picker closing returns app to foreground — AC was suspended
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible'&&AC&&AC.state!=='running'){
-      resumeSafe();
+      resumeSafe(); // mute→resume→fade handles the return-from-picker pop
     }
   });
-  // Stall detection only
   _wdi=setInterval(()=>{
     if(!AC||document.visibilityState!=='visible')return;
     if(masterAnalyser){
-      const b=new Uint8Array(masterAnalyser.fftSize);masterAnalyser.getByteTimeDomainData(b);
+      const b=new Uint8Array(masterAnalyser.fftSize);
+      masterAnalyser.getByteTimeDomainData(b);
       const rms=Math.sqrt(b.reduce((s,v)=>s+(v/128-1)**2,0)/b.length);
       const act=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
-      if(act>0&&rms<.002)console.warn('[SF3:watchdog] AUDIO STALL v:',act,'rms:',rms.toFixed(4));
+      if(act>0&&rms<.002)console.warn('[SF3:watchdog] STALL v:',act,'rms:',rms.toFixed(4));
     }
   },3000);
 }
@@ -726,42 +735,26 @@ let resampledBuffer=null; // latest render result
 
 const matInput=document.getElementById('mat-file-input');
 
-// iOS canonical fix — touchstart-only on mobile prevents double-fire with click
-let _matTouchFired=false;
-document.getElementById('mat-drop').addEventListener('touchstart',e=>{
-  e.preventDefault();
-  _matTouchFired=true;
-  loadMaterialDialog();
-},{passive:false});
-document.getElementById('mat-drop').addEventListener('click',()=>{
-  if(_matTouchFired){_matTouchFired=false;return;} // skip click if touchstart already ran
-  loadMaterialDialog();
-});
-
-function loadMaterialDialog(){
-  if(!AC)initAC();
-  // ALL synchronous inside gesture handler — iOS requires matInput.click()
-  // to be called synchronously or file picker will not open.
-  masterGain.gain.cancelScheduledValues(AC.currentTime||0);
-  masterGain.gain.setValueAtTime(0,AC.currentTime||0);
-  AC.resume();
-  masterGain.gain.linearRampToValueAtTime(0.80,(AC.currentTime||0)+0.25);
-  matInput.click();
-}
-
+// Input sits inside drop zone — user taps it directly.
+// No programmatic .click() needed. AC is initialized on the change event
+// which is itself a user gesture on iOS.
 matInput.addEventListener('change',e=>{
   const file=e.target.files[0];if(!file)return;
+  // Init AC here — 'change' fires inside a user gesture on iOS Safari
+  if(!AC)initAC();
+  AC.resume();
+  keepDACAlive();
   setT('mat-status','loading...');
   const reader=new FileReader();
   reader.onload=ev=>{
-    const buf=ev.target.result.slice(0); // Step 3: ArrayBuffer.slice(0)
-    AC.decodeAudioData(buf, // Step 3: callback form, not promise
+    const buf=ev.target.result.slice(0);
+    AC.decodeAudioData(buf,
       buffer=>onMaterialLoaded(buffer,file.name),
-      err=>{setT('mat-status','decode error');console.warn('[SF3:material] decode error',err);}
+      err=>{setT('mat-status','decode error');console.warn('[SF3:material]',err);}
     );
   };
   reader.readAsArrayBuffer(file);
-  matInput.value=''; // reset for re-load
+  matInput.value='';
 });
 
 function onMaterialLoaded(buffer,name){
@@ -1010,18 +1003,16 @@ let flashAmt=0;
 function trigger(){
   try{
     if(!AC)initAC();
-    if(AC.state!=='running'){
-      resumeSafe();
-      // Fire trigger after brief settle — AC was suspended
-      setTimeout(()=>{try{_triggerInner();}catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}},50);
-    } else {
-      _triggerInner();
-    }
+    // Synchronous resume inside gesture — iOS honors this.
+    // keepDACAlive starts here on first gesture, preventing future DAC power-cycle pops.
+    AC.resume();
+    keepDACAlive();
+    _triggerInner();
   }catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}
 }
 
 function _triggerInner(){
-  if(!AC)return;
+  if(!AC||!noiseBuffer)return;
 
   const fa=forgeToAudio();
   const now=AC.currentTime;
