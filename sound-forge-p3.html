@@ -623,7 +623,7 @@ let noiseBuffer=null,FFT_SIZE=2048;
 function initAC(){
   if(AC)return;
   AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
-  masterGain=AC.createGain();masterGain.gain.value=0; // start muted
+  masterGain=AC.createGain();masterGain.gain.value=0;
   compressor=AC.createDynamicsCompressor();
   compressor.threshold.value=-14;compressor.knee.value=8;
   compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
@@ -638,16 +638,31 @@ function initAC(){
   startWatchdog();
 }
 
-// Mute master, resume AC, fade in — absorbs any initialization pop
-function resumeSafe(onReady){
+// Keep iOS DAC powered on with a subsonic inaudible oscillator.
+// Prevents hardware power-cycle pop when audio activity resumes after silence.
+let _dacKeepAlive=null;
+function keepDACAlive(){
+  if(!AC||_dacKeepAlive)return;
+  const osc=AC.createOscillator();
+  const g=AC.createGain();
+  osc.frequency.value=1;   // 1Hz — completely subsonic, never audible
+  g.gain.value=0.00003;    // inaudible amplitude
+  osc.connect(g);
+  g.connect(AC.destination); // direct to destination — bypasses chain
+  osc.start();
+  _dacKeepAlive=osc;
+}
+
+// resumeSafe: mute master → resume → fade in (absorbs AC init pop)
+// Only call when AC is suspended. Does NOT open file picker.
+function resumeSafe(){
   if(!AC)return;
   masterGain.gain.cancelScheduledValues(AC.currentTime);
   masterGain.gain.setValueAtTime(0,AC.currentTime);
   AC.resume().then(()=>{
-    // 200ms muted window absorbs compressor init pop
+    keepDACAlive();
     masterGain.gain.setValueAtTime(0,AC.currentTime);
     masterGain.gain.linearRampToValueAtTime(0.80,AC.currentTime+0.22);
-    if(onReady)setTimeout(onReady,0);
   });
 }
 function genNoise(dur){
@@ -725,8 +740,13 @@ document.getElementById('mat-drop').addEventListener('click',()=>{
 
 function loadMaterialDialog(){
   if(!AC)initAC();
-  // resumeSafe: mutes master → resumes → 220ms fade in (absorbs init pop)
-  resumeSafe(()=>matInput.click());
+  // ALL synchronous inside gesture handler — iOS requires matInput.click()
+  // to be called synchronously or file picker will not open.
+  masterGain.gain.cancelScheduledValues(AC.currentTime||0);
+  masterGain.gain.setValueAtTime(0,AC.currentTime||0);
+  AC.resume();
+  masterGain.gain.linearRampToValueAtTime(0.80,(AC.currentTime||0)+0.25);
+  matInput.click();
 }
 
 matInput.addEventListener('change',e=>{
@@ -991,8 +1011,9 @@ function trigger(){
   try{
     if(!AC)initAC();
     if(AC.state!=='running'){
-      // AC suspended (e.g. after file picker) — mute→resume→fade, then fire
-      resumeSafe(()=>{try{_triggerInner();}catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}});
+      resumeSafe();
+      // Fire trigger after brief settle — AC was suspended
+      setTimeout(()=>{try{_triggerInner();}catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}},50);
     } else {
       _triggerInner();
     }
