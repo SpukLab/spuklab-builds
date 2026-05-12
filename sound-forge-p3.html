@@ -635,12 +635,24 @@ function initAC(){
   masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
-  // iOS warm-up: play a silent buffer to fully initialize the audio graph
-  // This eliminates the initialization pop on first real trigger
-  const warmup=AC.createBuffer(1,1,AC.sampleRate);
-  const ws=AC.createBufferSource();ws.buffer=warmup;
-  ws.connect(AC.destination);ws.start(0);
+  playWarmup();
   startWatchdog();
+}
+
+// Warm-up: silent buffer through the FULL chain (masterGain → compressor → sat → dest)
+// This initializes every node in the pipeline before real audio arrives,
+// eliminating the iOS initialization pop.
+function playWarmup(){
+  if(!AC)return;
+  try{
+    const dur=0.12; // 120ms silent — enough to settle compressor
+    const buf=AC.createBuffer(2,Math.ceil(AC.sampleRate*dur),AC.sampleRate);
+    // Buffer is already zero-filled — genuinely silent
+    const src=AC.createBufferSource();src.buffer=buf;
+    const g=AC.createGain();g.gain.value=0; // absolute zero — no signal
+    src.connect(g);g.connect(masterGain); // through full chain
+    src.start(0);
+  }catch(e){dbg('audio','warmup fail:',e.message);}
 }
 function genNoise(dur){
   const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);
@@ -652,19 +664,25 @@ function genNoise(dur){
 let _wdi=null;
 function startWatchdog(){
   if(_wdi)return;
-  _wdi=setInterval(()=>{
-    if(!AC)return;
-    // Only resume when the tab is actually visible — prevents pop on tab return
-    if(AC.state!=='running'&&document.visibilityState==='visible'){
-      AC.resume().then(()=>dbg('audio','Watchdog resume'));
+  // visibilitychange: when tab/app returns to foreground, resume AC + warm-up
+  // Delay 180ms to let iOS settle before sending audio through the chain
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'&&AC&&AC.state!=='running'){
+      setTimeout(()=>{
+        AC.resume().then(()=>{playWarmup();dbg('audio','visibilitychange resume+warmup');});
+      },180);
     }
-    if(masterAnalyser&&document.visibilityState==='visible'){
+  });
+  // Stall detection only — no longer calls resume() here (visibilitychange handles it)
+  _wdi=setInterval(()=>{
+    if(!AC||document.visibilityState!=='visible')return;
+    if(masterAnalyser){
       const b=new Uint8Array(masterAnalyser.fftSize);masterAnalyser.getByteTimeDomainData(b);
       const rms=Math.sqrt(b.reduce((s,v)=>s+(v/128-1)**2,0)/b.length);
       const act=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
       if(act>0&&rms<.002)console.warn('[SF3:watchdog] AUDIO STALL v:',act,'rms:',rms.toFixed(4));
     }
-  },2000);
+  },3000);
 }
 
 // ─── VOICE POOL ─────────────────────────────────────────
