@@ -635,6 +635,11 @@ function initAC(){
   masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
+  // iOS warm-up: play a silent buffer to fully initialize the audio graph
+  // This eliminates the initialization pop on first real trigger
+  const warmup=AC.createBuffer(1,1,AC.sampleRate);
+  const ws=AC.createBufferSource();ws.buffer=warmup;
+  ws.connect(AC.destination);ws.start(0);
   startWatchdog();
 }
 function genNoise(dur){
@@ -649,8 +654,11 @@ function startWatchdog(){
   if(_wdi)return;
   _wdi=setInterval(()=>{
     if(!AC)return;
-    if(AC.state!=='running')AC.resume().then(()=>dbg('audio','Watchdog resume'));
-    if(masterAnalyser){
+    // Only resume when the tab is actually visible — prevents pop on tab return
+    if(AC.state!=='running'&&document.visibilityState==='visible'){
+      AC.resume().then(()=>dbg('audio','Watchdog resume'));
+    }
+    if(masterAnalyser&&document.visibilityState==='visible'){
       const b=new Uint8Array(masterAnalyser.fftSize);masterAnalyser.getByteTimeDomainData(b);
       const rms=Math.sqrt(b.reduce((s,v)=>s+(v/128-1)**2,0)/b.length);
       const act=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
@@ -692,11 +700,17 @@ let resampledBuffer=null; // latest render result
 
 const matInput=document.getElementById('mat-file-input');
 
-// iOS canonical fix: resume BEFORE fileInput.click()
+// iOS canonical fix — touchstart-only on mobile prevents double-fire with click
+let _matTouchFired=false;
 document.getElementById('mat-drop').addEventListener('touchstart',e=>{
-  e.preventDefault();loadMaterialDialog();
+  e.preventDefault();
+  _matTouchFired=true;
+  loadMaterialDialog();
 },{passive:false});
-document.getElementById('mat-drop').addEventListener('click',()=>loadMaterialDialog());
+document.getElementById('mat-drop').addEventListener('click',()=>{
+  if(_matTouchFired){_matTouchFired=false;return;} // skip click if touchstart already ran
+  loadMaterialDialog();
+});
 
 function loadMaterialDialog(){
   if(!AC)initAC();
