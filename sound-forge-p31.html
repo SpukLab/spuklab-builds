@@ -1182,7 +1182,7 @@ function _triggerInner(){
     hollowProc.type='notch';safeFreq(hollowProc.frequency,600);
     safeParam(hollowProc.Q,ProcState.spectralHollow.enabled?1+ProcState.spectralHollow.intensity*4:.0001,AP.Q_MIN,AP.Q_MAX);
 
-    // Material gain
+    // Material gain — explicit fade-out before stop prevents compressor release click
     const matGain=AC.createGain();
     matGain.gain.value=.88;
 
@@ -1200,7 +1200,11 @@ function _triggerInner(){
     matGain.connect(v.bus);
 
     const dur=Math.min(mat.buffer.duration,3.0);
-    src.start(t);src.stop(t+dur+.1);
+    const matStop=t+dur+.01;
+    const fadeStart=Math.max(t+.010,matStop-.045); // 45ms fade-out window
+    matGain.gain.setValueAtTime(.88,fadeStart);
+    matGain.gain.linearRampToValueAtTime(.00001,matStop); // ramp to near-zero before stop
+    src.start(t);src.stop(matStop+.005); // stop 5ms after gain reaches zero
     maxDur=Math.max(maxDur,dur);
   }
 
@@ -1280,8 +1284,18 @@ function _triggerInner(){
 
   // Apply saturation DNA to voice permanent chain
   v.sat.curve=buildSatCurve(currentSatProfile,ForgeState.satDrive);
-  v.panner.pan.setValueAtTime(clampAudio((Math.random()-.5)*.8,AP.PAN_MIN,AP.PAN_MAX),t);
-  v.bus.gain.setValueAtTime(1,t);v.claim(maxDur);
+  // Pan: cancel old schedules, hold current value, ease to new position (avoids pan click)
+  v.panner.pan.cancelScheduledValues(t);
+  v.panner.pan.setValueAtTime(v.panner.pan.value,t);
+  v.panner.pan.linearRampToValueAtTime(clampAudio((Math.random()-.5)*.8,AP.PAN_MIN,AP.PAN_MAX),t+.005);
+  // Bus gain: cancel old schedules, hold current, ramp to 1 over 7ms (onset click fix)
+  v.bus.gain.cancelScheduledValues(t);
+  v.bus.gain.setValueAtTime(v.bus.gain.value,t);
+  v.bus.gain.linearRampToValueAtTime(1.0,t+.007);
+  // Schedule bus fade-out at voice end (release click fix — catches any filter/compressor tail)
+  v.bus.gain.setValueAtTime(1.0,t+maxDur);
+  v.bus.gain.linearRampToValueAtTime(.0001,t+maxDur+.025);
+  v.claim(maxDur);
 
   // Memory + fatigue
   const mem2=SYNTH_MEM[currentOrg];
