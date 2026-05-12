@@ -184,8 +184,8 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
 .proc-name{font-family:var(--mono);font-size:11px;letter-spacing:.07em;
   color:var(--gray);flex:1;transition:color .15s;}
 .proc-node.active .proc-name{color:var(--white);}
-.proc-int-track{width:48px;height:3px;background:rgba(255,255,255,.06);
-  border-radius:2px;overflow:hidden;}
+.proc-int-track{width:60px;height:5px;background:rgba(255,255,255,.06);
+  border-radius:2px;overflow:hidden;cursor:pointer;flex-shrink:0;touch-action:none;}
 .proc-int-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .1s;}
 .proc-int-val{font-family:var(--mono);font-size:11px;color:var(--gray);
   width:26px;text-align:right;flex-shrink:0;}
@@ -1097,9 +1097,10 @@ function _triggerInner(){
     maxDur=Math.max(maxDur,dur);
   }
 
-  // === SYNTHESIS SUB CORE ===
-  // Always synthesize sub for low-end control and physicality
-  {
+  // === SYNTHESIS FALLBACK ===
+  // Synth only plays when NO material is loaded. With material, the Forge
+  // controls shape the material directly — no synth layers underneath.
+  if(!mat||!mat.buffer){
     const org=SYNTH_ORGS[currentOrg];
     const subFreq=clampAudio(fa.subFreq,AP.FREQ_MIN,AP.FREQ_MAX,50);
     const subDecay=clampAudio(fa.subDecay,.02,2,.1);
@@ -1111,7 +1112,6 @@ function _triggerInner(){
     const subEnv=AC.createGain();
 
     safeSetValue(subOsc.frequency,subFreq,t,AP.FREQ_MIN,AP.FREQ_MAX);
-    // Pitch envelope (sub punch)
     safeSetValue(subOsc.frequency,subFreq*2.8,t,AP.FREQ_MIN,AP.FREQ_MAX);
     safeExpRamp(subOsc.frequency,subFreq,t+subDecay*.12,AP.FREQ_MIN,AP.FREQ_MAX);
 
@@ -1119,7 +1119,6 @@ function _triggerInner(){
     safeLinearRamp(subEnv.gain,subGain,t+.003,AP.GAIN_MIN,AP.GAIN_MAX);
     safeExpRamp(subEnv.gain,.001,t+subDecay,0.00001,AP.GAIN_MAX);
 
-    // Sub saturation (analog bloom)
     const subSat=AC.createWaveShaper();
     subSat.curve=buildSatCurveRaw('magnetic',clamp(1+ForgeState.pressure*3,.5,5));
 
@@ -1127,8 +1126,8 @@ function _triggerInner(){
     subOsc.start(t);subOsc.stop(t+subDecay+.05);
     maxDur=Math.max(maxDur,subDecay);
 
-    // Impact transient (for punch/click feel)
-    if(ForgeState.impactHardness>0.1&&!mat){
+    // Impact transient
+    if(ForgeState.impactHardness>0.1){
       const impOsc=AC.createOscillator();impOsc.type='triangle';
       const impEnv=AC.createGain();
       safeSetValue(impOsc.frequency,org.baseFreq*2,t,AP.FREQ_MIN,AP.FREQ_MAX);
@@ -1547,18 +1546,56 @@ document.querySelectorAll('.sat-chip').forEach(chip=>{
   chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
 });
 
-// Processor nodes — tap to toggle, drag intensity
+// Processor nodes — drag intensity track to adjust, tap rest of node to toggle
 document.querySelectorAll('.proc-node').forEach(node=>{
   const proc=node.dataset.proc;if(!proc||!ProcState[proc])return;
+  const intTrack=node.querySelector('.proc-int-track');
   const intFill=node.querySelector('.proc-int-fill');
   const intVal=node.querySelector('.proc-int-val');
-  node.addEventListener('click',()=>{
+
+  // Initialize fill width from state
+  if(intFill)intFill.style.width=(ProcState[proc].intensity*100).toFixed(0)+'%';
+  if(intVal)intVal.textContent=ProcState[proc].intensity.toFixed(2);
+
+  // Intensity drag handler
+  let dragging=false;
+  function updateInt(e){
+    if(!intTrack)return;
+    const rect=intTrack.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const v=clamp((cx-rect.left)/rect.width,0,1);
+    ProcState[proc].intensity=v;
+    // Auto-enable when user drags intensity > 0
+    if(v>0.02&&!ProcState[proc].enabled){
+      ProcState[proc].enabled=true;
+      node.classList.add('active');
+    }
+    if(intFill)intFill.style.width=(v*100).toFixed(0)+'%';
+    if(intVal)intVal.textContent=v.toFixed(2);
+  }
+  if(intTrack){
+    intTrack.addEventListener('touchstart',e=>{
+      e.stopPropagation();e.preventDefault();dragging=true;updateInt(e);
+    },{passive:false});
+    intTrack.addEventListener('touchmove',e=>{
+      if(dragging){e.stopPropagation();e.preventDefault();updateInt(e);}
+    },{passive:false});
+    intTrack.addEventListener('touchend',e=>{e.stopPropagation();dragging=false;});
+    intTrack.addEventListener('mousedown',e=>{e.stopPropagation();dragging=true;updateInt(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)updateInt(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  }
+
+  // Toggle handler — only fires when click is NOT on the intensity track
+  function toggle(e){
+    if(intTrack&&intTrack.contains(e.target))return; // ignore clicks on the track
     ProcState[proc].enabled=!ProcState[proc].enabled;
     node.classList.toggle('active',ProcState[proc].enabled);
-  });
-  node.addEventListener('touchstart',e=>{e.preventDefault();
-    ProcState[proc].enabled=!ProcState[proc].enabled;
-    node.classList.toggle('active',ProcState[proc].enabled);
+  }
+  node.addEventListener('click',toggle);
+  node.addEventListener('touchstart',e=>{
+    if(intTrack&&intTrack.contains(e.target))return;
+    e.preventDefault();toggle(e);
   },{passive:false});
 });
 
