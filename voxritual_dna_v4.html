@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VOXRITUAL DNA v4</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px}
+
+/* ── BOOT ─────────────────────────────────────────────────────────────── */
+#boot{position:fixed;inset:0;z-index:200;background:linear-gradient(155deg,#050310,#090714);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem}
+.b-logo{font-size:.88rem;font-weight:800;letter-spacing:.12em}
+.b-logo span{color:#00ffff}
+.b-title{font-size:1.65rem;font-weight:200;letter-spacing:.18em;text-align:center;
+  color:rgba(255,255,255,.5);line-height:1.45}
+.b-sub{font-size:.7rem;color:rgba(255,255,255,.25);letter-spacing:.1em}
+#enterBtn{padding:.85rem 2.5rem;background:rgba(153,68,255,.1);
+  border:1px solid rgba(153,68,255,.3);color:#fff;font-size:.9rem;font-weight:700;
+  letter-spacing:.12em;cursor:pointer;border-radius:2px}
+#enterBtn:active{background:rgba(153,68,255,.2)}
+#bootMsg{font-size:.7rem;color:rgba(255,255,255,.25);min-height:1em}
+
+/* ── APP SHELL ─────────────────────────────────────────────────────────── */
+#app{position:fixed;inset:0;display:none;flex-direction:column}
+#app.show{display:flex}
+
+/* ── HEADER ────────────────────────────────────────────────────────────── */
+#hdr{height:38px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 .9rem;background:rgba(9,7,20,.85);backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(153,68,255,.1);flex-shrink:0}
+.logo{font-size:.78rem;font-weight:800;letter-spacing:.08em}
+.logo span{color:#00ffff}
+#semInfo{display:flex;align-items:center;gap:.45rem}
+#semOrb{width:8px;height:8px;border-radius:50%;background:#ff00ff;
+  box-shadow:0 0 5px #ff00ff;transition:background .35s,box-shadow .35s}
+#semName{font-size:.68rem;color:rgba(255,255,255,.3);letter-spacing:.06em;min-width:4rem;text-align:right}
+
+/* ── CATEGORY TABS ─────────────────────────────────────────────────────── */
+#catBar{height:34px;display:flex;align-items:center;gap:.3rem;padding:0 .7rem;
+  overflow-x:auto;flex-shrink:0;background:rgba(9,7,20,.6);
+  border-bottom:1px solid rgba(153,68,255,.08);scrollbar-width:none}
+#catBar::-webkit-scrollbar{display:none}
+.cat{padding:.28rem .65rem;background:rgba(153,68,255,.06);border:1px solid rgba(153,68,255,.12);
+  color:rgba(255,255,255,.45);font-size:.69rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px;white-space:nowrap;flex-shrink:0;transition:all .12s}
+.cat.on{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.4);color:#fff}
+
+/* ── LIBRARY ───────────────────────────────────────────────────────────── */
+#library{flex:1;overflow-y:auto;min-height:0;
+  scrollbar-width:thin;scrollbar-color:rgba(153,68,255,.18) transparent}
+#library::-webkit-scrollbar{width:2px}
+#library::-webkit-scrollbar-thumb{background:rgba(153,68,255,.2)}
+
+.sRow{display:flex;align-items:center;gap:.55rem;padding:.45rem .8rem;
+  border-bottom:1px solid rgba(153,68,255,.05);cursor:pointer;position:relative;
+  transition:background .1s}
+.sRow:active{background:rgba(153,68,255,.08)}
+.sRow.on{background:rgba(153,68,255,.1);border-left:2px solid rgba(153,68,255,.5)}
+.sWave{width:48px;height:20px;flex-shrink:0;border-radius:1px}
+.sInfo{flex:1;min-width:0}
+.sName{font-size:.76rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sTags{display:flex;gap:.25rem;margin-top:.15rem}
+.sTag{font-size:.62rem;padding:.08rem .3rem;border-radius:1px;
+  background:rgba(153,68,255,.1);color:rgba(255,255,255,.45)}
+.sTag.sem{background:rgba(0,255,255,.07);color:rgba(0,255,255,.55)}
+.sRight{flex-shrink:0;text-align:right}
+.sDur{font-size:.66rem;color:rgba(255,255,255,.28);font-family:'Courier New',monospace}
+.sScr{font-size:.6rem;color:rgba(153,68,255,.6);margin-top:.12rem}
+.sPlaying{position:absolute;left:0;top:0;bottom:0;width:2px;background:#00ffff}
+
+.libEmpty{padding:1.5rem .9rem;text-align:center;color:rgba(255,255,255,.18);
+  font-size:.75rem;line-height:1.8;letter-spacing:.04em}
+
+/* ── WORKSPACE DIVIDER ─────────────────────────────────────────────────── */
+#wsDivider{height:26px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 .8rem;background:rgba(9,7,20,.7);border-top:1px solid rgba(153,68,255,.1);
+  border-bottom:1px solid rgba(153,68,255,.08);flex-shrink:0;cursor:pointer}
+#wsTitle{font-size:.68rem;color:rgba(255,255,255,.35);letter-spacing:.08em}
+#wsToggle{font-size:.68rem;color:rgba(153,68,255,.45);letter-spacing:.04em}
+
+/* ── WORKSPACE ─────────────────────────────────────────────────────────── */
+#ws{height:0;overflow:hidden;transition:height .22s ease;flex-shrink:0;
+  background:rgba(9,7,20,.5);overflow-y:auto}
+#ws.open{height:236px}
+#wsBody{padding:.6rem .8rem;display:flex;flex-direction:column;gap:.45rem}
+
+/* Waveform + phrase map */
+#wsWave{width:100%;height:34px;display:block;border-radius:1px}
+#wsPhrase{display:flex;gap:.22rem;flex-wrap:wrap;min-height:18px}
+.ph{padding:.14rem .38rem;border-radius:1px;font-size:.6rem;font-weight:700;
+  letter-spacing:.03em;cursor:pointer;border:1px solid transparent;user-select:none}
+.ph.phrase{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);
+  color:rgba(255,255,255,.4)}
+.ph.breath{background:rgba(153,68,255,.1);border-color:rgba(153,68,255,.25);
+  color:rgba(153,68,255,.75)}
+.ph.consonant{background:rgba(0,255,255,.07);border-color:rgba(0,255,255,.22);
+  color:rgba(0,255,255,.7)}
+.ph.silence{background:transparent;border-color:rgba(255,255,255,.07);
+  color:rgba(255,255,255,.2)}
+
+/* Mutation strip */
+.wsLabel{font-size:.64rem;color:rgba(255,255,255,.25);letter-spacing:.08em}
+#mutStrip{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;padding-bottom:.1rem}
+#mutStrip::-webkit-scrollbar{display:none}
+.mBtn{padding:.42rem .75rem;background:rgba(153,68,255,.07);
+  border:1px solid rgba(153,68,255,.18);color:rgba(255,255,255,.65);
+  font-size:.72rem;font-weight:700;letter-spacing:.04em;cursor:pointer;border-radius:2px;
+  flex-shrink:0;transition:all .1s;white-space:nowrap}
+.mBtn:active{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.45);color:#fff}
+.mBtn.on{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.5);color:#b580ff}
+.mBtn.savebtn{border-color:rgba(0,255,255,.25);color:rgba(0,255,255,.65)}
+.mBtn.savebtn:active{background:rgba(0,255,255,.15);border-color:rgba(0,255,255,.5);color:#00ffff}
+
+/* Snapshots */
+#snapStrip{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;align-items:center}
+#snapStrip::-webkit-scrollbar{display:none}
+.snapChip{padding:.28rem .6rem;background:rgba(0,255,255,.05);border:1px solid rgba(0,255,255,.15);
+  color:rgba(0,255,255,.6);font-size:.65rem;font-weight:700;cursor:pointer;border-radius:2px;
+  flex-shrink:0;white-space:nowrap}
+.snapChip:active{background:rgba(0,255,255,.14)}
+.snapChip.add{border-color:rgba(153,68,255,.2);color:rgba(153,68,255,.55)}
+.noSnap{font-size:.66rem;color:rgba(255,255,255,.18)}
+
+/* History tree */
+#histRow{display:flex;align-items:center;gap:.28rem;overflow-x:auto;scrollbar-width:none}
+#histRow::-webkit-scrollbar{display:none}
+.hNode{padding:.26rem .55rem;background:rgba(153,68,255,.06);
+  border:1px solid rgba(153,68,255,.15);color:rgba(255,255,255,.55);
+  font-size:.64rem;font-weight:700;cursor:pointer;border-radius:2px;flex-shrink:0;
+  white-space:nowrap}
+.hNode:active,.hNode.on{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.4);color:#fff}
+.hNode.root{border-color:rgba(0,255,255,.2);color:rgba(0,255,255,.6)}
+.hArrow{color:rgba(255,255,255,.15);font-size:.7rem;flex-shrink:0}
+
+/* Recompose panel */
+#recomposePanel{display:none;flex-direction:column;gap:.4rem}
+#recomposePanel.open{display:flex}
+#phraseBlocks{display:flex;gap:.3rem;flex-wrap:wrap}
+.pbBlock{padding:.3rem .6rem;background:rgba(153,68,255,.08);border:1px solid rgba(153,68,255,.2);
+  color:rgba(255,255,255,.6);font-size:.66rem;cursor:pointer;border-radius:2px;font-weight:700}
+.pbBlock.off{background:rgba(153,68,255,.02);border-color:rgba(153,68,255,.08);
+  color:rgba(255,255,255,.22);text-decoration:line-through}
+.pbRender{padding:.38rem .8rem;background:rgba(0,255,255,.07);border:1px solid rgba(0,255,255,.2);
+  color:rgba(0,255,255,.7);font-size:.72rem;font-weight:700;cursor:pointer;border-radius:2px}
+
+/* ── TRANSPORT ─────────────────────────────────────────────────────────── */
+#transport{height:40px;display:flex;align-items:center;gap:.4rem;padding:0 .8rem;
+  border-top:1px solid rgba(153,68,255,.1);background:rgba(9,7,20,.75);
+  flex-shrink:0;backdrop-filter:blur(8px)}
+.tb{padding:.35rem .7rem;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);
+  color:rgba(255,255,255,.6);font-size:.72rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px;transition:all .1s}
+.tb:active,.tb.on{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.4);color:#fff}
+#tlWrap{flex:1;position:relative;height:26px;cursor:pointer}
+#tlCanvas{width:100%;height:26px;display:block;border-radius:1px}
+#tlPos{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  font-size:.64rem;color:rgba(255,255,255,.28);font-family:'Courier New',monospace;
+  pointer-events:none}
+
+/* ── SEM BAR ───────────────────────────────────────────────────────────── */
+#semBar{height:20px;display:flex;align-items:center;gap:.5rem;padding:0 .8rem;
+  background:rgba(9,7,20,.6);border-top:1px solid rgba(153,68,255,.07);flex-shrink:0}
+#semDots{display:flex;gap:.18rem}
+.dot{width:5px;height:5px;border-radius:50%;background:rgba(153,68,255,.15)}
+.dot.on{background:rgba(153,68,255,.75);box-shadow:0 0 3px rgba(153,68,255,.5)}
+#specMini{flex:1;height:14px;border-radius:1px;overflow:hidden}
+#specC{width:100%;height:14px;display:block}
+
+/* ── ACTION BAR ────────────────────────────────────────────────────────── */
+#actionBar{height:42px;display:flex;align-items:center;gap:.38rem;padding:0 .8rem;
+  border-top:1px solid rgba(153,68,255,.1);background:rgba(9,7,20,.85);
+  flex-shrink:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+#actionBar::-webkit-scrollbar{display:none}
+.ab{padding:.38rem .75rem;border-radius:2px;font-size:.72rem;font-weight:700;
+  letter-spacing:.05em;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.ab.cap{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.22);
+  color:rgba(255,68,68,.75)}
+.ab.cap.on{background:rgba(255,68,68,.18);border-color:rgba(255,68,68,.55);color:#ff4444}
+.ab.neu{background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);
+  color:rgba(255,255,255,.6)}
+.ab.neu:active{background:rgba(153,68,255,.18);color:#fff}
+.ab.xp{background:rgba(0,255,255,.06);border:1px solid rgba(0,255,255,.18);
+  color:rgba(0,255,255,.65)}
+.ab.xp:active{background:rgba(0,255,255,.15);color:#00ffff}
+#capTime{font-size:.7rem;color:rgba(255,68,68,.55);font-family:'Courier New',monospace;
+  min-width:2.2rem}
+
+#fInput{display:none}
+</style>
+</head>
+<body>
+
+<!-- BOOT -->
+<div id="boot">
+  <div class="b-logo">SPUK<span>LAB</span></div>
+  <div class="b-title">VOXRITUAL<br>DNA ENGINE</div>
+  <div class="b-sub">vocal genetics laboratory — v4</div>
+  <button id="enterBtn">ENTER RITUAL</button>
+  <div id="bootMsg"></div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <input type="file" id="fInput" accept=".wav,.mp3,.m4a,.aiff,.aif,.caf,audio/*">
+
+  <div id="hdr">
+    <div class="logo">SPUK<span>LAB</span> / VOXRITUAL DNA</div>
+    <div id="semInfo">
+      <div id="semOrb"></div>
+      <div id="semName">fragile</div>
+    </div>
+  </div>
+
+  <div id="catBar">
+    <button class="cat on" data-c="all">ALL</button>
+    <button class="cat" data-c="captures">CAPTURES</button>
+    <button class="cat" data-c="spoken">SPOKEN</button>
+    <button class="cat" data-c="whispers">WHISPERS</button>
+    <button class="cat" data-c="breaths">BREATHS</button>
+    <button class="cat" data-c="hooks">HOOKS</button>
+    <button class="cat" data-c="fragments">FRAGMENTS</button>
+    <button class="cat" data-c="corrupted">CORRUPTED</button>
+    <button class="cat" data-c="textures">TEXTURES</button>
+    <button class="cat" data-c="ritual">RITUAL</button>
+  </div>
+
+  <div id="library">
+    <div class="libEmpty">NO SAMPLES IN LIBRARY<br><br>USE CAPTURE OR LOAD A FILE<br>TAP ONCE TO PLAY</div>
+  </div>
+
+  <div id="wsDivider">
+    <div id="wsTitle">WORKSPACE — select a sample</div>
+    <div id="wsToggle">▼</div>
+  </div>
+
+  <div id="ws">
+    <div id="wsBody">
+      <canvas id="wsWave"></canvas>
+      <div id="wsPhrase"></div>
+      <div class="wsLabel">MUTATIONS — tap to preview · hold to commit</div>
+      <div id="mutStrip">
+        <button class="mBtn on" data-m="source">SOURCE</button>
+        <button class="mBtn" data-m="dissolve">DISSOLVE</button>
+        <button class="mBtn" data-m="collapse">COLLAPSE</button>
+        <button class="mBtn" data-m="ritual">RITUAL</button>
+        <button class="mBtn" data-m="fever">FEVER</button>
+        <button class="mBtn savebtn" id="commitBtn">COMMIT +</button>
+      </div>
+      <div class="wsLabel">SNAPSHOTS</div>
+      <div id="snapStrip">
+        <button class="snapChip add" id="snapAddBtn">+ SNAP</button>
+        <span class="noSnap" id="noSnapMsg">no snapshots</span>
+      </div>
+      <div class="wsLabel">HISTORY TREE</div>
+      <div id="histRow"></div>
+      <div class="wsLabel" id="recomposeToggle" style="cursor:pointer">
+        RECOMPOSE ▶ phrase rearrangement
+      </div>
+      <div id="recomposePanel">
+        <div id="phraseBlocks"></div>
+        <button class="pbRender" id="pbRenderBtn">RENDER RECOMPOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="transport">
+    <button class="tb" id="tPlay">PLAY</button>
+    <button class="tb" id="tStop">STOP</button>
+    <button class="tb" id="tLoop">LOOP</button>
+    <div id="tlWrap">
+      <canvas id="tlCanvas"></canvas>
+      <div id="tlPos">0:00</div>
+    </div>
+  </div>
+
+  <div id="semBar">
+    <div id="semDots">
+      <div class="dot on"></div><div class="dot on"></div>
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div id="specMini"><canvas id="specC"></canvas></div>
+  </div>
+
+  <div id="actionBar">
+    <button class="ab cap" id="cap5">5s</button>
+    <button class="ab cap" id="cap10">10s</button>
+    <button class="ab cap" id="capLive">CAPTURE</button>
+    <button class="ab cap on" id="capStop" style="display:none">STOP REC</button>
+    <div id="capTime"></div>
+    <button class="ab neu" id="loadBtn">LOAD</button>
+    <button class="ab xp" id="adnBtn">ADN PACK</button>
+    <button class="ab xp" id="wavBtn">WAV</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// VOXRITUAL DNA ENGINE v4 — workflow fluidity pass
+// Principle: every tap produces immediate audio
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── GLOBAL STATE ─────────────────────────────────────────────────────────
+const A = {
+  AC: null, analyser: null, freqData: null,
+  db: null,
+  samples: [],
+  cat: 'all',
+  selectedId: null,
+  semState: 'fragile',
+  snapshots: [],      // in-memory, persisted to localStorage
+  vizFrame: null,
+
+  // capture
+  cap: { stream:null, recorder:null, chunks:[], timer:null, startMs:0 },
+
+  // transport
+  tp: {
+    state: 'stopped', // stopped|playing|paused
+    looping: false,
+    startedAt: 0,    // AC.currentTime when playback started
+    offsetSec: 0,    // seconds offset at start
+    duration: 0
+  }
+};
+
+const STATES    = ['fragile','collapse','ritual','ghost','fever'];
+const SCOLORS   = ['#ff00ff','#ff0055','#00ffff','#9944ff','#ff4488'];
+
+// ─── LIVE MUTATION ENGINE ─────────────────────────────────────────────────
+// Tap any mutation → instant audio via real-time DSP. No render.
+const LME = {
+  src: null,        // current AudioBufferSourceNode
+  mutType: 'source',// active mutation type
+  chainOut: null,   // node connected to analyser
+
+  play(buf, type, offset) {
+    this.stop();
+    if (!buf || !A.AC) return;
+
+    this.mutType = type;
+    const src = A.AC.createBufferSource();
+    src.buffer = buf;
+    src.loop = A.tp.looping;
+
+    const chain = buildLiveChain(type);
+    src.connect(chain.input);
+    chain.output.connect(A.analyser);
+    A.analyser.connect(A.AC.destination);
+
+    const off = Math.min(offset || 0, buf.duration * 0.99);
+    A.tp.startedAt = A.AC.currentTime - off;
+    A.tp.offsetSec = off;
+    A.tp.duration = buf.duration;
+    A.tp.state = 'playing';
+
+    src.start(A.AC.currentTime, off);
+    this.src = src;
+    this.chainOut = chain.output;
+
+    src.onended = () => {
+      if (A.tp.state === 'playing' && !A.tp.looping) {
+        A.tp.state = 'stopped';
+        updateTransportUI();
+      }
+    };
+    updateTransportUI();
+  },
+
+  stop() {
+    if (this.src) {
+      // Capture position before stopping
+      if (A.tp.state === 'playing' && this.src.buffer) {
+        const elapsed = A.AC.currentTime - A.tp.startedAt;
+        A.tp.offsetSec = elapsed % this.src.buffer.duration;
+      }
+      try { this.src.stop(); this.src.disconnect(); } catch(e) {}
+      this.src = null;
+    }
+    if (this.chainOut) {
+      try { this.chainOut.disconnect(); } catch(e) {}
+      this.chainOut = null;
+    }
+    A.tp.state = 'stopped';
+  },
+
+  currentPos() {
+    if (!this.src?.buffer || A.tp.state !== 'playing') return A.tp.offsetSec;
+    const dur = this.src.buffer.duration;
+    return ((A.AC.currentTime - A.tp.startedAt) % dur);
+  }
+};
+
+function buildLiveChain(type) {
+  const AC = A.AC;
+  const input = AC.createGain();
+  let last = input;
+
+  switch(type) {
+    case 'dissolve': {
+      // Ghost reverb: sparse IR + slight delay
+      const d1 = AC.createDelay(2); d1.delayTime.value = 0.032;
+      const d2 = AC.createDelay(2); d2.delayTime.value = 0.095;
+      const w1 = AC.createGain(); w1.gain.value = 0.28;
+      const w2 = AC.createGain(); w2.gain.value = 0.15;
+      const dry = AC.createGain(); dry.gain.value = 0.82;
+      const mix = AC.createGain();
+      input.connect(dry); input.connect(d1); input.connect(d2);
+      d1.connect(w1); d2.connect(w2);
+      dry.connect(mix); w1.connect(mix); w2.connect(mix);
+      last = mix; break;
+    }
+    case 'collapse': {
+      const dist = AC.createWaveShaper();
+      dist.curve = dCurve(115); dist.oversample = '4x';
+      const g = AC.createGain(); g.gain.value = 0.68;
+      input.connect(dist); dist.connect(g); last = g; break;
+    }
+    case 'ritual': {
+      const d = AC.createDelay(2); d.delayTime.value = 0.19;
+      const fb = AC.createGain(); fb.gain.value = 0.28;
+      const wet = AC.createGain(); wet.gain.value = 0.32;
+      const dry = AC.createGain(); dry.gain.value = 0.83;
+      const mix = AC.createGain();
+      input.connect(dry); input.connect(d);
+      d.connect(fb); fb.connect(d); d.connect(wet);
+      dry.connect(mix); wet.connect(mix);
+      last = mix; break;
+    }
+    case 'fever': {
+      const dist = AC.createWaveShaper();
+      dist.curve = dCurve(195); dist.oversample = '4x';
+      const g = AC.createGain(); g.gain.value = 0.55;
+      input.connect(dist); dist.connect(g); last = g; break;
+    }
+    // 'source' falls through: last = input (passthrough)
+  }
+
+  // Soft limiter
+  const lim = AC.createDynamicsCompressor();
+  lim.threshold.value = -8; lim.knee.value = 2;
+  lim.ratio.value = 16; lim.attack.value = 0.001; lim.release.value = 0.07;
+  last.connect(lim);
+  return { input, output: lim };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOT — iOS Safe
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('enterBtn').addEventListener('click', async function() {
+  this.disabled = true; setMsg('initializing…');
+
+  A.AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+  await A.AC.resume();
+
+  A.analyser = A.AC.createAnalyser();
+  A.analyser.fftSize = 512;
+  A.analyser.smoothingTimeConstant = 0.85;
+  A.freqData = new Uint8Array(A.analyser.frequencyBinCount);
+
+  setMsg('loading library…');
+  try {
+    A.db = await openDB();
+    A.samples = await dbAll();
+  } catch(e) { A.samples = []; }
+
+  // Load snapshots from localStorage
+  try {
+    A.snapshots = JSON.parse(localStorage.getItem('vr4_snaps') || '[]');
+  } catch(e) { A.snapshots = []; }
+
+  document.getElementById('boot').style.display = 'none';
+  document.getElementById('app').classList.add('show');
+
+  renderLibrary();
+  startViz();
+
+  // Restore last session
+  try {
+    const sess = JSON.parse(localStorage.getItem('vr4_sess') || '{}');
+    if (sess.cat) setCat(sess.cat);
+    if (sess.semState) setSemState(sess.semState);
+    if (sess.selectedId && A.samples.find(s => s.id === sess.selectedId)) {
+      selectSample(sess.selectedId, false); // don't autoplay on restore
+    }
+  } catch(e) {}
+
+  setMsg('');
+});
+
+function setMsg(m) { document.getElementById('bootMsg').textContent = m; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDEXEDDB
+// ═══════════════════════════════════════════════════════════════════════════
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('voxritual_v4', 1);
+    req.onerror = () => rej(req.error);
+    req.onsuccess = () => res(req.result);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('samples')) {
+        const s = db.createObjectStore('samples', { keyPath: 'id' });
+        s.createIndex('cat', 'cat');
+        s.createIndex('parentId', 'parentId');
+      }
+    };
+  });
+}
+const dbPut    = d => idbOp('readwrite', s => s.put(d));
+const dbDel    = id => idbOp('readwrite', s => s.delete(id));
+const dbAll    = () => idbOp('readonly', s => s.getAll());
+const dbClear  = () => idbOp('readwrite', s => s.clear());
+
+function idbOp(mode, fn) {
+  return new Promise((res, rej) => {
+    const tx = A.db.transaction('samples', mode);
+    const req = fn(tx.objectStore('samples'));
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPTURE — HARVEST (capture → immediate stream close)
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('cap5').addEventListener('click', () => startCap(5));
+document.getElementById('cap10').addEventListener('click', () => startCap(10));
+document.getElementById('capLive').addEventListener('click', () => startCap(null));
+document.getElementById('capStop').addEventListener('click', stopCap);
+
+async function startCap(maxSec) {
+  if (A.cap.stream) return;
+  if (A.AC.state === 'suspended') await A.AC.resume();
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+    A.cap.stream = stream;
+    A.cap.chunks = [];
+    A.cap.startMs = Date.now();
+
+    // Route mic → analyser for spectrum
+    const msrc = A.AC.createMediaStreamSource(stream);
+    msrc.connect(A.analyser);
+    A.cap.msrc = msrc;
+
+    const mr = new MediaRecorder(stream, { mimeType: supportedMime() });
+    mr.ondataavailable = e => { if (e.data.size > 0) A.cap.chunks.push(e.data); };
+    mr.onstop = finishCap;
+    mr.start(100);
+    A.cap.recorder = mr;
+
+    // UI
+    document.getElementById('capStop').style.display = 'inline-block';
+    document.getElementById('capLive').classList.add('on');
+    document.getElementById('cap5').classList.add('on');
+    document.getElementById('cap10').classList.add('on');
+
+    let elapsed = 0;
+    A.cap.timer = setInterval(() => {
+      elapsed = (Date.now() - A.cap.startMs) / 1000;
+      document.getElementById('capTime').textContent = elapsed.toFixed(1) + 's';
+      if (maxSec && elapsed >= maxSec) stopCap();
+    }, 100);
+
+  } catch(e) {
+    document.getElementById('capTime').textContent = 'denied';
+    setTimeout(() => { document.getElementById('capTime').textContent = ''; }, 2000);
+  }
+}
+
+function stopCap() {
+  if (!A.cap.stream) return;
+  clearInterval(A.cap.timer);
+  A.cap.recorder.stop();
+  // IMMEDIATELY release mic
+  A.cap.stream.getTracks().forEach(t => t.stop());
+  A.cap.stream = null;
+  if (A.cap.msrc) { try { A.cap.msrc.disconnect(); } catch(e){} A.cap.msrc = null; }
+  document.getElementById('capStop').style.display = 'none';
+  document.getElementById('capLive').classList.remove('on');
+  document.getElementById('cap5').classList.remove('on');
+  document.getElementById('cap10').classList.remove('on');
+  document.getElementById('capTime').textContent = '…';
+}
+
+async function finishCap() {
+  if (!A.cap.chunks.length) { document.getElementById('capTime').textContent = ''; return; }
+  const blob = new Blob(A.cap.chunks, { type: A.cap.chunks[0].type });
+  let buf;
+  try { buf = await A.AC.decodeAudioData((await blob.arrayBuffer()).slice(0)); }
+  catch(e) { document.getElementById('capTime').textContent = 'err'; return; }
+
+  const sample = await buildRecord(buf, { name:`cap_${stamp()}`, cat:'captures', parentId:null });
+  await dbPut(sample);
+  A.samples.push(sample);
+  renderLibrary();
+  selectSample(sample.id, true);
+  document.getElementById('capTime').textContent = `${buf.duration.toFixed(1)}s`;
+  setTimeout(() => { document.getElementById('capTime').textContent = ''; }, 3000);
+}
+
+// ── FILE LOAD ─────────────────────────────────────────────────────────────
+document.getElementById('loadBtn').addEventListener('click', () =>
+  document.getElementById('fInput').click());
+
+document.getElementById('fInput').addEventListener('change', async function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  document.getElementById('capTime').textContent = '…';
+  try {
+    const ab = await file.arrayBuffer();
+    const buf = await A.AC.decodeAudioData(ab.slice(0));
+    const name = file.name.replace(/\.[^.]+$/,'');
+    const sample = await buildRecord(buf, { name, cat:'spoken', parentId:null });
+    await dbPut(sample);
+    A.samples.push(sample);
+    renderLibrary();
+    selectSample(sample.id, true);
+    document.getElementById('capTime').textContent = '';
+  } catch(e) { document.getElementById('capTime').textContent = 'err'; }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SAMPLE RECORD BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildRecord(buf, meta) {
+  const analysis = analyze(buf);
+  const scores = score(buf, analysis);
+  const channelData = [];
+  for (let c = 0; c < buf.numberOfChannels; c++)
+    channelData.push(buf.getChannelData(c).slice());
+  return {
+    id: uid(), name: meta.name || 'fragment',
+    cat: meta.cat || 'fragments', parentId: meta.parentId || null,
+    mutationOf: meta.mutationOf || null,
+    sampleRate: buf.sampleRate, numberOfChannels: buf.numberOfChannels,
+    length: buf.length, duration: buf.duration,
+    channelData, analysis, scores,
+    semState: A.semState, createdAt: Date.now()
+  };
+}
+
+function analyze(buf) {
+  const data = buf.getChannelData(0), rate = buf.sampleRate;
+  const win = Math.floor(rate * 0.010);
+  let transients = [], breaths = [], silences = [], phrases = [];
+  let prevE = 0, silStart = -1, phraseStart = -1;
+
+  for (let i = 0; i < data.length; i += win) {
+    let e = 0;
+    const end = Math.min(i+win, data.length);
+    for (let j = i; j < end; j++) e += data[j]*data[j];
+    e = Math.sqrt(e / (end-i));
+    const t = i / rate;
+
+    if (e > prevE * 1.72 && e > 0.016)
+      transients.push({ t, e, type: e > 0.055 ? 'consonant' : 'onset' });
+
+    if (e < 0.004) {
+      if (silStart < 0) silStart = t;
+      if (phraseStart >= 0 && t - phraseStart > 0.12) {
+        phrases.push({ t0: phraseStart, t1: t }); phraseStart = -1;
+      }
+    } else {
+      if (silStart >= 0 && t - silStart > 0.04) {
+        silences.push({ t0: silStart, t1: t });
+        if (e < 0.022) breaths.push({ t, dur: t - silStart });
+      }
+      silStart = -1;
+      if (phraseStart < 0) phraseStart = t;
+    }
+    prevE = e;
+  }
+  if (phraseStart >= 0) phrases.push({ t0: phraseStart, t1: buf.duration });
+  return { transients, breaths, silences, phrases };
+}
+
+function score(buf, a) {
+  const silDur = a.silences.reduce((s,x) => s + x.t1 - x.t0, 0);
+  const fragility = Math.min(100, Math.round(silDur/buf.duration*100 + a.breaths.length*5));
+  const ghost = Math.min(100, Math.round(Math.max(0, 100 - (a.transients.length/buf.duration)*8)));
+  return { fragility, ghost };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRARY UI
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.cat').forEach(b =>
+  b.addEventListener('click', () => setCat(b.dataset.c)));
+
+function setCat(c) {
+  A.cat = c;
+  document.querySelectorAll('.cat').forEach(b =>
+    b.classList.toggle('on', b.dataset.c === c));
+  renderLibrary();
+  saveSession();
+}
+
+function renderLibrary() {
+  const lib = document.getElementById('library');
+  const list = A.cat === 'all' ? A.samples : A.samples.filter(s => s.cat === A.cat);
+
+  if (!list.length) {
+    lib.innerHTML = '<div class="libEmpty">NO SAMPLES<br>CAPTURE OR LOAD A FILE</div>';
+    return;
+  }
+
+  lib.innerHTML = list.map(s => {
+    const isPlaying = A.selectedId === s.id && LME.src;
+    const descN = A.samples.filter(x => x.parentId === s.id).length;
+    return `<div class="sRow${A.selectedId===s.id?' on':''}" data-id="${s.id}">
+      ${isPlaying ? '<div class="sPlaying"></div>' : ''}
+      <canvas class="sWave" data-id="${s.id}" width="48" height="20"></canvas>
+      <div class="sInfo">
+        <div class="sName">${s.name}${s.mutationOf?` ↳${s.mutationOf}`:''}</div>
+        <div class="sTags">
+          <span class="sTag">${s.cat}</span>
+          <span class="sTag sem">${s.semState}</span>
+          ${descN ? `<span class="sTag">${descN} desc</span>` : ''}
+        </div>
+      </div>
+      <div class="sRight">
+        <div class="sDur">${fmt(s.duration)}</div>
+        <div class="sScr">f:${s.scores.fragility} g:${s.scores.ghost}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Bind clicks
+  lib.querySelectorAll('.sRow').forEach(el =>
+    el.addEventListener('click', () => selectSample(el.dataset.id, true)));
+
+  // Draw mini waveforms
+  lib.querySelectorAll('.sWave').forEach(c => {
+    const s = A.samples.find(x => x.id === c.dataset.id);
+    if (s) miniWave(c, s);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECT SAMPLE — tap → play immediately
+// ═══════════════════════════════════════════════════════════════════════════
+function selectSample(id, autoPlay) {
+  A.selectedId = id;
+  const sample = A.samples.find(s => s.id === id);
+  if (!sample) return;
+
+  setSemState(sample.semState);
+  openWorkspace(sample);
+
+  if (autoPlay) {
+    const buf = toAudioBuf(sample);
+    LME.play(buf, LME.mutType === 'source' ? 'source' : LME.mutType, 0);
+    // Reset waveform cache for timeline
+    renderTimeline(sample);
+  }
+
+  renderLibrary(); // update selection highlight
+  saveSession();
+}
+
+function openWorkspace(sample) {
+  document.getElementById('ws').classList.add('open');
+  document.getElementById('wsTitle').textContent = `WORKSPACE — ${sample.name}`;
+  document.getElementById('wsToggle').textContent = '▲';
+
+  drawWorkspaceWave(sample);
+  drawPhraseMap(sample);
+  drawHistoryTree(sample);
+  renderSnapshots();
+  renderRecompose(sample);
+}
+
+// Workspace toggle (close/open)
+document.getElementById('wsDivider').addEventListener('click', () => {
+  const ws = document.getElementById('ws');
+  const tog = document.getElementById('wsToggle');
+  const open = ws.classList.toggle('open');
+  tog.textContent = open ? '▲' : '▼';
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MUTATION MACROS — TAP = live preview, HOLD = commit
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.mBtn[data-m]').forEach(btn => {
+  let holdTimer = null;
+
+  btn.addEventListener('click', () => {
+    const type = btn.dataset.m;
+    const sample = A.samples.find(s => s.id === A.selectedId);
+    if (!sample) return;
+
+    // Update active mutation highlight
+    document.querySelectorAll('.mBtn[data-m]').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+
+    // Preview immediately
+    const pos = LME.currentPos();
+    LME.play(toAudioBuf(sample), type, pos);
+    setSemState(statForMutation(type));
+  });
+
+  // Long press on mobile = commit
+  btn.addEventListener('touchstart', () => {
+    holdTimer = setTimeout(() => commitVariant(btn.dataset.m), 600);
+  });
+  btn.addEventListener('touchend', () => clearTimeout(holdTimer));
+  btn.addEventListener('touchmove', () => clearTimeout(holdTimer));
+});
+
+document.getElementById('commitBtn').addEventListener('click', () => {
+  commitVariant(LME.mutType);
+});
+
+async function commitVariant(type) {
+  if (type === 'source') return;
+  const src = A.samples.find(s => s.id === A.selectedId);
+  if (!src) return;
+
+  document.getElementById('commitBtn').textContent = 'RENDERING…';
+
+  try {
+    const srcBuf = toAudioBuf(src);
+    const rendered = await offlineRender(srcBuf, type);
+
+    const catMap = { dissolve:'textures', collapse:'corrupted', ritual:'ritual', fever:'corrupted' };
+    const child = await buildRecord(rendered, {
+      name: `${src.name}_${type}`,
+      cat: catMap[type] || 'fragments',
+      parentId: src.id, mutationOf: type
+    });
+    child.semState = statForMutation(type);
+
+    await dbPut(child);
+    A.samples.push(child);
+    renderLibrary();
+
+    // Refresh workspace
+    const current = A.samples.find(s => s.id === A.selectedId);
+    if (current) drawHistoryTree(current);
+
+    document.getElementById('commitBtn').textContent = `COMMIT + (${type})`;
+    setTimeout(() => { document.getElementById('commitBtn').textContent = 'COMMIT +'; }, 2500);
+  } catch(e) {
+    console.error('Commit failed:', e);
+    document.getElementById('commitBtn').textContent = 'COMMIT +';
+  }
+}
+
+// ─── OFFLINE RENDER ───────────────────────────────────────────────────────
+async function offlineRender(srcBuf, type) {
+  const len = srcBuf.length, rate = srcBuf.sampleRate;
+  const offAC = new OfflineAudioContext(2, len, rate);
+  const stereo = offAC.createBuffer(2, len, rate);
+  for (let c = 0; c < 2; c++)
+    stereo.copyToChannel(srcBuf.getChannelData(Math.min(c, srcBuf.numberOfChannels-1)), c);
+
+  const src = offAC.createBufferSource();
+  src.buffer = stereo;
+  let last = src;
+
+  switch(type) {
+    case 'dissolve': {
+      const ir = buildIR(offAC, 0.65, 0.22);
+      const conv = offAC.createConvolver(); conv.buffer = ir;
+      const wet = offAC.createGain(); wet.gain.value = 0.42;
+      const dry = offAC.createGain(); dry.gain.value = 0.75;
+      const mix = offAC.createGain();
+      src.connect(dry); src.connect(conv); conv.connect(wet);
+      dry.connect(mix); wet.connect(mix); last = mix; break;
+    }
+    case 'collapse': {
+      src.playbackRate.value = 0.97;
+      const dist = offAC.createWaveShaper(); dist.curve = dCurve(125); dist.oversample='4x';
+      const g = offAC.createGain(); g.gain.value = 0.68;
+      src.connect(dist); dist.connect(g); last = g; break;
+    }
+    case 'ritual': {
+      const d = offAC.createDelay(2); d.delayTime.value = 0.21;
+      const fb = offAC.createGain(); fb.gain.value = 0.3;
+      const wet = offAC.createGain(); wet.gain.value = 0.35;
+      const dry = offAC.createGain(); dry.gain.value = 0.82;
+      const mix = offAC.createGain();
+      src.connect(dry); src.connect(d); d.connect(fb); fb.connect(d);
+      d.connect(wet); dry.connect(mix); wet.connect(mix); last = mix; break;
+    }
+    case 'fever': {
+      src.playbackRate.value = 1.04;
+      const dist = offAC.createWaveShaper(); dist.curve = dCurve(215); dist.oversample='4x';
+      const g = offAC.createGain(); g.gain.value = 0.52;
+      src.connect(dist); dist.connect(g); last = g; break;
+    }
+  }
+
+  const lim = offAC.createDynamicsCompressor();
+  lim.threshold.value=-8; lim.knee.value=2; lim.ratio.value=18;
+  lim.attack.value=0.001; lim.release.value=0.06;
+  last.connect(lim); lim.connect(offAC.destination);
+  src.start(0);
+  return offAC.startRendering();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SNAPSHOTS — instant state memory (no audio stored)
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('snapAddBtn').addEventListener('click', () => {
+  if (!A.selectedId) return;
+  const snap = {
+    id: uid(),
+    name: `${LME.mutType}_${stamp()}`,
+    sourceId: A.selectedId,
+    mutType: LME.mutType,
+    semState: A.semState,
+    ts: Date.now()
+  };
+  A.snapshots.push(snap);
+  if (A.snapshots.length > 20) A.snapshots.shift();
+  localStorage.setItem('vr4_snaps', JSON.stringify(A.snapshots));
+  renderSnapshots();
+});
+
+function renderSnapshots() {
+  const strip = document.getElementById('snapStrip');
+  const noMsg = document.getElementById('noSnapMsg');
+  const relSnaps = A.snapshots.filter(s => s.sourceId === A.selectedId);
+
+  noMsg.style.display = relSnaps.length ? 'none' : 'inline';
+
+  // Remove old chips (keep + button and noMsg)
+  strip.querySelectorAll('.snapChip:not(.add)').forEach(c => c.remove());
+
+  relSnaps.slice(-8).forEach(snap => {
+    const chip = document.createElement('button');
+    chip.className = 'snapChip';
+    chip.textContent = snap.name;
+    chip.addEventListener('click', () => recallSnapshot(snap));
+    strip.appendChild(chip);
+  });
+}
+
+function recallSnapshot(snap) {
+  const sample = A.samples.find(s => s.id === snap.sourceId);
+  if (!sample) return;
+  if (A.selectedId !== snap.sourceId) selectSample(snap.sourceId, false);
+  setSemState(snap.semState);
+  // Activate mutation button
+  document.querySelectorAll('.mBtn[data-m]').forEach(b =>
+    b.classList.toggle('on', b.dataset.m === snap.mutType));
+  // Play with recalled mutation
+  const pos = LME.currentPos();
+  LME.play(toAudioBuf(sample), snap.mutType, pos);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HISTORY TREE — compact visual genetics map
+// ═══════════════════════════════════════════════════════════════════════════
+function drawHistoryTree(sample) {
+  const row = document.getElementById('histRow');
+  row.innerHTML = '';
+
+  // Build chain: root → ... → current + descendants
+  const chain = getAncestorChain(sample);
+  const descendants = A.samples.filter(s => s.parentId === sample.id);
+
+  chain.forEach((s, i) => {
+    if (i > 0) row.appendChild(arrow());
+    const node = hNode(s, s.id === sample.id ? 'on' : (i===0 ? 'root' : ''));
+    row.appendChild(node);
+  });
+
+  if (descendants.length) {
+    row.appendChild(arrow('('));
+    descendants.forEach((d, i) => {
+      if (i > 0) row.appendChild(arrow('|'));
+      row.appendChild(hNode(d, ''));
+    });
+    row.appendChild(arrow(')'));
+  }
+}
+
+function getAncestorChain(sample) {
+  const chain = [sample];
+  let cur = sample;
+  for (let i = 0; i < 8; i++) {
+    if (!cur.parentId) break;
+    const parent = A.samples.find(s => s.id === cur.parentId);
+    if (!parent) break;
+    chain.unshift(parent);
+    cur = parent;
+  }
+  return chain;
+}
+
+function hNode(s, cls) {
+  const n = document.createElement('button');
+  n.className = `hNode${cls ? ' '+cls : ''}`;
+  n.textContent = (s.mutationOf || s.name.slice(0,8));
+  n.addEventListener('click', () => selectSample(s.id, true));
+  return n;
+}
+
+function arrow(txt) {
+  const a = document.createElement('div');
+  a.className = 'hArrow';
+  a.textContent = txt || '→';
+  return a;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECOMPOSE MODE — phrase block rearrangement
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('recomposeToggle').addEventListener('click', () => {
+  document.getElementById('recomposePanel').classList.toggle('open');
+});
+
+document.getElementById('pbRenderBtn').addEventListener('click', renderRecomposed);
+
+function renderRecompose(sample) {
+  const blocks = document.getElementById('phraseBlocks');
+  const phrases = sample.analysis.phrases || [];
+  blocks.innerHTML = phrases.slice(0, 20).map((p, i) =>
+    `<button class="pbBlock" data-i="${i}" data-t0="${p.t0}" data-t1="${p.t1}">
+      P${i+1} ${(p.t1-p.t0).toFixed(1)}s
+    </button>`
+  ).join('');
+  blocks.querySelectorAll('.pbBlock').forEach(b =>
+    b.addEventListener('click', () => {
+      b.classList.toggle('off');
+      // If a phrase is active, preview that fragment
+      const sample = A.samples.find(s => s.id === A.selectedId);
+      if (!b.classList.contains('off') && sample) {
+        previewPhrase(sample, parseFloat(b.dataset.t0), parseFloat(b.dataset.t1));
+      }
+    })
+  );
+}
+
+function previewPhrase(sample, t0, t1) {
+  const buf = toAudioBuf(sample);
+  LME.stop();
+  const src = A.AC.createBufferSource();
+  src.buffer = buf;
+  src.connect(A.analyser);
+  A.analyser.connect(A.AC.destination);
+  src.start(0, t0, t1 - t0);
+  LME.src = src;
+  A.tp.state = 'playing';
+  A.tp.startedAt = A.AC.currentTime - t0;
+  A.tp.duration = buf.duration;
+}
+
+async function renderRecomposed() {
+  const sample = A.samples.find(s => s.id === A.selectedId);
+  if (!sample) return;
+
+  const blocks = Array.from(document.querySelectorAll('.pbBlock:not(.off)'));
+  if (!blocks.length) return;
+
+  document.getElementById('pbRenderBtn').textContent = 'RENDERING…';
+
+  const srcBuf = toAudioBuf(sample);
+  const segs = blocks.map(b => ({
+    t0: parseFloat(b.dataset.t0), t1: parseFloat(b.dataset.t1),
+    frames: Math.floor((parseFloat(b.dataset.t1) - parseFloat(b.dataset.t0)) * srcBuf.sampleRate)
+  }));
+  const totalFrames = segs.reduce((s, g) => s + g.frames, 0);
+  if (!totalFrames) { document.getElementById('pbRenderBtn').textContent = 'RENDER RECOMPOSE'; return; }
+
+  const newBuf = A.AC.createBuffer(srcBuf.numberOfChannels, totalFrames, srcBuf.sampleRate);
+  let off = 0;
+  for (const seg of segs) {
+    const sf = Math.floor(seg.t0 * srcBuf.sampleRate);
+    for (let c = 0; c < srcBuf.numberOfChannels; c++) {
+      const src = srcBuf.getChannelData(c), dst = newBuf.getChannelData(c);
+      for (let i = 0; i < seg.frames; i++) dst[off+i] = src[sf+i] || 0;
+    }
+    off += seg.frames;
+  }
+
+  const child = await buildRecord(newBuf, {
+    name: `${sample.name}_recomp`,
+    cat: 'fragments', parentId: sample.id, mutationOf: 'recompose'
+  });
+  await dbPut(child);
+  A.samples.push(child);
+  renderLibrary();
+  selectSample(child.id, true);
+  document.getElementById('pbRenderBtn').textContent = 'RENDER RECOMPOSE';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRANSPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('tPlay').addEventListener('click', () => {
+  const s = A.samples.find(x => x.id === A.selectedId);
+  if (!s) return;
+  if (A.AC.state === 'suspended') A.AC.resume();
+  const pos = A.tp.state === 'paused' ? A.tp.offsetSec : 0;
+  LME.play(toAudioBuf(s), LME.mutType, pos);
+});
+
+document.getElementById('tStop').addEventListener('click', () => {
+  LME.stop();
+  updateTransportUI();
+});
+
+document.getElementById('tLoop').addEventListener('click', function() {
+  A.tp.looping = !A.tp.looping;
+  this.classList.toggle('on', A.tp.looping);
+  if (LME.src) LME.src.loop = A.tp.looping;
+});
+
+// Timeline scrub
+document.getElementById('tlWrap').addEventListener('click', function(e) {
+  const s = A.samples.find(x => x.id === A.selectedId);
+  if (!s) return;
+  const frac = (e.clientX - this.getBoundingClientRect().left) / this.offsetWidth;
+  const sec = Math.max(0, Math.min(1, frac)) * s.duration;
+  if (A.tp.state === 'playing') {
+    LME.play(toAudioBuf(s), LME.mutType, sec);
+  } else {
+    A.tp.offsetSec = sec;
+  }
+});
+
+function updateTransportUI() {
+  document.getElementById('tPlay').classList.toggle('on', A.tp.state === 'playing');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUALIZATION — minimal functional
+// ═══════════════════════════════════════════════════════════════════════════
+function startViz() { vizLoop(); }
+
+function vizLoop() {
+  drawSpec();
+  drawTimeline();
+  requestAnimationFrame(vizLoop);
+}
+
+function drawSpec() {
+  const c = document.getElementById('specC');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.offsetWidth || 100, H = 14;
+  if (c.width !== W) { c.width = W; c.height = H; }
+  ctx.clearRect(0, 0, W, H);
+  if (!A.analyser) return;
+  A.analyser.getByteFrequencyData(A.freqData);
+  const col = SCOLORS[STATES.indexOf(A.semState)] || '#9944ff';
+  const [r,g,b] = hexRGB(col);
+  const step = A.freqData.length / W;
+  for (let x = 0; x < W; x++) {
+    const v = A.freqData[Math.floor(x*step)] / 255;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.65)`;
+    ctx.fillRect(x, H - v*H, 1, v*H);
+  }
+}
+
+function renderTimeline(sample) {
+  // Cache waveform image for timeline
+  const c = document.getElementById('tlCanvas');
+  if (!c) return;
+  c.width = c.offsetWidth || 300;
+  c.height = 26;
+  const ctx = c.getContext('2d'), W = c.width, H = 26;
+  ctx.fillStyle = 'rgba(153,68,255,.05)';
+  ctx.fillRect(0,0,W,H);
+  const data = sample.channelData[0];
+  const step = Math.max(1, Math.floor(data.length/W));
+  const mid = H/2;
+  ctx.strokeStyle = 'rgba(153,68,255,.35)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    let mx = 0; const b = x*step;
+    for (let j = b; j < b+step && j < data.length; j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    if (x===0) ctx.moveTo(x, mid-mx*mid*.8); else ctx.lineTo(x, mid-mx*mid*.8);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(153,68,255,.2)';
+  for (let x = 0; x < W; x++) {
+    let mx = 0; const b = x*step;
+    for (let j = b; j < b+step && j < data.length; j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    if (x===0) ctx.moveTo(x, mid+mx*mid*.8); else ctx.lineTo(x, mid+mx*mid*.8);
+  }
+  ctx.stroke();
+}
+
+function drawTimeline() {
+  const c = document.getElementById('tlCanvas');
+  if (!c || !LME.src?.buffer) return;
+  const ctx = c.getContext('2d'), W = c.width, H = c.height;
+  if (!W) return;
+
+  // Waveform already rendered — just draw playhead
+  const pos = LME.currentPos() / LME.src.buffer.duration;
+  const x = pos * W;
+
+  // Erase previous playhead area with a thin slice of the waveform color
+  // (Simplest approach: redraw waveform every N frames via flag)
+  // For now: draw translucent rect over old playhead then new one
+  ctx.fillStyle = 'rgba(0,255,255,0)'; // noop
+  ctx.fillStyle = 'rgba(0,255,255,.9)';
+  ctx.fillRect(Math.max(0, x-1), 0, 2, H);
+
+  // Time label
+  document.getElementById('tlPos').textContent = fmt(LME.currentPos());
+}
+
+// ─── Workspace waveform ────────────────────────────────────────────────────
+function drawWorkspaceWave(sample) {
+  const c = document.getElementById('wsWave');
+  c.width = c.offsetWidth || 300; c.height = 34;
+  const ctx = c.getContext('2d'), W = c.width, H = 34;
+  ctx.fillStyle = 'rgba(153,68,255,.05)';
+  ctx.fillRect(0,0,W,H);
+  const data = sample.channelData[0];
+  const step = Math.max(1, Math.floor(data.length/W)), mid = H/2;
+
+  ctx.strokeStyle = 'rgba(153,68,255,.5)'; ctx.lineWidth=1; ctx.beginPath();
+  for (let x=0;x<W;x++) {
+    let mx=0; const b=x*step;
+    for (let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0 ? ctx.moveTo(x, mid-mx*mid*.88) : ctx.lineTo(x, mid-mx*mid*.88);
+  }
+  ctx.stroke();
+  ctx.beginPath(); ctx.strokeStyle='rgba(153,68,255,.28)';
+  for (let x=0;x<W;x++) {
+    let mx=0; const b=x*step;
+    for (let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0 ? ctx.moveTo(x, mid+mx*mid*.88) : ctx.lineTo(x, mid+mx*mid*.88);
+  }
+  ctx.stroke();
+  // Transient markers
+  ctx.fillStyle='rgba(0,255,255,.5)';
+  for (const t of sample.analysis.transients.slice(0,60)) {
+    ctx.fillRect((t.t/sample.duration)*W-.5, 0, 1, t.type==='consonant'?H*.6:H*.35);
+  }
+  ctx.fillStyle='rgba(153,68,255,.6)';
+  for (const b of sample.analysis.breaths.slice(0,30)) {
+    ctx.fillRect((b.t/sample.duration)*W-.5, H*.7, 1, H*.3);
+  }
+}
+
+function drawPhraseMap(sample) {
+  const pm = document.getElementById('wsPhrase');
+  const { transients, breaths, silences, phrases } = sample.analysis;
+  let segs = [];
+  breaths.forEach(b => segs.push({ t:b.t, type:'breath', label:'BR' }));
+  transients.filter(t=>t.type==='consonant').slice(0,10).forEach(t =>
+    segs.push({ t:t.t, type:'consonant', label:'CX' }));
+  silences.slice(0,8).forEach(s => segs.push({ t:s.t0, type:'silence', label:'—' }));
+  phrases.slice(0,10).forEach(p => segs.push({ t:p.t0, type:'phrase',
+    label:`${(p.t1-p.t0).toFixed(1)}s` }));
+  segs.sort((a,b) => a.t-b.t);
+  pm.innerHTML = segs.slice(0,20).map(s =>
+    `<span class="ph ${s.type}">${s.label}</span>`
+  ).join('');
+}
+
+// ─── Mini waveform thumbnails ──────────────────────────────────────────────
+function miniWave(canvas, s) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = 'rgba(153,68,255,.06)'; ctx.fillRect(0,0,W,H);
+  const data = s.channelData[0];
+  const step = Math.max(1, Math.floor(data.length/W)), mid = H/2;
+  ctx.strokeStyle = 'rgba(153,68,255,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x=0;x<W;x++) {
+    let mx=0; const b=x*step;
+    for (let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0 ? ctx.moveTo(x,mid-mx*mid*.85) : ctx.lineTo(x,mid-mx*mid*.85);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEMANTIC STATE
+// ═══════════════════════════════════════════════════════════════════════════
+function setSemState(state) {
+  A.semState = state;
+  const idx = STATES.indexOf(state);
+  const col = SCOLORS[Math.max(0,idx)];
+  const orb = document.getElementById('semOrb');
+  orb.style.background = col;
+  orb.style.boxShadow = `0 0 6px ${col}`;
+  document.getElementById('semName').textContent = state;
+  const dots = document.querySelectorAll('#semDots .dot');
+  dots.forEach((d,i) => d.classList.toggle('on', i<=Math.max(0,idx)));
+}
+
+function statForMutation(type) {
+  return { source:'fragile',dissolve:'ghost',collapse:'collapse',ritual:'ritual',fever:'fever' }[type] || 'fragile';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('adnBtn').addEventListener('click', exportADN);
+document.getElementById('wavBtn').addEventListener('click', exportWAV);
+
+function exportADN() {
+  const pkg = {
+    version: 'voxritual_adn_v1',
+    ts: new Date().toISOString(),
+    semState: A.semState,
+    samples: A.samples.map(s => ({
+      id:s.id, name:s.name, cat:s.cat, parentId:s.parentId, mutationOf:s.mutationOf,
+      duration:s.duration, sampleRate:s.sampleRate, semState:s.semState,
+      scores:s.scores,
+      analysis:{
+        transientCount:s.analysis.transients.length,
+        breathCount:s.analysis.breaths.length,
+        phraseCount:s.analysis.phrases.length,
+        transients:s.analysis.transients.slice(0,50),
+        breaths:s.analysis.breaths.slice(0,30),
+        phrases:s.analysis.phrases.slice(0,20)
+      },
+      createdAt:s.createdAt
+    })),
+    descendantTree: A.samples.filter(s=>!s.parentId).map(r=>({
+      id:r.id, name:r.name,
+      descendants:A.samples.filter(d=>d.parentId===r.id).map(d=>({
+        id:d.id,name:d.name,mutationOf:d.mutationOf,semState:d.semState
+      }))
+    })),
+    snapshots: A.snapshots
+  };
+  dl(JSON.stringify(pkg,null,2),'application/json',`voxritual_adn_${Date.now()}.json`);
+}
+
+function exportWAV() {
+  const s = A.samples.find(x => x.id === A.selectedId);
+  if (!s) { alert('Select a sample first'); return; }
+  const buf = toAudioBuf(s);
+  const interleaved = new Float32Array(buf.length * buf.numberOfChannels);
+  for (let i = 0; i < buf.length; i++)
+    for (let c = 0; c < buf.numberOfChannels; c++)
+      interleaved[i*buf.numberOfChannels+c] = buf.getChannelData(c)[i];
+  dl(buildWAV(interleaved, buf.sampleRate, buf.numberOfChannels),
+     'audio/wav', `${s.name}_${Date.now()}.wav`);
+}
+
+function buildWAV(samples, rate, ch) {
+  const dl2 = samples.length*2, buf = new ArrayBuffer(44+dl2);
+  const v = new DataView(buf);
+  const ws=(o,s)=>s.split('').forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  ws(0,'RIFF'); v.setUint32(4,36+dl2,true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*ch*2,true); v.setUint16(32,ch*2,true);
+  v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,dl2,true);
+  let off=44;
+  for (let i=0;i<samples.length;i++,off+=2) {
+    const s=Math.max(-1,Math.min(1,samples[i]));
+    v.setInt16(off,s<0?s*32768:s*32767,true);
+  }
+  return buf;
+}
+
+function dl(data, mime, name) {
+  const blob = new Blob([data],{type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION PERSISTENCE
+// ═══════════════════════════════════════════════════════════════════════════
+function saveSession() {
+  localStorage.setItem('vr4_sess', JSON.stringify({
+    selectedId: A.selectedId, semState: A.semState, cat: A.cat,
+    mutType: LME.mutType, looping: A.tp.looping
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+function toAudioBuf(s) {
+  const buf = A.AC.createBuffer(s.numberOfChannels, s.length, s.sampleRate);
+  for (let c = 0; c < s.numberOfChannels; c++)
+    buf.copyToChannel(new Float32Array(s.channelData[c]), c);
+  return buf;
+}
+
+function dCurve(amount) {
+  const n=512; const c=new Float32Array(n);
+  for(let i=0;i<n;i++){const x=(i*2)/n-1;
+    c[i]=amount<1?x:(Math.PI+amount)*x/(Math.PI+amount*Math.abs(x));}
+  return c;
+}
+
+function buildIR(AC, dur, decay) {
+  const rate=AC.sampleRate, len=Math.floor(rate*dur);
+  const buf=AC.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++){const t=i/len;
+      d[i]=Math.random()>.8?(Math.random()*2-1)*Math.exp(-t/decay)*.3:0;}}
+  return buf;
+}
+
+function supportedMime() {
+  for(const t of['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg'])
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+
+function fmt(s) {
+  const m=Math.floor(s/60);
+  return `${m}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+}
+
+function stamp() {
+  const d=new Date();
+  return `${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}${d.getSeconds().toString().padStart(2,'0')}`;
+}
+
+function uid() { return Math.random().toString(36).slice(2,8)+Date.now().toString(36); }
+
+function hexRGB(hex) {
+  const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r?[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)]:[153,68,255];
+}
+</script>
+</body>
+</html>
