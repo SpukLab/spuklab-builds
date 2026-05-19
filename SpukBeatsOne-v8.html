@@ -370,7 +370,7 @@ const VOXDNA={
       slot.affinity=this.semanticAffinity;
       // Tension builds during high-pressure states, releases in void
       const tenBuild=EMO.s.spectral_tension*.004+EMO.s.cognitive_erosion*.003+BIO.traumaLevel*.002;
-      const tenRelease=(WEATHER.target==='VOID'||BIO.isRecovering?.())?slot.prob*.006:.0;
+      const tenRelease=(WEATHER.target==='VOID'||BIO.recovering)?slot.prob*.006:0;
       slot.tension=Math.max(0,Math.min(1,(slot.tension||0)+tenBuild-tenRelease));
     });
     this._updateUI();
@@ -529,12 +529,12 @@ const EMO={
     const s=this.s,L=(a,b,sp)=>a+(b-a)*(sp||.007);
     s.contemplate=Math.max(0,Math.min(1,L(s.contemplate,G.c.silence*.45+WEATHER.c.fogMod*.3+(1-G.c.energy)*.25)));
     s.pressure_acc=Math.max(0,Math.min(1,L(s.pressure_acc,SMEM.sub*.36+G.c.tension*.34+G.c.density*.3)));
-    s.ritual_hypnosis=Math.max(0,Math.min(1,L(s.ritual_hypnosis,(1-G.c.mut)*.42+(G.rhythmOn?.22:0)+(1-Math.abs(G.c.density-.7))*.36)));
+    s.ritual_hypnosis=Math.max(0,Math.min(1,L(s.ritual_hypnosis,(1-G.c.mut)*.42+(G.rhythmOn?0.22:0)+(1-Math.abs(G.c.density-.7))*.36)));
     s.cognitive_erosion=Math.max(0,Math.min(1,L(s.cognitive_erosion,SMEM.glitch*.42+INFECT.totalInfection*.3+BIO.traumaLevel*.28)));
-    s.fragile_recon=Math.max(0,Math.min(1,L(s.fragile_recon,(BIO.isRecovering?.()?.6||0)+(1-G.c.energy)*.24+SMEM.silence*.16)));
+    s.fragile_recon=Math.max(0,Math.min(1,L(s.fragile_recon,(BIO.recovering?0.6:0)+(1-G.c.energy)*.24+SMEM.silence*.16)));
     s.spectral_tension=Math.max(0,Math.min(1,L(s.spectral_tension,G.c.tension*.46+DNA.active.instability*.3+SMEM.sub*.24)));
     let mx=-1;Object.entries(s).forEach(([k,v])=>{if(v>mx){mx=v;this.dominant=k;this.dominantLevel=v;}});
-    SESSION_ID.recordEmo?.(this.dominant);
+    if(SESSION_ID.recordEmo)SESSION_ID.recordEmo(this.dominant);
   },
   applyInfluence(){
     const s=this.s;
@@ -635,11 +635,12 @@ const ECOLOGY_COMPILER={
     this.done=true;
     const ov=document.getElementById('compiler-ov');
     if(ov){ov.classList.add('fading');setTimeout(()=>ov.classList.add('gone'),950);}
-    // Apply emotional bias to initial state
     const bias=this.emotionalBias(DNA.active);
     if(bias.includes('VOID'))G.silenceInertia=Math.max(G.silenceInertia,.22);
     else if(bias.includes('RITUAL'))G.mut=Math.min(G.mut,.18);
     SESSION_ID.init();CIRCADIAN.init();
+    // iOS: resume AudioContext inside user gesture (this is the INITIATE click)
+    if(ac)ac.resume();
     _doStartPlay();
   }
 };
@@ -1174,7 +1175,7 @@ function drawFrame(){
   // Circadian darkening — session progressively enters night-state
   if(CIRCADIAN.darkness>.05){cx2.fillStyle=`rgba(0,0,5,${CIRCADIAN.darkness*.18})`;cx2.fillRect(0,0,W,H);}
   // Fossil visual residue — near-static ghost dots
-  FOSSILS.visuals.forEach(fv=>{const prog=fv.age/fv.maxAge;const al=fv.alpha*(1-prog*.6)*(imm?1:1.2);if(al>.004){cx2.beginPath();cx2.arc(fv.x,fv.y,2+Math.sin(barCount*.1+fv.x)*.8,0,Math.PI*2);cx2.fillStyle=`rgba(153,68,255,${al})`;cx2.fill();}fv.age++;});
+  FOSSILS.visuals.forEach(fv=>{const prog=fv.age/fv.maxAge;const al=fv.alpha*(1-prog*.6)*(imm?1:1.2);if(al>.004){cx2.beginPath();cx2.arc(fv.x,fv.y,2+Math.sin(barCount*.1+fv.x)*.8,0,Math.PI*2);cx2.fillStyle=`rgba(153,68,255,${al})`;cx2.fill();}});
   // Weather fog
   if(wc.fogMod>.1){const fc=WEATHER_TYPES[WEATHER.target]?.pRgb||[100,100,150];cx2.fillStyle=`rgba(${fc[0]},${fc[1]},${fc[2]},${wc.fogMod*.018+WEATHMEM.residue.fogPersist*.007})`;cx2.fillRect(0,0,W,H);}
   // Sub contamination
