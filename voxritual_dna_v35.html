@@ -2560,18 +2560,21 @@ async function renderVIE(srcBuf, identityState) {
     }
     case 'drift': {
       const mix=offAC.createGain();const dryG=offMkG(offAC,m.humanity/100*0.65);src.connect(dryG);dryG.connect(mix);
-      [[900,0.45,2.2],[1850,0.32,1.8],[2800,0.22,1.4]].forEach(([freq,amp,q])=>{
+      var _driftBands=[[900,0.45,2.2],[1850,0.32,1.8],[2800,0.22,1.4]];
+      _driftBands.forEach(function(band){
+        var freq=band[0],amp=band[1],q=band[2];
         const f=offAC.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;f.Q.value=q;
         const g=offMkG(offAC,amp);src.connect(f);f.connect(g);g.connect(mix);
-        // Bake formant drift automation
         const drift=freq*0.22;const step=0.04;
-        for(let t=0;t<srcBuf.duration;t+=step){f.frequency.setValueAtTime(freq+Math.sin(t*0.5)*drift,t);}
+        for(var t=0;t<srcBuf.duration;t+=step){f.frequency.setValueAtTime(freq+Math.sin(t*0.5)*drift,t);}
       });
       last=mix;break;
     }
     case 'tunnel': {
       const mix=offAC.createGain();const dryG=offMkG(offAC,(1-m.hollow/100)*0.5);src.connect(dryG);dryG.connect(mix);
-      [[680,5,0.35],[1380,4,0.28],[2080,3.5,0.18],[2850,3,0.12],[3500,2.5,0.08]].forEach(([freq,q,amp])=>{
+      var _tunnelBands=[[680,5,0.35],[1380,4,0.28],[2080,3.5,0.18],[2850,3,0.12],[3500,2.5,0.08]];
+      _tunnelBands.forEach(function(band){
+        var freq=band[0],q=band[1],amp=band[2];
         const f=offAC.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;f.Q.value=q;
         const g=offMkG(offAC,amp*(m.hollow/100*0.5+0.5));src.connect(f);f.connect(g);g.connect(mix);
       });
@@ -2591,25 +2594,26 @@ async function renderVIE(srcBuf, identityState) {
 }
 
 // ─── VIE UI HANDLERS ─────────────────────────────────────────────────────
-document.querySelectorAll('.vieState').forEach(btn => {
-  btn.addEventListener('click', async () => {
+document.querySelectorAll('.vieState').forEach(function(btn) {
+  btn.addEventListener('click', function() {
     var prevState=VIE.state,prevMacros=Object.assign({},VIE.macros);
     VIE.state = btn.dataset.vi;
     HISTORY.push({type:'vieState',sampleId:A.selectedId,before:{vieState:prevState,macros:prevMacros},after:{vieState:VIE.state,macros:Object.assign({},VIE.macros)},desc:'identity: '+VIE.state});
-    document.querySelectorAll('.vieState').forEach(b => b.classList.toggle('on', b.dataset.vi === VIE.state));
+    document.querySelectorAll('.vieState').forEach(function(b){ b.classList.toggle('on', b.dataset.vi === VIE.state); });
     VIE.updateStatus();
-    await ensureAC();
-    if(TP.state==='playing') {
-      LME.switchIdentity(); // hot-swap VIE — source uninterrupted
-    } else {
-      const s=sample(); if(!s)return;
-      LME.play(toAB(s), LME.mutType, REGION.startSec(s.duration));
-    }
+    ensureAC().then(function(){
+      if(TP.state==='playing') {
+        LME.switchIdentity();
+      } else {
+        var s=sample(); if(!s)return;
+        LME.play(toAB(s), LME.mutType, REGION.startSec(s.duration));
+      }
+    });
   });
 });
 
-document.querySelectorAll('.vieMacroSlider').forEach(sl => {
-  sl.addEventListener('input', () => {
+document.querySelectorAll('.vieMacroSlider').forEach(function(sl) {
+  sl.addEventListener('input', function() {
     VIE.macros[sl.dataset.m] = parseInt(sl.value);
     VIE.applyMacrosLive();
     VIE.updateStatus();
@@ -3240,7 +3244,7 @@ function buildMutChain(type){
 async function ensureAC(){if(A.AC){if(A.AC.state==='suspended')await A.AC.resume();return;}A.AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:44100});await A.AC.resume();A.analyser=A.AC.createAnalyser();A.analyser.fftSize=512;A.analyser.smoothingTimeConstant=0.86;A.freqData=new Uint8Array(A.analyser.frequencyBinCount);}
 
 // ─── STARTUP ─────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded',async()=>{
+async function _appInit(){
   try{A.db=await openDB();A.samples=await dbAll();}catch(e){A.samples=[];}
   try{A.snapshots=JSON.parse(localStorage.getItem('vr35_snaps')||'[]');}catch(e){A.snapshots=[];}
   try{MONTAGE.snapshots=JSON.parse(localStorage.getItem('vr35_msnaps')||'[]');}catch(e){MONTAGE.snapshots=[];}
@@ -3256,8 +3260,9 @@ window.addEventListener('DOMContentLoaded',async()=>{
     if(sbRec)sbRec.style.display=isRec?'':'none';
     if(sbRT&&isRec&&A.cap&&A.cap.startMs){var s=Math.floor((Date.now()-A.cap.startMs)/1000);sbRT.textContent=Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0');}
   },500);
-  try{const sess=JSON.parse(localStorage.getItem('vr35_sess')||'{}');if(sess.cat)setCat(sess.cat);if(sess.semState)setSemState(sess.semState);if(sess.normMode)setNormMode(sess.normMode);if(sess.gap){MONTAGE.gap=sess.gap;document.getElementById('gapVal').textContent=MONTAGE.gap.toFixed(1)+'s';}if(sess.gapType){MONTAGE.gapType=sess.gapType;document.querySelectorAll('.gapTypeBtn').forEach(b=>b.classList.toggle('on',b.dataset.gt===sess.gapType));}if(sess.drift!==undefined){MONTAGE.drift=sess.drift;document.getElementById('driftToggle').classList.toggle('on',MONTAGE.drift);}if(sess.looping){TP.looping=true;}if(sess.mode)setMode(sess.mode);else setMode('surgery');if(sess.selectedId&&A.samples.find(s=>s.id===sess.selectedId))selectSample(sess.selectedId,false);if(sess.trayFragIds&&sess.trayFragIds.length){sess.trayFragIds.forEach(function(fid){var s=A.samples.find(function(x){return x.id===fid;});if(s&&!MONTAGE.slots.find(function(sl){return sl.fragId===fid;}))MONTAGE.addFrag(s);});renderTray();drawMontageCanvas();}}catch(e){setMode('surgery');}
-});
+  try{var sess=JSON.parse(localStorage.getItem('vr35_sess')||'{}');if(sess.cat)setCat(sess.cat);if(sess.semState)setSemState(sess.semState);if(sess.normMode)setNormMode(sess.normMode);if(sess.gap){MONTAGE.gap=sess.gap;document.getElementById('gapVal').textContent=MONTAGE.gap.toFixed(1)+'s';}if(sess.gapType){MONTAGE.gapType=sess.gapType;document.querySelectorAll('.gapTypeBtn').forEach(function(b){b.classList.toggle('on',b.dataset.gt===sess.gapType);});}if(sess.drift!==undefined){MONTAGE.drift=sess.drift;document.getElementById('driftToggle').classList.toggle('on',MONTAGE.drift);}if(sess.looping){TP.looping=true;}if(sess.mode)setMode(sess.mode);else setMode('surgery');if(sess.selectedId&&A.samples.find(function(s){return s.id===sess.selectedId;}))selectSample(sess.selectedId,false);if(sess.trayFragIds&&sess.trayFragIds.length){sess.trayFragIds.forEach(function(fid){var s=A.samples.find(function(x){return x.id===fid;});if(s&&!MONTAGE.slots.find(function(sl){return sl.fragId===fid;}))MONTAGE.addFrag(s);});renderTray();drawMontageCanvas();}}catch(e){setMode('surgery');}
+}
+window.addEventListener('DOMContentLoaded', function(){ _appInit().catch(function(e){ console.error('init error:', e); }); });
 
 // ─── MODE ─────────────────────────────────────────────────────────────────
 document.querySelectorAll('.modeTab').forEach(btn=>btn.addEventListener('click',()=>setMode(btn.dataset.mode)));
@@ -4057,10 +4062,28 @@ if(_newOrgBtn){
   _newOrgBtn.addEventListener('click',function(){
     var n=MONTAGE.lanes.reduce(function(s,l){return s+l.slots.length;},0);
     if(n===0){ ORGANISM.newOrganism(ORGANISM.activeProfile); return; }
-    // Confirm before destroying existing content
-    if(confirm('NEW ORGANISM will clear all '+n+' fragments from the field.\n\nThis can be undone with UNDO.\n\nContinue?')){
-      ORGANISM.newOrganism(ORGANISM.activeProfile);
-    }
+    // Custom confirm modal — iOS-safe (confirm() blocked in WKWebView)
+    var modal=document.createElement('div');
+    modal.style.cssText='position:fixed;inset:0;background:rgba(9,7,20,.94);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:2rem';
+    var msg=document.createElement('div');
+    msg.style.cssText='font-size:.82rem;color:rgba(255,100,100,.85);font-weight:700;letter-spacing:.06em;text-align:center';
+    msg.textContent='NEW ORGANISM';
+    var sub=document.createElement('div');
+    sub.style.cssText='font-size:.7rem;color:rgba(255,255,255,.45);text-align:center;max-width:260px;line-height:1.7';
+    sub.textContent='This will clear '+n+' fragment'+(n!==1?'s':'')+' from the field.\n\nCan be undone with UNDO.';
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;gap:.6rem;margin-top:.5rem';
+    var okBtn=document.createElement('button');
+    okBtn.textContent='CLEAR FIELD';
+    okBtn.style.cssText='padding:.5rem 1.2rem;background:rgba(255,60,60,.15);border:1.5px solid rgba(255,60,60,.4);color:rgba(255,100,100,.85);font-size:.76rem;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:.06em';
+    var cancelBtn=document.createElement('button');
+    cancelBtn.textContent='CANCEL';
+    cancelBtn.style.cssText='padding:.5rem 1.2rem;background:rgba(153,68,255,.1);border:1px solid rgba(153,68,255,.25);color:rgba(180,140,255,.7);font-size:.76rem;font-weight:700;cursor:pointer;border-radius:3px';
+    okBtn.addEventListener('click',function(){document.body.removeChild(modal);ORGANISM.newOrganism(ORGANISM.activeProfile);});
+    cancelBtn.addEventListener('click',function(){document.body.removeChild(modal);});
+    row.appendChild(cancelBtn);row.appendChild(okBtn);
+    modal.appendChild(msg);modal.appendChild(sub);modal.appendChild(row);
+    document.body.appendChild(modal);
   });
 }
 
