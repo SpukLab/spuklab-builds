@@ -4257,10 +4257,20 @@ document.getElementById('packExportADN').addEventListener('click', function() {
   var json = null;
   // Step 1: build
   try { pkg = PACK.buildPackADN(); }
-  catch(e1) { console.error('buildPackADN crash:', e1); HISTORY.showToast('build error — see DBG'); return; }
+  catch(e1) {
+    var msg = e1 ? (e1.message || String(e1)) : 'unknown';
+    console.error('buildPackADN crash:', e1);
+    HISTORY.showToast('build: '+msg.slice(0,40));
+    return;
+  }
   // Step 2: stringify
   try { json = JSON.stringify(pkg, null, 2); }
-  catch(e2) { console.error('stringify crash:', e2); HISTORY.showToast('stringify error — circular ref'); return; }
+  catch(e2) {
+    var msg2 = e2 ? (e2.message || String(e2)) : 'unknown';
+    console.error('stringify crash:', e2);
+    HISTORY.showToast('json: '+msg2.slice(0,40));
+    return;
+  }
   // Step 3: download
   try {
     var filename = (PACK.name.trim().replace(/[^a-z0-9_\-]/gi,'_').toLowerCase() || 'voxritual_pack')
@@ -4269,7 +4279,10 @@ document.getElementById('packExportADN').addEventListener('click', function() {
     var n = (pkg.samples && pkg.samples.length) || 0;
     HISTORY.showToast('ADN pack exported · '+n+' fragments');
   }
-  catch(e3) { console.error('download crash:', e3); HISTORY.showToast('download failed'); }
+  catch(e3) {
+    var msg3 = e3 ? (e3.message || String(e3)) : 'unknown';
+    HISTORY.showToast('download: '+msg3.slice(0,40));
+  }
 });
 
 // Pack export — WAV (montage render)
