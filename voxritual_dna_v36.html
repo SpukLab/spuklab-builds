@@ -4256,7 +4256,7 @@ document.getElementById('packExportADN').addEventListener('click', function() {
     HISTORY.showToast('ADN pack exported · '+n+' fragments');
   } catch(e) {
     console.error('Pack export:', e);
-    HISTORY.showToast('export error: '+e.message.slice(0,30));
+    HISTORY.showToast('export error: '+(e&&e.message?e.message:String(e)).slice(0,35));
   }
 });
 
@@ -5175,23 +5175,40 @@ var ADN = {
 
 // ─── EXPORT HANDLERS ──────────────────────────────────────────────────────
 document.getElementById('adnBtn').addEventListener('click', function(){
+  var pkg = null;
+  var json = null;
+  // Step 1: serialize
+  try { pkg = ADN.serialize(); } catch(e1) {
+    console.error('serialize crash:', e1);
+    HISTORY.showToast('serialize crash — DBG mode');
+    _exportDebugDump(e1, 'serialize');
+    return;
+  }
+  // Step 2: JSON stringify
+  try { json = JSON.stringify(pkg, null, 2); } catch(e2) {
+    console.error('stringify crash:', e2);
+    HISTORY.showToast('stringify crash — circular ref?');
+    return;
+  }
+  // Step 3: download
   try {
-    var pkg = ADN.serialize();
-    // Check if serialize itself returned an error object
-    if(pkg.error) {
-      console.error('ADN serialize internal error:', pkg.error);
-      HISTORY.showToast('serialize error — check console');
-      return;
-    }
-    var json = JSON.stringify(pkg, null, 2);
-    var fragCount = (pkg.timeline && pkg.timeline.fragments) || A.samples.length;
     dlSafe(json, 'application/json', 'voxritual_adn_'+Date.now()+'.json');
-    HISTORY.showToast('ADN exported · '+fragCount+' frags');
-  } catch(e) {
-    console.error('ADN export failed:', e);
-    HISTORY.showToast('export error: '+e.message.slice(0,30));
+    var n = (pkg.timeline && pkg.timeline.fragments !== undefined) ? pkg.timeline.fragments : (A.samples?A.samples.length:0);
+    HISTORY.showToast('ADN exported · '+n+' frags');
+  } catch(e3) {
+    console.error('download crash:', e3);
+    HISTORY.showToast('download failed — open in new tab?');
   }
 });
+
+// Emergency debug dump — exports whatever we can as plain text
+function _exportDebugDump(err, stage) {
+  try {
+    var dump = { stage:stage, error:String(err), samples_count: A.samples?A.samples.length:0,
+      sample_ids: A.samples?A.samples.map(function(s){return s.id+':'+s.name;}).slice(0,5):[] };
+    dlSafe(JSON.stringify(dump,null,2), 'application/json', 'debug_dump_'+Date.now()+'.json');
+  } catch(e) { console.error('debug dump also failed:', e); }
+}
 
 // ─── WAV RENDER (frozen snapshot) ─────────────────────────────────────────
 document.getElementById('montRenderBtn').addEventListener('click', async function(){
