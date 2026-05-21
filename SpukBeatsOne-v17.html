@@ -362,6 +362,7 @@ body{display:grid;grid-template-rows:50px 1fr 86px;grid-template-columns:165px 1
     </div>
     <div id="vox-identity-display"></div>
     <div id="vox-param-bar"><div id="vox-param-fill"></div></div>
+    <div id="vox-frag-slots" style="margin-top:3px"></div>
     <div id="voxslots"></div>
   </div>
   <div class="rsep"></div>
@@ -2170,7 +2171,137 @@ const BUS={
 };
 
 let isPlaying=false,bpm=120;
-const sampleBank={kick:null,snare:null,hat:null,bass:null,texture:null};
+// ══════════════════════════════════════════════════════════
+// SAMPLE ACTIVATION LAYER
+// 3 states per slot: EMPTY → QUEUED → ACTIVE
+// Forge DNA = synthesis parameters (always active)
+// Audio samples = loaded separately, override synth when active
+// VoxRitual fragments = voice slots, bound to audio files by name
+// ══════════════════════════════════════════════════════════
+const SAL={
+  // Synthesis routing state — explicit, never ambiguous
+  routes:{
+    kick:   {mode:'synth',buffer:null,state:'EMPTY'},  // EMPTY|QUEUED|ACTIVE
+    snare:  {mode:'synth',buffer:null,state:'EMPTY'},
+    hat:    {mode:'synth',buffer:null,state:'EMPTY'},
+    bass:   {mode:'synth',buffer:null,state:'EMPTY'},
+    texture:{mode:'synth',buffer:null,state:'EMPTY'},
+  },
+  // VoxRitual fragment slots (keyed by fragment name/id from pack)
+  voxSlots:{},  // {fragId: {name, state:'EMPTY'|'ACTIVE', buffer:null}}
+
+  // Load audio file into a slot — iOS canonical pattern
+  loadSlot(role,file,onDone){
+    if(!ac)return;
+    const slot=this.routes[role];if(!slot)return;
+    slot.state='QUEUED';this._updateUI(role);
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      // iOS: slice(0) is mandatory before decodeAudioData
+      ac.decodeAudioData(ev.target.result.slice(0),
+        decoded=>{
+          slot.buffer=decoded;slot.mode='sample';slot.state='ACTIVE';
+          this._updateUI(role);
+          if(onDone)onDone(role);
+        },
+        err=>{slot.state='EMPTY';this._updateUI(role);console.warn('SAL decode:',err);}
+      );
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  // Load audio file into a VoxRitual fragment slot
+  loadVoxSlot(fragId,file,onDone){
+    if(!ac)return;
+    if(!this.voxSlots[fragId])this.voxSlots[fragId]={state:'QUEUED',buffer:null};
+    else this.voxSlots[fragId].state='QUEUED';
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      ac.decodeAudioData(ev.target.result.slice(0),
+        decoded=>{
+          this.voxSlots[fragId].buffer=decoded;
+          this.voxSlots[fragId].state='ACTIVE';
+          if(onDone)onDone(fragId);
+        },
+        err=>{this.voxSlots[fragId].state='EMPTY';console.warn('SAL vox decode:',err);}
+      );
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  // Clear a slot — back to synth
+  clearSlot(role){
+    const slot=this.routes[role];if(!slot)return;
+    slot.buffer=null;slot.mode='synth';slot.state='EMPTY';
+    this._updateUI(role);
+  },
+
+  // Get buffer for a role — null means use synth
+  get(role){
+    const s=this.routes[role];
+    return (s&&s.state==='ACTIVE'&&s.buffer)?s.buffer:null;
+  },
+
+  // Register VoxRitual fragments from pack (creates named slots)
+  registerVoxPack(samples){
+    if(!samples)return;
+    samples.forEach(s=>{
+      if(!this.voxSlots[s.id])
+        this.voxSlots[s.id]={state:'EMPTY',buffer:null,name:s.name,fragType:s.fragmentIdentity?.type||'fragment'};
+    });
+    this._updateVoxUI();
+  },
+
+  _updateUI(role){
+    const slot=this.routes[role];if(!slot)return;
+    const lb=document.querySelector(`.ss-load[data-role="${role}"]`);
+    const cb=document.querySelector(`.ss-clr[data-role="${role}"]`);
+    const stateColors={EMPTY:'rgba(255,255,255,.24)',QUEUED:'rgba(255,180,0,.7)',ACTIVE:'rgba(0,255,200,.8)'};
+    const stateText={EMPTY:'LOAD',QUEUED:'LOADING...',ACTIVE:'ACTIVE'};
+    if(lb){lb.textContent=stateText[slot.state]||'LOAD';lb.style.color=stateColors[slot.state];
+      lb.style.borderColor=slot.state==='ACTIVE'?'rgba(0,255,200,.5)':slot.state==='QUEUED'?'rgba(255,180,0,.4)':'rgba(153,68,255,.13)';}
+    if(cb)cb.classList.toggle('vis',slot.state==='ACTIVE');
+  },
+
+  _updateVoxUI(){
+    // VoxRitual fragment slots shown in VOXDNA panel
+    const el=document.getElementById('vox-frag-slots');if(!el)return;
+    el.innerHTML='';
+    Object.entries(this.voxSlots).forEach(([id,slot])=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:4px;padding:1px 0';
+      const stateCol=slot.state==='ACTIVE'?'rgba(0,255,200,.7)':slot.state==='QUEUED'?'rgba(255,180,0,.6)':'rgba(255,255,255,.2)';
+      row.innerHTML=`<div style="width:5px;height:5px;border-radius:50%;background:${stateCol};flex-shrink:0"></div>`+
+        `<div style="font-size:8px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.3);flex:1;overflow:hidden;white-space:nowrap">${slot.name||id.slice(0,12)}</div>`+
+        `<div style="font-size:7px;font-family:'JetBrains Mono',monospace;color:${stateCol}">${slot.state}</div>`;
+      // Load button for empty slots
+      if(slot.state==='EMPTY'){
+        const btn=document.createElement('button');
+        btn.style.cssText='font-size:7px;padding:1px 5px;border:1px solid rgba(153,68,255,.2);background:rgba(153,68,255,.05);color:rgba(153,68,255,.5);border-radius:2px;cursor:pointer;-webkit-tap-highlight-color:transparent';
+        btn.textContent='BIND';
+        btn.addEventListener('click',()=>{
+          if(!ac)return;ac.resume();
+          const inp=document.createElement('input');inp.type='file';inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
+          inp.onchange=e=>{const f=e.target.files[0];if(f)this.loadVoxSlot(id,f,()=>{this._updateVoxUI();showToast('VOX BOUND: '+(slot.name||id).toUpperCase());});};
+          inp.click();
+        });
+        row.appendChild(btn);
+      }
+      el.appendChild(row);
+    });
+  },
+
+  allActive(){return Object.values(this.routes).every(s=>s.state==='ACTIVE');},
+  anyActive(){return Object.values(this.routes).some(s=>s.state==='ACTIVE');},
+};
+// Legacy alias — existing code uses sampleBank.kick etc.
+const sampleBank={
+  get kick(){return SAL.get('kick');},
+  get snare(){return SAL.get('snare');},
+  get hat(){return SAL.get('hat');},
+  get bass(){return SAL.get('bass');},
+  get texture(){return SAL.get('texture');},
+};
 const BASS_ROOT_HZ=110;
 
 function initAC(){
@@ -2395,17 +2526,23 @@ const REC={
 // ══════════════════════════════════════════════════════════
 // SAMPLE LOADING
 // ══════════════════════════════════════════════════════════
-function loadSample(role){if(!ac)initAC();ac.resume();const inp=document.createElement('input');inp.type='file';inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{ac.decodeAudioData(ev.target.result.slice(0),decoded=>{sampleBank[role]=decoded;const lb=document.querySelector(`.ss-load[data-role="${role}"]`);const cb=document.querySelector(`.ss-clr[data-role="${role}"]`);if(lb){lb.textContent='LOADED';lb.classList.add('has');}if(cb)cb.classList.add('vis');},err=>console.warn('SpukLab:',err));};reader.readAsArrayBuffer(file);};inp.click();}
-function clearSample(role){sampleBank[role]=null;const lb=document.querySelector(`.ss-load[data-role="${role}"]`);const cb=document.querySelector(`.ss-clr[data-role="${role}"]`);if(lb){lb.textContent='LOAD';lb.classList.remove('has');}if(cb)cb.classList.remove('vis');}
+function loadSample(role){
+  if(!ac)initAC();
+  // iOS canonical: ac.resume() inside user gesture, BEFORE file picker
+  ac.resume();
+  const inp=document.createElement('input');inp.type='file';inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
+  inp.onchange=e=>{const file=e.target.files[0];if(file)SAL.loadSlot(role,file,()=>showToast(role.toUpperCase()+' ACTIVE'));};
+  inp.click();
+}
+function clearSample(role){SAL.clearSlot(role);}
 function importDNAPack(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);
     // If it has samples → VoxRitual ADN export
     if(data.samples&&Array.isArray(data.samples)){VOXDNA.loadADN(data);showToast('VOXDNA LOADED: '+(data.packName||data.organism?.id||'ADN').toUpperCase());return;}
     // Detect: VoxRitual ADN (has samples[]) vs SpukBeats/Forge DNA pack
     if(data.samples&&Array.isArray(data.samples)){
-      // VoxRitual → vocal scheduler only. Does NOT touch DNA engine.
-      // Forge DNA + VoxRitual ADN coexist: Forge drives synthesis, VoxRitual drives voice.
       VOXDNA.loadADN(data);
-      showToast('VOXDNA: '+(data.packName||data.organism?.id||'ADN').toUpperCase());
+      SAL.registerVoxPack(data.samples); // create bindable slots for each fragment
+      showToast('VOXDNA: '+(data.pack?.name||data.packName||'ADN').toUpperCase()+' — BIND AUDIO');
       return;
     }
     const idx=DNA.importPack(data);
@@ -2952,11 +3089,13 @@ function _updateDebugHUD(){
   // Show anchor pack name + key active params
   const anchorName=PACKS[DNA.anchorIdx]?.short||'?';
   const packCount=PACKS.length;
-  dnaRows.innerHTML=`<div><span class="dl">ANCHOR</span> ${anchorName} (${packCount} packs)</div>`+
-    `<div><span class="dl">KICK F0</span> ${Math.round(a.kickF0||0)} Hz</div>`+
-    `<div><span class="dl">BASS F</span> ${Math.round(a.bassFilter||0)} Hz</div>`+
+  const salSt=Object.entries(SAL.routes).map(([k,v])=>`${k[0].toUpperCase()}:${v.state[0]}`).join(' ');
+  dnaRows.innerHTML=`<div><span class="dl">ANCHOR</span> ${anchorName} (${packCount})</div>`+
+    `<div><span class="dl">KICK F0</span> ${Math.round(a.kickF0||0)}Hz ${a.bassWave||'?'}</div>`+
+    `<div><span class="dl">BASS F</span> ${Math.round(a.bassFilter||0)}Hz Q${(a.bassQ||0).toFixed(1)}</div>`+
     `<div><span class="dl">INSTAB</span> ${(a.instability||0).toFixed(2)}</div>`+
-    `<div><span class="dl">WAVE</span> ${a.bassWave||'?'}</div>`;
+    `<div><span class="dl">SLOTS</span> ${salSt}</div>`+
+    `<div style="color:${SAL.anyActive()?'rgba(0,255,200,.7)':'rgba(255,180,0,.7)'}"><span class="dl">MODE</span> ${SAL.anyActive()?'SAMPLE':'SYNTH ONLY'}</div>`;
 }
 
 function initMacros(){
