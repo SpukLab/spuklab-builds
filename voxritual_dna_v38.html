@@ -4934,68 +4934,57 @@ var RADIAL = {
   }
 };
 
-document.getElementById('radialOverlay').addEventListener('click', function() { RADIAL.hide(); });
-document.getElementById('rmSurgery').addEventListener('click', function() {
-  if(RADIAL.slotId) openSlotInSurgery(RADIAL.slotId, RADIAL.slotIdx); RADIAL.hide();
-});
-document.getElementById('rmDuplicate').addEventListener('click', function() {
-  if(!RADIAL.slotId) return;
-  var lane_r=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];var slot=lane_r.slots.find(function(s){return s.id===RADIAL.slotId;});
-  if(slot) {
-    var copy = JSON.parse(JSON.stringify(slot)); copy.id = uid();
-    var idx = MONTAGE.slots.indexOf(slot);
-    MONTAGE.slots.splice(idx+1, 0, copy);
-    renderTray(); drawMontageCanvas(); updateMontageStatus();
-  }
-  RADIAL.hide();
-});
-document.getElementById('rmReverse').addEventListener('click', async function() {
-  if(!RADIAL.slotId) return;
-  var lane_r=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];var slot=lane_r.slots.find(function(s){return s.id===RADIAL.slotId;});
-  if(!slot) { RADIAL.hide(); return; }
-  var frag = A.samples.find(function(x) { return x.id === slot.fragId; });
-  if(!frag || !A.AC) { RADIAL.hide(); return; }
-  await ensureAC();
-  var rev = await surgReverse(toAB(frag), 0, frag.duration);
-  var child = await buildRecord(rev, {name:frag.name+'_rev', cat:frag.cat, parentId:frag.id, mutationOf:'reverse'});
-  await dbPut(child); A.samples.push(child);
-  slot.fragId = child.id;
-  renderTray(); drawMontageCanvas(); renderLibrary();
-  RADIAL.hide();
-});
-document.getElementById('rmMute').addEventListener('click', function() {
-  if(!RADIAL.slotId) return;
-  var lane_r=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];var slot=lane_r.slots.find(function(s){return s.id===RADIAL.slotId;});
-  if(slot) { slot.mute = !slot.mute; renderTray(); drawMontageCanvas(); }
-  RADIAL.hide();
-});
-document.getElementById('rmSolo').addEventListener('click', function() {
-  if(!RADIAL.slotId) return;
-  MONTAGE.slots.forEach(function(s) { s.solo = (s.id === RADIAL.slotId) ? !s.solo : false; });
-  renderTray(); drawMontageCanvas();
-  RADIAL.hide();
-});
-document.getElementById('rmLock').addEventListener('click', function() {
-  if(!RADIAL.slotId) return;
-  var lane_r=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
-  var slot=lane_r.slots.find(function(s){return s.id===RADIAL.slotId;});
-  if(slot){
-    slot.locked=!slot.locked;
-    HISTORY.showToast(slot.locked?'slot locked':'slot unlocked');
-    drawMontageCanvas();
-  }
-  RADIAL.hide();
-});
-document.getElementById('rmDelete').addEventListener('click', function() {
-  if(!RADIAL.slotId) return;
-  HISTORY.pushOp('montageSlots', null, {slots:JSON.parse(JSON.stringify(MONTAGE.slots))}, null, 'delete fragment');
-  MONTAGE.removeFrag(RADIAL.slotId);
-  var last = HISTORY.undoStack[HISTORY.undoStack.length-1];
-  if(last) last.after = {slots:JSON.parse(JSON.stringify(MONTAGE.slots))};
-  renderLibrary();
-  RADIAL.hide();
-});
+// Safe listener helper — guards against null elements
+function _on(id, ev, fn) {
+  var el = document.getElementById(id);
+  if(el) el.addEventListener(ev, fn);
+}
 
+_on('radialOverlay','click', function() { RADIAL.hide(); });
+_on('rmSurgery','click', function() { if(RADIAL.slotId) openSlotInSurgery(RADIAL.slotId, RADIAL.slotIdx); RADIAL.hide(); });
+_on('rmDuplicate','click', function() {
+  if(!RADIAL.slotId) return;
+  var lane_d=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
+  var slot_d=lane_d&&lane_d.slots?lane_d.slots.find(function(s){return s.id===RADIAL.slotId;}):null;
+  if(slot_d){var copy=JSON.parse(JSON.stringify(slot_d));copy.id=uid();var idx=lane_d.slots.indexOf(slot_d);lane_d.slots.splice(idx+1,0,copy);renderTray();drawMontageCanvas();updateMontageStatus();}
+  RADIAL.hide();
+});
+_on('rmReverse','click', async function() {
+  if(!RADIAL.slotId) return;
+  var lane_rv=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
+  var slot_rv=lane_rv&&lane_rv.slots?lane_rv.slots.find(function(s){return s.id===RADIAL.slotId;}):null;
+  if(!slot_rv){RADIAL.hide();return;}
+  var frag_rv=A.samples.find(function(x){return x.id===slot_rv.fragId;});
+  if(!frag_rv||!A.AC){RADIAL.hide();return;}
+  await ensureAC();
+  var rev=await surgReverse(toAB(frag_rv),0,frag_rv.duration);
+  var child_rv=await buildRecord(rev,{name:frag_rv.name+'_rev',cat:frag_rv.cat,parentId:frag_rv.id,mutationOf:'reverse'});
+  await dbPut(child_rv);A.samples.push(child_rv);slot_rv.fragId=child_rv.id;
+  renderTray();drawMontageCanvas();renderLibrary();
+  RADIAL.hide();
+});
+_on('rmMute','click', function() {
+  if(!RADIAL.slotId) return;
+  var lane_m=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
+  var slot_m=lane_m&&lane_m.slots?lane_m.slots.find(function(s){return s.id===RADIAL.slotId;}):null;
+  if(slot_m){slot_m.mute=!slot_m.mute;renderTray();drawMontageCanvas();}
+  RADIAL.hide();
+});
+_on('rmLock','click', function() {
+  if(!RADIAL.slotId) return;
+  var lane_lk=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
+  var slot_lk=lane_lk&&lane_lk.slots?lane_lk.slots.find(function(s){return s.id===RADIAL.slotId;}):null;
+  if(slot_lk){slot_lk.locked=!slot_lk.locked;HISTORY.showToast(slot_lk.locked?'slot locked':'slot unlocked');drawMontageCanvas();}
+  RADIAL.hide();
+});
+_on('rmDelete','click', function() {
+  if(!RADIAL.slotId) return;
+  HISTORY.pushOp('montageSlots',null,{slots:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},null,'delete fragment');
+  var lane_dl=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
+  if(lane_dl&&lane_dl.slots) lane_dl.slots=lane_dl.slots.filter(function(s){return s.id!==RADIAL.slotId;});
+  renderTray();drawMontageCanvas();updateMontageStatus();
+  RADIAL.hide();
+});
 function updateTUI(){
   var playing=TP.state==='playing';
   var mode=A.activeMode||'surgery';
