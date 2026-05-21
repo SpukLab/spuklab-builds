@@ -4187,27 +4187,36 @@ var PACK = {
   // Build enriched ADN with pack metadata
   buildPackADN: function() {
     var pkg = ADN.serialize();
-    // Add pack metadata
-    pkg.pack = {
-      name:    this.name.trim() || 'unnamed_pack',
-      author:  this.author.trim() || 'unknown',
-      created: new Date().toISOString(),
-      version: 'voxritual_pack_v1',
-      scheduler: 'voxdna_scheduler_v1',
-      readiness: this.updateChecklist()
-    };
-    // Enrich each sample with explicit type tags for BeatsOne
-    if(pkg.samples) {
-      pkg.samples.forEach(function(s) {
-        var orig = A.samples.find(function(x){ return x.id===s.id; });
-        if(orig && orig.fragmentIdentity) {
-          s.fragmentIdentity.type = orig.fragmentIdentity.type || 'fragment';
-          s.fragmentIdentity.text = orig.fragmentIdentity.text || '';
-          // Update beatsOnePayload with final type
-          if(s.beatsOnePayload) s.beatsOnePayload.fragType = s.fragmentIdentity.type;
-        }
-      });
-    }
+    // Pack metadata
+    try {
+      pkg.pack = {
+        name:      this.name.trim() || 'unnamed_pack',
+        author:    this.author.trim() || 'unknown',
+        created:   new Date().toISOString(),
+        version:   'voxritual_pack_v1',
+        scheduler: 'voxdna_scheduler_v1'
+      };
+    } catch(e) { pkg.pack = { name:'unnamed', error:String(e) }; }
+    // Enrich samples with final type tags — fully guarded
+    try {
+      if(pkg.samples && Array.isArray(pkg.samples)) {
+        pkg.samples.forEach(function(s) {
+          if(!s) return;
+          // Ensure fragmentIdentity exists on serialized sample
+          if(!s.fragmentIdentity) s.fragmentIdentity = {};
+          // Pull type from live sample if available
+          try {
+            var orig = A.samples.find(function(x){ return x.id===s.id; });
+            if(orig) {
+              var fi = orig.fragmentIdentity || {};
+              s.fragmentIdentity.type = fi.type || 'fragment';
+              s.fragmentIdentity.text = fi.text || '';
+              if(s.beatsOnePayload) s.beatsOnePayload.fragType = s.fragmentIdentity.type;
+            }
+          } catch(e2) { /* skip this sample enrichment */ }
+        });
+      }
+    } catch(e) { console.error('buildPackADN enrich:', e); }
     return pkg;
   }
 };
@@ -4222,19 +4231,17 @@ if(_packAuthorEl) {
   _packAuthorEl.addEventListener('input', function(){ PACK.author=this.value; PACK.updateChecklist(); });
 }
 
-// Fragment type tag buttons — tags the currently selected fragment
+// Fragment type tag buttons
 document.querySelectorAll('.fragTypeTag').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var s = sample();
     if(!s) { HISTORY.showToast('select a fragment first'); return; }
     if(!s.fragmentIdentity) s.fragmentIdentity = {};
     s.fragmentIdentity.type = btn.dataset.type;
-    // Update cat for library display
     var catMap = { spoken:'captures', whisper:'whispers', breath:'breaths',
                    texture:'textures', fragment:'fragments', collapse:'corrupted' };
     s.cat = catMap[btn.dataset.type] || s.cat;
     dbPut(s);
-    // Highlight active tag
     document.querySelectorAll('.fragTypeTag').forEach(function(b){
       b.classList.toggle('on', b.dataset.type === btn.dataset.type);
     });
@@ -4244,20 +4251,25 @@ document.querySelectorAll('.fragTypeTag').forEach(function(btn) {
   });
 });
 
-// Pack export — ADN
+// Pack export — ADN (3-step, each step isolated)
 document.getElementById('packExportADN').addEventListener('click', function() {
+  var pkg = null;
+  var json = null;
+  // Step 1: build
+  try { pkg = PACK.buildPackADN(); }
+  catch(e1) { console.error('buildPackADN crash:', e1); HISTORY.showToast('build error — see DBG'); return; }
+  // Step 2: stringify
+  try { json = JSON.stringify(pkg, null, 2); }
+  catch(e2) { console.error('stringify crash:', e2); HISTORY.showToast('stringify error — circular ref'); return; }
+  // Step 3: download
   try {
-    var pkg = PACK.buildPackADN();
-    if(pkg && pkg.error){ console.error('Pack ADN error:', pkg.error); HISTORY.showToast('serialize error: '+pkg.error.slice(0,30)); return; }
-    var filename = (PACK.name.trim().replace(/\s+/g,'_').toLowerCase() || 'voxritual_pack')
+    var filename = (PACK.name.trim().replace(/[^a-z0-9_\-]/gi,'_').toLowerCase() || 'voxritual_pack')
                   +'_'+Date.now()+'.json';
-    dlSafe(JSON.stringify(pkg, null, 2), 'application/json', filename);
-    var n = (pkg.samples && pkg.samples.length) || A.samples.length;
+    dlSafe(json, 'application/json', filename);
+    var n = (pkg.samples && pkg.samples.length) || 0;
     HISTORY.showToast('ADN pack exported · '+n+' fragments');
-  } catch(e) {
-    console.error('Pack export:', e);
-    HISTORY.showToast('export error: '+(e&&e.message?e.message:String(e)).slice(0,35));
   }
+  catch(e3) { console.error('download crash:', e3); HISTORY.showToast('download failed'); }
 });
 
 // Pack export — WAV (montage render)
