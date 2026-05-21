@@ -694,35 +694,40 @@ const DNA={
   updateMorphUI(){PACKS.forEach((_,i)=>{const f=document.getElementById('dna'+i),p=document.getElementById('dpct'+i),pct=Math.round(this.weights[i]*100);if(f)f.style.width=pct+'%';if(p)p.textContent=pct+'%';});},
   setAnchor(idx){this.anchorIdx=idx;this.weights=new Float32Array(PACKS.length);this.morphWeights=new Float32Array(PACKS.length);this.weights[idx]=1;this.morphWeights[idx]=1;normW(this.weights);this.blend();this.startMorph();this.rebuildPackUI();this.rebuildMorphUI();},
   importPack(data){
-    // Sound Forge exports wrap params in spukbeats_bridge — unwrap first
+    // Sound Forge exports: bridge in spukbeats_bridge, name from saturationDNA or packName
     const d=data.spukbeats_bridge||data;
-    const name=d.packName||data.packName||data.saturationDNA||'CUSTOM';
+    // Try every possible name source
+    const name=(d.packName||data.packName||data.saturationDNA||data.packId||'CUSTOM').replace(/_/g,' ');
+    // soundEngine can live at d.soundEngine OR at root data.soundEngine
+    const se=d.soundEngine||data.soundEngine||{};
+    const bh=d.behaviorHints||data.behaviorHints||{};
+    const vd=d.visualDNA||data.visualDNA||{};
     const p={
       id:'imp_'+Date.now(),
       label:name,
-      short:name.slice(0,6).toUpperCase(),
-      kickF0:d.soundEngine?.kickF0||155,
-      kickF1:d.soundEngine?.kickF1||22,
-      kickDecay:d.soundEngine?.kickDecay||.4,
-      bassWave:d.soundEngine?.bassWave||'sine',
-      bassFilter:d.soundEngine?.bassFilter||380,
-      bassQ:d.soundEngine?.bassQ||4,
-      hatFreq:d.soundEngine?.hatFreq||8000,
+      short:name.slice(0,6).toUpperCase().replace(/\s/g,''),
+      kickF0:se.kickF0||d.kickF0||155,
+      kickF1:se.kickF1||d.kickF1||22,
+      kickDecay:se.kickDecay||d.kickDecay||.4,
+      bassWave:se.bassWave||d.bassWave||'sine',
+      bassFilter:se.bassFilter||d.bassFilter||380,
+      bassQ:se.bassQ||d.bassQ||4,
+      hatFreq:se.hatFreq||d.hatFreq||8000,
       swing:.52,
-      glitchAmt:d.instability||.5,
+      glitchAmt:d.instability||data.instability||.5,
       pitchDrift:.05,
       brightness:d.spectralBias==='high_bright'?.75:d.spectralBias==='low_dark'?.25:.5,
-      subCharacter:'resonant',
-      silenceAffinity:d.silenceAffinity||.3,
-      instability:d.instability||.5,
-      fragmentation:d.fragmentation||.4,
-      spatialSpread:d.behaviorHints?.spatialSpread||.5,
-      fogIntensity:d.visualDNA?.fogIntensity||.4,
-      collapseProb:d.behaviorHints?.collapseProb||.006,
-      fatigueResist:d.behaviorHints?.fatigueResist||.5,
-      ghostPersist:d.behaviorHints?.ghostPersistence||.5,
-      col:d.visualDNA?.primaryColor||'#9944ff',
-      pRgb:hexToRgb(d.visualDNA?.primaryColor||'#9944ff'),
+      subCharacter:se.subCharacter||'resonant',
+      silenceAffinity:d.silenceAffinity||data.silenceAffinity||.3,
+      instability:d.instability||data.instability||.5,
+      fragmentation:d.fragmentation||data.fragmentation||.4,
+      spatialSpread:bh.spatialSpread||.5,
+      fogIntensity:vd.fogIntensity||.4,
+      collapseProb:bh.collapseProb||.006,
+      fatigueResist:bh.fatigueResist||.5,
+      ghostPersist:bh.ghostPersistence||bh.ghostPersist||.5,
+      col:vd.primaryColor||'#9944ff',
+      pRgb:hexToRgb(vd.primaryColor||'#9944ff'),
       _imported:true,
     };
     PACKS.push(p);const nw=new Float32Array(PACKS.length);nw.set(this.weights);this.weights=nw;const nm=new Float32Array(PACKS.length);nm.set(this.morphWeights);this.morphWeights=nm;normW(this.weights);normW(this.morphWeights);this.rebuildPackUI();this.rebuildMorphUI();this.updateBadge();return PACKS.length-1;
@@ -2398,7 +2403,7 @@ const G={
   energy:.5,tension:.3,density:.5,mut:.2,silenceInertia:.08,
   c:{energy:.5,tension:.3,density:.5,mut:.2,inst:.25,silence:.08},
   e:{energy:.5,tension:.3,density:.5,mut:.2},
-  rhythmOn:true,pressureOn:true,textureOn:true,polyOn:true,
+  rhythmOn:true,pressureOn:true,textureOn:true,polyOn:false, // poly OFF by default
   breakMode:false,fillMode:false,voidMode:false,muteMode:false,chaosMode:false,
   immersiveMode:false,ghostForceMode:false,
   lockGroove:false,phraseMemory:true,humanize:true,
