@@ -4248,13 +4248,15 @@ document.querySelectorAll('.fragTypeTag').forEach(function(btn) {
 document.getElementById('packExportADN').addEventListener('click', function() {
   try {
     var pkg = PACK.buildPackADN();
+    if(pkg && pkg.error){ console.error('Pack ADN error:', pkg.error); HISTORY.showToast('serialize error: '+pkg.error.slice(0,30)); return; }
     var filename = (PACK.name.trim().replace(/\s+/g,'_').toLowerCase() || 'voxritual_pack')
                   +'_'+Date.now()+'.json';
     dlSafe(JSON.stringify(pkg, null, 2), 'application/json', filename);
-    HISTORY.showToast('ADN pack exported · '+pkg.samples.length+' fragments');
+    var n = (pkg.samples && pkg.samples.length) || A.samples.length;
+    HISTORY.showToast('ADN pack exported · '+n+' fragments');
   } catch(e) {
     console.error('Pack export:', e);
-    HISTORY.showToast('export error — see console');
+    HISTORY.showToast('export error: '+e.message.slice(0,30));
   }
 });
 
@@ -5039,9 +5041,8 @@ var ADN = {
         semState: s.semState||'fragile',
         scores: s.scores ? {
           fragility: ADN._safe(s.scores.fragility, 50),
-          ghost:     ADN._safe(s.scores.ghost, 30),
-          ritual:    ADN._safe(s.scores.ritual, 20)
-        } : {fragility:50,ghost:30,ritual:20},
+          ghost:     ADN._safe(s.scores.ghost, 30)
+        } : {fragility:50,ghost:30},
         favorite: !!s.favorite,
         generation: gen,
         fragmentIdentity: {
@@ -5151,7 +5152,7 @@ var ADN = {
         }
       };
     } catch(err) {
-      console.error('ADN serialize error:', err);
+      console.error('ADN serialize error:', err, err.stack);
       return { version:'voxritual_adn_v4', error: String(err), generated: new Date().toISOString() };
     }
   }
@@ -5161,12 +5162,19 @@ var ADN = {
 document.getElementById('adnBtn').addEventListener('click', function(){
   try {
     var pkg = ADN.serialize();
+    // Check if serialize itself returned an error object
+    if(pkg.error) {
+      console.error('ADN serialize internal error:', pkg.error);
+      HISTORY.showToast('serialize error — check console');
+      return;
+    }
     var json = JSON.stringify(pkg, null, 2);
+    var fragCount = (pkg.timeline && pkg.timeline.fragments) || A.samples.length;
     dlSafe(json, 'application/json', 'voxritual_adn_'+Date.now()+'.json');
-    HISTORY.showToast('ADN exported · '+pkg.timeline.fragments+' frags');
+    HISTORY.showToast('ADN exported · '+fragCount+' frags');
   } catch(e) {
     console.error('ADN export failed:', e);
-    HISTORY.showToast('export error — see console');
+    HISTORY.showToast('export error: '+e.message.slice(0,30));
   }
 });
 
