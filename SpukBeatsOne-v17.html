@@ -694,41 +694,62 @@ const DNA={
   updateMorphUI(){PACKS.forEach((_,i)=>{const f=document.getElementById('dna'+i),p=document.getElementById('dpct'+i),pct=Math.round(this.weights[i]*100);if(f)f.style.width=pct+'%';if(p)p.textContent=pct+'%';});},
   setAnchor(idx){this.anchorIdx=idx;this.weights=new Float32Array(PACKS.length);this.morphWeights=new Float32Array(PACKS.length);this.weights[idx]=1;this.morphWeights[idx]=1;normW(this.weights);this.blend();this.startMorph();this.rebuildPackUI();this.rebuildMorphUI();},
   importPack(data){
-    // Sound Forge exports: bridge in spukbeats_bridge, name from saturationDNA or packName
-    const d=data.spukbeats_bridge||data;
-    // Try every possible name source
-    const name=(d.packName||data.packName||data.saturationDNA||data.packId||'CUSTOM').replace(/_/g,' ');
-    // soundEngine can live at d.soundEngine OR at root data.soundEngine
-    const se=d.soundEngine||data.soundEngine||{};
-    const bh=d.behaviorHints||data.behaviorHints||{};
-    const vd=d.visualDNA||data.visualDNA||{};
+    // ── Build bridge from raw Sound Forge fields if spukbeats_bridge absent ──
+    let d=data.spukbeats_bridge;
+    if(!d&&data.forgeState){
+      // Derive SpukBeatsOne params from Forge export
+      const fs=data.forgeState||{};
+      const cv=data.carving||{};
+      const td=data.temporal_dna||{};
+      const mat=data.material||{};
+      // Pack name: packId > saturationDNA > 'CUSTOM'
+      const nm=(data.packId||data.saturationDNA||'CUSTOM').replace(/_/g,' ');
+      // kickF0: impactHardness 0-1 → 80-220Hz
+      const kF0=80+(fs.impactHardness||.5)*140;
+      // kickDecay: punchLength short=0.13 → 0.2s, long → 0.6s
+      const kDec=0.15+(fs.punchLength||.3)*0.55;
+      // bassWave: by saturationDNA character
+      const waveMap={rust:'sine',tape:'sawtooth',glass:'triangle',metal:'square',
+        collapsing:'sawtooth',burning:'sawtooth',organic:'sine',crystal:'triangle'};
+      const bWave=waveMap[data.saturationDNA]||'sawtooth';
+      // bassFilter: bodyWeight 0-1 → 120-800Hz
+      const bF=120+(fs.bodyWeight||.5)*680;
+      // bassQ: carving.pressure → 2-8
+      const bQ=2+(cv.pressure||.5)*6;
+      // hatFreq: airPush → 5000-12000Hz
+      const hF=5000+(fs.airPush||.4)*7000;
+      // instability: generation decay + carving ghost
+      const inst=Math.min(.9,(data.generation||0)/10*0.5+(cv.ghost||0)*.35);
+      // fragmentation: coneStress + mud
+      const frag=Math.min(1,((fs.coneStress||0)+(cv.mud||0))*.55);
+      // spectralBias from material profile
+      const sB=mat.spectralProfile==='bright'?'high_bright':mat.spectralProfile==='dark'?'low_dark':'neutral';
+      // silenceAffinity from temporal_dna
+      const silAff=td.silenceTolerance||.3;
+      // spatialSpread: average stereoWidth across narrative states
+      const ns=td.narrativeStates||{};const nKeys=Object.keys(ns);
+      const avgSW=nKeys.length?nKeys.reduce((a,k)=>a+(ns[k].stereoWidth||.5),0)/nKeys.length:.5;
+      // colors by saturationDNA
+      const colMap={rust:'#b86833',tape:'#ccaa44',glass:'#88cccc',metal:'#778899',
+        collapsing:'#cc3322',burning:'#ff5522',organic:'#44cc88',crystal:'#aaddff'};
+      const col=colMap[data.saturationDNA]||'#9944ff';
+      d={packName:nm,soundEngine:{kickF0:Math.round(kF0),kickF1:Math.round(kF0*.12),kickDecay:+kDec.toFixed(2),bassWave:bWave,bassFilter:Math.round(bF),bassQ:+bQ.toFixed(1),hatFreq:Math.round(hF)},instability:+inst.toFixed(2),fragmentation:+frag.toFixed(2),silenceAffinity:+silAff.toFixed(2),spectralBias:sB,behaviorHints:{spatialSpread:+avgSW.toFixed(2),ghostPersistence:+(cv.ghost||.5).toFixed(2),collapseProb:+((data.generation||0)/10*.015).toFixed(4),fatigueResist:+(1-(data.generation||0)/10*.1).toFixed(2)},visualDNA:{primaryColor:col,fogIntensity:+(cv.hollow||.4).toFixed(2)}};
+    }
+    if(!d)d=data; // fallback: use data as-is
+    const name=(d.packName||data.packName||data.packId||'CUSTOM').replace(/_/g,' ');
+    const se=d.soundEngine||{};const bh=d.behaviorHints||{};const vd=d.visualDNA||{};
     const p={
-      id:'imp_'+Date.now(),
-      label:name,
-      short:name.slice(0,6).toUpperCase().replace(/\s/g,''),
-      kickF0:se.kickF0||d.kickF0||155,
-      kickF1:se.kickF1||d.kickF1||22,
-      kickDecay:se.kickDecay||d.kickDecay||.4,
-      bassWave:se.bassWave||d.bassWave||'sine',
-      bassFilter:se.bassFilter||d.bassFilter||380,
-      bassQ:se.bassQ||d.bassQ||4,
-      hatFreq:se.hatFreq||d.hatFreq||8000,
-      swing:.52,
-      glitchAmt:d.instability||data.instability||.5,
-      pitchDrift:.05,
-      brightness:d.spectralBias==='high_bright'?.75:d.spectralBias==='low_dark'?.25:.5,
-      subCharacter:se.subCharacter||'resonant',
-      silenceAffinity:d.silenceAffinity||data.silenceAffinity||.3,
-      instability:d.instability||data.instability||.5,
-      fragmentation:d.fragmentation||data.fragmentation||.4,
-      spatialSpread:bh.spatialSpread||.5,
-      fogIntensity:vd.fogIntensity||.4,
-      collapseProb:bh.collapseProb||.006,
-      fatigueResist:bh.fatigueResist||.5,
+      id:'imp_'+Date.now(),label:name,short:name.slice(0,6).toUpperCase().replace(/\s/g,'_'),
+      kickF0:se.kickF0||155,kickF1:se.kickF1||22,kickDecay:se.kickDecay||.4,
+      bassWave:se.bassWave||'sine',bassFilter:se.bassFilter||380,bassQ:se.bassQ||4,hatFreq:se.hatFreq||8000,
+      swing:.52,glitchAmt:d.instability||.5,pitchDrift:.05,
+      brightness:d.spectralBias==='high_bright'?.72:d.spectralBias==='low_dark'?.28:.5,
+      subCharacter:se.subCharacter||'resonant',silenceAffinity:d.silenceAffinity||.3,
+      instability:d.instability||.5,fragmentation:d.fragmentation||.4,
+      spatialSpread:bh.spatialSpread||.5,fogIntensity:vd.fogIntensity||.4,
+      collapseProb:bh.collapseProb||.006,fatigueResist:bh.fatigueResist||.5,
       ghostPersist:bh.ghostPersistence||bh.ghostPersist||.5,
-      col:vd.primaryColor||'#9944ff',
-      pRgb:hexToRgb(vd.primaryColor||'#9944ff'),
-      _imported:true,
+      col:vd.primaryColor||'#9944ff',pRgb:hexToRgb(vd.primaryColor||'#9944ff'),_imported:true,
     };
     PACKS.push(p);const nw=new Float32Array(PACKS.length);nw.set(this.weights);this.weights=nw;const nm=new Float32Array(PACKS.length);nm.set(this.morphWeights);this.morphWeights=nm;normW(this.weights);normW(this.morphWeights);this.rebuildPackUI();this.rebuildMorphUI();this.updateBadge();return PACKS.length-1;
   }
