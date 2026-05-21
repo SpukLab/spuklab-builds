@@ -392,8 +392,6 @@ body{display:grid;grid-template-rows:50px 1fr 86px;grid-template-columns:165px 1
   <div class="mpad chaos-p" data-m="chaos"><div class="mpn">CHAOS</div><div class="mpd">fracture</div></div>
   <div class="mpad conclude-p" data-m="conclude"><div class="mpn">CONCLUDE</div><div class="mpd">ritual close</div></div>
 </div>
-<!-- Debug HUD — toggleable, organism diagnosis only -->
-<div id="debug-hud" style="display:none;position:fixed;top:54px;right:0;width:160px;background:rgba(6,5,13,.88);border-left:1px solid rgba(153,68,255,.12);padding:8px 9px;font-family:'JetBrains Mono',monospace;font-size:8px;color:rgba(255,255,255,.22);line-height:1.7;letter-spacing:.06em;z-index:200;pointer-events:none;backdrop-filter:blur(4px)"></div>
 
 <script>
 'use strict';
@@ -2381,6 +2379,8 @@ function importDNAPack(){const inp=document.createElement('input');inp.type='fil
     DNA.rebuildPackUI();DNA.rebuildMorphUI();
     const packName=data.spukbeats_bridge?.packName||data.packName||data.saturationDNA||'PACK';
     showToast('DNA: '+packName.toUpperCase());
+    // Immediate HUD update so user can verify params changed
+    _updateDebugHUD();
   }catch(err){console.warn('SpukLab DNA:',err);}};reader.readAsText(file);};inp.click();}
 function showToast(msg){const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(153,68,255,.82);color:#fff;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.1em;padding:6px 14px;border-radius:4px;z-index:999;pointer-events:none';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';setTimeout(()=>t.remove(),600);},2000);}
 
@@ -2897,6 +2897,22 @@ function _updateDebugHUD(){
   ob('dbg-rec')&&(ob('dbg-rec').textContent=ORCH.recovery.active?`${ORCH.recovery.barsLeft}b`:'off');
   ob('dbg-auto')&&(ob('dbg-auto').textContent=`${Math.round(GOVERNANCE.autonomy*100)}%`);
   ob('dbg-cryst')&&(ob('dbg-cryst').textContent=ORCH.crystal.label||'—');
+  // DNA.active diagnostic — shows if imported pack is actually being used
+  const a=DNA.active;
+  let dnaRows=h.querySelector('#dbg-dna-section');
+  if(!dnaRows){
+    dnaRows=document.createElement('div');dnaRows.id='dbg-dna-section';
+    dnaRows.style.cssText='margin-top:4px;padding-top:4px;border-top:1px solid rgba(153,68,255,.15)';
+    h.appendChild(dnaRows);
+  }
+  // Show anchor pack name + key active params
+  const anchorName=PACKS[DNA.anchorIdx]?.short||'?';
+  const packCount=PACKS.length;
+  dnaRows.innerHTML=`<div><span class="dl">ANCHOR</span> ${anchorName} (${packCount} packs)</div>`+
+    `<div><span class="dl">KICK F0</span> ${Math.round(a.kickF0||0)} Hz</div>`+
+    `<div><span class="dl">BASS F</span> ${Math.round(a.bassFilter||0)} Hz</div>`+
+    `<div><span class="dl">INSTAB</span> ${(a.instability||0).toFixed(2)}</div>`+
+    `<div><span class="dl">WAVE</span> ${a.bassWave||'?'}</div>`;
 }
 
 function initMacros(){
@@ -2976,8 +2992,15 @@ window.addEventListener('load',()=>{
   document.querySelectorAll('.ss-clr').forEach(btn=>{btn.addEventListener('click',()=>clearSample(btn.dataset.role));});
   initToggle('tgl-mem','phraseMemory');initToggle('tgl-hum','humanize');initToggle('tgl-lock','lockGroove');
   initKeys();initBPM();initPhase();initMacros();initGovernance();
-  // DBG toggle
-  document.getElementById('dbg-btn')?.addEventListener('click',function(){const h=document.getElementById('debug-hud');if(h){const on=h.classList.toggle('on');this.style.color=on?'rgba(153,68,255,.8)':'rgba(153,68,255,.38)';this.style.borderColor=on?'rgba(153,68,255,.5)':'rgba(153,68,255,.15)';}});
+  // DBG toggle — targets the canvas-embedded debug-hud
+  document.getElementById('dbg-btn')?.addEventListener('click',function(){
+    const h=document.getElementById('debug-hud');
+    if(h){const on=h.classList.toggle('on');
+      this.style.color=on?'rgba(153,68,255,.8)':'rgba(153,68,255,.38)';
+      this.style.borderColor=on?'rgba(153,68,255,.5)':'rgba(153,68,255,.15)';
+      if(on)_updateDebugHUD(); // immediate update when opened
+    }
+  });
   // SIM multiplier buttons
   document.querySelectorAll('.sim-btn').forEach(btn=>btn.addEventListener('click',()=>SIM.set(parseInt(btn.dataset.sim))));
   // REBIRTH toggle (triple-tap on CONCLUDE pad)
