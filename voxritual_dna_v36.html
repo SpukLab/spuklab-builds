@@ -5080,81 +5080,96 @@ var ADN = {
 
   // Full export — builds clean portable object
   serialize: function() {
+    var S = ADN._safe;
+    var pkg = { version:'voxritual_adn_v4', generated: new Date().toISOString() };
+
+    // ── ORGANISM ──────────────────────────────────────────────────────────
     try {
-      var tempProf = TEMPERATURE.getProfile ? TEMPERATURE.getProfile() : MEMORY_TEMPERATURE.neutral;
-      return {
-        version: 'voxritual_adn_v4',
-        generated: new Date().toISOString(),
+      var tempProf = {};
+      try { tempProf = (TEMPERATURE && TEMPERATURE.getProfile) ? TEMPERATURE.getProfile() : {}; } catch(e) {}
+      var locks = {};
+      try { locks = ORGANISM && ORGANISM.locks ? { space:!!ORGANISM.locks.space, presence:!!ORGANISM.locks.presence, gaps:!!ORGANISM.locks.gaps } : {}; } catch(e) {}
+      var laneTemps = {};
+      try { laneTemps = TEMPERATURE && TEMPERATURE.laneTarget ? { lane_a:TEMPERATURE.laneTarget[0]||'neutral', lane_b:TEMPERATURE.laneTarget[1]||'distant', lane_c:TEMPERATURE.laneTarget[2]||'warm' } : { lane_a:'neutral', lane_b:'distant', lane_c:'warm' }; } catch(e) {}
 
-        organism: {
-          semState:      A.semState||'fragile',
-          normMode:      A.normMode||'off',
-          activeMutation: LME.mutType||'source',
-          vieState:      VIE.state||'none',
-          generationProfile: ORGANISM.activeProfile||'documentary',
-          montageState:  MONTAGE_STATE.current||'resting',
-          locks: {
-            space:    !!ORGANISM.locks.space,
-            presence: !!ORGANISM.locks.presence,
-            gaps:     !!ORGANISM.locks.gaps
-          },
-          temperatureProfile: {
-            global:   TEMPERATURE.target||'neutral',
-            laneTemps: {
-              lane_a: TEMPERATURE.laneTarget[0]||'neutral',
-              lane_b: TEMPERATURE.laneTarget[1]||'distant',
-              lane_c: TEMPERATURE.laneTarget[2]||'warm'
-            },
-            behavioralHints: {
-              driftAmount:        ADN._safe(tempProf.driftAmount, 0.18),
-              reappearProbability:ADN._safe(tempProf.reappearProb, 0.06),
-              silenceMultiplier:  ADN._safe(tempProf.silenceMult, 1.0),
-              transientSoftness:  ADN._safe(tempProf.transientSoft, 1.0)
-            }
+      pkg.organism = {
+        semState:          (A && A.semState) || 'fragile',
+        normMode:          (A && A.normMode) || 'off',
+        activeMutation:    (LME && LME.mutType) || 'source',
+        vieState:          (VIE && VIE.state) || 'none',
+        generationProfile: (ORGANISM && ORGANISM.activeProfile) || 'documentary',
+        montageState:      (MONTAGE_STATE && MONTAGE_STATE.current) || 'resting',
+        locks:             locks,
+        temperatureProfile: {
+          global:   (TEMPERATURE && TEMPERATURE.target) || 'neutral',
+          laneTemps: laneTemps,
+          behavioralHints: {
+            driftAmount:         S(tempProf.driftAmount, 0.18),
+            reappearProbability: S(tempProf.reappearProb, 0.06),
+            silenceMultiplier:   S(tempProf.silenceMult, 1.0),
+            transientSoftness:   S(tempProf.transientSoft, 1.0)
           }
-        },
+        }
+      };
+    } catch(e) { pkg.organism = { error: String(e) }; console.error('ADN organism section:', e); }
 
-        semantics: {
-          states: ['fragile','collapse','ritual','ghost','fever'],
-          weights: WEIGHTS ? Object.assign({},WEIGHTS) : {}
-        },
+    // ── SEMANTICS ─────────────────────────────────────────────────────────
+    try {
+      pkg.semantics = {
+        states: ['fragile','collapse','ritual','ghost','fever'],
+        weights: (typeof WEIGHTS !== 'undefined' && WEIGHTS) ? Object.assign({}, WEIGHTS) : {}
+      };
+    } catch(e) { pkg.semantics = {}; }
 
-        samples: A.samples.map(function(s){ return ADN._sample(s); }),
+    // ── SAMPLES ───────────────────────────────────────────────────────────
+    try {
+      pkg.samples = (A && A.samples) ? A.samples.map(function(s){ return ADN._sample(s); }) : [];
+    } catch(e) { pkg.samples = []; console.error('ADN samples section:', e); }
 
-        montageState: {
-          lanes: MONTAGE.lanes.map(function(lane,li){
+    // ── MONTAGE STATE ─────────────────────────────────────────────────────
+    try {
+      pkg.montageState = {
+        lanes: (MONTAGE && MONTAGE.lanes) ? MONTAGE.lanes.map(function(lane, li){
+          try {
             return {
-              id:    lane.id||('lane_'+li),
+              id:    lane.id || ('lane_'+li),
               index: li,
-              gain:  ADN._safe(lane.gain, 1),
+              gain:  S(lane.gain, 1),
               mute:  !!lane.mute,
               solo:  !!lane.solo,
               drift: !!lane.drift,
-              slots: lane.slots.map(function(sl){ return ADN._slot(sl); })
+              slots: (lane.slots || []).map(function(sl){ return ADN._slot(sl); })
             };
-          }),
-          gap:     ADN._safe(MONTAGE.gap, 0.4),
-          gapType: MONTAGE.gapType||'void',
-          drift:   !!MONTAGE.drift,
-          totalDuration: ADN._safe(MONTAGE.totalDuration ? MONTAGE.totalDuration() : 0, 0)
-        },
-
-        timeline: {
-          fragments: MONTAGE.lanes.reduce(function(s,l){return s+l.slots.length;},0),
-          lanes: 3,
-          estimatedDuration: ADN._safe(MONTAGE.totalDuration ? MONTAGE.totalDuration() : 0, 0)
-        },
-
-        history: {
-          undoDepth: HISTORY.undoStack.length,
-          lastOp: HISTORY.undoStack.length ?
-            (HISTORY.undoStack[HISTORY.undoStack.length-1].desc||null) : null
-        }
+          } catch(e2) { return { id:'lane_'+li, index:li, slots:[], error:String(e2) }; }
+        }) : [],
+        gap:           S(MONTAGE && MONTAGE.gap, 0.4),
+        gapType:       (MONTAGE && MONTAGE.gapType) || 'void',
+        drift:         !!(MONTAGE && MONTAGE.drift),
+        totalDuration: S(MONTAGE && MONTAGE.totalDuration ? MONTAGE.totalDuration() : 0, 0)
       };
-    } catch(err) {
-      console.error('ADN serialize error:', err, err.stack);
-      return { version:'voxritual_adn_v4', error: String(err), generated: new Date().toISOString() };
-    }
+    } catch(e) { pkg.montageState = { lanes:[], error:String(e) }; console.error('ADN montage section:', e); }
+
+    // ── TIMELINE ──────────────────────────────────────────────────────────
+    try {
+      var totalFrags = 0;
+      try { totalFrags = MONTAGE.lanes.reduce(function(s,l){ return s+(l.slots?l.slots.length:0); }, 0); } catch(e) {}
+      pkg.timeline = {
+        fragments: totalFrags,
+        lanes: 3,
+        estimatedDuration: S(MONTAGE && MONTAGE.totalDuration ? MONTAGE.totalDuration() : 0, 0)
+      };
+    } catch(e) { pkg.timeline = { fragments:0, lanes:3, estimatedDuration:0 }; }
+
+    // ── HISTORY ───────────────────────────────────────────────────────────
+    try {
+      var ud = (HISTORY && HISTORY.undoStack) ? HISTORY.undoStack.length : 0;
+      pkg.history = {
+        undoDepth: ud,
+        lastOp: ud > 0 ? (HISTORY.undoStack[ud-1].desc || null) : null
+      };
+    } catch(e) { pkg.history = { undoDepth:0, lastOp:null }; }
+
+    return pkg;
   }
 };
 
