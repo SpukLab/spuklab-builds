@@ -3421,6 +3421,18 @@ function setMode(mode){
   }
   updateTUI();
   updateStatusBar();
+  // Pack Builder: sync when switching to CAPTURE
+  if(mode==='capture' && typeof PACK !== 'undefined'){
+    setTimeout(function(){
+      PACK.updateChecklist();
+      var s=sample();
+      if(s&&s.fragmentIdentity&&s.fragmentIdentity.type){
+        document.querySelectorAll('.fragTypeTag').forEach(function(b){
+          b.classList.toggle('on',b.dataset.type===s.fragmentIdentity.type);
+        });
+      }
+    },50);
+  }
 }
 
 function updateStatusBar(){
@@ -4253,21 +4265,8 @@ document.getElementById('packExportWAV').addEventListener('click', async functio
   if(renderBtn) renderBtn.click();
 });
 
-// Update checklist when switching to CAPTURE tab
-var _origSetMode = setMode;
-function setMode(mode) {
-  _origSetMode(mode);
-  if(mode === 'capture') {
-    setTimeout(function(){ PACK.updateChecklist(); }, 50);
-    // Highlight active type tag for current fragment
-    var s = sample();
-    if(s && s.fragmentIdentity && s.fragmentIdentity.type) {
-      document.querySelectorAll('.fragTypeTag').forEach(function(b){
-        b.classList.toggle('on', b.dataset.type === s.fragmentIdentity.type);
-      });
-    }
-  }
-}
+// Pack checklist update handled inline in setMode (see setMode definition above)
+// Wrapper removed — function hoisting caused infinite recursion
 
 // Also update checklist when a sample is selected
 var _origSelectSample = selectSample;
