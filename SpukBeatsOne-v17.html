@@ -692,7 +692,18 @@ const DNA={
   rebuildPackUI(){const grid=document.getElementById('pack-grid');if(!grid)return;grid.innerHTML='';PACKS.forEach((p,i)=>{const b=document.createElement('div');b.className='pbtn'+(i===this.anchorIdx?' on':'')+(i>=BUILTIN_PACKS.length?' imported':'');b.dataset.pi=i;b.textContent=p.short;b.addEventListener('click',()=>this.setAnchor(i));grid.appendChild(b);});},
   rebuildMorphUI(){const el=document.getElementById('dna-morph-display');if(!el)return;el.innerHTML='';PACKS.forEach((p,i)=>{const row=document.createElement('div');row.className='dna-row';row.innerHTML=`<div class="dna-name">${p.short.slice(0,6)}</div><div class="dna-bar"><div class="dna-fill" id="dna${i}" style="width:${Math.round(this.weights[i]*100)}%;background:rgba(${p.pRgb.join(',')},0.7)"></div></div><div class="dna-pct" id="dpct${i}">${Math.round(this.weights[i]*100)}%</div>`;el.appendChild(row);});},
   updateMorphUI(){PACKS.forEach((_,i)=>{const f=document.getElementById('dna'+i),p=document.getElementById('dpct'+i),pct=Math.round(this.weights[i]*100);if(f)f.style.width=pct+'%';if(p)p.textContent=pct+'%';});},
-  setAnchor(idx){this.anchorIdx=idx;this.weights=new Float32Array(PACKS.length);this.morphWeights=new Float32Array(PACKS.length);this.weights[idx]=1;this.morphWeights[idx]=1;normW(this.weights);this.blend();this.startMorph();this.rebuildPackUI();this.rebuildMorphUI();},
+  setAnchor(idx){
+    this.anchorIdx=idx;
+    this.weights=new Float32Array(PACKS.length);
+    this.morphWeights=new Float32Array(PACKS.length);
+    this.weights[idx]=1;this.morphWeights[idx]=1;
+    normW(this.weights);this.blend();
+    // If it's an imported pack, freeze morph so it stays pure
+    // User can activate morphing via MORPH macro
+    if(PACKS[idx]?._imported){this.morphT=0;this.morphDur=99999;}
+    else this.startMorph();
+    this.rebuildPackUI();this.rebuildMorphUI();
+  },
   importPack(data){
     // ── Build bridge from raw Sound Forge fields if spukbeats_bridge absent ──
     let d=data.spukbeats_bridge;
@@ -2389,8 +2400,10 @@ function clearSample(role){sampleBank[role]=null;const lb=document.querySelector
 function importDNAPack(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);
     // If it has samples → VoxRitual ADN export
     if(data.samples&&Array.isArray(data.samples)){VOXDNA.loadADN(data);showToast('VOXDNA LOADED: '+(data.packName||data.organism?.id||'ADN').toUpperCase());return;}
-    // Detect: VoxRitual ADN (has samples[]) vs SpukBeats DNA pack
+    // Detect: VoxRitual ADN (has samples[]) vs SpukBeats/Forge DNA pack
     if(data.samples&&Array.isArray(data.samples)){
+      // VoxRitual → vocal scheduler only. Does NOT touch DNA engine.
+      // Forge DNA + VoxRitual ADN coexist: Forge drives synthesis, VoxRitual drives voice.
       VOXDNA.loadADN(data);
       showToast('VOXDNA: '+(data.packName||data.organism?.id||'ADN').toUpperCase());
       return;
@@ -2400,8 +2413,13 @@ function importDNAPack(){const inp=document.createElement('input');inp.type='fil
     // Force weights to actually use the new pack immediately
     DNA.weights=new Float32Array(PACKS.length);
     DNA.morphWeights=new Float32Array(PACKS.length);
+    // Keep 100% on imported pack — don't call startMorph yet
+    // startMorph dilutes the anchor with builtin packs immediately
     DNA.weights[idx]=1;DNA.morphWeights[idx]=1;
-    normW(DNA.weights);DNA.blend();DNA.startMorph();
+    DNA.anchorIdx=idx;
+    normW(DNA.weights);DNA.blend();
+    // Freeze morph timer so organism stays on this pack until user decides
+    DNA.morphT=0;DNA.morphDur=99999;
     DNA.rebuildPackUI();DNA.rebuildMorphUI();
     const packName=data.spukbeats_bridge?.packName||data.packName||data.saturationDNA||'PACK';
     showToast('DNA: '+packName.toUpperCase());
