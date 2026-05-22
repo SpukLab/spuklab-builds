@@ -399,6 +399,23 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
 .wav-status{font-family:var(--mono);font-size:11px;color:rgba(0,255,180,.45);
   min-height:14px;margin-top:4px;font-style:italic;text-align:center;}
 
+/* ═══ SPUKPACK FORGE ═══ */
+.spukpack-btn{width:100%;padding:14px;margin-top:5px;
+  background:linear-gradient(145deg,rgba(153,68,255,.14),rgba(0,255,200,.06));
+  border:1px solid rgba(153,68,255,.55);border-radius:5px;
+  color:var(--white);font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:13px;letter-spacing:.18em;cursor:pointer;text-align:center;
+  transition:background .12s,border-color .12s;-webkit-tap-highlight-color:transparent;}
+.spukpack-btn:active{background:rgba(153,68,255,.30);}
+.spukpack-btn:disabled{opacity:.35;cursor:default;}
+.pack-progress-wrap{display:none;margin-top:6px;border:1px solid var(--vdim);
+  border-radius:3px;overflow:hidden;background:rgba(8,6,18,.5);}
+.pack-progress-wrap.visible{display:block;}
+.pack-progress-bar{height:3px;background:linear-gradient(90deg,var(--violet),var(--cyan));
+  width:0%;transition:width .25s;}
+.pack-progress-label{font-family:var(--mono);font-size:11px;color:var(--gray);
+  font-style:italic;padding:4px 8px;min-height:14px;}
+
 /* PARAM ROWS (Forge stats display) */
 .prow{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
 .prow:last-child{margin-bottom:0;}
@@ -806,6 +823,18 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
         <button class="wav-btn" id="wav-stems" style="grid-column:1/-1;">PRINT STEMS</button>
       </div>
       <div class="wav-status" id="wav-status"></div>
+    </div>
+
+    <div class="sec" style="margin-top:8px;">
+      <div class="st">SPUKPACK EXPORT</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--gray);margin-bottom:6px;line-height:1.5;">
+        Renders all entities offline and exports a .spukpack archive ready for SpukBeatsOne.
+      </div>
+      <button class="spukpack-btn" id="forge-pack-btn">FORGE PACK</button>
+      <div class="pack-progress-wrap" id="pack-progress-wrap">
+        <div class="pack-progress-bar" id="pack-progress-bar"></div>
+        <div class="pack-progress-label" id="pack-progress-label">initializing...</div>
+      </div>
     </div>
 
   </div>
@@ -2611,6 +2640,579 @@ function buildSpukBeatsBridge(forgeState, satDNA, procState, carveState, generat
   };
 }
 
+// ═══════════════════════════════════════════════════════
+// MINIMAL ZIP BUILDER — Store mode, no dependencies
+// Produces valid .zip / .spukpack from in-memory files
+// ═══════════════════════════════════════════════════════
+class MinimalZip{
+  constructor(){this._files=[];}
+  add(path,data){
+    const b=data instanceof ArrayBuffer?new Uint8Array(data):data;
+    this._files.push({path,bytes:b,crc:this._crc32(b)});
+  }
+  _crc32(buf){
+    if(!MinimalZip._t){
+      MinimalZip._t=new Uint32Array(256);
+      for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);MinimalZip._t[i]=c;}
+    }
+    let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=MinimalZip._t[(c^buf[i])&0xff]^(c>>>8);return(c^0xFFFFFFFF)>>>0;
+  }
+  _u16(v){return[v&0xff,(v>>8)&0xff];}
+  _u32(v){return[v&0xff,(v>>8)&0xff,(v>>16)&0xff,(v>>24)&0xff];}
+  build(){
+    const parts=[],cd=[];let off=0;
+    for(const f of this._files){
+      const name=new TextEncoder().encode(f.path);
+      const lh=new Uint8Array([0x50,0x4B,0x03,0x04,0x14,0x00,0x00,0x00,0x00,0x00,
+        0x00,0x00,0x00,0x00,...this._u32(f.crc),...this._u32(f.bytes.length),
+        ...this._u32(f.bytes.length),...this._u16(name.length),0x00,0x00,...name]);
+      cd.push(new Uint8Array([0x50,0x4B,0x01,0x02,0x14,0x00,0x14,0x00,
+        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,...this._u32(f.crc),
+        ...this._u32(f.bytes.length),...this._u32(f.bytes.length),
+        ...this._u16(name.length),0x00,0x00,0x00,0x00,0x00,0x00,
+        0x00,0x00,0x00,0x00,...this._u32(off),...name]));
+      parts.push(lh,f.bytes);off+=lh.length+f.bytes.length;
+    }
+    const cdBuf=this._cat(cd),cdSize=cdBuf.length,n=this._files.length;
+    const eocd=new Uint8Array([0x50,0x4B,0x05,0x06,0x00,0x00,0x00,0x00,
+      ...this._u16(n),...this._u16(n),...this._u32(cdSize),...this._u32(off),0x00,0x00]);
+    parts.push(cdBuf,eocd);return this._cat(parts);
+  }
+  _cat(arrays){
+    const tot=arrays.reduce((s,a)=>s+a.length,0),out=new Uint8Array(tot);
+    let p=0;for(const a of arrays){out.set(a,p);p+=a.length;}return out;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ENTITY RENDERERS — each creates an OfflineAudioContext
+// and synthesizes one entity shaped by the current ForgeState.
+// ═══════════════════════════════════════════════════════
+
+// Helper: generate noise buffer for offline contexts
+function makeOfflineNoise(ctx,sec){
+  const len=Math.ceil(ctx.sampleRate*sec);
+  const b=ctx.createBuffer(1,len,ctx.sampleRate);
+  const d=b.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1);
+  return b;
+}
+
+// shared: apply gentle final limiter to offline ctx
+function addOfflineLimiter(ctx,src,gain){
+  const lim=ctx.createDynamicsCompressor();
+  lim.threshold.value=-1.8;lim.ratio.value=18;lim.attack.value=.001;lim.release.value=.06;lim.knee.value=1;
+  const g=ctx.createGain();g.gain.value=gain||0.82;
+  src.connect(lim);lim.connect(g);g.connect(ctx.destination);
+}
+
+// ── ENTITY 1: semantic_ghost ─────────────────────────
+// Spectral shimmer through allpass cascade, slowly breathing
+async function _renderSemanticGhost(variant){
+  const dur=variant==='b'?6.0:4.2;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,dur+.2);
+  const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  // HP — shaped by airPush: more air = higher HP
+  const hp=ctx.createBiquadFilter();hp.type='highpass';
+  hp.frequency.value=800+ForgeState.airPush*1800;hp.Q.value=.5;
+  // Allpass shimmer chain (spectral comb)
+  const ap1=ctx.createBiquadFilter();ap1.type='allpass';ap1.frequency.value=480+ForgeState.bodyWeight*600;ap1.Q.value=4+ForgeState.coneStress*8;
+  const ap2=ctx.createBiquadFilter();ap2.type='allpass';ap2.frequency.value=1100+ForgeState.airPush*1200;ap2.Q.value=3+ForgeState.coneStress*6;
+  const ap3=ctx.createBiquadFilter();ap3.type='allpass';ap3.frequency.value=240+ForgeState.bodyWeight*320;ap3.Q.value=5;
+  // Slow AM (ghost breathing) — 0.12–0.4Hz
+  const lfo=ctx.createOscillator();lfo.type='sine';lfo.frequency.value=0.12+Math.random()*.22;
+  const lfoGain=ctx.createGain();lfoGain.gain.value=0.22;
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.28,0.9);
+  env.gain.setValueAtTime(.28,dur-.9);env.gain.linearRampToValueAtTime(.00001,dur);
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('exhausted',1+ForgeState.coneStress*.8);
+  const pan=ctx.createStereoPanner();pan.pan.value=(variant==='b'?-.55:.62);
+  ns.connect(hp);hp.connect(ap1);ap1.connect(ap2);ap2.connect(ap3);ap3.connect(sat);sat.connect(env);
+  lfo.connect(lfoGain);lfoGain.connect(env.gain);
+  env.connect(pan);addOfflineLimiter(ctx,pan,.18);
+  ns.start();lfo.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 2: ritual_voice ───────────────────────────
+// Resonant bandpass noise — formant-like, damaged, wet
+async function _renderRitualVoice(variant){
+  const dur=variant==='b'?2.8:2.2;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,dur+.1);
+  const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  // Formant: center freq from bodyWeight
+  const baseF=180+ForgeState.bodyWeight*520; // 180–700Hz
+  const bp=ctx.createBiquadFilter();bp.type='bandpass';
+  bp.frequency.value=baseF*(variant==='b'?1.6:1.0);
+  bp.Q.value=8+ForgeState.coneStress*14; // resonant
+  // Slight pitch drift on center (instability)
+  bp.frequency.linearRampToValueAtTime(baseF*(variant==='b'?1.7:1.1),dur*.6);
+  bp.frequency.linearRampToValueAtTime(baseF*(variant==='b'?1.5:.9),dur);
+  const bp2=ctx.createBiquadFilter();bp2.type='bandpass';
+  bp2.frequency.value=baseF*(variant==='b'?3.1:2.4);bp2.Q.value=5;
+  const merge=ctx.createGain();merge.gain.value=.5;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw(currentSatProfile,ForgeState.satDrive*.7);
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.45,.08);
+  env.gain.setValueAtTime(.45,dur-.35);env.gain.linearRampToValueAtTime(.00001,dur);
+  const pan=ctx.createStereoPanner();pan.pan.value=(variant==='b'?.38:-.28);
+  ns.connect(bp);ns.connect(bp2);bp.connect(merge);bp2.connect(merge);
+  merge.connect(sat);sat.connect(env);env.connect(pan);addOfflineLimiter(ctx,pan,.38);
+  ns.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 3: pressure_field ─────────────────────────
+// Heavy sub presence — sine + sub rumble, slow breathing
+async function _renderPressureField(){
+  const dur=5.5;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const baseF=28+ForgeState.bodyWeight*28; // 28–56Hz
+  // Primary sub sine
+  const osc=ctx.createOscillator();osc.type='sine';osc.frequency.value=baseF;
+  osc.frequency.setValueAtTime(baseF*1.08,0);
+  osc.frequency.linearRampToValueAtTime(baseF,1.2);
+  // Second sub one octave up — less prominent
+  const osc2=ctx.createOscillator();osc2.type='sine';osc2.frequency.value=baseF*2.02;
+  const g2=ctx.createGain();g2.gain.value=.22;
+  // Rumble layer
+  const nBuf=makeOfflineNoise(ctx,dur+.1);const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';
+  lp.frequency.value=baseF*3;lp.Q.value=.45;
+  const rumbleG=ctx.createGain();rumbleG.gain.value=.14;
+  // Compressor glue
+  const comp=ctx.createDynamicsCompressor();
+  comp.threshold.value=-14-ForgeState.pressure*18;comp.ratio.value=3+ForgeState.pressure*4;
+  comp.attack.value=.025;comp.release.value=.35;comp.knee.value=8;
+  // Envelope — slow in/out
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.60,1.6);
+  env.gain.setValueAtTime(.60,dur-1.4);env.gain.linearRampToValueAtTime(.00001,dur);
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('magnetic',1.2+ForgeState.coneStress*.9);
+  const merge=ctx.createGain();
+  osc.connect(merge);osc2.connect(g2);g2.connect(merge);
+  ns.connect(lp);lp.connect(rumbleG);rumbleG.connect(merge);
+  merge.connect(comp);comp.connect(sat);sat.connect(env);addOfflineLimiter(ctx,env,.55);
+  osc.start();osc2.start();ns.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 4: sub_fragment ───────────────────────────
+// Single sub click — ultra short, frequency sweeps down
+async function _renderSubFragment(){
+  const dur=0.42;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const f0=55+ForgeState.bodyWeight*30;
+  const decay=.08+ForgeState.punchLength*.22;
+  const osc=ctx.createOscillator();osc.type='sine';
+  osc.frequency.setValueAtTime(f0*2.8,0);
+  osc.frequency.exponentialRampToValueAtTime(f0,.005+ForgeState.impactHardness*.008);
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=f0*3.5;lp.Q.value=.5;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('magnetic',1.4+ForgeState.pressure*.8);
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.85,0.003+ForgeState.impactHardness*.004);
+  env.gain.exponentialRampToValueAtTime(.00001,decay);
+  osc.connect(lp);lp.connect(sat);sat.connect(env);addOfflineLimiter(ctx,env,.78);
+  osc.start();osc.stop(dur);
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 5: erosion_texture ────────────────────────
+// Mid-range damaged noise — tape-burned, bandpassed, saturated
+async function _renderErosionTexture(){
+  const dur=3.2;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,dur+.1);const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=180+ForgeState.bodyWeight*220;hp.Q.value=.55;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=3500-ForgeState.coneStress*1800;lp.Q.value=.6;
+  const pk=ctx.createBiquadFilter();pk.type='peaking';pk.frequency.value=900+ForgeState.bodyWeight*400;pk.Q.value=.9;
+  pk.gain.value=4+ForgeState.coneStress*6;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw(currentSatProfile,ForgeState.satDrive*1.2);sat.oversample='4x';
+  // Gentle tremolo
+  const lfo=ctx.createOscillator();lfo.type='sine';lfo.frequency.value=.8+Math.random()*.6;
+  const lfoG=ctx.createGain();lfoG.gain.value=.12;
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.35,.14);
+  env.gain.setValueAtTime(.35,dur-.25);env.gain.linearRampToValueAtTime(.00001,dur);
+  const panL=ctx.createStereoPanner();panL.pan.value=-.42;
+  const panR=ctx.createStereoPanner();panR.pan.value=.42;
+  ns.connect(hp);hp.connect(lp);lp.connect(pk);pk.connect(sat);sat.connect(env);
+  lfo.connect(lfoG);lfoG.connect(env.gain);
+  env.connect(panL);env.connect(panR);
+  addOfflineLimiter(ctx,panL,.22);addOfflineLimiter(ctx,panR,.22);
+  ns.start();lfo.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 6: spectral_click ─────────────────────────
+// Microscopic HP transient — essentially a spectral needle
+async function _renderSpectralClick(variant){
+  const dur=.06;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,.08);const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  const hp=ctx.createBiquadFilter();hp.type='highpass';
+  hp.frequency.value=variant==='b'?9500+ForgeState.airPush*2000:5500+ForgeState.airPush*3500;hp.Q.value=.7;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('cracked',2.5+ForgeState.impactHardness*2);
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.55,.001);
+  env.gain.exponentialRampToValueAtTime(.00001,.018+ForgeState.transientErosion*.022);
+  const pan=ctx.createStereoPanner();pan.pan.value=(variant==='b'?.72:-.68);
+  ns.connect(hp);hp.connect(sat);sat.connect(env);env.connect(pan);
+  addOfflineLimiter(ctx,pan,.62);
+  ns.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 7: drone_field ────────────────────────────
+// Beating sine drones — slightly detuned, hypnotic
+async function _renderDroneField(){
+  const dur=8.5;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const f=38+ForgeState.bodyWeight*44; // 38–82Hz fundamental
+  // Two oscillators with slight detune — creates beating
+  const o1=ctx.createOscillator();o1.type='sine';o1.frequency.value=f;
+  const o2=ctx.createOscillator();o2.type='sine';o2.frequency.value=f*1.0022; // ~3.8 cents
+  const o3=ctx.createOscillator();o3.type='sine';o3.frequency.value=f*2.007; // upper harmonic
+  const g1=ctx.createGain();g1.gain.value=.45;
+  const g2=ctx.createGain();g2.gain.value=.38;
+  const g3=ctx.createGain();g3.gain.value=.14;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=f*4+ForgeState.airPush*800;lp.Q.value=.55;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('exhausted',1.1+ForgeState.coneStress*.6);
+  const panA=ctx.createStereoPanner();panA.pan.value=-.35;
+  const panB=ctx.createStereoPanner();panB.pan.value=.32;
+  // Slow breathing envelope
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.42,2.5);
+  env.gain.setValueAtTime(.42,dur-2.2);env.gain.linearRampToValueAtTime(.00001,dur);
+  const merge=ctx.createGain();
+  o1.connect(g1);o2.connect(g2);o3.connect(g3);
+  g1.connect(merge);g2.connect(merge);g3.connect(merge);
+  merge.connect(lp);lp.connect(sat);sat.connect(env);env.connect(panA);env.connect(panB);
+  addOfflineLimiter(ctx,panA,.28);addOfflineLimiter(ctx,panB,.28);
+  o1.start();o2.start();o3.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 8: collapse_residue ───────────────────────
+// Reverse-envelope noise — arrives before the silence
+async function _renderCollapseResidue(){
+  const dur=1.8;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,dur+.1);const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=90+ForgeState.bodyWeight*160;hp.Q.value=.6;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2200-ForgeState.transientErosion*1200;lp.Q.value=.5;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw(currentSatProfile,ForgeState.satDrive*.9);sat.oversample='4x';
+  // Reverse-style: slow build up, then hard abrupt cut
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.55,dur*.75);
+  env.gain.setValueAtTime(.55,dur*.78);env.gain.linearRampToValueAtTime(.00001,dur*.80);
+  const pan=ctx.createStereoPanner();pan.pan.value=(Math.random()-.5)*.8;
+  ns.connect(hp);hp.connect(lp);lp.connect(sat);sat.connect(env);env.connect(pan);
+  addOfflineLimiter(ctx,pan,.42);
+  ns.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 9: fog_layer ──────────────────────────────
+// Full-field low-amplitude spectral fog — background constant
+async function _renderFogLayer(){
+  const dur=7.0;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  const nBuf=makeOfflineNoise(ctx,dur+.1);const ns=ctx.createBufferSource();ns.buffer=nBuf;
+  // Wide bandpass — keeps full spectrum but shaped
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=40;hp.Q.value=.45;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';
+  lp.frequency.value=6000-GlueState.airAbsorption*3500;lp.Q.value=.48;
+  const ap1=ctx.createBiquadFilter();ap1.type='allpass';ap1.frequency.value=320;ap1.Q.value=2.5;
+  const ap2=ctx.createBiquadFilter();ap2.type='allpass';ap2.frequency.value=1600;ap2.Q.value=2.2;
+  const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('magnetic',.8+ForgeState.bodyWeight*.4);
+  // Wide stereo via two panned versions
+  const panL=ctx.createStereoPanner();panL.pan.value=-1;
+  const panR=ctx.createStereoPanner();panR.pan.value=1;
+  const delayR=ctx.createDelay();delayR.delayTime.value=.011; // 11ms offset — stereo width
+  const env=ctx.createGain();env.gain.setValueAtTime(0,0);
+  env.gain.linearRampToValueAtTime(.15,2.2);
+  env.gain.setValueAtTime(.15,dur-2.0);env.gain.linearRampToValueAtTime(.00001,dur);
+  ns.connect(hp);hp.connect(lp);lp.connect(ap1);ap1.connect(ap2);ap2.connect(sat);sat.connect(env);
+  env.connect(panL);env.connect(delayR);delayR.connect(panR);
+  addOfflineLimiter(ctx,panL,.12);addOfflineLimiter(ctx,panR,.12);
+  ns.start();
+  return startRenderingCompat(ctx);
+}
+
+// ── ENTITY 10: memory_trace ──────────────────────────
+// Ultra-sparse: a few isolated spectral events in silence
+async function _renderMemoryTrace(){
+  const dur=5.0;const sr=48000;
+  const ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+  // Three micro events at different times
+  function addMicro(t,f,d,g){
+    const n2=makeOfflineNoise(ctx,.12);const s=ctx.createBufferSource();s.buffer=n2;
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=12;
+    const ev=ctx.createGain();ev.gain.setValueAtTime(0,t);
+    ev.gain.linearRampToValueAtTime(g,t+.003);ev.gain.exponentialRampToValueAtTime(.00001,t+d);
+    const pan=ctx.createStereoPanner();pan.pan.value=(Math.random()-.5)*1.4;
+    s.connect(bp);bp.connect(ev);ev.connect(pan);addOfflineLimiter(ctx,pan,1);
+    s.start(t);s.stop(t+d+.02);
+  }
+  addMicro(.18, 380+ForgeState.bodyWeight*200, .08, .28);
+  addMicro(1.55,2200+ForgeState.airPush*1800,.05,.18);
+  addMicro(3.40, 820+ForgeState.coneStress*400,.10,.22);
+  // DC silence node to trigger rendering
+  const sil=ctx.createGain();sil.gain.value=0;const dummyOsc=ctx.createOscillator();
+  dummyOsc.connect(sil);sil.connect(ctx.destination);dummyOsc.start();dummyOsc.stop(dur);
+  return startRenderingCompat(ctx);
+}
+
+// ═══════════════════════════════════════════════════════
+// ENTITY CATALOG — metadata + render fn for each entity
+// ═══════════════════════════════════════════════════════
+function buildEntityCatalog(){
+  const mat=SLOTS[currentSlot];
+  const gen=totalGenerations;
+  const dmg=mat?mat.damageLevel:0;
+  const clarityBase=clamp(1-dmg-.12,0.05,.92);
+
+  return[
+    {id:'semantic_ghost_a',type:'semantic_ghost',folder:'ghosts',audio:'ghost_a.wav',
+     clarity:parseFloat((clarityBase*.55).toFixed(2)),
+     weatherAffinity:['FOG','VOID','TENSION'],preferredPhase:'FRAGMENTATION',
+     fatigueCost:.08,densityWeight:.18,maxRepeats:2,spectralRole:'background',
+     emergenceProbability:parseFloat((.06+GlueState.distance*.04).toFixed(3)),
+     renderFn:()=>_renderSemanticGhost('a')},
+
+    {id:'semantic_ghost_b',type:'semantic_ghost',folder:'ghosts',audio:'ghost_b.wav',
+     clarity:parseFloat((clarityBase*.40).toFixed(2)),
+     weatherAffinity:['VOID','AFTERSHOCK'],preferredPhase:'VOID',
+     fatigueCost:.06,densityWeight:.12,maxRepeats:1,spectralRole:'background',
+     emergenceProbability:parseFloat((.04+TemporalDNA.states.void.rareProb*.5).toFixed(3)),
+     renderFn:()=>_renderSemanticGhost('b')},
+
+    {id:'ritual_voice_a',type:'ritual_voice',folder:'voices',audio:'voice_a.wav',
+     clarity:parseFloat((clarityBase*.72).toFixed(2)),
+     weatherAffinity:['TENSION','RUPTURE','BUILD'],preferredPhase:'TENSION',
+     fatigueCost:.15,densityWeight:.35,maxRepeats:3,spectralRole:'mid_body',
+     emergenceProbability:parseFloat((.08+ForgeState.pressure*.06).toFixed(3)),
+     renderFn:()=>_renderRitualVoice('a')},
+
+    {id:'ritual_voice_b',type:'ritual_voice',folder:'voices',audio:'voice_b.wav',
+     clarity:parseFloat((clarityBase*.58).toFixed(2)),
+     weatherAffinity:['RECOVERY','VOID'],preferredPhase:'RECOVERY',
+     fatigueCost:.10,densityWeight:.22,maxRepeats:2,spectralRole:'mid_shadow',
+     emergenceProbability:.06,renderFn:()=>_renderRitualVoice('b')},
+
+    {id:'pressure_field',type:'pressure_field',folder:'pressure',audio:'pressure.wav',
+     clarity:parseFloat((clarityBase*.80).toFixed(2)),
+     weatherAffinity:['TENSION','PEAK','RUPTURE'],preferredPhase:'PEAK',
+     fatigueCost:.22,densityWeight:.55,maxRepeats:1,spectralRole:'low_anchor',
+     emergenceProbability:.10,renderFn:()=>_renderPressureField()},
+
+    {id:'sub_fragment',type:'sub_fragment',folder:'pressure',audio:'sub_fragment.wav',
+     clarity:1.0,weatherAffinity:['BUILD','PEAK','RUPTURE'],preferredPhase:'BUILD',
+     fatigueCost:.12,densityWeight:.42,maxRepeats:8,spectralRole:'impulse',
+     emergenceProbability:.22,renderFn:()=>_renderSubFragment()},
+
+    {id:'erosion_texture',type:'erosion_texture',folder:'textures',audio:'erosion.wav',
+     clarity:parseFloat((clarityBase*.62).toFixed(2)),
+     weatherAffinity:['TENSION','RECOVERY','AFTERSHOCK'],preferredPhase:'RECOVERY',
+     fatigueCost:.09,densityWeight:.28,maxRepeats:3,spectralRole:'mid_texture',
+     emergenceProbability:.09,renderFn:()=>_renderErosionTexture()},
+
+    {id:'spectral_click_a',type:'spectral_click',folder:'textures',audio:'click_a.wav',
+     clarity:.95,weatherAffinity:['BUILD','TENSION','RUPTURE'],preferredPhase:'TENSION',
+     fatigueCost:.04,densityWeight:.08,maxRepeats:12,spectralRole:'micro_event',
+     emergenceProbability:.18,renderFn:()=>_renderSpectralClick('a')},
+
+    {id:'spectral_click_b',type:'spectral_click',folder:'textures',audio:'click_b.wav',
+     clarity:.90,weatherAffinity:['AFTERSHOCK','VOID'],preferredPhase:'AFTERSHOCK',
+     fatigueCost:.03,densityWeight:.06,maxRepeats:8,spectralRole:'micro_accent',
+     emergenceProbability:.12,renderFn:()=>_renderSpectralClick('b')},
+
+    {id:'drone_field',type:'drone_field',folder:'textures',audio:'drone.wav',
+     clarity:parseFloat((clarityBase*.50).toFixed(2)),
+     weatherAffinity:['VOID','INTRO','RECOVERY'],preferredPhase:'VOID',
+     fatigueCost:.18,densityWeight:.25,maxRepeats:1,spectralRole:'sub_atmosphere',
+     emergenceProbability:.07,renderFn:()=>_renderDroneField()},
+
+    {id:'collapse_residue',type:'collapse_residue',folder:'ghosts',audio:'collapse.wav',
+     clarity:parseFloat((clarityBase*.35).toFixed(2)),
+     weatherAffinity:['RUPTURE','AFTERSHOCK'],preferredPhase:'RUPTURE',
+     fatigueCost:.14,densityWeight:.38,maxRepeats:3,spectralRole:'event_tail',
+     emergenceProbability:.08,renderFn:()=>_renderCollapseResidue()},
+
+    {id:'fog_layer',type:'fog_layer',folder:'textures',audio:'fog.wav',
+     clarity:parseFloat((clarityBase*.38).toFixed(2)),
+     weatherAffinity:['VOID','INTRO','RECOVERY','FOG'],preferredPhase:'INTRO',
+     fatigueCost:.05,densityWeight:.12,maxRepeats:1,spectralRole:'atmosphere',
+     emergenceProbability:.05,renderFn:()=>_renderFogLayer()},
+
+    {id:'memory_trace',type:'memory_trace',folder:'ghosts',audio:'memory_trace.wav',
+     clarity:parseFloat((clarityBase*.22).toFixed(2)),
+     weatherAffinity:['VOID','RECOVERY','AFTERSHOCK'],preferredPhase:'VOID',
+     fatigueCost:.04,densityWeight:.05,maxRepeats:2,spectralRole:'micro_ghost',
+     emergenceProbability:parseFloat((.04+TemporalDNA.states.void.rareProb*.8).toFixed(3)),
+     renderFn:()=>_renderMemoryTrace()}
+  ];
+}
+
+// ─── PACK MANIFEST BUILDER ───────────────────────────
+function buildPackManifest(entities,bridge){
+  const mat=SLOTS[currentSlot];
+  const packId=currentSatProfile+'_'+TemporalDNA.sessionIntent;
+  const packName=currentSatProfile.charAt(0).toUpperCase()+currentSatProfile.slice(1)
+    +' / '+TemporalDNA.sessionIntent.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+  // samples map: entity id → audio path
+  const samples={};
+  const entitiesMap={};
+  entities.forEach(e=>{
+    samples[e.id]=`audio/${e.folder}/${e.audio}`;
+    const {renderFn,...meta}=e;
+    entitiesMap[e.id]=meta;
+  });
+
+  return{
+    format:'spukpack_v1',
+    version:'3.3',
+    generated:new Date().toISOString(),
+
+    meta:{
+      packId,packName,
+      saturationDNA:currentSatProfile,
+      generation:totalGenerations,
+      damage:mat?parseFloat(mat.damageLevel.toFixed(3)):0,
+      sessionIntent:TemporalDNA.sessionIntent,
+      energyCurve:TemporalDNA.energyCurve,
+      spectralDensity:TemporalDNA.spectralDensity,
+      entityCount:entities.length
+    },
+
+    behavior:{
+      instability:bridge.instability,
+      fragmentation:bridge.fragmentation,
+      silenceAffinity:bridge.silenceAffinity,
+      spectralBias:bridge.spectralBias,
+      contrastLevel:TemporalDNA.contrastLevel,
+      silenceTolerance:TemporalDNA.silenceTolerance,
+      energyCurve:TemporalDNA.energyCurve
+    },
+
+    visual:bridge.visualDNA,
+
+    ecology:{
+      narrativeStates:TemporalDNA.states,
+      transitions:{
+        buildToTension:'saturation_rise|stereo_narrow',
+        ruptureToVoid:'density_collapse|rare_event_unlock',
+        voidToAftershock:'micro_spikes|wide_stereo'
+      },
+      ruptureThreshold:.82,
+      voidThreshold:.06,
+      collapseResistance:bridge.behaviorHints.fatigueResist,
+      silenceAffinity:bridge.silenceAffinity,
+      ritualGravity:parseFloat(
+        clamp(TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3)),
+      narrativeDensity:TemporalDNA.spectralDensity,
+      memoryPersistence:bridge.behaviorHints.ghostPersistence,
+      spatialSpread:bridge.behaviorHints.spatialSpread
+    },
+
+    routing:{
+      maxSimultaneousEntities:6,
+      maxPolyphony:12,
+      preferredSampleRate:48000,
+      bitDepth:24,
+      rareEntityCooldownMs:18000,
+      eventEntityCooldownMs:8000
+    },
+
+    samples,
+    entities:entitiesMap,
+
+    spukbeats_bridge:bridge,
+
+    temporal_dna:{
+      sessionIntent:TemporalDNA.sessionIntent,
+      energyCurve:TemporalDNA.energyCurve,
+      contrastLevel:TemporalDNA.contrastLevel,
+      silenceTolerance:TemporalDNA.silenceTolerance,
+      spectralDensity:TemporalDNA.spectralDensity,
+      narrativeStates:TemporalDNA.states,
+      organismRoles:ORGANISM_TEMPORAL.map((t,i)=>({
+        name:SYNTH_ORGS[i].name,role:t.role,durationType:t.durationType,
+        fadeB:t.fadeB,reentry:t.reentry
+      }))
+    }
+  };
+}
+
+// ─── FORGE PACK ORCHESTRATOR ─────────────────────────
+async function forgeSpukPack(){
+  const btn=document.getElementById('forge-pack-btn');
+  const wrap=document.getElementById('pack-progress-wrap');
+  const bar=document.getElementById('pack-progress-bar');
+  const lbl=document.getElementById('pack-progress-label');
+  function progress(pct,msg){
+    if(bar)bar.style.width=pct+'%';
+    if(lbl)lbl.textContent=msg;
+  }
+
+  btn.disabled=true;
+  if(wrap)wrap.classList.add('visible');
+  progress(0,'initializing audio context...');
+
+  if(!AC)initAC();
+  try{await AC.resume();}catch(e){}
+
+  const mat=SLOTS[currentSlot];
+  const damage=mat?mat.damageLevel:0;
+  const bridge=buildSpukBeatsBridge(ForgeState,currentSatProfile,ProcState,CarveState,totalGenerations,damage);
+  const catalog=buildEntityCatalog();
+  const zip=new MinimalZip();
+  const rendered=[];
+
+  const total=catalog.length;
+  for(let i=0;i<total;i++){
+    const entity=catalog[i];
+    progress(Math.round((i/total)*82), `rendering ${entity.id}…`);
+    try{
+      const buf=await entity.renderFn();
+      const wav=encodeWAV(buf);
+      zip.add(`audio/${entity.folder}/${entity.audio}`,wav);
+      rendered.push(entity);
+    }catch(e){
+      console.warn('[SF3:packRender]',entity.id,e.message);
+      // Skip failed entity but continue
+    }
+    // Brief yield to keep UI responsive on iPad
+    await new Promise(r=>setTimeout(r,8));
+  }
+
+  progress(88,'building manifest…');
+  const manifest=buildPackManifest(rendered,bridge);
+  const manifestBytes=new TextEncoder().encode(JSON.stringify(manifest,null,2));
+  zip.add('manifest.json',manifestBytes);
+
+  progress(94,'compressing pack…');
+  await new Promise(r=>setTimeout(r,16)); // let UI update
+  const packBytes=zip.build();
+
+  progress(98,'downloading…');
+  const packName=currentSatProfile+'_'+TemporalDNA.sessionIntent;
+  const fname=`${packName}_g${totalGenerations}.spukpack`;
+  const blob=new Blob([packBytes],{type:'application/zip'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fname;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  const kb=(packBytes.length/1024).toFixed(0);
+  progress(100,`exported: ${fname} — ${kb}kb — ${rendered.length} entities`);
+  btn.disabled=false;
+}
+
 document.getElementById('forge-dna-btn').addEventListener('click',()=>{
   const mat=SLOTS[currentSlot];
   const damage=mat?mat.damageLevel:0;
@@ -2654,6 +3256,26 @@ document.getElementById('forge-dna-btn').addEventListener('click',()=>{
   const a=document.createElement('a');a.href=url;a.download=fname;
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 });
+
+// ─── FORGE PACK LISTENER ────────────────────────────────
+(function(){
+  const btn=document.getElementById('forge-pack-btn');
+  if(!btn)return;
+  btn.addEventListener('click',()=>forgeSpukPack().catch(e=>{
+    console.error('[SF3:forgePack]',e);
+    const lbl=document.getElementById('pack-progress-label');
+    if(lbl)lbl.textContent='error: '+e.message;
+    btn.disabled=false;
+  }));
+  btn.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    forgeSpukPack().catch(err=>{
+      const lbl=document.getElementById('pack-progress-label');
+      if(lbl)lbl.textContent='error: '+err.message;
+      btn.disabled=false;
+    });
+  },{passive:false});
+})();
 
 // Resample buttons
 document.getElementById('rsb-render').addEventListener('click',()=>{
