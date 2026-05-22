@@ -2354,7 +2354,6 @@ const SAL={
 
   _updateVoxUI(){
     const el=document.getElementById('vox-frag-slots');if(!el)return;
-    // Ready count header
     const ready=this.voxReady,total=this.voxTotal;
     const statusEl=document.getElementById('voxdna-status');
     if(statusEl){
@@ -2363,35 +2362,59 @@ const SAL={
       statusEl.style.color=allReady?'rgba(0,255,200,.8)':ready>0?'rgba(255,180,0,.7)':'rgba(0,255,180,.4)';
     }
     el.innerHTML='';
+    if(total>0){
+      // BIND ALL button — pick multiple files, auto-match by filename
+      const bindAll=document.createElement('button');
+      bindAll.style.cssText='width:100%;font-size:8px;font-family:JetBrains Mono,monospace;padding:4px;border:1px solid rgba(0,255,180,.25);background:rgba(0,255,180,.05);color:rgba(0,255,180,.6);border-radius:3px;cursor:pointer;margin-bottom:4px;-webkit-tap-highlight-color:transparent;letter-spacing:.08em';
+      bindAll.textContent=ready===total?`ALL BOUND (${total}/${total})`:`BIND ALL AUDIO (${ready}/${total} done)`;
+      bindAll.style.color=ready===total?'rgba(0,255,200,.8)':'rgba(0,255,180,.6)';
+      bindAll.addEventListener('click',()=>{
+        if(!ac)initAC();ac.resume();
+        const inp=document.createElement('input');inp.type='file';inp.multiple=true;
+        inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
+        inp.onchange=async e=>{
+          const files=Array.from(e.target.files);
+          let bound=0;
+          for(const file of files){
+            // Auto-match: strip extension and _clean suffix, find matching slot
+            const fname=file.name.replace(/\.[^.]+$/,'').replace(/_clean$/,'');
+            const matchId=Object.keys(this.voxSlots).find(id=>{
+              const slot=this.voxSlots[id];
+              // Match by slot name or audio filename
+              const slotName=(slot.name||'').replace(/_clean$/,'');
+              const audioBase=(slot.audio||'').replace(/\.[^.]+$/,'').replace(/_clean$/,'');
+              return slotName===fname||audioBase===file.name.replace(/\.[^.]+$/,'')||fname.includes(slotName)||slotName.includes(fname);
+            });
+            if(matchId){bound++;await this.bindAndDecode(matchId,file);}
+          }
+          if(bound===0)showToast('NO MATCHES FOUND — CHECK FILENAMES');
+          else showToast(`BOUND ${bound}/${files.length} FILES`);
+        };
+        inp.click();
+      });
+      el.appendChild(bindAll);
+    }
     Object.entries(this.voxSlots).forEach(([id,slot])=>{
       const row=document.createElement('div');
       row.style.cssText='display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid rgba(153,68,255,.06)';
       const col=slot.state==='ACTIVE'?'rgba(0,255,200,.75)':slot.failed?'rgba(255,80,80,.6)':slot.state==='QUEUED'?'rgba(255,180,0,.7)':'rgba(255,255,255,.18)';
-      const shortName=(slot.name||id).slice(0,20);
+      const shortName=(slot.name||id).slice(0,18);
       const dur=slot.duration?` ${slot.duration.toFixed(1)}s`:'';
       row.innerHTML=`<div style="width:5px;height:5px;border-radius:50%;background:${col};flex-shrink:0"></div>`+
-        `<div style="font-size:7px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.28);flex:1;overflow:hidden;white-space:nowrap">${shortName}${dur}</div>`;
+        `<div style="font-size:7px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.26);flex:1;overflow:hidden;white-space:nowrap">${shortName}${dur}</div>`;
       if(slot.state==='ACTIVE'){
-        const ok=document.createElement('div');
-        ok.style.cssText='font-size:7px;font-family:JetBrains Mono,monospace;color:rgba(0,255,200,.6)';
-        ok.textContent='OK';row.appendChild(ok);
+        const ok=document.createElement('div');ok.style.cssText='font-size:7px;font-family:JetBrains Mono,monospace;color:rgba(0,255,200,.6)';ok.textContent='OK';row.appendChild(ok);
       } else if(slot.state==='QUEUED'){
-        const ld=document.createElement('div');
-        ld.style.cssText='font-size:7px;font-family:JetBrains Mono,monospace;color:rgba(255,180,0,.7)';
-        ld.textContent='...';row.appendChild(ld);
+        const ld=document.createElement('div');ld.style.cssText='font-size:7px;font-family:JetBrains Mono,monospace;color:rgba(255,180,0,.7)';ld.textContent='...';row.appendChild(ld);
       } else {
-        // BIND button — triggers bindAndDecode inside user gesture
         const btn=document.createElement('button');
         btn.style.cssText='font-size:7px;padding:1px 5px;border:1px solid rgba(0,255,180,.2);background:rgba(0,255,180,.04);color:rgba(0,255,180,.5);border-radius:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;flex-shrink:0';
         btn.textContent=slot.failed?'RETRY':'BIND';
         if(slot.failed)btn.style.borderColor='rgba(255,80,80,.3)';
         btn.addEventListener('click',()=>{
-          if(!ac){initAC();}
-          // iOS: must resume AC inside this tap handler BEFORE file picker
-          if(ac)ac.resume();
+          if(!ac)initAC();ac.resume();
           const inp=document.createElement('input');inp.type='file';inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
-          inp.onchange=e=>{const f=e.target.files[0];if(f)this.bindAndDecode(id,f);};
-          inp.click();
+          inp.onchange=e=>{const f=e.target.files[0];if(f)this.bindAndDecode(id,f);};inp.click();
         });
         row.appendChild(btn);
       }
