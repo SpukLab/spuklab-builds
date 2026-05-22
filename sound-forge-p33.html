@@ -2544,98 +2544,76 @@ document.querySelectorAll('.proc-node').forEach(node=>{
 // SpukBeatsOne v17 DNA.importPack() schema
 // ═══════════════════════════════════════════════════════
 function buildSpukBeatsBridge(forgeState, satDNA, procState, carveState, generation, damage){
+  const fs=forgeState;
+  const cv=carveState;
 
-  // ── satDNA → bassWave mapping ────────────────────────
-  const WAVE_MAP={rust:'sine',magnetic:'sawtooth',burned:'sawtooth',
+  // ── soundEngine ──────────────────────────────────────
+  const kickF0=Math.round(80+(fs.impactHardness||0.5)*140);
+  const kickDecay=+((0.15+(fs.punchLength||0.3)*0.55).toFixed(2));
+
+  const waveMap={rust:'sine',magnetic:'sawtooth',burned:'sawtooth',
     collapsing:'sawtooth',toxic:'square',overloaded:'square',
-    exhausted:'triangle',cracked:'triangle'};
-  const bassWave=WAVE_MAP[satDNA]||'sine';
+    exhausted:'triangle',cracked:'triangle',
+    tape:'sawtooth',glass:'triangle',metal:'square',organic:'sine',crystal:'triangle'};
+  const bassWave=waveMap[satDNA]||'sawtooth';
 
-  // ── satDNA → primaryColor ────────────────────────────
-  const COLOR_MAP={
-    rust:'#b86833',magnetic:'#ccaa44',burned:'#ff4422',
-    collapsing:'#993322',toxic:'#44cc55',overloaded:'#ff7700',
-    exhausted:'#778899',cracked:'#88cccc'
-  };
-  const primaryColor=COLOR_MAP[satDNA]||'#b86833';
+  const bassFilter=Math.round(120+(fs.bodyWeight||0.5)*680);
+  const bassQ=+((2+(cv.pressure||0.5)*6).toFixed(1));
+  const hatFreq=Math.round(5000+(fs.airPush||0.4)*7000);
 
-  // Scar color: lighten primary by ~20%
-  function lightenHex(hex, amount){
+  // ── behavioral ───────────────────────────────────────
+  const instability=+(Math.min(0.9,(generation/10)*0.5+(cv.ghost||0)*0.35).toFixed(2));
+  const fragmentation=+(Math.min(1,((fs.coneStress||0)+(cv.mud||0))*0.55).toFixed(2));
+  const silenceAffinity=+(TemporalDNA.silenceTolerance||0.3).toFixed(2);
+
+  const mat=SLOTS[currentSlot];
+  const spectralBias=mat?.spectralProfile==='bright'?'high_bright'
+    :mat?.spectralProfile==='low_heavy'?'low_dark':'neutral';
+
+  // ── spatialSpread: average stereoWidth across narrative states ──
+  const ns=TemporalDNA.states||{};
+  const nsKeys=Object.keys(ns);
+  const avgSW=nsKeys.length
+    ?+(nsKeys.reduce((a,k)=>a+(ns[k].stereoWidth||0.5),0)/nsKeys.length).toFixed(2)
+    :0.5;
+
+  // ── collapseProb / fatigueResist ─────────────────────
+  const collapseProb=+((generation/10)*0.015).toFixed(4);
+  const fatigueResist=+(Math.max(0,1-(generation/10)*0.1)).toFixed(2);
+
+  // ── visualDNA ────────────────────────────────────────
+  const colMap={rust:'#b86833',magnetic:'#6644aa',burned:'#ff4422',
+    collapsing:'#cc3322',toxic:'#44cc55',overloaded:'#ff7700',
+    exhausted:'#778899',cracked:'#88cccc',
+    tape:'#ccaa44',glass:'#88cccc',metal:'#778899',organic:'#44cc88',crystal:'#aaddff'};
+  const primaryColor=colMap[satDNA]||'#9944ff';
+  const fogIntensity=+(cv.hollow||0.4).toFixed(2);
+
+  // ── scar color: lighten primary +38 per channel ──────
+  function lightenHex(hex,amt){
     const n=parseInt(hex.replace('#',''),16);
-    const r=clamp(((n>>16)&0xff)+amount,0,255);
-    const g=clamp(((n>>8)&0xff)+amount,0,255);
-    const b=clamp((n&0xff)+amount,0,255);
-    return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+    const r=clamp(((n>>16)&0xff)+amt,0,255);
+    const g=clamp(((n>>8)&0xff)+amt,0,255);
+    const b=clamp((n&0xff)+amt,0,255);
+    return'#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
   }
   const scarColor=lightenHex(primaryColor,38);
 
-  // ── soundEngine mappings ─────────────────────────────
-  // impactHardness → kickF0: 0→80Hz, 1→220Hz
-  const kickF0=Math.round(80+forgeState.impactHardness*140);
-  const kickF1=Math.round(kickF0*0.12);
-
-  // transientErosion drives decay length inversely:
-  // low erosion = sharper transient = shorter decay (0.15s)
-  // high erosion = longer decay (0.70s)
-  const kickDecay=parseFloat((0.15+forgeState.transientErosion*0.55).toFixed(3));
-
-  // bodyWeight → bassFilter: 0→120Hz, 1→800Hz
-  const bassFilter=Math.round(120+forgeState.bodyWeight*680);
-
-  // pressure → bassQ: 0→2.0, 1→8.0
-  const bassQ=parseFloat((2.0+forgeState.pressure*6.0).toFixed(2));
-
-  // airPush → hatFreq: 0→5000Hz, 1→12000Hz
-  const hatFreq=Math.round(5000+forgeState.airPush*7000);
-
-  // ── top-level fields ─────────────────────────────────
-  // instability: generation count / 10, cap 0.9
-  const instability=parseFloat(Math.min(0.9,generation/10).toFixed(3));
-
-  // fragmentation: coneStress (closest to "grit") 0–1
-  const fragmentation=parseFloat(forgeState.coneStress.toFixed(3));
-
-  // silenceAffinity: inverse of impactHardness
-  const silenceAffinity=parseFloat((1-forgeState.impactHardness).toFixed(3));
-
-  // spectralBias
-  let spectralBias='neutral';
-  if(forgeState.airPush>0.6)spectralBias='high_bright';
-  else if(forgeState.bodyWeight>0.6)spectralBias='low_dark';
-
-  // ── behaviorHints ────────────────────────────────────
-  // spatialSpread: use speakerDamage as stereo proxy (0→narrow, 1→wide)
-  const spatialSpread=parseFloat(clamp(forgeState.speakerDamage*1.2,0,1).toFixed(3));
-
-  // ghostPersistence: damage × 0.8, floor at punchLength × 0.3
-  const ghostPersistence=parseFloat(
-    clamp(Math.max(damage*0.8, forgeState.punchLength*0.3),0,1).toFixed(3));
-
-  // collapseProb: (generation / 10) × 0.015, cap 0.12
-  const collapseProb=parseFloat(Math.min(0.12,(generation/10)*0.015).toFixed(5));
-
-  // fatigueResist: inverse of accumulated damage (1 = fresh, 0 = fully eroded)
-  const fatigueResist=parseFloat(clamp(1-damage,0,1).toFixed(3));
-
-  // fogIntensity: check processor nodes for reverb/room-like contribution
-  // Use spectralHollow + tapeFatigue as proxy for "room feel"
-  const hollowInt=procState.spectralHollow&&procState.spectralHollow.enabled
-    ?procState.spectralHollow.intensity:0;
-  const fatigueInt=procState.tapeFatigue&&procState.tapeFatigue.enabled
-    ?procState.tapeFatigue.intensity:0;
-  const fogIntensity=parseFloat(clamp((hollowInt*0.5+fatigueInt*0.3+0.12),0,1).toFixed(3));
-
-  // ── packName: capitalize satDNA profile ──────────────
-  const packName=satDNA.charAt(0).toUpperCase()+satDNA.slice(1);
+  const packName=(satDNA.charAt(0).toUpperCase()+satDNA.slice(1));
 
   return{
     packName,
-    soundEngine:{kickF0,kickF1,kickDecay,bassWave,bassFilter,bassQ,hatFreq},
+    soundEngine:{kickF0,kickF1:Math.round(kickF0*0.12),kickDecay,bassWave,bassFilter,bassQ,hatFreq},
     instability,
     fragmentation,
     silenceAffinity,
     spectralBias,
-    behaviorHints:{spatialSpread,ghostPersistence,collapseProb,fatigueResist},
+    behaviorHints:{
+      spatialSpread:avgSW,
+      ghostPersistence:+(cv.ghost||0.5).toFixed(2),
+      collapseProb,
+      fatigueResist
+    },
     visualDNA:{primaryColor,scarColor,fogIntensity}
   };
 }
