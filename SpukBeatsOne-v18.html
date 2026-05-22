@@ -2667,15 +2667,16 @@ function loadSample(role){
 }
 function clearSample(role){SAL.clearSlot(role);}
 function importDNAPack(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);
-    // Detect VoxRitual / spukpack — check all possible format markers
-    const isVoxPack=data.format==='spukpack_v1'||data.version==='voxritual_pack_v1'||
-      (data.samples&&Array.isArray(data.samples)&&!data.forgeState)||
-      (data.entities&&Array.isArray(data.entities));
-    if(isVoxPack){
+    const isVoxPack=data.format==='spukpack_v1'
+      ||data.version==='voxritual_pack_v1'
+      ||(data.entities&&Array.isArray(data.entities)&&data.entities.length>0)
+      ||(data.samples&&Array.isArray(data.samples)&&!data.forgeState&&!data.format?.startsWith('sound_dna'));
+    const isForgePack=data.format==='sound_dna_v1'||data.format?.startsWith('sound_dna')||!!data.forgeState;
+
+    if(isVoxPack&&!isForgePack){
       VOXDNA.loadADN(data);
       const slots=data.samples||data.entities||[];
       SAL.registerVoxPack(slots);
-      const pname=(data.pack?.name&&data.pack.name!=='unnamed')?data.pack.name:(data.packName||'PACK');
       showToast('VOXDNA: '+slots.length+' FRAGMENTS — BIND AUDIO');
       return;
     }
@@ -2692,9 +2693,8 @@ function importDNAPack(){const inp=document.createElement('input');inp.type='fil
     // Freeze morph timer so organism stays on this pack until user decides
     DNA.morphT=0;DNA.morphDur=99999;
     DNA.rebuildPackUI();DNA.rebuildMorphUI();
-    const packName=data.spukbeats_bridge?.packName||data.packName||data.saturationDNA||'PACK';
-    showToast('DNA: '+packName.toUpperCase());
-    // Immediate HUD update so user can verify params changed
+    const packName=data.spukbeats_bridge?.packName||data.packName||data.packId||data.saturationDNA||'PACK';
+    showToast('DNA: '+packName.toUpperCase()+' ('+PACKS.length+' total)');
     _updateDebugHUD();
   }catch(err){console.warn('SpukLab DNA:',err);}};reader.readAsText(file);};inp.click();}
 function showToast(msg){const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(153,68,255,.82);color:#fff;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.1em;padding:6px 14px;border-radius:4px;z-index:999;pointer-events:none';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';setTimeout(()=>t.remove(),600);},2000);}
@@ -3340,8 +3340,14 @@ window.addEventListener('load',()=>{
     if(h){const on=h.classList.toggle('on');
       this.style.color=on?'rgba(153,68,255,.8)':'rgba(153,68,255,.38)';
       this.style.borderColor=on?'rgba(153,68,255,.5)':'rgba(153,68,255,.15)';
-      if(on)_updateDebugHUD(); // immediate update when opened
+      if(on)_updateDebugHUD();
     }
+  });
+  // FORCE VOX — debug: immediately fire a voice regardless of conditions
+  document.getElementById('dbg-btn')?.addEventListener('dblclick',()=>{
+    if(!ac||!isPlaying){showToast('PLAY FIRST');return;}
+    VOXDNA.forceEmergence('ghost');
+    showToast('VOX FORCED');
   });
   // SIM multiplier buttons
   document.querySelectorAll('.sim-btn').forEach(btn=>btn.addEventListener('click',()=>SIM.set(parseInt(btn.dataset.sim))));
