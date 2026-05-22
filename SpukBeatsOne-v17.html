@@ -587,11 +587,38 @@ var VOXDNA=(function(){
     // Called when VoxRitual ADN export is loaded
     loadADN:function(pkg){
       if(!pkg)return;
+      // Support both old format (samples[].beatsOnePayload) and new (entities[] with direct fields)
       var frags=[];
-      if(pkg.samples)pkg.samples.forEach(function(s){if(s.beatsOnePayload){var p=s.beatsOnePayload;p.id=s.id;p.name=s.name;p.fragType=p.fragType||(s.fragmentIdentity&&s.fragmentIdentity.type)||'fragment';frags.push(p);}});
+      const source=pkg.entities||pkg.samples||[];
+      source.forEach(function(s){
+        // New format: entity has fields directly
+        if(s.semanticId||s.entityType){
+          frags.push({
+            id:s.id||s.semanticId,
+            name:s.name||(s.audio&&s.audio.replace('.wav','').replace('.mp3',''))||s.semanticId,
+            fragType:s.type||s.entityType||'fragment',
+            spawnProbability:s.spawnProbability||s.emergenceProbability||0.5,
+            semanticTrigger:s.semState||'fragile',
+            decayState:s.decayState||false,
+            duration:s.duration,
+            audio:s.audio,
+            weatherAffinity:s.weatherAffinity,
+            preferredPhase:s.preferredPhase,
+            fatigueCost:s.fatigueCost,
+            spatialRole:s.spatialRole,
+            spatialWidth:s.spatialWidth,
+          });
+        } else if(s.beatsOnePayload){
+          // Old format
+          var p=s.beatsOnePayload;
+          p.id=s.id;p.name=s.name;p.duration=s.duration;
+          p.fragType=p.fragType||(s.fragmentIdentity&&s.fragmentIdentity.type)||'fragment';
+          frags.push(p);
+        }
+      });
       _s.fragments=frags;
       if(pkg.organism&&pkg.organism.temperatureProfile){var t=pkg.organism.temperatureProfile;_s.coherenceDesire+=((t.behavioralHints&&t.behavioralHints.driftAmount)||0)*.15;}
-      console.log('[VOXDNA] ADN loaded:',frags.length,'fragments');
+      console.log('[VOXDNA] ADN loaded:',frags.length,'fragments from',pkg.format||pkg.version||'unknown format');
     },
     // Called every bar — feed current ecology state
     tick:function(eco){
@@ -2246,8 +2273,13 @@ const SAL={
   registerVoxPack(samples){
     if(!samples)return;
     samples.forEach(s=>{
-      if(!this.voxSlots[s.id])
-        this.voxSlots[s.id]={state:'EMPTY',buffer:null,name:s.name,fragType:s.fragmentIdentity?.type||'fragment'};
+      const id=s.id||s.semanticId;
+      if(!id)return;
+      // Name: use sample name or derive from audio filename
+      const name=s.name||(s.audio&&s.audio.replace(/_clean\.[^.]+$/,'').replace(/\.[^.]+$/,''))||id.slice(0,12);
+      const ftype=s.fragmentIdentity?.type||s.entityType||s.type||'fragment';
+      if(!this.voxSlots[id])
+        this.voxSlots[id]={state:'EMPTY',buffer:null,name,fragType:ftype,audio:s.audio};
     });
     this._updateVoxUI();
   },
@@ -2536,13 +2568,16 @@ function loadSample(role){
 }
 function clearSample(role){SAL.clearSlot(role);}
 function importDNAPack(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);
-    // If it has samples → VoxRitual ADN export
-    if(data.samples&&Array.isArray(data.samples)){VOXDNA.loadADN(data);showToast('VOXDNA LOADED: '+(data.packName||data.organism?.id||'ADN').toUpperCase());return;}
-    // Detect: VoxRitual ADN (has samples[]) vs SpukBeats/Forge DNA pack
-    if(data.samples&&Array.isArray(data.samples)){
+    // Detect VoxRitual / spukpack — check all possible format markers
+    const isVoxPack=data.format==='spukpack_v1'||data.version==='voxritual_pack_v1'||
+      (data.samples&&Array.isArray(data.samples)&&!data.forgeState)||
+      (data.entities&&Array.isArray(data.entities));
+    if(isVoxPack){
       VOXDNA.loadADN(data);
-      SAL.registerVoxPack(data.samples); // create bindable slots for each fragment
-      showToast('VOXDNA: '+(data.pack?.name||data.packName||'ADN').toUpperCase()+' — BIND AUDIO');
+      const slots=data.samples||data.entities||[];
+      SAL.registerVoxPack(slots);
+      const pname=(data.pack?.name&&data.pack.name!=='unnamed')?data.pack.name:(data.packName||'PACK');
+      showToast('VOXDNA: '+slots.length+' FRAGMENTS — BIND AUDIO');
       return;
     }
     const idx=DNA.importPack(data);
