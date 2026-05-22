@@ -526,15 +526,15 @@ var VOXDNA=(function(){
   function _canNarrative(){
     var wm=WEATHER_VOICE_MAP[_s.currentWeather]||WEATHER_VOICE_MAP.CLEAR;
     var ph=_s.currentPhase;
-    var minI=ENTITY.narrative.minIntervalSec[ph]||480;
+    var hasAudio=typeof SAL!=='undefined'&&SAL.voxReady>0;
+    var minI=(ENTITY.narrative.minIntervalSec[ph]||480)*(hasAudio?0.3:1);
     if(wm.suppress&&wm.suppress.indexOf('narrative')>=0)return false;
     if(_s.bioCollapsing||_s.orchRecovering)return false;
-    if(_s.vocFatigue>.3)return false;
-    if(_s.orchStrength>.4)return false;
-    if(_s.silenceDepth<.45)return false;
+    if(_s.vocFatigue>.55)return false;
+    if(_s.orchStrength>.58)return false;
+    if(_s.silenceDepth<.15)return false;
     if(_s.tickTimeSec-_s.lastNarrativeTime<minI)return false;
     if(_s.tickTimeSec<_s.forcedSilenceUntil)return false;
-    if(_s.terminalGravity<.25&&ph!=='RECOVERY'&&ph!=='REBIRTH'&&_s.silenceDepth<.6)return false;
     return true;
   }
   function _canGhost(){
@@ -542,9 +542,10 @@ var VOXDNA=(function(){
     var den=PHASE_DENSITY[_s.currentPhase]||PHASE_DENSITY.PRESSURE_BUILD;
     if(wm.suppress&&wm.suppress.indexOf('ghost')>=0)return false;
     if(_s.bioCollapsing||_s.orchRecovering)return false;
-    if(_s.vocFatigue>.7)return false;
+    if(_s.vocFatigue>.78)return false;
     if(_s.tickTimeSec<_s.forcedSilenceUntil)return false;
-    var minI=60/(ENTITY.ghost.baseDensityPerMin*(den.ghost||1));
+    var hasAudio=typeof SAL!=='undefined'&&SAL.voxReady>0;
+    var minI=60/(ENTITY.ghost.baseDensityPerMin*(den.ghost||1))*(hasAudio?0.35:1);
     return _s.tickTimeSec-_s.lastGhostTime>=minI;
   }
   function _canSub(){
@@ -553,12 +554,36 @@ var VOXDNA=(function(){
     if(_s.bioCollapsing)return false;
     return true;
   }
+  // Pick a ready fragment from SAL — prefers ACTIVE slots
+  function _pickReadyFragment(entityType){
+    var frags=_s.fragments.filter(function(f){
+      // Match entity type
+      if(entityType==='subconscious')return (f.entityType||f.type||'')===entityType;
+      if(entityType==='narrative')return (f.entityType||f.type||'')!=='subconscious';
+      return true;
+    });
+    // Sort: ACTIVE slots first, then by spawnProbability
+    var sal=typeof SAL!=='undefined'?SAL:null;
+    frags.sort(function(a,b){
+      var aReady=sal&&sal.voxSlots[a.id]&&sal.voxSlots[a.id].ready?1:0;
+      var bReady=sal&&sal.voxSlots[b.id]&&sal.voxSlots[b.id].ready?1:0;
+      if(aReady!==bReady)return bReady-aReady;
+      return (b.spawnProbability||0.5)-(a.spawnProbability||0.5);
+    });
+    if(frags.length===0)return null;
+    // Pick from top 3 with randomness
+    var top=frags.slice(0,Math.min(3,frags.length));
+    return top[Math.floor(Math.random()*top.length)];
+  }
+
   function _buildNarrative(){
     var st=_selectState('narrative'),pr=IDENTITY_PROFILES[st]||IDENTITY_PROFILES.none;
     var wm=WEATHER_VOICE_MAP[_s.currentWeather]||WEATHER_VOICE_MAP.CLEAR;
     var g=ENTITY.narrative.gainRange[0]+Math.random()*(ENTITY.narrative.gainRange[1]-ENTITY.narrative.gainRange[0]);
     g*=(wm.gainMult||1);
+    var frag=_pickReadyFragment('narrative');
     return{shouldEmerge:true,entity:'narrative',identity:st,gain:g,clarity:pr.clarity,lateralize:pr.lateralize,
+      fragment:frag,
       macros:{humanity:Math.round(pr.humanContent*100),hollow:Math.round(pr.fragility*80),presence:Math.round(g*100),memory:Math.round((1-pr.clarity)*70),body:Math.round(pr.humanContent*90),bleed:Math.round(pr.fragility*40)},
       reversed:false,duckEcology:true,duckGain:.45,fadeDuration:2.5};
   }
@@ -568,7 +593,9 @@ var VOXDNA=(function(){
     var g=ENTITY.ghost.gainRange[0]+Math.random()*(ENTITY.ghost.gainRange[1]-ENTITY.ghost.gainRange[0]);
     g*=(wm.gainMult||1);
     var revP=st==='radio'?.45:st==='choir'?.25:.3;
+    var frag=_pickReadyFragment('ghost');
     return{shouldEmerge:true,entity:'ghost',identity:st,gain:g,clarity:pr.clarity,lateralize:pr.lateralize,
+      fragment:frag,
       reversed:Math.random()<revP,pitchDrift:st==='drift'?.25:st==='radio'?.12:.08,
       macros:{humanity:Math.round(pr.humanContent*70),hollow:Math.round(pr.fragility*65),presence:Math.round(g*80),memory:Math.round((1-pr.clarity)*85),body:Math.round(pr.humanContent*60),bleed:Math.round(pr.fragility*55)},
       duckEcology:false};
@@ -578,7 +605,9 @@ var VOXDNA=(function(){
     var pr=IDENTITY_PROFILES[st]||IDENTITY_PROFILES.tunnel;
     var g=_s.bioCollapsing?.06+Math.random()*.04:ENTITY.subconscious.gainRange[0]+Math.random()*(ENTITY.subconscious.gainRange[1]-ENTITY.subconscious.gainRange[0]);
     var pan=(Math.random()>.5?1:-1)*(.5+Math.random()*.45);
+    var frag=_pickReadyFragment('subconscious');
     return{active:true,entity:'subconscious',identity:st,gain:g,pan:pan,clarity:pr.clarity,granular:true,grainSize:.04+Math.random()*.12,
+      fragment:frag,
       macros:{humanity:Math.round(pr.humanContent*40),hollow:Math.round(pr.fragility*90),presence:Math.round(g*60),memory:Math.round((1-pr.clarity)*95),body:Math.round(pr.humanContent*30),bleed:Math.round(pr.fragility*70)}};
   }
   // ── PUBLIC API ──
