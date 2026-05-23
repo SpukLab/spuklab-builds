@@ -2320,8 +2320,37 @@ const SAL={
       const ftype=s.fragmentIdentity?.type||s.entityType||s.type||'fragment';
       if(!this.voxSlots[id])
         this.voxSlots[id]={state:'EMPTY',buffer:null,ready:false,failed:false,name,fragType:ftype,audio:s.audio,duration:s.duration||0};
+      // Auto-decode if audioData (base64) is embedded — no BIND required
+      if(s.audioData&&this.voxSlots[id].state==='EMPTY'){
+        this.voxSlots[id].state='QUEUED';
+        this._decodeDataURL(id,s.audioData,s.duration);
+      }
     });
     this._updateVoxUI();
+  },
+
+  // Decode a data:audio/... base64 URL into a buffer
+  async _decodeDataURL(id,dataURL,hintDuration){
+    try{
+      if(!ac)return;
+      if(ac.state!=='running')await ac.resume();
+      const resp=await fetch(dataURL);
+      const ab=await resp.arrayBuffer();
+      await new Promise((res,rej)=>{
+        ac.decodeAudioData(ab.slice(0),decoded=>{
+          const slot=this.voxSlots[id];if(!slot)return rej();
+          slot.buffer=decoded;slot.state='ACTIVE';slot.ready=true;
+          slot.failed=false;slot.duration=decoded.duration;
+          const frag=VOXDNA._getFragment(id);
+          if(frag){frag.buffer=decoded;frag.ready=true;}
+          this._updateVoxUI();res();
+        },rej);
+      });
+    }catch(err){
+      const slot=this.voxSlots[id];if(slot){slot.state='EMPTY';slot.failed=true;}
+      console.warn('SAL auto-decode failed:',id,err);
+      this._updateVoxUI();
+    }
   },
 
   // Ready count for status
@@ -2666,37 +2695,45 @@ function loadSample(role){
   inp.click();
 }
 function clearSample(role){SAL.clearSlot(role);}
-function importDNAPack(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';inp.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);
-    const isVoxPack=data.format==='spukpack_v1'
-      ||data.version==='voxritual_pack_v1'
-      ||(data.entities&&Array.isArray(data.entities)&&data.entities.length>0)
-      ||(data.samples&&Array.isArray(data.samples)&&!data.forgeState&&!data.format?.startsWith('sound_dna'));
-    const isForgePack=data.format==='sound_dna_v1'||data.format?.startsWith('sound_dna')||!!data.forgeState;
-
-    if(isVoxPack&&!isForgePack){
-      VOXDNA.loadADN(data);
-      const slots=data.samples||data.entities||[];
-      SAL.registerVoxPack(slots);
-      showToast('VOXDNA: '+slots.length+' FRAGMENTS — BIND AUDIO');
-      return;
-    }
-    const idx=DNA.importPack(data);
-    DNA.setAnchor(idx);
-    // Force weights to actually use the new pack immediately
-    DNA.weights=new Float32Array(PACKS.length);
-    DNA.morphWeights=new Float32Array(PACKS.length);
-    // Keep 100% on imported pack — don't call startMorph yet
-    // startMorph dilutes the anchor with builtin packs immediately
-    DNA.weights[idx]=1;DNA.morphWeights[idx]=1;
-    DNA.anchorIdx=idx;
-    normW(DNA.weights);DNA.blend();
-    // Freeze morph timer so organism stays on this pack until user decides
-    DNA.morphT=0;DNA.morphDur=99999;
-    DNA.rebuildPackUI();DNA.rebuildMorphUI();
-    const packName=data.spukbeats_bridge?.packName||data.packName||data.packId||data.saturationDNA||'PACK';
-    showToast('DNA: '+packName.toUpperCase()+' ('+PACKS.length+' total)');
-    _updateDebugHUD();
-  }catch(err){console.warn('SpukLab DNA:',err);}};reader.readAsText(file);};inp.click();}
+function importDNAPack(){
+  if(!ac)initAC();
+  ac.resume();
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';
+  inp.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        const isVox=data.format==='spukpack_v1'||data.version==='voxritual_pack_v1'
+          ||(data.entities&&Array.isArray(data.entities)&&data.entities.length>0)
+          ||(data.samples&&Array.isArray(data.samples)&&!data.forgeState&&!data.format?.startsWith('sound_dna'));
+        const isForge=data.format==='sound_dna_v1'||data.format?.startsWith('sound_dna')||!!data.forgeState;
+        if(isVox&&!isForge){
+          VOXDNA.loadADN(data);
+          const slots=data.samples||data.entities||[];
+          SAL.registerVoxPack(slots);
+          const auto=slots.filter(s=>s.audioData).length;
+          showToast(auto>0?`VOXDNA: DECODING ${auto} AUDIO...`:`VOXDNA: ${slots.length} — BIND AUDIO`);
+          return;
+        }
+        if(isForge){
+          const idx=DNA.importPack(data);
+          DNA.weights=new Float32Array(PACKS.length);DNA.morphWeights=new Float32Array(PACKS.length);
+          DNA.weights[idx]=1;DNA.morphWeights[idx]=1;DNA.anchorIdx=idx;
+          normW(DNA.weights);DNA.blend();DNA.morphT=0;DNA.morphDur=99999;
+          DNA.rebuildPackUI();DNA.rebuildMorphUI();
+          const pn=(data.spukbeats_bridge?.packName||data.packName||data.packId||data.saturationDNA||'PACK').toUpperCase();
+          showToast('DNA: '+pn+' ('+PACKS.length+')');_updateDebugHUD();return;
+        }
+        showToast('UNKNOWN FORMAT');
+      }catch(err){console.error('DNA import:',err);showToast('IMPORT ERROR: '+err.message.slice(0,30));}
+    };
+    reader.onerror=()=>showToast('FILE READ ERROR');
+    reader.readAsText(file);
+  };
+  inp.click();
+}
 function showToast(msg){const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(153,68,255,.82);color:#fff;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.1em;padding:6px 14px;border-radius:4px;z-index:999;pointer-events:none';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';setTimeout(()=>t.remove(),600);},2000);}
 
 // ══════════════════════════════════════════════════════════
