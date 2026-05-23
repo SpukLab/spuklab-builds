@@ -558,12 +558,15 @@ var VOXDNA=(function(){
   // Pick a ready fragment from SAL — prefers ACTIVE slots
   function _pickReadyFragment(entityType){
     var frags=_s.fragments.filter(function(f){
-      // Match entity type
-      if(entityType==='subconscious')return (f.entityType||f.type||'')===entityType;
-      if(entityType==='narrative')return (f.entityType||f.type||'')!=='subconscious';
-      return true;
+      // loadADN stores type in f.fragType
+      var ft=f.fragType||f.entityType||f.type||'';
+      if(entityType==='subconscious')return ft==='subconscious';
+      if(entityType==='narrative')return ft!=='subconscious';
+      return true; // ghost: any type
     });
-    // Sort: ACTIVE slots first, then by spawnProbability
+    // If filter is empty, fall back to ALL fragments — better a voice than silence
+    if(frags.length===0)frags=_s.fragments.slice();
+    // Sort: SAL-ready slots first, then by spawnProbability
     var sal=typeof SAL!=='undefined'?SAL:null;
     frags.sort(function(a,b){
       var aReady=sal&&sal.voxSlots[a.id]&&sal.voxSlots[a.id].ready?1:0;
@@ -572,7 +575,6 @@ var VOXDNA=(function(){
       return (b.spawnProbability||0.5)-(a.spawnProbability||0.5);
     });
     if(frags.length===0)return null;
-    // Pick from top 3 with randomness
     var top=frags.slice(0,Math.min(3,frags.length));
     return top[Math.floor(Math.random()*top.length)];
   }
@@ -822,7 +824,12 @@ const DNA={
       ghostPersist:bh.ghostPersistence||bh.ghostPersist||.5,
       col:vd.primaryColor||'#9944ff',pRgb:hexToRgb(vd.primaryColor||'#9944ff'),_imported:true,
     };
-    PACKS.push(p);const nw=new Float32Array(PACKS.length);nw.set(this.weights);this.weights=nw;const nm=new Float32Array(PACKS.length);nm.set(this.morphWeights);this.morphWeights=nm;normW(this.weights);normW(this.morphWeights);this.rebuildPackUI();this.rebuildMorphUI();this.updateBadge();return PACKS.length-1;
+    PACKS.push(p);
+    const nw=new Float32Array(PACKS.length);nw.set(this.weights);this.weights=nw;
+    const nmw=new Float32Array(PACKS.length);nmw.set(this.morphWeights);this.morphWeights=nmw;
+    normW(this.weights);normW(this.morphWeights);
+    this.rebuildPackUI();this.rebuildMorphUI();this.updateBadge();
+    return PACKS.length-1;
   }
 };
 function hexToRgb(h){return[parseInt(h.slice(1,3),16)||153,parseInt(h.slice(3,5),16)||68,parseInt(h.slice(5,7),16)||255]}
@@ -2722,33 +2729,38 @@ function importDNAPack(){
   const inp=document.createElement('input');inp.type='file';inp.accept='.json,.spukdna,application/json';
   inp.onchange=e=>{
     const file=e.target.files[0];if(!file)return;
+    showToast('READING '+(file.size>500000?Math.round(file.size/1024)+'KB...':'PACK...'));
     const reader=new FileReader();
     reader.onload=ev=>{
-      try{
-        const data=JSON.parse(ev.target.result);
-        const isVox=data.format==='spukpack_v1'||data.version==='voxritual_pack_v1'
-          ||(data.entities&&Array.isArray(data.entities)&&data.entities.length>0)
-          ||(data.samples&&Array.isArray(data.samples)&&!data.forgeState&&!data.format?.startsWith('sound_dna'));
-        const isForge=data.format==='sound_dna_v1'||data.format?.startsWith('sound_dna')||!!data.forgeState;
-        if(isVox&&!isForge){
-          VOXDNA.loadADN(data);
-          const slots=data.samples||data.entities||[];
-          SAL.registerVoxPack(slots);
-          const auto=slots.filter(s=>s.audioData).length;
-          showToast(auto>0?`VOXDNA: DECODING ${auto} AUDIO...`:`VOXDNA: ${slots.length} — BIND AUDIO`);
-          return;
-        }
-        if(isForge){
-          const idx=DNA.importPack(data);
-          DNA.weights=new Float32Array(PACKS.length);DNA.morphWeights=new Float32Array(PACKS.length);
-          DNA.weights[idx]=1;DNA.morphWeights[idx]=1;DNA.anchorIdx=idx;
-          normW(DNA.weights);DNA.blend();DNA.morphT=0;DNA.morphDur=99999;
-          DNA.rebuildPackUI();DNA.rebuildMorphUI();
-          const pn=(data.spukbeats_bridge?.packName||data.packName||data.packId||data.saturationDNA||'PACK').toUpperCase();
-          showToast('DNA: '+pn+' ('+PACKS.length+')');_updateDebugHUD();return;
-        }
-        showToast('UNKNOWN FORMAT');
-      }catch(err){console.error('DNA import:',err);showToast('IMPORT ERROR: '+err.message.slice(0,30));}
+      const raw=ev.target.result;
+      // Defer parse one frame so the "READING" toast renders before a heavy parse
+      setTimeout(()=>{
+        try{
+          const data=JSON.parse(raw);
+          const isVox=data.format==='spukpack_v1'||data.version==='voxritual_pack_v1'
+            ||(data.entities&&Array.isArray(data.entities)&&data.entities.length>0)
+            ||(data.samples&&Array.isArray(data.samples)&&!data.forgeState&&!data.format?.startsWith('sound_dna'));
+          const isForge=data.format==='sound_dna_v1'||data.format?.startsWith('sound_dna')||!!data.forgeState;
+          if(isVox&&!isForge){
+            VOXDNA.loadADN(data);
+            const slots=data.samples||data.entities||[];
+            SAL.registerVoxPack(slots);
+            const auto=slots.filter(s=>s.audioData).length;
+            showToast(auto>0?`VOXDNA: ${auto} AUDIO EMBEDDED`:`VOXDNA: ${slots.length} — NEEDS BIND`);
+            return;
+          }
+          if(isForge){
+            const idx=DNA.importPack(data);
+            DNA.weights=new Float32Array(PACKS.length);DNA.morphWeights=new Float32Array(PACKS.length);
+            DNA.weights[idx]=1;DNA.morphWeights[idx]=1;DNA.anchorIdx=idx;
+            normW(DNA.weights);DNA.blend();DNA.morphT=0;DNA.morphDur=99999;
+            DNA.rebuildPackUI();DNA.rebuildMorphUI();
+            const pn=(data.spukbeats_bridge?.packName||data.packName||data.packId||data.saturationDNA||'PACK').toUpperCase();
+            showToast('DNA: '+pn+' ('+PACKS.length+' packs)');_updateDebugHUD();return;
+          }
+          showToast('UNKNOWN FORMAT');
+        }catch(err){console.error('DNA import:',err);showToast('IMPORT ERROR: '+(err.message||'').slice(0,28));}
+      },30);
     };
     reader.onerror=()=>showToast('FILE READ ERROR');
     reader.readAsText(file);
@@ -2901,7 +2913,7 @@ function schedStep(step,t){
     SMEM.tick();DNA.tick();WEATHER.tick();SPATIAL.tick();FIELD.tick();
     BPMSTATE.update();BPMSTATE.apply();  // neurodynamic update — runs before all ecology
     INFECT.tick();WEATHMEM.recordBar(WEATHER.target);WEATHMEM.tick();
-    BIO.tick(barCount);BUDGET.onBar();VOXDNA.tick();
+    BIO.tick(barCount);BUDGET.onBar();
     EMO.tick();EMO.applyInfluence();CIRCADIAN.tick();FOSSILS.tick(barCount);
     SESSION_ID.recordWeather(WEATHER.target);
     GOVERNANCE.tick();
@@ -2972,13 +2984,16 @@ function schedStep(step,t){
         vEvent('ghost',voxDec.ghost.gain*.4,ac.currentTime,Math.random()*W,Math.random()*H);
       }
 
-      if(voxDec.subconscious.active&&Math.random()<.14){
+      if(voxDec.subconscious.active){
         const frag=voxDec.subconscious.fragment;
         const slot=frag&&SAL.voxSlots[frag.id];
         if(slot?.ready&&slot.buffer){
-          const dur=.25+Math.random()*.5;
-          const offset=Math.random()*Math.max(0,slot.buffer.duration-dur-.05);
-          playBuf(slot.buffer,voxDec.subconscious.gain*.35,voxDec.subconscious.pan||0,offset,dur);
+          // Real buffer loaded — fire more often and louder so it's actually heard
+          if(Math.random()<.35){
+            const dur=.4+Math.random()*1.2;
+            const offset=Math.random()*Math.max(0,slot.buffer.duration-dur-.05);
+            playBuf(slot.buffer,voxDec.subconscious.gain*1.8,voxDec.subconscious.pan||0,offset,dur);
+          }
         }
       }
     }
@@ -3436,8 +3451,9 @@ window.addEventListener('load',()=>{
   // FORCE VOX — debug: immediately fire a voice regardless of conditions
   document.getElementById('dbg-btn')?.addEventListener('dblclick',()=>{
     if(!ac||!isPlaying){showToast('PLAY FIRST');return;}
+    VOXDNA.forceEmergence('narrative');
     VOXDNA.forceEmergence('ghost');
-    showToast('VOX FORCED');
+    showToast('VOX FORCED — '+SAL.voxReady+'/'+SAL.voxTotal+' ready');
   });
   // SIM multiplier buttons
   document.querySelectorAll('.sim-btn').forEach(btn=>btn.addEventListener('click',()=>SIM.set(parseInt(btn.dataset.sim))));
