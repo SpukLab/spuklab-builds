@@ -201,6 +201,7 @@ body{display:grid;grid-template-rows:50px 1fr 86px;grid-template-columns:165px 1
   <button class="hbtn" id="tap-btn">TAP</button>
   <div id="weather-badge">CLEAR</div>
   <button class="hbtn" id="imm-btn">IMM</button>
+  <button class="hbtn" id="vox-mon-btn" title="VOX MONITOR — suppresses synth, amplifies voices">VOX</button>
   <button class="hbtn" id="rec-btn">REC</button>
   <button class="hbtn" id="dbg-btn" style="font-size:8px;color:rgba(153,68,255,.38);border-color:rgba(153,68,255,.15)">DBG</button>
   <button class="hbtn" id="mic-btn" data-state="HOLLOW">MIC</button>
@@ -2221,7 +2222,7 @@ const BUS={
     });
     // ORCH handles gain — we only override ghost/drone depth here if ORCH has no protagonist
     if(!ORCH||!ORCH.protagonist){
-      if(this.ghost)this.ghost.gain.gain.setTargetAtTime(G.immersiveMode?.06+Math.random()*.06:.14+Math.random()*.1,ac.currentTime,.3);
+      if(this.ghost)this.ghost.gain.gain.setTargetAtTime(G.immersiveMode?.12+Math.random()*.06:.32+Math.random()*.12,ac.currentTime,.3);
     }
   },
   // Get the INPUT of a bus (connect your source → bus.gain)
@@ -2330,10 +2331,16 @@ const SAL={
   },
 
   // Decode a data:audio/... base64 URL into a buffer
+  // Store pending audioData for slots that imported before AC existed
+  _pendingDecodes:{},
+
   async _decodeDataURL(id,dataURL,hintDuration){
     try{
-      if(!ac)return;
-      if(ac.state!=='running')await ac.resume();
+      // If no AC yet, park for retry when PLAY starts
+      if(!ac||ac.state==='suspended'){
+        this._pendingDecodes[id]=dataURL;
+        return;
+      }
       const resp=await fetch(dataURL);
       const ab=await resp.arrayBuffer();
       await new Promise((res,rej)=>{
@@ -2341,6 +2348,7 @@ const SAL={
           const slot=this.voxSlots[id];if(!slot)return rej();
           slot.buffer=decoded;slot.state='ACTIVE';slot.ready=true;
           slot.failed=false;slot.duration=decoded.duration;
+          delete this._pendingDecodes[id];
           const frag=VOXDNA._getFragment(id);
           if(frag){frag.buffer=decoded;frag.ready=true;}
           this._updateVoxUI();res();
@@ -2348,8 +2356,21 @@ const SAL={
       });
     }catch(err){
       const slot=this.voxSlots[id];if(slot){slot.state='EMPTY';slot.failed=true;}
-      console.warn('SAL auto-decode failed:',id,err);
+      console.warn('SAL decode failed:',id,err);
       this._updateVoxUI();
+    }
+  },
+
+  // Call this after AC.resume() — flushes any slots that were imported before AC existed
+  async retryPending(){
+    const ids=Object.keys(this._pendingDecodes);
+    if(ids.length===0)return;
+    showToast(`DECODING ${ids.length} VOX...`);
+    for(const id of ids){
+      const url=this._pendingDecodes[id];
+      const slot=this.voxSlots[id];
+      if(slot)slot.state='QUEUED';
+      await this._decodeDataURL(id,url);
     }
   },
 
@@ -2926,7 +2947,7 @@ function schedStep(step,t){
         const frag=voxDec.narrative.fragment;
         const slot=frag&&SAL.voxSlots[frag.id];
         if(slot?.ready&&slot.buffer){
-          playBuf(slot.buffer,voxDec.narrative.gain*.75,0,0);
+          playBuf(slot.buffer,voxDec.narrative.gain*1.1,0,0);
           if(voxDec.narrative.duckEcology){
             ['kick','snare','hat','pressure','texture'].forEach(k=>{if(BUS[k])BUS[k].gain.gain.setTargetAtTime(voxDec.narrative.duckGain,ac.currentTime,2.5);});
             setTimeout(()=>{if(ORCH)ORCH.applyBusGains();},8000+Math.random()*10000);
@@ -2943,7 +2964,7 @@ function schedStep(step,t){
         if(slot?.ready&&slot.buffer){
           const drift=1+(voxDec.ghost.pitchDrift||0)*(Math.random()-.5)*.8;
           const src=ac.createBufferSource();src.buffer=slot.buffer;src.playbackRate.value=drift;
-          const g=ac.createGain();g.gain.setValueAtTime(voxDec.ghost.gain*.55,ac.currentTime);
+          const g=ac.createGain();g.gain.setValueAtTime(voxDec.ghost.gain*.85,ac.currentTime);
           g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+Math.min(slot.buffer.duration+.05,3));
           src.connect(g);g.connect(BUS.get('ghost'));src.start(ac.currentTime);
           src.onended=()=>BUDGET.releaseNode();BUDGET.addEvent(2);
@@ -2974,7 +2995,16 @@ function schedStep(step,t){
 }
 function nxtStep(){nextT+=(60/bpm)/4;curStep=(curStep+1)%16;}
 function doSched(){while(nextT<ac.currentTime+SAHEAD){schedStep(curStep,nextT);nxtStep();}schedH=setTimeout(doSched,SINT);}
-function _doStartPlay(){nextT=ac.currentTime+.05;curStep=0;barCount=0;POLY5=new PolyLayer(5,4/5);POLY7=new PolyLayer(7,4/7);POLY5.nextT=nextT;POLY7.nextT=nextT;nextSublimT=nextT;FIELD.init();PE.start();DNA.startMorph();TEMPORAL.init();DESTINY.init(TEMPORAL.plannedDuration);VOXDNA.reset();isPlaying=true;doSched();}
+function _doStartPlay(){
+  nextT=ac.currentTime+.05;curStep=0;barCount=0;
+  POLY5=new PolyLayer(5,4/5);POLY7=new PolyLayer(7,4/7);
+  POLY5.nextT=nextT;POLY7.nextT=nextT;nextSublimT=nextT;
+  FIELD.init();PE.start();DNA.startMorph();TEMPORAL.init();
+  DESTINY.init(TEMPORAL.plannedDuration);VOXDNA.reset();
+  // Flush any VoxRitual audioData that was queued before AC existed
+  SAL.retryPending();
+  isPlaying=true;doSched();
+}
 function startPlay(){
   initAC();ac.resume();
   if(!ECOLOGY_COMPILER.done){ECOLOGY_COMPILER.show();return;}
@@ -3371,6 +3401,29 @@ window.addEventListener('load',()=>{
   document.querySelectorAll('.ss-clr').forEach(btn=>{btn.addEventListener('click',()=>clearSample(btn.dataset.role));});
   initToggle('tgl-mem','phraseMemory');initToggle('tgl-hum','humanize');initToggle('tgl-lock','lockGroove');
   initKeys();initBPM();initPhase();initMacros();initGovernance();
+  // VOX MONITOR button — suppresses rhythm/pressure/texture, amplifies ghost bus
+  let voxMonitor=false;
+  document.getElementById('vox-mon-btn')?.addEventListener('click',function(){
+    voxMonitor=!voxMonitor;
+    this.classList.toggle('on',voxMonitor);
+    this.style.color=voxMonitor?'rgba(0,255,200,.9)':'';
+    this.style.borderColor=voxMonitor?'rgba(0,255,200,.5)':'';
+    if(ac&&BUS){
+      const t=ac.currentTime;
+      if(voxMonitor){
+        // Suppress instrument buses, boost ghost
+        ['kick','snare','hat','pressure','texture'].forEach(k=>{if(BUS[k])BUS[k].gain.gain.setTargetAtTime(.04,t,.5);});
+        if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.85,t,.5);
+        if(BUS.drone)BUS.drone.gain.gain.setTargetAtTime(.15,t,.5);
+        showToast('VOX MONITOR ON');
+      }else{
+        // Restore
+        ORCH.applyBusGains();
+        if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.18,t,.5);
+        showToast('VOX MONITOR OFF');
+      }
+    }
+  });
   // DBG toggle — targets the canvas-embedded debug-hud
   document.getElementById('dbg-btn')?.addEventListener('click',function(){
     const h=document.getElementById('debug-hud');
