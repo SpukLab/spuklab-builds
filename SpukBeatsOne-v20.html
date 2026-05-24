@@ -2654,21 +2654,18 @@ const SYS={
   },
 
   validate(){
-    // Mark subsystems that are already initialized
-    if(ac&&ac.state!=='closed')this.flags.ac=true;
-    if(window.BUS&&BUS._inited)this.flags.bus=true;
-    if(PACKS.length>6)this.flags.dna=true;
+    if(ac&&ac.state!=='closed'){this.flags.ac=true;this.flags.bus=true;}
+    if(PACKS&&PACKS.length>0)this.flags.dna=true;
     if(typeof WEATHER!=='undefined')this.flags.weather=true;
     if(typeof TEMPORAL!=='undefined')this.flags.temporal=true;
-    // SAL ready if any vox slot is ACTIVE or no pack imported yet
-    if(SAL.voxTotal===0||SAL.voxReady>0)this.flags.sal=true;
+    if(SAL&&(SAL.voxTotal===0||SAL.voxReady>0))this.flags.sal=true;
     this._check();
     return this.state;
   },
 
   canPlay(){
-    this.validate();
-    return this.state==='READY'||this.state==='PARTIAL'; // PARTIAL = AC+BUS ok, can play
+    // Only AC is truly required to start — everything else loads progressively
+    return !!(ac&&ac.state!=='closed');
   },
 
   _updateUI(){
