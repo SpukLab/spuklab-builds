@@ -216,7 +216,46 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
 .cval{font-family:var(--mono);font-style:italic;font-size:11px;
   color:var(--white);width:26px;text-align:right;flex-shrink:0;}
 
-/* ═══ SURFACE CHIPS + GLUE ═══ */
+/* ═══ MACRO CONTROLS ═══ */
+.macro-grid{display:flex;flex-direction:column;gap:5px;}
+.macro-row{display:flex;align-items:center;gap:6px;}
+.macro-lbl-l{font-family:var(--mono);font-size:11px;letter-spacing:.05em;
+  color:var(--gray);width:56px;text-align:right;flex-shrink:0;transition:color .2s;}
+.macro-lbl-r{font-family:var(--mono);font-size:11px;letter-spacing:.05em;
+  color:var(--gray);width:56px;flex-shrink:0;transition:color .2s;}
+.macro-row.left-active .macro-lbl-l{color:var(--cyan);}
+.macro-row.right-active .macro-lbl-r{color:var(--violet);}
+.macro-track{flex:1;height:5px;background:rgba(255,255,255,.06);
+  border-radius:3px;position:relative;cursor:pointer;touch-action:none;}
+/* Bipolar fill from center */
+.macro-fill-l{position:absolute;right:50%;top:0;height:100%;
+  border-radius:3px 0 0 3px;background:var(--cyan);transition:width .12s;}
+.macro-fill-r{position:absolute;left:50%;top:0;height:100%;
+  border-radius:0 3px 3px 0;background:var(--violet);transition:width .12s;}
+.macro-center{position:absolute;left:50%;top:-3px;width:1px;height:11px;
+  background:rgba(255,255,255,.18);}
+.macro-thumb{position:absolute;top:-5px;width:11px;height:11px;border-radius:50%;
+  background:var(--white);transform:translateX(-5px);pointer-events:none;
+  box-shadow:0 0 5px rgba(153,68,255,.5);transition:left .08s;}
+
+/* ═══ TEMPORAL PRESETS + RANDOMIZER ═══ */
+.tpreset-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:7px;}
+.tpreset-chip{padding:9px 5px;border-radius:4px;text-align:center;cursor:pointer;
+  background:rgba(153,68,255,.05);border:1px solid var(--vdim);
+  transition:all .12s;-webkit-tap-highlight-color:transparent;}
+.tpreset-chip.active{background:rgba(153,68,255,.18);border-color:var(--violet);}
+.tpc-name{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.06em;display:block;line-height:1.3;transition:color .12s;}
+.tpreset-chip.active .tpc-name{color:var(--white);}
+.tpc-desc{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:rgba(153,68,255,.45);display:block;margin-top:2px;transition:color .12s;}
+.tpreset-chip.active .tpc-desc{color:rgba(153,68,255,.75);}
+.randomize-btn{width:100%;padding:10px;border-radius:4px;cursor:pointer;
+  font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.14em;
+  text-align:center;background:rgba(0,255,200,.04);
+  border:1px dashed rgba(0,255,200,.28);color:rgba(0,255,200,.60);
+  transition:background .1s;-webkit-tap-highlight-color:transparent;}
+.randomize-btn:active{background:rgba(0,255,200,.14);}
 .surface-chips{display:flex;gap:3px;margin-bottom:7px;}
 .surf-chip{flex:1;padding:5px 2px;border-radius:3px;text-align:center;cursor:pointer;
   background:rgba(0,255,255,.03);border:1px solid rgba(0,255,255,.10);
@@ -507,6 +546,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <button class="mbtn" id="mb-resample">RESAMPLE</button>
     <button class="mbtn" id="mb-dna">DNA</button>
     <button class="mbtn" id="mb-temporal">TEMPORAL</button>
+    <button class="mbtn" id="mb-macro">MACRO</button>
   </div>
 
   <!-- QUICK FILTER STRIP — always visible -->
@@ -843,7 +883,31 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
   <div class="pane" id="pane-temporal">
 
     <div class="sec">
-      <div class="st">SESSION INTENT</div>
+      <div class="st">TEMPORAL PRESETS</div>
+      <div class="tpreset-grid">
+        <div class="tpreset-chip" data-tpreset="ritual_pressure">
+          <span class="tpc-name">RITUAL PRESSURE</span>
+          <span class="tpc-desc">slow build · heavy rupture</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="neon_expansion">
+          <span class="tpc-name">NEON EXPANSION</span>
+          <span class="tpc-desc">wide stereo · open peaks</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="collapse_cycles">
+          <span class="tpc-name">COLLAPSE CYCLES</span>
+          <span class="tpc-desc">micro-ruptures · aftershocks</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="ghost_architecture">
+          <span class="tpc-name">GHOST ARCHITECTURE</span>
+          <span class="tpc-desc">void dominant · rare events</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="urban_pulse" style="grid-column:1/-1;">
+          <span class="tpc-name">URBAN PULSE</span>
+          <span class="tpc-desc">steady groove · stable tension</span>
+        </div>
+      </div>
+      <button class="randomize-btn" id="randomize-temporal-btn">RANDOMIZE WITHIN IDENTITY</button>
+    </div>
       <div class="intent-grid">
         <div class="intent-chip active" data-intent="ritual"><span>RITUAL</span></div>
         <div class="intent-chip" data-intent="collapse"><span>COLLAPSE</span></div>
@@ -893,6 +957,81 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div class="st">ORGANISM ROLES</div>
       <div class="role-grid" id="role-grid">
         <!-- Badges injected by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ MACRO CONTROLS PANE ═══ -->
+  <div class="pane" id="pane-macro">
+
+    <div class="sec">
+      <div class="st">MACRO CONTROLS</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--gray);margin-bottom:8px;line-height:1.5;font-style:italic;">
+        Perceptual controls. Each macro shapes multiple parameters simultaneously.
+      </div>
+      <div class="macro-grid">
+        <!-- Each row: left-label, bipolar-track, right-label -->
+        <div class="macro-row" id="mr-tone">
+          <span class="macro-lbl-l">DARK</span>
+          <div class="macro-track" data-macro="tone">
+            <div class="macro-fill-l" id="mfl-tone"></div>
+            <div class="macro-fill-r" id="mfr-tone"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-tone" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">OPEN</span>
+        </div>
+        <div class="macro-row" id="mr-space">
+          <span class="macro-lbl-l">DRY</span>
+          <div class="macro-track" data-macro="space">
+            <div class="macro-fill-l" id="mfl-space"></div>
+            <div class="macro-fill-r" id="mfr-space"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-space" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">ATMOSPHERIC</span>
+        </div>
+        <div class="macro-row" id="mr-damage">
+          <span class="macro-lbl-l">CLEAN</span>
+          <div class="macro-track" data-macro="damage">
+            <div class="macro-fill-l" id="mfl-damage"></div>
+            <div class="macro-fill-r" id="mfr-damage"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-damage" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">BROKEN</span>
+        </div>
+        <div class="macro-row" id="mr-time">
+          <span class="macro-lbl-l">TIGHT</span>
+          <div class="macro-track" data-macro="time">
+            <div class="macro-fill-l" id="mfl-time"></div>
+            <div class="macro-fill-r" id="mfr-time"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-time" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">DIFFUSED</span>
+        </div>
+        <div class="macro-row" id="mr-motion">
+          <span class="macro-lbl-l">STATIC</span>
+          <div class="macro-track" data-macro="motion">
+            <div class="macro-fill-l" id="mfl-motion"></div>
+            <div class="macro-fill-r" id="mfr-motion"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-motion" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">EVOLVING</span>
+        </div>
+        <div class="macro-row" id="mr-scale">
+          <span class="macro-lbl-l">INTIMATE</span>
+          <div class="macro-track" data-macro="scale">
+            <div class="macro-fill-l" id="mfl-scale"></div>
+            <div class="macro-fill-r" id="mfr-scale"></div>
+            <div class="macro-center"></div>
+            <div class="macro-thumb" id="mt-scale" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">MASSIVE</span>
+        </div>
       </div>
     </div>
 
@@ -1256,6 +1395,201 @@ const SURFACE_PROFILES={
   concrete:{lowMidBoost:3.0,highCut:14000,Q:.6,transRound:.08},
   fabric:  {lowMidBoost:0.8,highCut:5500,Q:.5,transRound:.32}
 };
+
+// ─── MACRO STATE — bipolar -1…+1 ────────────────────────
+// Each macro maps to multiple micro-parameters simultaneously
+const MacroState={tone:0,space:0,damage:0,time:0,motion:0,scale:0};
+
+function applyMacro(key,v){
+  // v is -1…+1 (left side negative, right side positive)
+  MacroState[key]=v;
+  const vp=Math.max(0,v);  // right half  0…1
+  const vn=Math.max(0,-v); // left half   0…1
+
+  switch(key){
+    case 'tone':
+      // DARK(-1): darken QF + warmth + soften | OPEN(+1): air QF + presence
+      QF.darken=clamp(.15+vn*.65,0,1);
+      QF.air=clamp(vp*.55,0,1);
+      QF.presence=clamp(vp*.40,0,1);
+      ToneState.warmth=clamp(vn*.55,0,1);
+      ToneState.soften=clamp(vn*.45,0,1);
+      break;
+    case 'space':
+      // DRY(-1): less glue, less air absorption | ATMOSPHERIC(+1): more glue, air absorb, distance
+      GlueState.glue=clamp(.08+vp*.65,0,1);
+      GlueState.airAbsorption=clamp(vp*.60,0,1);
+      GlueState.distance=clamp(vp*.55,0,1);
+      ToneState.dust=clamp(vp*.45,0,1);
+      break;
+    case 'damage':
+      // CLEAN(-1): reduce coneStress, satDrive | BROKEN(+1): coneStress, satDrive, speakerDamage
+      ForgeState.coneStress=clamp(.18+vp*.70,0,1);
+      ForgeState.satDrive=clamp(1.2+vp*5.5,.5,8);
+      ForgeState.speakerDamage=clamp(vp*.75,0,1);
+      ForgeState.transientErosion=clamp(vp*.55,0,1);
+      break;
+    case 'time':
+      // TIGHT(-1): hard impact, short punch | DIFFUSED(+1): soft transient, long decay, decay softness
+      ForgeState.impactHardness=clamp(.72-vp*.45,.05,1);
+      ForgeState.punchLength=clamp(.22+vp*.65,0,1);
+      GlueState.decaySoftness=clamp(vp*.72,0,1);
+      QF.softenT=clamp(vp*.60,0,1);
+      ForgeState.transientErosion=clamp(.12+vp*.50,0,1);
+      break;
+    case 'motion':
+      // STATIC(-1): low instability, stable density | EVOLVING(+1): high contrast, rare events, transitions
+      TemporalDNA.contrastLevel=clamp(.25+vp*.65,0,1);
+      TemporalDNA.silenceTolerance=clamp(.20+vp*.55,0,1);
+      // Boost rare event probability across all phases
+      if(vp>.1){
+        Object.keys(TemporalDNA.states).forEach(ph=>{
+          TemporalDNA.states[ph].rareProb=clamp(
+            TemporalDNA.states[ph].rareProb*(1+vp*.8),0,.15);
+        });
+      }
+      break;
+    case 'scale':
+      // INTIMATE(-1): low mass, narrow stereo, short decay | MASSIVE(+1): mass, wide stereo, long decay
+      GlueState.mass=clamp(.05+vp*.75,0,1);
+      ForgeState.bodyWeight=clamp(.28+vp*.60,0,1);
+      GlueState.decaySoftness=clamp(.05+vp*.70,0,1);
+      // Boost all phase widths proportionally
+      if(vp>.05){
+        Object.keys(TemporalDNA.states).forEach(ph=>{
+          TemporalDNA.states[ph].stereoWidth=clamp(
+            TemporalDNA.states[ph].stereoWidth*(1+vp*.4),0,1.0);
+        });
+      }else if(vn>.05){
+        Object.keys(TemporalDNA.states).forEach(ph=>{
+          TemporalDNA.states[ph].stereoWidth=clamp(
+            TemporalDNA.states[ph].stereoWidth*(1-vn*.3),0,1.0);
+        });
+      }
+      break;
+  }
+}
+
+// ─── TEMPORAL PRESETS ────────────────────────────────────
+const TEMPORAL_PRESETS={
+  ritual_pressure:{
+    intent:'ritual',curve:'slow_burn',density:'focused',contrast:.65,silence:.72,
+    states:{
+      intro:    {densityTarget:.08,silenceProb:.80,stereoWidth:.45,satBias:.25,transientInt:.15,spectralOpen:.80,rareProb:.000},
+      build:    {densityTarget:.35,silenceProb:.35,stereoWidth:.55,satBias:.55,transientInt:.55,spectralOpen:.55,rareProb:.004},
+      tension:  {densityTarget:.60,silenceProb:.10,stereoWidth:.38,satBias:.78,transientInt:.82,spectralOpen:.30,rareProb:.020},
+      peak:     {densityTarget:.82,silenceProb:.03,stereoWidth:.42,satBias:.88,transientInt:.95,spectralOpen:.22,rareProb:.012},
+      rupture:  {densityTarget:.92,silenceProb:.01,stereoWidth:.22,satBias:.98,transientInt:1.0,spectralOpen:.15,rareProb:.035},
+      recovery: {densityTarget:.22,silenceProb:.55,stereoWidth:.65,satBias:.35,transientInt:.28,spectralOpen:.68,rareProb:.048},
+      void:     {densityTarget:.04,silenceProb:.88,stereoWidth:.92,satBias:.12,transientInt:.05,spectralOpen:.95,rareProb:.090},
+      aftershock:{densityTarget:.18,silenceProb:.42,stereoWidth:.72,satBias:.52,transientInt:.50,spectralOpen:.48,rareProb:.075}
+    }
+  },
+  neon_expansion:{
+    intent:'hypnotic',curve:'waves',density:'focused',contrast:.45,silence:.35,
+    states:{
+      intro:    {densityTarget:.20,silenceProb:.55,stereoWidth:.85,satBias:.28,transientInt:.30,spectralOpen:.88,rareProb:.005},
+      build:    {densityTarget:.55,silenceProb:.15,stereoWidth:.92,satBias:.42,transientInt:.65,spectralOpen:.75,rareProb:.008},
+      tension:  {densityTarget:.62,silenceProb:.12,stereoWidth:.78,satBias:.55,transientInt:.75,spectralOpen:.62,rareProb:.015},
+      peak:     {densityTarget:.80,silenceProb:.04,stereoWidth:.88,satBias:.72,transientInt:.88,spectralOpen:.48,rareProb:.010},
+      rupture:  {densityTarget:.85,silenceProb:.02,stereoWidth:.65,satBias:.90,transientInt:.98,spectralOpen:.35,rareProb:.025},
+      recovery: {densityTarget:.38,silenceProb:.30,stereoWidth:.90,satBias:.30,transientInt:.35,spectralOpen:.82,rareProb:.040},
+      void:     {densityTarget:.12,silenceProb:.60,stereoWidth:.98,satBias:.15,transientInt:.10,spectralOpen:.95,rareProb:.065},
+      aftershock:{densityTarget:.28,silenceProb:.28,stereoWidth:.88,satBias:.45,transientInt:.55,spectralOpen:.68,rareProb:.055}
+    }
+  },
+  collapse_cycles:{
+    intent:'collapse',curve:'collapse_cycles',density:'dense',contrast:.90,silence:.25,
+    states:{
+      intro:    {densityTarget:.22,silenceProb:.48,stereoWidth:.55,satBias:.45,transientInt:.38,spectralOpen:.62,rareProb:.008},
+      build:    {densityTarget:.62,silenceProb:.08,stereoWidth:.62,satBias:.68,transientInt:.78,spectralOpen:.42,rareProb:.015},
+      tension:  {densityTarget:.72,silenceProb:.05,stereoWidth:.42,satBias:.82,transientInt:.88,spectralOpen:.28,rareProb:.028},
+      peak:     {densityTarget:.88,silenceProb:.02,stereoWidth:.35,satBias:.95,transientInt:.98,spectralOpen:.18,rareProb:.018},
+      rupture:  {densityTarget:.95,silenceProb:.00,stereoWidth:.18,satBias:1.0,transientInt:1.0,spectralOpen:.10,rareProb:.050},
+      recovery: {densityTarget:.35,silenceProb:.28,stereoWidth:.55,satBias:.48,transientInt:.45,spectralOpen:.55,rareProb:.065},
+      void:     {densityTarget:.08,silenceProb:.65,stereoWidth:.78,satBias:.22,transientInt:.12,spectralOpen:.88,rareProb:.085},
+      aftershock:{densityTarget:.32,silenceProb:.18,stereoWidth:.68,satBias:.65,transientInt:.70,spectralOpen:.42,rareProb:.095}
+    }
+  },
+  ghost_architecture:{
+    intent:'void_psychology',curve:'fragmented',density:'minimal',contrast:.82,silence:.90,
+    states:{
+      intro:    {densityTarget:.04,silenceProb:.90,stereoWidth:.92,satBias:.12,transientInt:.08,spectralOpen:.98,rareProb:.025},
+      build:    {densityTarget:.12,silenceProb:.72,stereoWidth:.88,satBias:.20,transientInt:.18,spectralOpen:.90,rareProb:.035},
+      tension:  {densityTarget:.18,silenceProb:.58,stereoWidth:.75,satBias:.35,transientInt:.28,spectralOpen:.78,rareProb:.048},
+      peak:     {densityTarget:.28,silenceProb:.40,stereoWidth:.68,satBias:.48,transientInt:.38,spectralOpen:.65,rareProb:.035},
+      rupture:  {densityTarget:.38,silenceProb:.22,stereoWidth:.45,satBias:.65,transientInt:.55,spectralOpen:.48,rareProb:.045},
+      recovery: {densityTarget:.08,silenceProb:.82,stereoWidth:.90,satBias:.15,transientInt:.10,spectralOpen:.95,rareProb:.075},
+      void:     {densityTarget:.02,silenceProb:.95,stereoWidth:.99,satBias:.06,transientInt:.02,spectralOpen:.99,rareProb:.100},
+      aftershock:{densityTarget:.12,silenceProb:.65,stereoWidth:.92,satBias:.28,transientInt:.22,spectralOpen:.88,rareProb:.088}
+    }
+  },
+  urban_pulse:{
+    intent:'pressure_cycle',curve:'slow_burn',density:'dense',contrast:.50,silence:.30,
+    states:{
+      intro:    {densityTarget:.30,silenceProb:.40,stereoWidth:.58,satBias:.38,transientInt:.42,spectralOpen:.65,rareProb:.005},
+      build:    {densityTarget:.58,silenceProb:.12,stereoWidth:.65,satBias:.58,transientInt:.68,spectralOpen:.50,rareProb:.008},
+      tension:  {densityTarget:.68,silenceProb:.08,stereoWidth:.52,satBias:.72,transientInt:.78,spectralOpen:.38,rareProb:.015},
+      peak:     {densityTarget:.80,silenceProb:.04,stereoWidth:.58,satBias:.82,transientInt:.88,spectralOpen:.30,rareProb:.010},
+      rupture:  {densityTarget:.88,silenceProb:.02,stereoWidth:.38,satBias:.92,transientInt:.96,spectralOpen:.22,rareProb:.030},
+      recovery: {densityTarget:.42,silenceProb:.22,stereoWidth:.68,satBias:.42,transientInt:.48,spectralOpen:.58,rareProb:.038},
+      void:     {densityTarget:.15,silenceProb:.55,stereoWidth:.80,satBias:.22,transientInt:.18,spectralOpen:.78,rareProb:.060},
+      aftershock:{densityTarget:.28,silenceProb:.25,stereoWidth:.65,satBias:.58,transientInt:.62,spectralOpen:.48,rareProb:.052}
+    }
+  }
+};
+
+let activeTemporalPreset=null;
+
+function applyTemporalPreset(key){
+  const p=TEMPORAL_PRESETS[key];if(!p)return;
+  activeTemporalPreset=key;
+  // Apply intent + curve
+  TemporalDNA.sessionIntent=p.intent;
+  TemporalDNA.energyCurve=p.curve;
+  TemporalDNA.spectralDensity=p.density;
+  TemporalDNA.contrastLevel=p.contrast;
+  TemporalDNA.silenceTolerance=p.silence;
+  // Deep copy states
+  Object.keys(p.states).forEach(ph=>{
+    Object.assign(TemporalDNA.states[ph],p.states[ph]);
+  });
+  // Sync UI
+  TemporalDNA.syncUISliders();
+  TemporalDNA.renderPhaseCards();
+  // Update intent/curve chips
+  document.querySelectorAll('.intent-chip[data-intent]').forEach(c=>{
+    c.classList.toggle('active',c.dataset.intent===p.intent);
+  });
+  document.querySelectorAll('.curve-chip[data-curve]').forEach(c=>{
+    c.classList.toggle('active',c.dataset.curve===p.curve);
+  });
+  document.querySelectorAll('.sden-chip[data-sden]').forEach(c=>{
+    c.classList.toggle('active',c.dataset.sden===p.density);
+  });
+}
+
+// Directed randomizer: varies duration/silence/stereo/rareProb within identity envelope
+function randomizeWithinIdentity(){
+  const base=activeTemporalPreset?TEMPORAL_PRESETS[activeTemporalPreset]:null;
+  const FIELDS=['densityTarget','silenceProb','stereoWidth','rareProb'];
+  const JITTER=0.10; // max ±10% deviation from preset value
+  Object.keys(TemporalDNA.states).forEach(ph=>{
+    FIELDS.forEach(f=>{
+      const ref=base?base.states[ph][f]:TemporalDNA.states[ph][f];
+      // Gaussian-ish: uniform ±JITTER, centered on ref
+      const delta=(Math.random()*2-1)*JITTER;
+      TemporalDNA.states[ph][f]=clamp(ref+delta,0,1);
+    });
+    // Preserve satBias and transientInt from preset — these define the identity
+  });
+  // Small variance on contrast + silence tolerance
+  const sj=(Math.random()*2-1)*.08;
+  TemporalDNA.contrastLevel=clamp((base?base.contrast:TemporalDNA.contrastLevel)+sj,0,1);
+  TemporalDNA.silenceTolerance=clamp((base?base.silence:TemporalDNA.silenceTolerance)+(Math.random()*2-1)*.08,0,1);
+  TemporalDNA.syncUISliders();
+  TemporalDNA.renderPhaseCards();
+}
 
 // ═══════════════════════════════════════════════════════
 // TEMPORAL DNA — Behavioral identity of the pack
@@ -1706,9 +2040,14 @@ function _triggerInner(){
     // Hollow notch — Q clamped to 2.4, with RMS makeup gain comp (max +1.5dB)
     const hollowNotch=AC.createBiquadFilter();hollowNotch.type='notch';
     safeFreq(hollowNotch.frequency,400);
-    safeParam(hollowNotch.Q,1+CarveState.hollow*1.4,AP.Q_MIN,2.4); // Q max 2.4
-    const hollowComp=AC.createGain(); // makeup gain after notch, max +1.5dB
-    hollowComp.gain.value=1+CarveState.hollow*0.19; // ~0dB→+1.45dB
+    // Dynamic notch: Q grows with hollow, makeup is INVERSELY proportional to Q depth
+    // At hollow=0: Q=1.0, makeup≈1.00. At hollow=1: Q=2.4, makeup≈0.90
+    const hollowQ=clamp(1+CarveState.hollow*1.4,AP.Q_MIN,2.4);
+    safeParam(hollowNotch.Q,hollowQ,AP.Q_MIN,2.4);
+    const hollowComp=AC.createGain();
+    const qNorm=clamp((hollowQ-1)/1.4,0,1); // 0 = shallow, 1 = deep
+    // deeper notch gets proportionally less makeup — prevents gain explosion
+    hollowComp.gain.value=clamp(1+CarveState.hollow*0.16*(1-qNorm*.7),0.88,1.14);
 
     const mudHP=AC.createBiquadFilter();mudHP.type='highpass';
     safeFreq(mudHP.frequency,80+CarveState.mud*180);safeQ(mudHP.Q,.7);
@@ -1807,20 +2146,6 @@ function _triggerInner(){
     surfHC.connect(distLP);distLP.connect(distAP);distAP.connect(massShelf);
     massShelf.connect(surfTR);surfTR.connect(matGain);matGain.connect(v.bus);
 
-    // DUST: if dust > 0.04, inject low-level filtered noise
-    if(ToneState.dust>0.04&&noiseBuffer){
-      const dustSrc=AC.createBufferSource();dustSrc.buffer=noiseBuffer;dustSrc.loop=true;
-      const dustLP=AC.createBiquadFilter();dustLP.type='lowpass';safeFreq(dustLP.frequency,3000);
-      const dustG=AC.createGain();
-      safeSetValue(dustG.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
-      safeLinearRamp(dustG.gain,ToneState.dust*0.04,t+0.012,AP.GAIN_MIN,AP.GAIN_MAX); // max ~4% noise
-      const dustStop=t+dur+.01;
-      safeSetValue(dustG.gain,ToneState.dust*0.04,dustStop-.030,AP.GAIN_MIN,AP.GAIN_MAX);
-      dustG.gain.linearRampToValueAtTime(.00001,dustStop);
-      dustSrc.connect(dustLP);dustLP.connect(dustG);dustG.connect(v.bus);
-      dustSrc.start(t);dustSrc.stop(dustStop+.003);
-    }
-
     const dur=Math.min(mat.buffer.duration,3.0);
     const matStop=t+dur+.01;
     const fadeStart=Math.max(t+.010,matStop-.045);
@@ -1828,6 +2153,26 @@ function _triggerInner(){
     matGain.gain.linearRampToValueAtTime(.00001,matStop);
     src.start(t);src.stop(matStop+.005);
     maxDur=Math.max(maxDur,dur);
+
+    // DUST: pre-fader injection — HP guard prevents low-end buildup into compressor
+    // No loop — uses a short one-shot segment to avoid accumulation
+    if(ToneState.dust>0.04&&noiseBuffer){
+      const dustDur=Math.min(dur+.01,.8); // cap at 800ms — no long looping noise
+      const dustSrc=AC.createBufferSource();dustSrc.buffer=noiseBuffer;
+      // HP guard: ensures dust doesn't feed sub energy into compressor chain
+      const dustHP=AC.createBiquadFilter();dustHP.type='highpass';safeFreq(dustHP.frequency,600);dustHP.Q.value=.5;
+      const dustLP2=AC.createBiquadFilter();dustLP2.type='lowpass';safeFreq(dustLP2.frequency,2800);dustLP2.Q.value=.5;
+      const dustG=AC.createGain();
+      const dustGainVal=clamp(ToneState.dust*0.025,0,0.025); // hard cap at 2.5%
+      safeSetValue(dustG.gain,0,t,AP.GAIN_MIN,0.025);
+      safeLinearRamp(dustG.gain,dustGainVal,t+0.015,AP.GAIN_MIN,0.025);
+      const dustStop=t+dustDur;
+      safeSetValue(dustG.gain,dustGainVal,dustStop-.025,AP.GAIN_MIN,0.025);
+      dustG.gain.linearRampToValueAtTime(.00001,dustStop);
+      // Inject directly to masterGain (post-voice) — bypasses processor chain entirely
+      dustSrc.connect(dustHP);dustHP.connect(dustLP2);dustLP2.connect(dustG);dustG.connect(masterGain);
+      dustSrc.start(t);dustSrc.stop(dustStop+.003);
+    }
   }
 
   // === SYNTHESIS LAYERS (opt-in) ===
@@ -2381,7 +2726,7 @@ function flashTrigger(){
 let currentMode='mat';
 function setMode(mode){
   currentMode=mode;
-  const modes=['mat','forge','sculpt','resample','dna','temporal'];
+  const modes=['mat','forge','sculpt','resample','dna','temporal','macro'];
   modes.forEach(m=>{
     document.getElementById(`pane-${m}`).classList.toggle('visible',m===mode);
     document.getElementById(`mb-${m}`).classList.toggle('active',m===mode);
@@ -2390,7 +2735,7 @@ function setMode(mode){
   if(mode==='dna')updateDNAPane();
   if(mode==='temporal'){TemporalDNA.renderPhaseCards();TemporalDNA.renderRoleBadges();}
 }
-['mat','forge','sculpt','resample','dna','temporal'].forEach(m=>{
+['mat','forge','sculpt','resample','dna','temporal','macro'].forEach(m=>{
   document.getElementById(`mb-${m}`).addEventListener('click',()=>setMode(m));
   document.getElementById(`mb-${m}`).addEventListener('touchstart',e=>{e.preventDefault();setMode(m);},{passive:false});
 });
@@ -3436,6 +3781,61 @@ document.querySelectorAll('.imp-chip[data-shape]').forEach(chip=>{
 })();
 
 // ─── TEMPORAL DNA LISTENERS ──────────────────────────────
+// ─── TEMPORAL PRESETS ────────────────────────────────────
+document.querySelectorAll('.tpreset-chip[data-tpreset]').forEach(chip=>{
+  function select(){
+    document.querySelectorAll('.tpreset-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    applyTemporalPreset(chip.dataset.tpreset);
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+(function(){
+  const btn=document.getElementById('randomize-temporal-btn');
+  if(!btn)return;
+  btn.addEventListener('click',randomizeWithinIdentity);
+  btn.addEventListener('touchstart',e=>{e.preventDefault();randomizeWithinIdentity();},{passive:false});
+})();
+
+// ─── MACRO CONTROLS ─────────────────────────────────────
+(function(){
+  document.querySelectorAll('.macro-track[data-macro]').forEach(track=>{
+    const key=track.dataset.macro;
+    const thumbEl=document.getElementById('mt-'+key);
+    const fillL=document.getElementById('mfl-'+key);
+    const fillR=document.getElementById('mfr-'+key);
+    const rowEl=document.getElementById('mr-'+key);
+    let dragging=false;
+    function updateMacro(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const norm=clamp((cx-rect.left)/rect.width,0,1);
+      const v=(norm-.5)*2; // -1…+1
+      applyMacro(key,v);
+      const pct=norm*100;
+      if(thumbEl)thumbEl.style.left=pct+'%';
+      const halfW=Math.abs(norm-.5)*50;
+      if(v<=0){
+        if(fillL)fillL.style.width=halfW+'%';
+        if(fillR)fillR.style.width='0%';
+        if(rowEl){rowEl.classList.toggle('left-active',v<-.05);rowEl.classList.remove('right-active');}
+      }else{
+        if(fillR)fillR.style.width=halfW+'%';
+        if(fillL)fillL.style.width='0%';
+        if(rowEl){rowEl.classList.toggle('right-active',v>.05);rowEl.classList.remove('left-active');}
+      }
+      if(Math.abs(v)<.05&&rowEl)rowEl.classList.remove('left-active','right-active');
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;updateMacro(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();updateMacro(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;updateMacro(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)updateMacro(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+})();
+
 // Intent chips
 document.querySelectorAll('.intent-chip[data-intent]').forEach(chip=>{
   function select(){
