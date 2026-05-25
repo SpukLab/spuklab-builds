@@ -106,6 +106,45 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
 .pane::-webkit-scrollbar{width:2px;}
 .pane::-webkit-scrollbar-thumb{background:var(--vdim);}
 
+/* LAB SUB-BAR */
+.lab-bar{display:flex;flex-shrink:0;border-bottom:1px solid var(--vdim);
+  background:rgba(153,68,255,.04);display:none;}
+.lab-bar.visible{display:flex;}
+.lbtn{flex:1;padding:7px 2px;background:none;border:none;border-right:1px solid var(--vdim);
+  color:rgba(153,68,255,.55);font-family:var(--mono);font-style:italic;font-size:11px;
+  letter-spacing:.08em;cursor:pointer;text-align:center;transition:all .1s;
+  -webkit-tap-highlight-color:transparent;}
+.lbtn:last-child{border-right:none;}
+.lbtn.active{background:rgba(153,68,255,.10);color:var(--violet);}
+
+/* EXPORT PANE — pack identity */
+.pack-id-grid{display:grid;grid-template-columns:1fr;gap:5px;margin-bottom:8px;}
+.pack-id-row{display:flex;align-items:center;gap:7px;}
+.pid-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.07em;width:66px;flex-shrink:0;}
+.pid-val{flex:1;background:rgba(153,68,255,.06);border:1px solid var(--vdim);
+  border-radius:3px;padding:5px 8px;font-family:var(--mono);font-size:11px;
+  color:var(--white);letter-spacing:.06em;outline:none;
+  -webkit-appearance:none;}
+.pid-val:focus{border-color:var(--violet);}
+.filename-preview{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:rgba(0,255,200,.45);padding:5px 8px;border:1px dashed rgba(0,255,200,.15);
+  border-radius:3px;word-break:break-all;line-height:1.5;}
+.export-btns-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.export-btn-main{padding:14px;border-radius:5px;cursor:pointer;
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:12px;
+  letter-spacing:.14em;text-align:center;transition:background .1s;
+  -webkit-tap-highlight-color:transparent;}
+.export-btn-main.dna{background:rgba(153,68,255,.12);border:1px solid rgba(153,68,255,.45);
+  color:var(--white);}
+.export-btn-main.pack{background:linear-gradient(145deg,rgba(153,68,255,.14),rgba(0,255,200,.06));
+  border:1px solid rgba(153,68,255,.55);color:var(--white);grid-column:1/-1;}
+.export-btn-main.wav{background:rgba(0,255,180,.05);border:1px solid rgba(0,255,180,.25);
+  color:rgba(0,255,180,.80);}
+.export-btn-main:active{opacity:.7;}
+.export-status{font-family:var(--mono);font-size:11px;color:rgba(0,255,180,.45);
+  min-height:14px;margin-top:4px;font-style:italic;text-align:center;}
+
 /* SECTIONS */
 .sec{border:1px solid var(--vdim);border-radius:5px;padding:9px 10px;
   background:rgba(153,68,255,.04);}
@@ -538,18 +577,24 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
 <!-- CONTROLS -->
 <div class="cpanel">
 
-  <!-- MODE BAR -->
+  <!-- MODE BAR — 5 focused tabs -->
   <div class="modebar">
-    <button class="mbtn active" id="mb-mat">MATERIAL</button>
-    <button class="mbtn" id="mb-forge">FORGE</button>
-    <button class="mbtn" id="mb-sculpt">SCULPT</button>
-    <button class="mbtn" id="mb-resample">RESAMPLE</button>
-    <button class="mbtn" id="mb-dna">DNA</button>
-    <button class="mbtn" id="mb-temporal">TEMPORAL</button>
-    <button class="mbtn" id="mb-macro">MACRO</button>
+    <button class="mbtn active" id="mb-sculpt2">SCULPT</button>
+    <button class="mbtn" id="mb-mat">MATERIAL</button>
+    <button class="mbtn" id="mb-temporal2">FEEL</button>
+    <button class="mbtn" id="mb-export">EXPORT</button>
+    <button class="mbtn" id="mb-lab">LAB ›</button>
   </div>
 
-  <!-- QUICK FILTER STRIP — always visible -->
+  <!-- LAB SUB-BAR — hidden until LAB tab active -->
+  <div class="lab-bar" id="lab-bar">
+    <button class="lbtn active" id="lb-forge">FORGE</button>
+    <button class="lbtn" id="lb-sculpt">CHAIN</button>
+    <button class="lbtn" id="lb-resample">RESAMPLE</button>
+    <button class="lbtn" id="lb-dna">DNA RAW</button>
+    <button class="lbtn" id="lb-temporal">TEMPORAL</button>
+    <button class="lbtn" id="lb-macro">MACRO</button>
+  </div>
   <div class="qfs">
     <div class="qf-item">
       <span class="qf-lbl">LOW CUT</span>
@@ -573,8 +618,183 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     </div>
   </div>
 
+  <!-- ═══ SCULPT PANE (PRIMARY) — macro controls ═══ -->
+  <div class="pane visible" id="pane-sculpt2">
+
+    <div class="sec">
+      <div class="st">SOUND SCULPT</div>
+      <div class="macro-grid">
+        <div class="macro-row" id="mr-tone">
+          <span class="macro-lbl-l">DARK</span>
+          <div class="macro-track" data-macro="tone">
+            <div class="macro-fill-l" id="mfl-tone"></div><div class="macro-fill-r" id="mfr-tone"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-tone" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">OPEN</span>
+        </div>
+        <div class="macro-row" id="mr-damage">
+          <span class="macro-lbl-l">CLEAN</span>
+          <div class="macro-track" data-macro="damage">
+            <div class="macro-fill-l" id="mfl-damage"></div><div class="macro-fill-r" id="mfr-damage"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-damage" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">BROKEN</span>
+        </div>
+        <div class="macro-row" id="mr-scale">
+          <span class="macro-lbl-l">INTIMATE</span>
+          <div class="macro-track" data-macro="scale">
+            <div class="macro-fill-l" id="mfl-scale"></div><div class="macro-fill-r" id="mfr-scale"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-scale" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">MASSIVE</span>
+        </div>
+        <div class="macro-row" id="mr-space">
+          <span class="macro-lbl-l">DRY</span>
+          <div class="macro-track" data-macro="space">
+            <div class="macro-fill-l" id="mfl-space"></div><div class="macro-fill-r" id="mfr-space"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-space" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">ATMOSPHERIC</span>
+        </div>
+        <div class="macro-row" id="mr-time">
+          <span class="macro-lbl-l">TIGHT</span>
+          <div class="macro-track" data-macro="time">
+            <div class="macro-fill-l" id="mfl-time"></div><div class="macro-fill-r" id="mfr-time"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-time" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">DIFFUSED</span>
+        </div>
+        <div class="macro-row" id="mr-motion">
+          <span class="macro-lbl-l">STATIC</span>
+          <div class="macro-track" data-macro="motion">
+            <div class="macro-fill-l" id="mfl-motion"></div><div class="macro-fill-r" id="mfr-motion"></div>
+            <div class="macro-center"></div><div class="macro-thumb" id="mt-motion" style="left:50%;"></div>
+          </div>
+          <span class="macro-lbl-r">EVOLVING</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mini material preview in sculpt pane -->
+    <div class="sec">
+      <div class="st">MATERIAL</div>
+      <div style="display:flex;gap:7px;align-items:center;margin-bottom:6px;">
+        <button class="obtn active" data-org2="0" style="flex:1;">A</button>
+        <button class="obtn" data-org2="1" style="flex:1;">B</button>
+        <button class="obtn" data-org2="2" style="flex:1;">C</button>
+        <button class="preview-btn no-mat" id="preview-btn2" style="flex:2;margin:0;padding:6px 4px;">PREVIEW</button>
+      </div>
+      <canvas class="mat-wave-wrap" id="mat-wave-sculpt" height="28" style="opacity:.55;"></canvas>
+      <div id="sculpt-mat-name" style="font-family:var(--mono);font-size:11px;color:var(--gray);font-style:italic;margin-top:4px;text-align:center;"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ FEEL PANE — simplified temporal ═══ -->
+  <div class="pane" id="pane-temporal2">
+
+    <div class="sec">
+      <div class="st">FEEL PRESETS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div class="tpreset-chip" data-tpreset="ritual_pressure" style="padding:12px 6px;">
+          <span class="tpc-name">RITUAL PRESSURE</span>
+          <span class="tpc-desc">slow · heavy · mono</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="neon_expansion" style="padding:12px 6px;">
+          <span class="tpc-name">NEON EXPANSION</span>
+          <span class="tpc-desc">wide · bright · open</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="collapse_cycles" style="padding:12px 6px;">
+          <span class="tpc-name">COLLAPSE CYCLES</span>
+          <span class="tpc-desc">ruptures · aftershocks</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="ghost_architecture" style="padding:12px 6px;">
+          <span class="tpc-name">GHOST ARCHITECTURE</span>
+          <span class="tpc-desc">void · rare · minimal</span>
+        </div>
+        <div class="tpreset-chip" data-tpreset="urban_pulse" style="padding:12px 6px;grid-column:1/-1;">
+          <span class="tpc-name">URBAN PULSE</span>
+          <span class="tpc-desc">steady · groove · tension</span>
+        </div>
+      </div>
+      <button class="randomize-btn" id="randomize-temporal-btn2" style="margin-top:5px;">RANDOMIZE WITHIN IDENTITY</button>
+    </div>
+
+    <div class="sec">
+      <div class="st">FEEL CONTROLS</div>
+      <div class="tone-ctrl">
+        <span class="tlbl">SILENCE</span>
+        <div class="ttrack" data-td="silenceTolerance"><div class="tfill" style="width:50%;background:rgba(100,180,255,.65);"></div></div>
+        <span class="tval" id="tdv-silenceTolerance">0.50</span>
+      </div>
+      <div class="tone-ctrl">
+        <span class="tlbl">EVOLUTION</span>
+        <div class="ttrack" data-td="contrastLevel"><div class="tfill" style="width:60%;background:rgba(255,100,180,.65);"></div></div>
+        <span class="tval" id="tdv-contrastLevel">0.60</span>
+      </div>
+      <div class="tone-ctrl">
+        <span class="tlbl">WIDTH</span>
+        <div class="ttrack" data-feel="width"><div class="tfill" style="width:60%;background:rgba(153,68,255,.70);"></div></div>
+        <span class="tval" id="feelv-width">0.60</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">NARRATIVE MAP</div>
+      <div class="phase-grid" id="phase-grid2"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ EXPORT PANE ═══ -->
+  <div class="pane" id="pane-export">
+
+    <div class="sec">
+      <div class="st">PACK IDENTITY</div>
+      <div class="pack-id-grid">
+        <div class="pack-id-row">
+          <span class="pid-lbl">PACK NAME</span>
+          <input class="pid-val" id="pid-name" type="text" value="Rust Ritual" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="pack-id-row">
+          <span class="pid-lbl">SESSION</span>
+          <input class="pid-val" id="pid-session" type="text" value="Void Pressure" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="pack-id-row">
+          <span class="pid-lbl">MOOD TAGS</span>
+          <input class="pid-val" id="pid-tags" type="text" value="ritual / pressure" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="pack-id-row">
+          <span class="pid-lbl">VERSION</span>
+          <input class="pid-val" id="pid-version" type="text" value="v01" autocomplete="off" autocorrect="off" spellcheck="false" style="width:52px;flex:none;">
+        </div>
+      </div>
+      <div class="filename-preview" id="export-filename-preview">–</div>
+    </div>
+
+    <div class="sec">
+      <div class="st">EXPORT</div>
+      <div class="export-btns-grid">
+        <button class="export-btn-main wav" id="exp-wav-dry">DRY WAV</button>
+        <button class="export-btn-main wav" id="exp-wav-proc">PROCESSED WAV</button>
+        <button class="export-btn-main dna" id="exp-dna">FORGE DNA</button>
+        <button class="export-btn-main wav" id="exp-stems">PRINT STEMS</button>
+        <button class="export-btn-main pack" id="exp-pack">FORGE PACK</button>
+      </div>
+      <div class="export-status" id="export-status"></div>
+      <div class="pack-progress-wrap" id="pack-progress-wrap2">
+        <div class="pack-progress-bar" id="pack-progress-bar2"></div>
+        <div class="pack-progress-label" id="pack-progress-label2">initializing...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LAB PANE — all old panes live inside here, gated by sub-bar -->
+  <div class="pane" id="pane-lab"><!-- content rendered by JS sub-mode --></div>
+
   <!-- ═══ MATERIAL PANE ═══ -->
-  <div class="pane visible" id="pane-mat">
+  <div class="pane" id="pane-mat">
 
     <div class="orgsel">
       <button class="obtn active" data-org="0">SLOT A</button>
@@ -1293,6 +1513,8 @@ function updateMaterialUI(){
   const mat=SLOTS[currentSlot];
   const pvBtn=document.getElementById('preview-btn');
   if(pvBtn)pvBtn.classList.toggle('no-mat',!mat);
+  // Sync sculpt pane mini panel
+  if(typeof updateSculptMiniWave==='function')updateSculptMiniWave();
   if(!mat){
     ['mat-dur','mat-trans','mat-spec','mat-phys','mat-noise','mat-gen','mat-dmg','mat-air']
       .forEach(id=>setT(id,'--'));
@@ -1704,8 +1926,8 @@ const TemporalDNA={
     if(trkSL)trkSL.style.width=(this.silenceTolerance*100).toFixed(0)+'%';
   },
 
-  renderPhaseCards(){
-    const grid=document.getElementById('phase-grid');if(!grid)return;
+  renderPhaseCards(gridId){
+    const grid=document.getElementById(gridId||'phase-grid');if(!grid)return;
     const curPhase=GlobalState?GlobalState.phase:'intro';
     grid.innerHTML='';
     const phases=['intro','build','tension','peak','rupture','recovery','void','aftershock'];
@@ -2651,7 +2873,8 @@ const GlobalState={
     if(TemporalDNA._prevPhase!==this.phase){
       TemporalDNA.onPhaseChange(TemporalDNA._prevPhase||this.phase,this.phase);
       TemporalDNA._prevPhase=this.phase;
-      TemporalDNA.renderPhaseCards();
+      TemporalDNA.renderPhaseCards('phase-grid');
+      TemporalDNA.renderPhaseCards('phase-grid2');
     }
     TemporalDNA.tickBias();
     this.updateUI();
@@ -2723,22 +2946,214 @@ function flashTrigger(){
 }
 
 // ─── MODE SYSTEM ────────────────────────────────────────
-let currentMode='mat';
+// ── filename preview generator ────────────────────────────
+function updateFilenamePreview(){
+  const name=(document.getElementById('pid-name')?.value||'PACK').replace(/\s+/g,'_').toUpperCase();
+  const session=(document.getElementById('pid-session')?.value||'SESSION').replace(/\s+/g,'').toUpperCase();
+  const ver=(document.getElementById('pid-version')?.value||'v01').toUpperCase();
+  const gen=`G${totalGenerations}`;
+  const fn=`${name}_${session}_${gen}_${ver}`;
+  const el=document.getElementById('export-filename-preview');
+  if(el)el.textContent=fn+'.spukdna / .wav / .spukpack';
+}
+
+// ── LAB sub-mode ──────────────────────────────────────────
+const LAB_PANES=['forge','sculpt','resample','dna','temporal','macro'];
+let currentLabMode='forge';
+
+function setLabMode(key){
+  currentLabMode=key;
+  document.querySelectorAll('.lbtn').forEach(b=>b.classList.toggle('active',b.id==='lb-'+key));
+  // Show the actual old pane inside pane-lab by moving it
+  const labEl=document.getElementById('pane-lab');
+  if(!labEl)return;
+  LAB_PANES.forEach(k=>{
+    const p=document.getElementById('pane-'+k);
+    if(p){p.style.display=(k===key)?'flex':'none';p.style.flex=(k===key)?'1':'none';}
+  });
+  if(key==='temporal')TemporalDNA.renderPhaseCards();
+  if(key==='temporal')TemporalDNA.renderRoleBadges();
+  if(key==='sculpt')drawSatCurvePreview();
+}
+
+// ── Main mode system ─────────────────────────────────────
+const MAIN_MODES=['sculpt2','mat','temporal2','export','lab'];
+let currentMode='sculpt2';
+
 function setMode(mode){
   currentMode=mode;
-  const modes=['mat','forge','sculpt','resample','dna','temporal','macro'];
-  modes.forEach(m=>{
-    document.getElementById(`pane-${m}`).classList.toggle('visible',m===mode);
-    document.getElementById(`mb-${m}`).classList.toggle('active',m===mode);
+  MAIN_MODES.forEach(m=>{
+    const p=document.getElementById('pane-'+m);
+    if(p)p.classList.toggle('visible',m===mode);
+    const b=document.getElementById('mb-'+m);
+    if(b)b.classList.toggle('active',m===mode);
   });
-  if(mode==='sculpt')drawSatCurvePreview();
-  if(mode==='dna')updateDNAPane();
-  if(mode==='temporal'){TemporalDNA.renderPhaseCards();TemporalDNA.renderRoleBadges();}
+
+  // LAB sub-bar visibility
+  const labBar=document.getElementById('lab-bar');
+  if(labBar)labBar.classList.toggle('visible',mode==='lab');
+
+  if(mode==='lab'){
+    setLabMode(currentLabMode);
+  } else {
+    // Hide all old panes when not in LAB
+    LAB_PANES.forEach(k=>{
+      const p=document.getElementById('pane-'+k);
+      if(p)p.style.display='none';
+    });
+  }
+
+  if(mode==='temporal2'){
+    TemporalDNA.renderPhaseCards('phase-grid2');
+  }
+  if(mode==='export'){
+    updateFilenamePreview();
+  }
+  // Sync sculpt mini-waveform
+  if(mode==='sculpt2')updateSculptMiniWave();
 }
-['mat','forge','sculpt','resample','dna','temporal','macro'].forEach(m=>{
-  document.getElementById(`mb-${m}`).addEventListener('click',()=>setMode(m));
-  document.getElementById(`mb-${m}`).addEventListener('touchstart',e=>{e.preventDefault();setMode(m);},{passive:false});
+
+// Bind main tabs
+['sculpt2','mat','temporal2','export','lab'].forEach(m=>{
+  const btn=document.getElementById('mb-'+m);
+  if(!btn)return;
+  btn.addEventListener('click',()=>setMode(m));
+  btn.addEventListener('touchstart',e=>{e.preventDefault();setMode(m);},{passive:false});
 });
+
+// Bind LAB sub-tabs
+['forge','sculpt','resample','dna','temporal','macro'].forEach(k=>{
+  const btn=document.getElementById('lb-'+k);
+  if(!btn)return;
+  btn.addEventListener('click',()=>setLabMode(k));
+  btn.addEventListener('touchstart',e=>{e.preventDefault();setLabMode(k);},{passive:false});
+});
+
+// Sculpt mini-waveform sync
+function updateSculptMiniWave(){
+  const mat=SLOTS[currentSlot];
+  const nameEl=document.getElementById('sculpt-mat-name');
+  const pvBtn=document.getElementById('preview-btn2');
+  if(nameEl)nameEl.textContent=mat?mat.name:'— no material —';
+  if(pvBtn)pvBtn.classList.toggle('no-mat',!mat);
+  if(!mat)return;
+  const c=document.getElementById('mat-wave-sculpt');
+  if(!c)return;
+  const w=c.offsetWidth||c.parentElement?.offsetWidth||200;
+  c.width=w;c.height=28;
+  const ctx2=c.getContext('2d');ctx2.clearRect(0,0,w,28);
+  const data=mat.buffer.getChannelData(0);const step=Math.floor(data.length/w);
+  ctx2.strokeStyle='rgba(0,255,255,.45)';ctx2.lineWidth=1;ctx2.beginPath();
+  for(let x=0;x<w;x++){const s=data[x*step]||0;const y=14-s*12;x===0?ctx2.moveTo(x,y):ctx2.lineTo(x,y);}
+  ctx2.stroke();
+}
+
+// Pack identity field listeners → update filename preview
+['pid-name','pid-session','pid-tags','pid-version'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el)el.addEventListener('input',updateFilenamePreview);
+});
+
+// Slot buttons in sculpt mini-panel
+document.querySelectorAll('[data-org2]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    currentSlot=parseInt(btn.dataset.org2);currentOrg=currentSlot;
+    document.querySelectorAll('[data-org2]').forEach(b=>b.classList.toggle('active',b===btn));
+    document.querySelectorAll('[data-org]').forEach(b=>b.classList.toggle('active',
+      parseInt(b.dataset.org)===currentSlot));
+    updateMaterialUI();updateSculptMiniWave();
+  });
+});
+
+// Preview btn in sculpt panel
+(function(){
+  const btn=document.getElementById('preview-btn2');
+  if(!btn)return;
+  btn.addEventListener('click',()=>previewMaterial());
+  btn.addEventListener('touchstart',e=>{e.preventDefault();previewMaterial();},{passive:false});
+})();
+
+// ── WIDTH feel control ────────────────────────────────────
+(function(){
+  const track=document.querySelector('.ttrack[data-feel="width"]');
+  if(!track)return;
+  const fill=track.querySelector('.tfill');
+  const valEl=document.getElementById('feelv-width');
+  let dragging=false;
+  function update(e){
+    const rect=track.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const v=clamp((cx-rect.left)/rect.width,0,1);
+    if(fill)fill.style.width=(v*100).toFixed(0)+'%';
+    if(valEl)valEl.textContent=v.toFixed(2);
+    // Apply width globally to all narrative state stereoWidths
+    Object.keys(TemporalDNA.states).forEach(ph=>{
+      const base=TemporalDNA.states[ph].stereoWidth;
+      // Interpolate toward v, keeping relative spread
+      TemporalDNA.states[ph].stereoWidth=clamp(base*.4+v*.6,0,1);
+    });
+  }
+  track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+  track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+  track.addEventListener('touchend',()=>{dragging=false;});
+  track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+  window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+  window.addEventListener('mouseup',()=>{dragging=false;});
+})();
+
+// ── FEEL preset chips in temporal2 pane ──────────────────
+document.querySelectorAll('#pane-temporal2 .tpreset-chip[data-tpreset]').forEach(chip=>{
+  function select(){
+    document.querySelectorAll('#pane-temporal2 .tpreset-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    applyTemporalPreset(chip.dataset.tpreset);
+    TemporalDNA.renderPhaseCards('phase-grid2');
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+
+// Randomize btn in feel pane
+(function(){
+  const btn=document.getElementById('randomize-temporal-btn2');
+  if(!btn)return;
+  btn.addEventListener('click',()=>{randomizeWithinIdentity();TemporalDNA.renderPhaseCards('phase-grid2');});
+  btn.addEventListener('touchstart',e=>{
+    e.preventDefault();randomizeWithinIdentity();TemporalDNA.renderPhaseCards('phase-grid2');
+  },{passive:false});
+})();
+
+// ── EXPORT pane buttons ────────────────────────────────────
+function getPackName(){
+  return(document.getElementById('pid-name')?.value||currentSatProfile)
+    .replace(/\s+/g,'_').toUpperCase();
+}
+(function(){
+  const bind=(id,fn)=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.addEventListener('click',fn);
+    el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  };
+  const setStatus=msg=>{
+    const s=document.getElementById('export-status');if(s)s.textContent=msg;
+  };
+  bind('exp-wav-dry',()=>exportWAV('dry').then(()=>{}).catch(e=>setStatus('error: '+e.message)));
+  bind('exp-wav-proc',()=>exportWAV('processed').then(()=>{}).catch(e=>setStatus('error: '+e.message)));
+  bind('exp-stems',()=>exportStemsWAV().catch(e=>setStatus('error: '+e.message)));
+  bind('exp-dna',()=>{
+    document.getElementById('forge-dna-btn')?.click();
+  });
+  bind('exp-pack',()=>{
+    const pw=document.getElementById('pack-progress-wrap2');
+    const pb=document.getElementById('pack-progress-bar2');
+    const pl=document.getElementById('pack-progress-label2');
+    if(pw)pw.classList.add('visible');
+    // Redirect progress to export pane progress elements
+    forgeSpukPack({progressBar:pb,progressLabel:pl}).catch(e=>{
+      if(pl)pl.textContent='error: '+e.message;
+    });
+  });
+})();
 
 // ─── ORGANISM SELECTOR ──────────────────────────────────
 const ORG_CSS=[
@@ -3472,17 +3887,18 @@ function buildPackManifest(entities,bridge){
 }
 
 // ─── FORGE PACK ORCHESTRATOR ─────────────────────────
-async function forgeSpukPack(){
+async function forgeSpukPack(opts){
+  opts=opts||{};
   const btn=document.getElementById('forge-pack-btn');
   const wrap=document.getElementById('pack-progress-wrap');
-  const bar=document.getElementById('pack-progress-bar');
-  const lbl=document.getElementById('pack-progress-label');
+  const bar=opts.progressBar||document.getElementById('pack-progress-bar');
+  const lbl=opts.progressLabel||document.getElementById('pack-progress-label');
   function progress(pct,msg){
     if(bar)bar.style.width=pct+'%';
     if(lbl)lbl.textContent=msg;
   }
 
-  btn.disabled=true;
+  if(btn)btn.disabled=true;
   if(wrap)wrap.classList.add('visible');
   progress(0,'initializing audio context...');
 
@@ -3533,7 +3949,7 @@ async function forgeSpukPack(){
 
   const kb=(packBytes.length/1024).toFixed(0);
   progress(100,`exported: ${fname} — ${kb}kb — ${rendered.length} entities`);
-  btn.disabled=false;
+  if(btn)btn.disabled=false;
 }
 
 document.getElementById('forge-dna-btn').addEventListener('click',()=>{
