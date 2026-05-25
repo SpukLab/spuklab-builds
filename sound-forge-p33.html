@@ -351,7 +351,66 @@ main{flex:1;display:flex;overflow:hidden;min-height:0;}
   transition:background .12s;-webkit-tap-highlight-color:transparent;}
 .forge-dna-btn:active{background:rgba(153,68,255,.28);}
 
-/* ═══ PHASE 3.35 — PERFORMATIVE MODULES ═══ */
+/* ═══ PHASE 3.4 — MATERIAL EDIT + FINISH ═══ */
+
+/* Waveform editor canvas */
+.wave-edit-wrap{position:relative;width:100%;height:60px;background:rgba(0,0,0,.35);
+  border:1px solid var(--vdim);border-radius:3px;overflow:hidden;cursor:crosshair;
+  touch-action:none;}
+.wave-edit-canvas{position:absolute;inset:0;width:100%;height:100%;}
+.wave-region-overlay{position:absolute;top:0;height:100%;pointer-events:none;}
+.wave-handle{position:absolute;top:0;width:3px;height:100%;cursor:ew-resize;
+  background:rgba(0,255,255,.7);border-radius:2px;touch-action:none;z-index:10;pointer-events:all;}
+.wave-handle::before{content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);width:11px;height:22px;
+  background:rgba(0,255,255,.18);border-radius:2px;}
+
+/* Playback mode chips */
+.pbmode-row{display:flex;gap:3px;margin-bottom:7px;}
+.pbchip{flex:1;padding:6px 3px;border-radius:3px;text-align:center;cursor:pointer;
+  background:rgba(0,255,255,.03);border:1px solid rgba(0,255,255,.12);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.pbchip.active{background:rgba(0,255,255,.12);border-color:rgba(0,255,255,.45);}
+.pbchip span{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.04em;transition:color .1s;}
+.pbchip.active span{color:var(--cyan);}
+
+/* Edit controls row */
+.edit-btns{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;}
+.edit-btn{padding:6px 8px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+  font-size:11px;letter-spacing:.07em;border:1px solid var(--vdim);
+  background:rgba(153,68,255,.05);color:var(--gray);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
+.edit-btn:active{background:rgba(153,68,255,.18);color:var(--white);}
+.edit-btn.destructive{border-color:rgba(255,80,80,.25);color:rgba(255,80,80,.65);}
+.edit-btn.destructive:active{background:rgba(255,80,80,.15);}
+
+/* Material edit params */
+.medit-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+.medit-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.06em;width:70px;flex-shrink:0;}
+.medit-track{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;cursor:pointer;touch-action:none;}
+.medit-fill{height:100%;border-radius:2px;}
+.medit-val{font-family:var(--mono);font-size:11px;color:var(--white);
+  width:30px;text-align:right;flex-shrink:0;}
+
+/* Slot type chips */
+.slottype-row{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;}
+.stchip{padding:4px 6px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+  font-size:11px;letter-spacing:.05em;border:1px solid var(--vdim);
+  background:rgba(153,68,255,.03);color:var(--gray);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.stchip.active{background:rgba(153,68,255,.15);border-color:var(--violet);color:var(--white);}
+
+/* Finish layer — reuse tone-ctrl but accent */
+.finish-section .tfill{background:rgba(0,255,180,.65)!important;}
+.finish-section .tlbl{color:rgba(0,255,180,.65)!important;}
+
+/* Micro loop indicator */
+.loop-indicator{display:none;font-family:var(--mono);font-style:italic;font-size:11px;
+  color:rgba(255,200,0,.55);text-align:center;margin-top:3px;}
+.loop-indicator.active{display:block;}
 .perf-modules{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px;}
 .perf-mod{padding:8px 4px;border-radius:4px;border:1px solid var(--vdim);
   background:rgba(153,68,255,.04);text-align:center;
@@ -760,6 +819,16 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div id="sculpt-mat-name" style="font-family:var(--mono);font-size:11px;color:var(--gray);font-style:italic;margin-top:3px;text-align:center;"></div>
     </div>
 
+    <!-- FINISH LAYER -->
+    <div class="sec finish-section">
+      <div class="st">FINISH</div>
+      <div class="tone-ctrl"><span class="tlbl">SOFTEN</span><div class="ttrack" data-fin="soften"><div class="tfill" style="width:0%;background:rgba(0,255,180,.6);"></div></div><span class="tval" id="finv-soften">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">FOCUS</span><div class="ttrack" data-fin="focus"><div class="tfill" style="width:0%;background:rgba(0,255,180,.5);"></div></div><span class="tval" id="finv-focus">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">DEPTH</span><div class="ttrack" data-fin="depth"><div class="tfill" style="width:0%;background:rgba(0,255,180,.45);"></div></div><span class="tval" id="finv-depth">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">DRY/WET</span><div class="ttrack" data-fin="dryWet"><div class="tfill" style="width:80%;background:rgba(0,255,180,.55);"></div></div><span class="tval" id="finv-dryWet">0.80</span></div>
+      <div class="tone-ctrl"><span class="tlbl">METAL SOFT</span><div class="ttrack" data-fin="metalSoft"><div class="tfill" style="width:0%;background:rgba(255,200,100,.55);"></div></div><span class="tval" id="finv-metalSoft">0.00</span></div>
+    </div>
+
   </div>
 
   <!-- ═══ FEEL PANE — simplified temporal ═══ -->
@@ -865,7 +934,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
   <!-- LAB PANE — all old panes live inside here, gated by sub-bar -->
   <div class="pane" id="pane-lab"><!-- content rendered by JS sub-mode --></div>
 
-  <!-- ═══ MATERIAL PANE ═══ -->
+  <!-- ═══ MATERIAL PANE — Phase 3.4 ═══ -->
   <div class="pane" id="pane-mat">
 
     <div class="orgsel">
@@ -874,6 +943,19 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <button class="obtn"        data-org="2">SLOT C</button>
     </div>
 
+    <!-- SLOT TYPE -->
+    <div class="slottype-row" id="slottype-row">
+      <div class="stchip active" data-st="kick_a">KICK A</div>
+      <div class="stchip" data-st="kick_b">KICK B</div>
+      <div class="stchip" data-st="snare">SNARE</div>
+      <div class="stchip" data-st="hat">HAT</div>
+      <div class="stchip" data-st="bass">BASS</div>
+      <div class="stchip" data-st="texture">TEXTURE</div>
+      <div class="stchip" data-st="entity">ENTITY</div>
+      <div class="stchip" data-st="void">VOID</div>
+    </div>
+
+    <!-- LOAD -->
     <div class="mat-drop-zone" id="mat-drop">
       <input type="file" id="mat-file-input"
         accept=".wav,.aif,.aiff,.mp3,.m4a,.caf,audio/*">
@@ -882,10 +964,64 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div class="mat-status" id="mat-status"></div>
     </div>
 
-    <button class="preview-btn no-mat" id="preview-btn">PREVIEW CLEAN</button>
+    <!-- WAVEFORM EDITOR -->
+    <div class="wave-edit-wrap" id="wave-edit-wrap">
+      <canvas class="wave-edit-canvas" id="wave-edit-canvas"></canvas>
+      <div class="wave-handle" id="wh-start" style="left:0%;"></div>
+      <div class="wave-handle" id="wh-end" style="left:100%;background:rgba(153,68,255,.80);"></div>
+    </div>
+    <div class="loop-indicator" id="loop-indicator">MICRO LOOP ACTIVE</div>
 
-    <canvas class="mat-wave-wrap" id="mat-wave-mini" height="40"></canvas>
+    <!-- PLAYBACK MODES -->
+    <div class="pbmode-row">
+      <div class="pbchip active" data-pb="full"><span>FULL</span></div>
+      <div class="pbchip" data-pb="transient"><span>TRANSIENT</span></div>
+      <div class="pbchip" data-pb="tail"><span>TAIL</span></div>
+      <div class="pbchip" data-pb="micro"><span>MICRO</span></div>
+    </div>
 
+    <!-- EDIT BUTTONS -->
+    <div class="edit-btns">
+      <button class="edit-btn" id="eb-preview">PREVIEW</button>
+      <button class="edit-btn" id="eb-normalize">NORMALIZE</button>
+      <button class="edit-btn" id="eb-reverse">REVERSE</button>
+      <button class="edit-btn" id="eb-trim">TRIM REGION</button>
+      <button class="edit-btn" id="eb-loop-toggle">LOOP OFF</button>
+    </div>
+
+    <!-- EDIT PARAMS -->
+    <div class="medit-row">
+      <span class="medit-lbl">GAIN TRIM</span>
+      <div class="medit-track" data-me="gainTrim"><div class="medit-fill" id="mef-gainTrim" style="width:75%;background:rgba(0,255,200,.55);"></div></div>
+      <span class="medit-val" id="mev-gainTrim">+0dB</span>
+    </div>
+    <div class="medit-row">
+      <span class="medit-lbl">PITCH</span>
+      <div class="medit-track" data-me="pitch"><div class="medit-fill" id="mef-pitch" style="width:50%;background:rgba(153,68,255,.55);"></div></div>
+      <span class="medit-val" id="mev-pitch">0st</span>
+    </div>
+    <div class="medit-row">
+      <span class="medit-lbl">FADE IN</span>
+      <div class="medit-track" data-me="fadeIn"><div class="medit-fill" id="mef-fadeIn" style="width:0%;background:rgba(0,255,100,.45);"></div></div>
+      <span class="medit-val" id="mev-fadeIn">0ms</span>
+    </div>
+    <div class="medit-row">
+      <span class="medit-lbl">FADE OUT</span>
+      <div class="medit-track" data-me="fadeOut"><div class="medit-fill" id="mef-fadeOut" style="width:0%;background:rgba(255,100,0,.45);"></div></div>
+      <span class="medit-val" id="mev-fadeOut">0ms</span>
+    </div>
+    <div class="medit-row" id="medit-loopsize-row" style="display:none;">
+      <span class="medit-lbl">LOOP SIZE</span>
+      <div class="medit-track" data-me="loopSize"><div class="medit-fill" id="mef-loopSize" style="width:30%;background:rgba(255,200,0,.55);"></div></div>
+      <span class="medit-val" id="mev-loopSize">60ms</span>
+    </div>
+    <div class="medit-row" id="medit-loopdrift-row" style="display:none;">
+      <span class="medit-lbl">LOOP DRIFT</span>
+      <div class="medit-track" data-me="loopDrift"><div class="medit-fill" id="mef-loopDrift" style="width:20%;background:rgba(255,200,0,.35);"></div></div>
+      <span class="medit-val" id="mev-loopDrift">0.20</span>
+    </div>
+
+    <!-- MATERIAL PROFILE -->
     <div class="sec">
       <div class="st">MATERIAL PROFILE</div>
       <div class="mat-grid">
@@ -896,19 +1032,8 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
         <div class="mgi"><div class="mgi-k">NOISE FLOOR</div><div class="mgi-v" id="mat-noise">--</div></div>
         <div class="mgi"><div class="mgi-k">GENERATION</div><div class="mgi-v" id="mat-gen">0</div></div>
         <div class="mgi"><div class="mgi-k">DAMAGE</div><div class="mgi-v" id="mat-dmg">0%</div></div>
-        <div class="mgi"><div class="mgi-k">AIR CONTENT</div><div class="mgi-v" id="mat-air">--</div></div>
+        <div class="mgi"><div class="mgi-k">AIR</div><div class="mgi-v" id="mat-air">--</div></div>
       </div>
-    </div>
-
-    <div class="sec">
-      <div class="st">SYNTHESIS FALLBACK</div>
-      <div class="srow"><span class="slbl">ORGANISM</span><span class="sval" id="sf-org">RUST KICK</span></div>
-      <div class="prow" style="margin-top:4px;">
-        <span class="plbl">FATIGUE</span>
-        <div class="ptr"><div class="pf fat" id="pf-fat"></div></div>
-        <span class="pval" id="pv-fat">0.00</span>
-      </div>
-      <div class="srow" style="margin-top:3px;"><span class="slbl">PLAY COUNT</span><span class="sval" id="st-cnt">0</span></div>
     </div>
 
   </div>
@@ -1400,8 +1525,11 @@ function initAC(){
   masterSat.curve=buildSatCurveRaw('rust',28);masterSat.oversample='4x';
   masterAnalyser=AC.createAnalyser();
   masterAnalyser.fftSize=FFT_SIZE;masterAnalyser.smoothingTimeConstant=.88;
+  // DC blocker at 28Hz prevents sub accumulation post-saturation
+  const dcBlocker=AC.createBiquadFilter();dcBlocker.type='highpass';
+  dcBlocker.frequency.value=28;dcBlocker.Q.value=.5;
   masterGain.connect(compressor);compressor.connect(masterSat);
-  masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
+  masterSat.connect(dcBlocker);dcBlocker.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
   initPool();
   // keepDACAlive called after first resume (trigger or material load)
@@ -1587,6 +1715,8 @@ function updateMaterialUI(){
   if(pvBtn)pvBtn.classList.toggle('no-mat',!mat);
   // Sync sculpt pane mini panel
   if(typeof updateSculptMiniWave==='function')updateSculptMiniWave();
+  // Redraw waveform editor
+  if(typeof drawWaveEditor==='function')drawWaveEditor();
   if(!mat){
     ['mat-dur','mat-trans','mat-spec','mat-phys','mat-noise','mat-gen','mat-dmg','mat-air']
       .forEach(id=>setT(id,'--'));
@@ -1635,16 +1765,181 @@ function drawMiniWaveform(slotIdx){
 function previewMaterial(){
   const mat=SLOTS[currentSlot];
   if(!mat||!mat.buffer)return;
-  if(!AC)initAC();
-  AC.resume();keepDACAlive();
+  if(!AC)initAC();AC.resume();keepDACAlive();
   try{
-    const src=AC.createBufferSource();
-    src.buffer=mat.buffer;
+    // Respect current region
+    const {startSec,endSec}=getPlaybackRegion(mat);
+    const offset=startSec;const dur=endSec-startSec;
+    const src=AC.createBufferSource();src.buffer=applyGainAndPitch(mat.buffer);
     const pvGain=AC.createGain();pvGain.gain.value=0.78;
-    // Direct to masterAnalyser: hear it in scope, bypass all voice saturation & processing
+    applyFadeSchedule(src,pvGain,AC.currentTime,dur);
     src.connect(pvGain);pvGain.connect(masterAnalyser);
-    src.start();src.stop(AC.currentTime+Math.min(mat.buffer.duration,3.0)+.08);
+    src.start(0,offset,dur);
   }catch(e){console.warn('[SF3:preview]',e.message);}
+}
+
+// ─── WAVEFORM EDITOR ────────────────────────────────────
+function drawWaveEditor(){
+  const canvas=document.getElementById('wave-edit-canvas');
+  if(!canvas)return;
+  const w=canvas.offsetWidth||canvas.parentElement?.offsetWidth||300;
+  canvas.width=w;canvas.height=60;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,w,60);
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){
+    ctx.fillStyle='rgba(0,255,255,.06)';ctx.fillRect(0,0,w,60);
+    ctx.fillStyle='rgba(153,68,255,.25)';
+    ctx.font='11px monospace';ctx.textAlign='center';
+    ctx.fillText('no material',w/2,34);return;
+  }
+  const data=mat.buffer.getChannelData(0);
+  const step=Math.max(1,Math.floor(data.length/w));
+  const s0=MatEditState.startPct,s1=MatEditState.endPct;
+  const x0=Math.round(s0*w),x1=Math.round(s1*w);
+
+  // Background — outside region darker
+  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,w,60);
+  ctx.fillStyle='rgba(0,255,255,.04)';ctx.fillRect(x0,0,x1-x0,60);
+
+  // Waveform
+  for(let x=0;x<w;x++){
+    let mx=0,mn=0;
+    for(let j=0;j<step;j++){const v=data[x*step+j]||0;if(v>mx)mx=v;if(v<mn)mn=v;}
+    const inRegion=x>=x0&&x<=x1;
+    ctx.strokeStyle=inRegion?'rgba(0,255,255,.75)':'rgba(0,255,255,.20)';
+    ctx.lineWidth=1;ctx.beginPath();
+    const yTop=30-mx*26;const yBot=30-mn*26;
+    ctx.moveTo(x+.5,yTop);ctx.lineTo(x+.5,yBot);ctx.stroke();
+  }
+
+  // Region boundary lines
+  ctx.strokeStyle='rgba(0,255,255,.70)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x0+.5,0);ctx.lineTo(x0+.5,60);ctx.stroke();
+  ctx.strokeStyle='rgba(153,68,255,.80)';
+  ctx.beginPath();ctx.moveTo(x1-.5,0);ctx.lineTo(x1-.5,60);ctx.stroke();
+
+  // Sync handle positions
+  const startH=document.getElementById('wh-start');
+  const endH=document.getElementById('wh-end');
+  if(startH)startH.style.left=(s0*100).toFixed(1)+'%';
+  if(endH)endH.style.left=(s1*100)-.2+'%';
+}
+
+function initWaveEditor(){
+  const wrap=document.getElementById('wave-edit-wrap');if(!wrap)return;
+  const startH=document.getElementById('wh-start');
+  const endH=document.getElementById('wh-end');
+  function setupHandle(el,key){
+    let dragging=false;
+    const onMove=e=>{
+      if(!dragging)return;
+      e.preventDefault();
+      const rect=wrap.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      let p=clamp((cx-rect.left)/rect.width,0,1);
+      if(key==='startPct')p=Math.min(p,MatEditState.endPct-.01);
+      else p=Math.max(p,MatEditState.startPct+.01);
+      MatEditState[key]=p;drawWaveEditor();
+    };
+    el.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;},{passive:false});
+    el.addEventListener('touchmove',e=>{if(dragging)onMove(e);},{passive:false});
+    el.addEventListener('touchend',()=>{dragging=false;});
+    el.addEventListener('mousedown',e=>{e.stopPropagation();dragging=true;});
+    window.addEventListener('mousemove',e=>{if(dragging)onMove(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  }
+  if(startH)setupHandle(startH,'startPct');
+  if(endH)setupHandle(endH,'endPct');
+}
+
+// ─── PLAYBACK REGION HELPERS ─────────────────────────────
+function getPlaybackRegion(mat){
+  if(!mat||!mat.buffer)return{startSec:0,endSec:0};
+  const dur=mat.buffer.duration;
+  const mode=MatEditState.playbackMode;
+  let s=MatEditState.startPct*dur;
+  let e=MatEditState.endPct*dur;
+  if(mode==='transient'){e=Math.min(s+.18,dur);} // first 0–180ms
+  else if(mode==='tail'){s=Math.max(dur*.65,s);e=Math.min(e,dur);} // last 35%
+  else if(mode==='micro'){
+    // 20–120ms fragment starting at startPct
+    const microLen=0.020+MatEditState.loopSize*.100; // 20–120ms
+    e=Math.min(s+microLen,dur);
+  }
+  return{startSec:clamp(s,0,dur),endSec:clamp(e,0,dur)};
+}
+
+// Apply gain trim (no pitch — playbackRate used in trigger)
+function applyGainAndPitch(buf){
+  // Returns the buffer as-is; gain and pitch applied during playback via gainNode + playbackRate
+  return buf;
+}
+
+// Schedule fade in/out on an envelope gain node
+function applyFadeSchedule(src,gainNode,t,dur){
+  const fi=MatEditState.fadeIn*.5; // 0–500ms
+  const fo=MatEditState.fadeOut*.5;
+  gainNode.gain.setValueAtTime(fi>0?.001:1,t);
+  if(fi>0)gainNode.gain.linearRampToValueAtTime(1,t+fi);
+  if(fo>0){
+    gainNode.gain.setValueAtTime(1,t+Math.max(0,dur-fo));
+    gainNode.gain.linearRampToValueAtTime(.00001,t+dur);
+  }
+}
+
+// ─── MATERIAL EDIT OPS ───────────────────────────────────
+function matOpNormalize(){
+  const mat=SLOTS[currentSlot];if(!mat||!mat.buffer)return;
+  const data=mat.buffer.getChannelData(0);
+  let peak=0;for(let i=0;i<data.length;i++)if(Math.abs(data[i])>peak)peak=Math.abs(data[i]);
+  if(peak<.0001)return;
+  const scale=0.92/peak;
+  for(let i=0;i<data.length;i++)data[i]*=scale;
+  mat.peak=0.92;mat.rms*=scale;
+  drawWaveEditor();setT('mat-status','normalized');
+}
+
+function matOpReverse(){
+  const mat=SLOTS[currentSlot];if(!mat||!mat.buffer)return;
+  const buf=mat.buffer;
+  for(let ch=0;ch<buf.numberOfChannels;ch++){
+    const d=buf.getChannelData(ch);d.reverse();
+  }
+  precomputedWaveforms[currentSlot]=null;
+  drawWaveEditor();setT('mat-status','reversed');
+}
+
+function matOpTrimRegion(){
+  const mat=SLOTS[currentSlot];if(!mat||!mat.buffer)return;
+  if(!AC)initAC();
+  const {startSec,endSec}=getPlaybackRegion(mat);
+  const dur=endSec-startSec;if(dur<.01)return;
+  const sr=mat.buffer.sampleRate;
+  const s0=Math.floor(startSec*sr);
+  const newLen=Math.floor(dur*sr);
+  const newBuf=AC.createBuffer(mat.buffer.numberOfChannels,newLen,sr);
+  for(let ch=0;ch<mat.buffer.numberOfChannels;ch++){
+    const src=mat.buffer.getChannelData(ch).slice(s0,s0+newLen);
+    newBuf.getChannelData(ch).set(src);
+  }
+  mat.buffer=newBuf;mat.duration=dur;
+  MatEditState.startPct=0;MatEditState.endPct=1;
+  precomputedWaveforms[currentSlot]=null;
+  drawWaveEditor();updateMaterialUI();setT('mat-status','trimmed');
+}
+
+// ─── FINISH CHAIN — applied in material path ─────────────
+// Metal softener: dynamic high shelf cut + narrow band damping
+function buildMetalSoftenChain(ctx,ins){
+  if(FinishState.metalSoft<0.02)return ins;
+  const ms=FinishState.metalSoft;
+  const hs=ctx.createBiquadFilter();hs.type='highshelf';
+  hs.frequency.value=5000;hs.gain.value=clamp(-ms*12,-16,0); // max -16dB above 5k
+  const nb=ctx.createBiquadFilter();nb.type='peaking';
+  nb.frequency.value=3200+ms*500; // 3.2–3.7kHz harsh band
+  nb.Q.value=2.5;nb.gain.value=clamp(-ms*8,-12,0);
+  ins.connect(hs);hs.connect(nb);return nb;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1694,12 +1989,25 @@ const SURFACE_PROFILES={
 
 // Performative module state
 const PerformState={
-  glitchDensity:0,   // 0–1
-  lowMassDepth:0,    // 0–1
-  voidPressure:0,    // 0–1
-  glitchMode:'binary',    // binary | phase | burst | grid
-  massCharacter:'dense',  // dense | bloom | crushed | dry
-  precision:0        // -1…+1 (from macro)
+  glitchDensity:0,lowMassDepth:0,voidPressure:0,
+  glitchMode:'binary',massCharacter:'dense',precision:0
+};
+
+// ─── FINISH STATE ────────────────────────────────────────
+const FinishState={soften:0,focus:0,depth:0,dryWet:.80,metalSoft:0};
+
+// ─── MATERIAL EDIT STATE ─────────────────────────────────
+const MatEditState={
+  startPct:0,endPct:1,
+  gainTrim:.75,   // 0→1 maps to -12…+6dB
+  pitch:.50,      // 0→1 maps to -12…+12 semitones
+  fadeIn:0,       // 0→1 maps to 0…500ms
+  fadeOut:0,      // 0→1 maps to 0…500ms
+  playbackMode:'full',
+  loopEnabled:false,
+  loopSize:.30,   // 0→1 → 12…400ms
+  loopDrift:.20,
+  slotType:'kick_a'
 };
 
 // ─── DIGITAL FRAGMENT ENGINE (Ikeda / Bretschneider) ────
@@ -2489,6 +2797,17 @@ function _triggerInner(){
   if(mat&&mat.buffer){
     const src=AC.createBufferSource();
     src.buffer=mat.buffer;
+    // MatEditState — region + pitch + gain
+    const {startSec,endSec}=getPlaybackRegion(mat);
+    const regionDur=Math.max(.005,endSec-startSec);
+    // Pitch via playbackRate: semitones from center (.50 = 0st)
+    const semitones=(MatEditState.pitch-.50)*24; // ±12 semitones
+    src.playbackRate.value=Math.pow(2,semitones/12);
+    // Gain trim: 0→-12dB, .75→0dB, 1→+6dB
+    const gainTrimDB=MatEditState.gainTrim<.75
+      ?(MatEditState.gainTrim-.75)*48 // -12…0 dB
+      :(MatEditState.gainTrim-.75)*24; // 0…+6 dB
+    const gainTrimLin=Math.pow(10,gainTrimDB/20);
 
     // ── QUICK FILTER (pre-chain) ────────────────────────
     // LOW CUT: highpass 20→320Hz
@@ -2598,9 +2917,9 @@ function _triggerInner(){
     safeFreq(surfTR.frequency,5000);
     safeParam(surfTR.gain,-surf.transRound*6-QF.softenT*9,-18,0);
 
-    const matGain=AC.createGain();matGain.gain.value=.86;
+    const matGain=AC.createGain();matGain.gain.value=clamp(.86*gainTrimLin,0,1.2);
 
-    // Chain assembly:
+    // Chain assembly: QF → (processor or bypass) → ToneShape → Glue → Finish → matGain
     if(!chainBypassed){
       src.connect(qfLC);qfLC.connect(qfAir);qfAir.connect(qfPres);qfPres.connect(qfDark);
       qfDark.connect(erosionLP);erosionLP.connect(mudHP);mudHP.connect(metalPeak);
@@ -2612,19 +2931,32 @@ function _triggerInner(){
       src.connect(qfLC);qfLC.connect(qfAir);qfAir.connect(qfPres);qfPres.connect(qfDark);
       qfDark.connect(toneSoften);
     }
-    // ToneShape → Glue → matGain
     toneSoften.connect(toneWarmth);toneWarmth.connect(toneSmooth);
     toneSmooth.connect(toneFocus);toneFocus.connect(glueComp);
     glueComp.connect(airAbsLP);airAbsLP.connect(surfLM);surfLM.connect(surfHC);
     surfHC.connect(distLP);distLP.connect(distAP);distAP.connect(massShelf);
-    massShelf.connect(surfTR);surfTR.connect(matGain);matGain.connect(v.bus);
+    massShelf.connect(surfTR);
+    // Finish layer: metal softener → soften LP → focus HP → depth allpass
+    const metalOut=buildMetalSoftenChain(AC,surfTR);
+    const finLP=AC.createBiquadFilter();finLP.type='lowpass';
+    safeFreq(finLP.frequency,FinishState.soften>.01?clamp(18000-FinishState.soften*14000,1000,18000):18000);finLP.Q.value=.45;
+    const finHP=AC.createBiquadFilter();finHP.type='highpass';
+    safeFreq(finHP.frequency,FinishState.focus>.01?20+FinishState.focus*200:20);finHP.Q.value=.5;
+    const finAP=AC.createBiquadFilter();finAP.type='allpass';
+    safeFreq(finAP.frequency,clamp(800-FinishState.depth*500,200,800));finAP.Q.value=.5;
+    metalOut.connect(finLP);finLP.connect(finHP);finHP.connect(finAP);finAP.connect(matGain);matGain.connect(v.bus);
 
-    const dur=Math.min(mat.buffer.duration,3.0);
+    const dur=Math.min(regionDur,3.0);
     const matStop=t+dur+.01;
     const fadeStart=Math.max(t+.010,matStop-.045);
-    matGain.gain.setValueAtTime(.88,fadeStart);
+    // Fade-in from MatEditState
+    const fi=MatEditState.fadeIn*.5;
+    matGain.gain.setValueAtTime(fi>.005?.00001:matGain.gain.value,t);
+    if(fi>.005)matGain.gain.linearRampToValueAtTime(clamp(.86*gainTrimLin,0,1.2),t+fi);
+    // Fade-out: always ramp to silence before stop
+    matGain.gain.setValueAtTime(clamp(.86*gainTrimLin,0,1.2),fadeStart);
     matGain.gain.linearRampToValueAtTime(.00001,matStop);
-    src.start(t);src.stop(matStop+.005);
+    src.start(t,startSec,dur);src.stop(matStop+.005);
     maxDur=Math.max(maxDur,dur);
 
     // DUST: pre-fader injection — HP guard prevents low-end buildup into compressor
@@ -3317,6 +3649,113 @@ function updateSculptMiniWave(){
   for(let x=0;x<w;x++){const s=data[x*step]||0;const y=14-s*12;x===0?ctx2.moveTo(x,y):ctx2.lineTo(x,y);}
   ctx2.stroke();
 }
+
+// ─── WAVEFORM EDITOR INIT ───────────────────────────────
+initWaveEditor();
+
+// ─── PLAYBACK MODE CHIPS ────────────────────────────────
+document.querySelectorAll('.pbchip[data-pb]').forEach(chip=>{
+  function select(){
+    MatEditState.playbackMode=chip.dataset.pb;
+    document.querySelectorAll('.pbchip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    ['medit-loopsize-row','medit-loopdrift-row'].forEach(id=>{
+      const e=document.getElementById(id);if(e)e.style.display=MatEditState.loopEnabled?'flex':'none';
+    });
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+
+// ─── SLOT TYPE CHIPS ────────────────────────────────────
+document.querySelectorAll('.stchip[data-st]').forEach(chip=>{
+  function select(){
+    MatEditState.slotType=chip.dataset.st;
+    document.querySelectorAll('.stchip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+
+// ─── EDIT BUTTONS ────────────────────────────────────────
+(function(){
+  const bind=(id,fn)=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.addEventListener('click',fn);
+    el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  };
+  bind('eb-preview',()=>previewMaterial());
+  bind('eb-normalize',()=>matOpNormalize());
+  bind('eb-reverse',()=>matOpReverse());
+  bind('eb-trim',()=>matOpTrimRegion());
+  bind('eb-loop-toggle',()=>{
+    MatEditState.loopEnabled=!MatEditState.loopEnabled;
+    const btn=document.getElementById('eb-loop-toggle');
+    if(btn)btn.textContent=MatEditState.loopEnabled?'LOOP ON':'LOOP OFF';
+    const ind=document.getElementById('loop-indicator');
+    if(ind)ind.classList.toggle('active',MatEditState.loopEnabled);
+    ['medit-loopsize-row','medit-loopdrift-row'].forEach(id=>{
+      const e=document.getElementById(id);if(e)e.style.display=MatEditState.loopEnabled?'flex':'none';
+    });
+  });
+})();
+
+// ─── MATERIAL EDIT PARAMS ────────────────────────────────
+(function(){
+  const ME_FMT={
+    gainTrim:v=>{const db=(v<.75?(v-.75)*48:(v-.75)*24);return(db>=0?'+':'')+db.toFixed(0)+'dB';},
+    pitch:v=>{const st=(v-.50)*24;return(st>=0?'+':'')+st.toFixed(0)+'st';},
+    fadeIn:v=>(v*500).toFixed(0)+'ms',
+    fadeOut:v=>(v*500).toFixed(0)+'ms',
+    loopSize:v=>(12+v*388).toFixed(0)+'ms',
+    loopDrift:v=>v.toFixed(2)
+  };
+  document.querySelectorAll('.medit-track[data-me]').forEach(track=>{
+    const key=track.dataset.me;const fmt=ME_FMT[key];if(!fmt)return;
+    const fill=document.getElementById('mef-'+key);
+    const val=document.getElementById('mev-'+key);
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      MatEditState[key]=v;
+      if(fill)fill.style.width=(v*100).toFixed(0)+'%';
+      if(val)val.textContent=fmt(v);
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+})();
+
+// ─── FINISH LAYER ────────────────────────────────────────
+(function(){
+  document.querySelectorAll('.ttrack[data-fin]').forEach(track=>{
+    const key=track.dataset.fin;if(!FinishState.hasOwnProperty(key))return;
+    const fill=track.querySelector('.tfill');
+    const valEl=document.getElementById('finv-'+key);
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      FinishState[key]=v;
+      if(fill)fill.style.width=(v*100).toFixed(0)+'%';
+      if(valEl)valEl.textContent=v.toFixed(2);
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+})();
 
 // Pack identity field listeners → update filename preview
 ['pid-name','pid-session','pid-tags','pid-version'].forEach(id=>{
