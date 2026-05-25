@@ -848,8 +848,9 @@ var VOXDNA=(function(){
     reset:function(){Object.assign(_s,{vocFatigue:0,clarityDebt:0,coherenceDesire:0,voiceMemory:[],lastNarrativeTime:-99999,lastGhostTime:-99999,forcedSilenceUntil:0,forcedFragUntil:0,bioCollapsing:false,orchRecovering:false});VOXMEM.recent=[];VOXMEM.residue={narrative:0,ghost:0,subconscious:0};VOXMEM.attentionFatigue=0;},
     // Record a real playback for memory/sequencing
     recordPlayback:function(frag,entityType,protagonist,weather){if(frag)VOXMEM.record(frag,entityType,protagonist,weather);},
-    // Get VOXMEM status for DBG
     memStatus:function(){return{size:VOXMEM.recent.length,fatigue:VOXMEM.attentionFatigue.toFixed(2),residue:{n:VOXMEM.residue.narrative.toFixed(2),g:VOXMEM.residue.ghost.toFixed(2),s:VOXMEM.residue.subconscious.toFixed(2)}};},
+    // Expose VOXMEM to global scope for MIX_INTEL and VOX_ENTITY access
+    getMem:function(){return VOXMEM;},
     _getFragment:function(id){return _s.fragments.find(f=>f.id===id)||null;},
     // UI panel (VoxRitual slot display — now shows real metabolism)
     _updateUI:function(){
@@ -3381,7 +3382,7 @@ const VOX_ENTITY={
     const weather=eco?.weather||WEATHER.target;
     const protagonist=eco?.protagonist||ORCH.protagonist;
     const ecoObj={protagonist,weather,terminalGravity:DESTINY.terminalGravity,
-                   attentionFatigue:typeof VOXMEM!=='undefined'?VOXMEM.attentionFatigue:0};
+                   attentionFatigue:VOXDNA.getMem()?.attentionFatigue||0};
 
     // Narrative → resolve to Command or Ritual
     if(voxDec.narrative?.shouldEmerge){
@@ -4250,7 +4251,7 @@ function schedStep(step,t){
     }
     const barDurSec=(60/bpm)*4;
     // VOXMEM decay — runs every bar
-    try{VOXDNA._getFragment&&VOXMEM.tick(barDurSec);}catch(e){}
+    try{VOXDNA._getFragment&&VOXDNA.getMem().tick(barDurSec);}catch(e){}
     // Signal ecology — silence tension + burst lifecycle
     if(RHYTHM_DNA.isIkeda()){
       SIGNAL_ECOLOGY.tick(barDurSec);
@@ -4285,7 +4286,7 @@ function schedStep(step,t){
         protagonist:ORCH.protagonist,
         weather:WEATHER.target,
         terminalGravity:DESTINY.terminalGravity,
-        attentionFatigue:VOXMEM.attentionFatigue,
+        attentionFatigue:VOXDNA.getMem()?.attentionFatigue||0,
       };
       VOX_ENTITY.playDecision(voxDec,ecoState);
       // Mic active with no buffers: keep ghost bus elevated
