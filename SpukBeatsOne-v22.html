@@ -2059,10 +2059,16 @@ const ECOLOGY_COMPILER={
     if(dd){dd.innerHTML='';PACKS.forEach((p,i)=>{const pct=Math.round((DNA.weights[i]||0)*100);if(pct<2)return;const row=document.createElement('div');row.className='co-row';row.innerHTML=`<div class="co-n">${p.short.slice(0,5)}</div><div class="co-b"><div class="co-f" id="cof${i}" style="width:0%;background:rgba(${p.pRgb.join(',')},0.8)"></div></div>`;dd.appendChild(row);setTimeout(()=>{const f=document.getElementById('cof'+i);if(f)f.style.width=pct+'%';},80);});}
     const cp=document.getElementById('co-profile');if(cp)cp.textContent=(activeProfile.label?.toUpperCase()||'IMMERSION')+' / '+TEMPORAL.plannedDuration+'MIN';
     const ce=document.getElementById('co-emo');if(ce)ce.textContent=this.emotionalBias(DNA.active);
-    const pf=document.getElementById('co-prog-fill');if(pf)setTimeout(()=>{pf.style.transition='width .88s';pf.style.width='100%';},80);
-    // Enable initiate after compile animation completes
+    const pf=document.getElementById('co-prog-fill');if(pf)setTimeout(()=>{pf.style.transition='width 1.4s';pf.style.width='100%';},80);
+    // Auto-compile after animation (1.6s). INITIATE tap also works immediately.
     const init=document.getElementById('co-initiate');
-    if(init){setTimeout(()=>{init.classList.add('active');init.style.color='#00ffff';},1050);init.addEventListener('click',()=>this.compile(),{once:true});}
+    const doCompile=()=>{if(!this.done)this.compile();};
+    if(init){
+      setTimeout(()=>{init.classList.add('active');init.style.color='#00ffff';},1050);
+      init.addEventListener('click',doCompile,{once:true});
+    }
+    // Auto-fire after progress bar completes — no tap needed
+    setTimeout(doCompile,1700);
   },
   compile(){
     this.done=true;
