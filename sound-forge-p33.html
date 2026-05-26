@@ -923,7 +923,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
   </div>
 
   <!-- LAB PANE — all old panes live inside here, gated by sub-bar -->
-  <div class="pane" id="pane-lab"><!-- content rendered by JS sub-mode --></div>
+
 
   <!-- ═══ MATERIAL PANE — Phase 3.4 ═══ -->
   <div class="pane" id="pane-mat">
@@ -1732,6 +1732,25 @@ function updateMaterialUI(){
   if(typeof updateSculptMiniWave==='function')updateSculptMiniWave();
   // Redraw waveform editor
   if(typeof drawWaveEditor==='function')drawWaveEditor();
+  // Slot loaded indicators — show dot on obtn if slot has material
+  document.querySelectorAll('.obtn[data-org]').forEach(b=>{
+    const idx=parseInt(b.dataset.org);
+    const loaded=!!(SLOTS[idx]&&SLOTS[idx].buffer);
+    // Append dot if not present
+    let dot=b.querySelector('.slot-dot');
+    if(!dot){dot=document.createElement('span');dot.className='slot-dot';b.appendChild(dot);}
+    dot.textContent=loaded?' ·':'';
+    dot.style.color=loaded?'var(--cyan)':'transparent';
+  });
+  // Sync slot buttons in sculpt panel too
+  document.querySelectorAll('.obtn[data-org2]').forEach(b=>{
+    const idx=parseInt(b.dataset.org2);
+    const loaded=!!(SLOTS[idx]&&SLOTS[idx].buffer);
+    let dot=b.querySelector('.slot-dot');
+    if(!dot){dot=document.createElement('span');dot.className='slot-dot';b.appendChild(dot);}
+    dot.textContent=loaded?' ·':'';
+    dot.style.color=loaded?'var(--cyan)':'transparent';
+  });
   if(!mat){
     ['mat-dur','mat-trans','mat-spec','mat-phys','mat-noise','mat-gen','mat-dmg','mat-air']
       .forEach(id=>setT(id,'--'));
@@ -3345,20 +3364,25 @@ function encodeWAV(buffer){
 
 async function exportWAV(mode){
   const mat=SLOTS[currentSlot];
-  const wavStatus=document.getElementById('wav-status');
+  const setStatus=msg=>{
+    const s1=document.getElementById('wav-status');
+    const s2=document.getElementById('export-status');
+    if(s1)s1.textContent=msg;
+    if(s2)s2.textContent=msg;
+  };
   let exportBuf=null;
 
   if(mode==='dry'){
-    if(!mat||!mat.buffer){setT('wav-status','no material loaded');return;}
+    if(!mat||!mat.buffer){setStatus('no material loaded');return;}
     exportBuf=mat.buffer;
   } else if(mode==='resampled'){
-    if(!resampledBuffer){setT('wav-status','no resampled buffer — run RENDER PASS first');return;}
+    if(!resampledBuffer){setStatus('no resampled buffer — run RENDER PASS first');return;}
     exportBuf=resampledBuffer;
   } else {
     // processed or current: render offline with full chain + safety limiter
     const srcBuf=(mode==='current'&&resampledBuffer)?resampledBuffer:(mat?mat.buffer:null);
-    if(!srcBuf){setT('wav-status','no material loaded');return;}
-    setT('wav-status','rendering...');
+    if(!srcBuf){setStatus('no material loaded');return;}
+    setStatus('rendering...');
     const fa=forgeToAudio();
     const sr=srcBuf.sampleRate;const dur=srcBuf.duration;
     const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
@@ -3387,7 +3411,7 @@ async function exportWAV(mode){
     finalGain.connect(offline.destination);
     src.start(0);
     try{exportBuf=await startRenderingCompat(offline);}
-    catch(e){setT('wav-status','render error: '+e.message);return;}
+    catch(e){setStatus('render error: '+e.message);return;}
   }
 
   const ab=encodeWAV(exportBuf);
@@ -3397,11 +3421,11 @@ async function exportWAV(mode){
   a.href=url;a.download=`sf_${mode}_g${totalGenerations}_${Date.now()}.wav`;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  setT('wav-status',`exported: ${mode} — ${(ab.byteLength/1024).toFixed(0)}kb`);
+  setStatus(`exported: ${mode} — ${(ab.byteLength/1024).toFixed(0)}kb`);
 }
 
 async function exportStemsWAV(){
-  setT('wav-status','rendering stems...');
+  setStatus('rendering stems...');
   const mat=SLOTS[currentSlot];
   const results=[];
   const sr=48000;
@@ -3444,7 +3468,7 @@ async function exportStemsWAV(){
     URL.revokeObjectURL(url);
     await new Promise(r=>setTimeout(r,200)); // brief pause between downloads
   }
-  setT('wav-status',`stems exported: ${results.length} file${results.length!==1?'s':''}`);
+  setStatus(`stems exported: ${results.length} file${results.length!==1?'s':''}`);
 }
 
 function updateResampleUI(){
@@ -3585,16 +3609,19 @@ let currentLabMode='forge';
 function setLabMode(key){
   currentLabMode=key;
   document.querySelectorAll('.lbtn').forEach(b=>b.classList.toggle('active',b.id==='lb-'+key));
-  // Show the actual old pane inside pane-lab by moving it
-  const labEl=document.getElementById('pane-lab');
-  if(!labEl)return;
+  // Old panes sit as direct children of .cpanel — show the selected one
   LAB_PANES.forEach(k=>{
     const p=document.getElementById('pane-'+k);
-    if(p){p.style.display=(k===key)?'flex':'none';p.style.flex=(k===key)?'1':'none';}
+    if(!p)return;
+    const show=(k===key);
+    p.style.display=show?'flex':'none';
+    p.style.flex=show?'1':'';
+    p.style.overflowY=show?'auto':'';
+    p.style.minHeight=show?'0':'';
   });
-  if(key==='temporal')TemporalDNA.renderPhaseCards();
-  if(key==='temporal')TemporalDNA.renderRoleBadges();
+  if(key==='temporal'){TemporalDNA.renderPhaseCards();TemporalDNA.renderRoleBadges();}
   if(key==='sculpt')drawSatCurvePreview();
+  if(key==='dna')updateDNAPane();
 }
 
 // ── Main mode system ─────────────────────────────────────
@@ -3603,6 +3630,9 @@ let currentMode='sculpt2';
 
 function setMode(mode){
   currentMode=mode;
+  const isLab=(mode==='lab');
+
+  // Toggle main panes
   MAIN_MODES.forEach(m=>{
     const p=document.getElementById('pane-'+m);
     if(p)p.classList.toggle('visible',m===mode);
@@ -3610,28 +3640,24 @@ function setMode(mode){
     if(b)b.classList.toggle('active',m===mode);
   });
 
-  // LAB sub-bar visibility
+  // LAB sub-bar
   const labBar=document.getElementById('lab-bar');
-  if(labBar)labBar.classList.toggle('visible',mode==='lab');
+  if(labBar)labBar.classList.toggle('visible',isLab);
 
-  if(mode==='lab'){
+  if(isLab){
     setLabMode(currentLabMode);
-  } else {
-    // Hide all old panes when not in LAB
+  }else{
+    // Hide all lab panes
     LAB_PANES.forEach(k=>{
       const p=document.getElementById('pane-'+k);
-      if(p)p.style.display='none';
+      if(p){p.style.display='none';p.style.flex='';}
     });
   }
 
-  if(mode==='temporal2'){
-    TemporalDNA.renderPhaseCards('phase-grid2');
-  }
-  if(mode==='export'){
-    updateFilenamePreview();
-  }
-  // Sync sculpt mini-waveform
+  if(mode==='temporal2')TemporalDNA.renderPhaseCards('phase-grid2');
+  if(mode==='export')updateFilenamePreview();
   if(mode==='sculpt2')updateSculptMiniWave();
+  if(mode==='mat')drawWaveEditor();
 }
 
 // Bind main tabs
@@ -4541,50 +4567,61 @@ function buildPackManifest(entities,bridge){
     entitiesMap[e.id]=meta;
   });
 
+  const uiName=document.getElementById('pid-name')?.value||packName;
+  const uiSession=document.getElementById('pid-session')?.value||TemporalDNA.sessionIntent;
+  const uiTags=(document.getElementById('pid-tags')?.value||'').split('/').map(t=>t.trim()).filter(Boolean);
+  const uiVer=document.getElementById('pid-version')?.value||'v01';
+
+  const weatherMap={ritual:'VOID',collapse:'STORM',hypnotic:'FOG',urban_decay:'TENSION',
+    void_psychology:'VOID',industrial_ceremony:'STORM',pressure_cycle:'PRESSURE',memory_fragment:'FOG'};
+  const bpmRanges={slow_burn:{min:60,max:100,sweet:80},waves:{min:80,max:130,sweet:110},
+    single_climb:{min:90,max:140,sweet:120},collapse_cycles:{min:100,max:160,sweet:130},
+    fragmented:{min:70,max:120,sweet:95}};
+
   return{
-    format:'spukpack_v1',
-    version:'3.3',
-    generated:new Date().toISOString(),
+    schema:'spukpack_v2',
 
     meta:{
-      packId,packName,
-      saturationDNA:currentSatProfile,
+      name:uiName,
+      author:'SpukLab',
+      session:uiSession,
+      tags:uiTags,
+      version:uiVer,
       generation:totalGenerations,
       damage:mat?parseFloat(mat.damageLevel.toFixed(3)):0,
-      sessionIntent:TemporalDNA.sessionIntent,
-      energyCurve:TemporalDNA.energyCurve,
-      spectralDensity:TemporalDNA.spectralDensity,
+      created:new Date().toISOString(),
       entityCount:entities.length
     },
 
-    behavior:{
-      instability:bridge.instability,
-      fragmentation:bridge.fragmentation,
-      silenceAffinity:bridge.silenceAffinity,
-      spectralBias:bridge.spectralBias,
-      contrastLevel:TemporalDNA.contrastLevel,
-      silenceTolerance:TemporalDNA.silenceTolerance,
-      energyCurve:TemporalDNA.energyCurve
+    rhythmDNA:{
+      bridge,
+      saturationDNA:currentSatProfile,
+      temporalDNA:{
+        sessionIntent:TemporalDNA.sessionIntent,
+        energyCurve:TemporalDNA.energyCurve,
+        contrastLevel:TemporalDNA.contrastLevel,
+        silenceTolerance:TemporalDNA.silenceTolerance,
+        spectralDensity:TemporalDNA.spectralDensity,
+        narrativeStates:TemporalDNA.states,
+        organismRoles:ORGANISM_TEMPORAL.map((t,i)=>({
+          name:SYNTH_ORGS[i].name,role:t.role,durationType:t.durationType,
+          fadeB:t.fadeB,reentry:t.reentry
+        }))
+      }
     },
 
-    visual:bridge.visualDNA,
-
     ecology:{
-      narrativeStates:TemporalDNA.states,
-      transitions:{
-        buildToTension:'saturation_rise|stereo_narrow',
-        ruptureToVoid:'density_collapse|rare_event_unlock',
-        voidToAftershock:'micro_spikes|wide_stereo'
-      },
-      ruptureThreshold:.82,
-      voidThreshold:.06,
+      weatherBias:{target:weatherMap[TemporalDNA.sessionIntent]||'TENSION'},
+      bpmAffinity:bpmRanges[TemporalDNA.energyCurve]||{min:90,max:140,sweet:120},
+      silenceTolerance:TemporalDNA.silenceTolerance,
+      sessionIntent:TemporalDNA.sessionIntent,
+      contrastLevel:TemporalDNA.contrastLevel,
+      spectralDensity:TemporalDNA.spectralDensity,
       collapseResistance:bridge.behaviorHints.fatigueResist,
-      silenceAffinity:bridge.silenceAffinity,
-      ritualGravity:parseFloat(
-        clamp(TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3)),
-      narrativeDensity:TemporalDNA.spectralDensity,
+      ritualGravity:parseFloat(clamp(TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3)),
       memoryPersistence:bridge.behaviorHints.ghostPersistence,
-      spatialSpread:bridge.behaviorHints.spatialSpread
+      spatialSpread:bridge.behaviorHints.spatialSpread,
+      narrativeStates:TemporalDNA.states
     },
 
     routing:{
@@ -4597,17 +4634,8 @@ function buildPackManifest(entities,bridge){
     },
 
     samples,
-    entities:entitiesMap,
-
-    spukbeats_bridge:bridge,
-
-    temporal_dna:{
-      sessionIntent:TemporalDNA.sessionIntent,
-      energyCurve:TemporalDNA.energyCurve,
-      contrastLevel:TemporalDNA.contrastLevel,
-      silenceTolerance:TemporalDNA.silenceTolerance,
-      spectralDensity:TemporalDNA.spectralDensity,
-      narrativeStates:TemporalDNA.states,
+    entities:entitiesMap
+  };
       organismRoles:ORGANISM_TEMPORAL.map((t,i)=>({
         name:SYNTH_ORGS[i].name,role:t.role,durationType:t.durationType,
         fadeB:t.fadeB,reentry:t.reentry
@@ -4621,15 +4649,20 @@ async function forgeSpukPack(opts){
   opts=opts||{};
   const btn=document.getElementById('forge-pack-btn');
   const wrap=document.getElementById('pack-progress-wrap');
-  const bar=opts.progressBar||document.getElementById('pack-progress-bar');
-  const lbl=opts.progressLabel||document.getElementById('pack-progress-label');
+  // Use export pane progress elements by default
+  const bar=opts.progressBar||document.getElementById('pack-progress-bar2')||document.getElementById('pack-progress-bar');
+  const lbl=opts.progressLabel||document.getElementById('pack-progress-label2')||document.getElementById('pack-progress-label');
+  const statusEl=document.getElementById('export-status');
   function progress(pct,msg){
     if(bar)bar.style.width=pct+'%';
     if(lbl)lbl.textContent=msg;
+    if(statusEl&&pct===100)statusEl.textContent=msg;
   }
 
   if(btn)btn.disabled=true;
+  const wrap2=document.getElementById('pack-progress-wrap2');
   if(wrap)wrap.classList.add('visible');
+  if(wrap2)wrap2.classList.add('visible');
   progress(0,'initializing audio context...');
 
   if(!AC)initAC();
@@ -4665,12 +4698,13 @@ async function forgeSpukPack(opts){
   zip.add('manifest.json',manifestBytes);
 
   progress(94,'compressing pack…');
-  await new Promise(r=>setTimeout(r,16)); // let UI update
+  await new Promise(r=>setTimeout(r,16));
   const packBytes=zip.build();
 
   progress(98,'downloading…');
-  const packName=currentSatProfile+'_'+TemporalDNA.sessionIntent;
-  const fname=`${packName}_g${totalGenerations}.spukpack`;
+  const uiName=(document.getElementById('pid-name')?.value||currentSatProfile).replace(/\s+/g,'_').toLowerCase();
+  const uiVer=(document.getElementById('pid-version')?.value||'v01').toLowerCase();
+  const fname=`${uiName}_g${totalGenerations}_${uiVer}.spukpack`;
   const blob=new Blob([packBytes],{type:'application/zip'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=fname;
@@ -5217,8 +5251,8 @@ document.querySelectorAll('.obtn').forEach((btn,i)=>{
 document.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();trigger();}
   if(e.code==='Digit1')selectOrg(0);if(e.code==='Digit2')selectOrg(1);if(e.code==='Digit3')selectOrg(2);
-  if(e.code==='KeyM')setMode('mat');if(e.code==='KeyF')setMode('forge');
-  if(e.code==='KeyS')setMode('sculpt');if(e.code==='KeyR')setMode('resample');
+  if(e.code==='KeyM')setMode('mat');if(e.code==='KeyS')setMode('sculpt2');
+  if(e.code==='KeyE')setMode('export');if(e.code==='KeyL')setMode('lab');
 });
 
 // ─── INIT ────────────────────────────────────────────────
