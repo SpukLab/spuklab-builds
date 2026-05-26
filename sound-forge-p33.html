@@ -4685,41 +4685,89 @@ async function forgeSpukPack(opts){
 document.getElementById('forge-dna-btn').addEventListener('click',()=>{
   const mat=SLOTS[currentSlot];
   const damage=mat?mat.damageLevel:0;
+  const packName=document.getElementById('pid-name')?.value||currentSatProfile;
+  const session=document.getElementById('pid-session')?.value||TemporalDNA.sessionIntent;
+  const tags=document.getElementById('pid-tags')?.value||'';
+  const ver=document.getElementById('pid-version')?.value||'v01';
 
-  const spukbeats_bridge=buildSpukBeatsBridge(
+  const bridge=buildSpukBeatsBridge(
     ForgeState, currentSatProfile, ProcState, CarveState, totalGenerations, damage
   );
 
-  const pack={
-    format:'sound_dna_v1',version:'3.3',
-    packId:spukbeats_bridge.packName.toLowerCase()+'_ritual',
-    exported:new Date().toISOString(),
-    saturationDNA:currentSatProfile,
-    generation:totalGenerations,
-    forgeState:{...ForgeState},
-    processor:{
-      active:Object.fromEntries(Object.entries(ProcState).map(([k,v])=>[k,{enabled:v.enabled,intensity:v.intensity}]))
-    },
-    carving:{...CarveState},
-    material:mat?{name:mat.name,duration:mat.duration,transientProfile:mat.transientProfile,
-      spectralProfile:mat.spectralProfile,physicality:mat.physicality,
-      damageLevel:mat.damageLevel,generation:mat.generation}:null,
-    globalState:{tension:GlobalState.tension,energy:GlobalState.energy,phase:GlobalState.phase},
-    temporal_dna:{
-      sessionIntent:TemporalDNA.sessionIntent,
-      energyCurve:TemporalDNA.energyCurve,
-      contrastLevel:TemporalDNA.contrastLevel,
-      silenceTolerance:TemporalDNA.silenceTolerance,
-      spectralDensity:TemporalDNA.spectralDensity,
-      narrativeStates:TemporalDNA.states,
-      organismRoles:ORGANISM_TEMPORAL.map((t,i)=>({
-        name:SYNTH_ORGS[i].name,role:t.role,durationType:t.durationType,
-        fadeB:t.fadeB,reentry:t.reentry
-      }))
-    },
-    spukbeats_bridge
+  const temporalDNA={
+    sessionIntent:TemporalDNA.sessionIntent,
+    energyCurve:TemporalDNA.energyCurve,
+    contrastLevel:TemporalDNA.contrastLevel,
+    silenceTolerance:TemporalDNA.silenceTolerance,
+    spectralDensity:TemporalDNA.spectralDensity,
+    narrativeStates:TemporalDNA.states,
+    organismRoles:ORGANISM_TEMPORAL.map((t,i)=>({
+      name:SYNTH_ORGS[i].name,role:t.role,durationType:t.durationType,
+      fadeB:t.fadeB,reentry:t.reentry
+    }))
   };
-  const fname=`${spukbeats_bridge.packName.toLowerCase()}_g${totalGenerations}.spukdna`;
+
+  const materialMeta=mat?{
+    name:mat.name,duration:mat.duration,transientProfile:mat.transientProfile,
+    spectralProfile:mat.spectralProfile,physicality:mat.physicality,
+    damageLevel:mat.damageLevel,generation:mat.generation,
+    slotType:MatEditState.slotType
+  }:null;
+
+  // Derive BPM affinity from energy curve + temporal DNA
+  const bpmRanges={slow_burn:{min:60,max:100,sweet:80},waves:{min:80,max:130,sweet:110},
+    single_climb:{min:90,max:140,sweet:120},collapse_cycles:{min:100,max:160,sweet:130},
+    fragmented:{min:70,max:120,sweet:95}};
+  const bpmAff=bpmRanges[TemporalDNA.energyCurve]||{min:90,max:140,sweet:120};
+
+  // Weather bias from spectral profile + session intent
+  const weatherMap={ritual:'VOID',collapse:'STORM',hypnotic:'FOG',urban_decay:'TENSION',
+    void_psychology:'VOID',industrial_ceremony:'STORM',pressure_cycle:'PRESSURE',memory_fragment:'FOG'};
+  const weatherTarget=weatherMap[TemporalDNA.sessionIntent]||'TENSION';
+
+  const pack={
+    // ── spukpack_v2 schema ──────────────────────────────
+    schema:'spukpack_v2',
+
+    meta:{
+      name:packName,
+      author:'SpukLab',
+      session,
+      tags:tags.split('/').map(t=>t.trim()).filter(Boolean),
+      version:ver,
+      generation:totalGenerations,
+      created:new Date().toISOString(),
+      saturationDNA:currentSatProfile,
+      globalState:{tension:GlobalState.tension,energy:GlobalState.energy,phase:GlobalState.phase}
+    },
+
+    rhythmDNA:{
+      bridge,                           // spukbeats_bridge — SpukBeatsOne v17 ready
+      forgeState:{...ForgeState},
+      processor:{active:Object.fromEntries(
+        Object.entries(ProcState).map(([k,v])=>[k,{enabled:v.enabled,intensity:v.intensity}])
+      )},
+      carving:{...CarveState},
+      material:materialMeta,
+      temporalDNA,
+      saturationDNA:currentSatProfile
+    },
+
+    ecology:{
+      weatherBias:{target:weatherTarget},
+      bpmAffinity:bpmAff,
+      silenceTolerance:TemporalDNA.silenceTolerance,
+      sessionIntent:TemporalDNA.sessionIntent,
+      contrastLevel:TemporalDNA.contrastLevel,
+      spectralDensity:TemporalDNA.spectralDensity,
+      collapseResistance:bridge.behaviorHints.fatigueResist,
+      ritualGravity:parseFloat(clamp(
+        TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3))
+    }
+  };
+
+  const safeName=packName.replace(/\s+/g,'_').toLowerCase();
+  const fname=`${safeName}_g${totalGenerations}_${ver}.spukdna`;
   const blob=new Blob([JSON.stringify(pack,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=fname;
