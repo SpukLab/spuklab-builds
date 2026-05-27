@@ -626,7 +626,7 @@ body.live-mode .ws-tab{font-size:9px}
 
 <script>
 'use strict';
-// ── BOOT LOGGER — must be first, catches all errors ──────────────────────
+// -- BOOT LOGGER -- must be first, catches all errors ----------------------
 const BOOT={
   log:[],
   trace(msg){const t=Date.now();this.log.push('['+t%100000+'ms] '+msg);console.log('[BOOT]',msg);},
@@ -644,9 +644,9 @@ window.onunhandledrejection=function(e){
 };
 BOOT.trace('script loaded');
 
-// ══════════════════════════════════════════════════════════
-// DURATION PROFILES — Narrative Neuro Timer
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// DURATION PROFILES -- Narrative Neuro Timer
+// ==========================================================
 const PROFILES={
   SHORT:    {label:'SHORT RITUAL', phaseMult:.45,collapseMult:1.6,silCycles:.35,satDecay:.9,memDecay:.9,maxEvPerBar:28,driftMult:.8},
   IMMERSION:{label:'IMMERSION',    phaseMult:1.0,collapseMult:1.0,silCycles:.5, satDecay:.55,memDecay:.5,maxEvPerBar:22,driftMult:1.0},
@@ -655,16 +655,16 @@ const PROFILES={
 };
 let activeProfile=PROFILES.IMMERSION;
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // EVENT BUDGET + SATURATION ENGINE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const BUDGET={
   events:0,satIndex:0,nodeCount:0,MAX_NODES:40,circadianReduction:0,
   _evHistory:[],
   addEvent(weight){this.events+=weight||1;this.nodeCount=Math.min(this.MAX_NODES,this.nodeCount+1);return true;},
   releaseNode(){this.nodeCount=Math.max(0,this.nodeCount-1);},
   canFire(cat){
-    // maxEvPerBarAdj reads from TEMPORAL × BPMSTATE cognitive load compensation
+    // maxEvPerBarAdj reads from TEMPORAL x BPMSTATE cognitive load compensation
     // Fallback to activeProfile if BPMSTATE not yet initialized
     const bpmAdj=typeof BPMSTATE!=='undefined'?BPMSTATE.maxEvPerBarAdj:activeProfile.maxEvPerBar;
     const max=Math.max(6,bpmAdj-this.circadianReduction);
@@ -695,11 +695,11 @@ const BUDGET={
   }
 };
 
-// ══════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════
-// VOXDNA — Semantic Voice Scheduler
+// ==========================================================
+// ==========================================================
+// VOXDNA -- Semantic Voice Scheduler
 // VoxRitual DNA Engine → SpukBeatsOne integration
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 var VOXDNA=(function(){
   var IDENTITY_PROFILES={
     hollow:  {clarity:.55,fragility:.80,lateralize:.1,grainDensity:.2,humanContent:.5},
@@ -780,7 +780,7 @@ var VOXDNA=(function(){
     if(_s.vocFatigue>.55)return false;
     if(_s.orchStrength>.58)return false;
     if(_s.silenceDepth<.15)return false;
-    // Attention fatigue — too many voice events in a row → extend silence
+    // Attention fatigue -- too many voice events in a row → extend silence
     if(VOXMEM.attentionFatigue>.75)return false;
     if(_s.tickTimeSec-_s.lastNarrativeTime<minI)return false;
     if(_s.tickTimeSec<_s.forcedSilenceUntil)return false;
@@ -804,14 +804,14 @@ var VOXDNA=(function(){
     if(_s.bioCollapsing)return false;
     return true;
   }
-  // Pick a ready fragment from SAL — prefers ACTIVE slots
-  // ── VOICE MEMORY GRAPH ────────────────────────────────────────────────────
-  // Tracks what was said, when, and how — drives semantic continuity.
+  // Pick a ready fragment from SAL -- prefers ACTIVE slots
+  // -- VOICE MEMORY GRAPH ----------------------------------------------------
+  // Tracks what was said, when, and how -- drives semantic continuity.
   var VOXMEM={
     recent:[], // [{id,fragType,ts,weather,protagonist,weight}] circular, max 32
     residue:{narrative:0,ghost:0,subconscious:0}, // accumulated emotional weight
     lastEntity:null,
-    attentionFatigue:0, // 0..1 — rises with frequent voice, reduces emergence prob
+    attentionFatigue:0, // 0..1 -- rises with frequent voice, reduces emergence prob
     _MAX:32,
 
     record(frag,entityType,protagonist,weather){
@@ -819,7 +819,7 @@ var VOXDNA=(function(){
       this.recent.push({id:frag.id,fragType:frag.fragType||entityType,ts:now,weather:weather||'CLEAR',protagonist:protagonist||'none',weight:frag.spawnProbability||.5});
       if(this.recent.length>this._MAX)this.recent.shift();
       this.lastEntity=entityType;
-      // Accumulate residue — subconscious slowly charges narrative; narrative leaves ghost echo
+      // Accumulate residue -- subconscious slowly charges narrative; narrative leaves ghost echo
       if(entityType==='subconscious')this.residue.narrative=Math.min(1,this.residue.narrative+.08);
       if(entityType==='narrative'){this.residue.ghost=Math.min(1,this.residue.ghost+.12);this.residue.narrative=Math.max(0,this.residue.narrative-.3);}
       if(entityType==='ghost')this.residue.ghost=Math.max(0,this.residue.ghost-.15);
@@ -847,7 +847,7 @@ var VOXDNA=(function(){
       return this.recent.some(function(r){return r.fragType===type&&r.ts>cutoff;});
     },
 
-    // Score a fragment for selection — higher = more likely to be picked
+    // Score a fragment for selection -- higher = more likely to be picked
     score(frag,entityType,weather,protagonist,bioCollapsing){
       var s=frag.spawnProbability||0.5;
       // Heavy penalty for same id within 40s
@@ -859,12 +859,12 @@ var VOXDNA=(function(){
       var wAffinities={VOID:['collapse_residue','ghost'],STORM:['collapse_residue'],FOG:['subconscious','breath'],CLEAR:['texture','breath']};
       var waf=wAffinities[weather]||[];
       if(waf.indexOf(type)>=0)s+=0.28;
-      // Residue-based callbacks — narrative residue prefers ghost callbacks
+      // Residue-based callbacks -- narrative residue prefers ghost callbacks
       if(entityType==='ghost'&&this.residue.narrative>.3)s+=this.residue.narrative*.3;
       if(entityType==='subconscious'&&this.residue.ghost>.3)s+=this.residue.ghost*.2;
       // SAL-ready slots strongly preferred
       if(typeof SAL!=='undefined'){var slot=SAL.voxSlots[frag.id];if(slot&&slot.ready)s+=0.45;}
-      // Callback intelligence — returning fragments in new forms
+      // Callback intelligence -- returning fragments in new forms
       s+=this.callbackBonus(frag,entityType,weather);
       return s;
     },
@@ -905,7 +905,7 @@ var VOXDNA=(function(){
     var bioCol=_s.bioCollapsing||false;
     var scored=frags.map(function(f){return{frag:f,score:VOXMEM.score(f,entityType,weather,protagonist,bioCol)};});
     scored.sort(function(a,b){return b.score-a.score;});
-    // Probabilistic top-3 pick (not always top-1 — preserves variety)
+    // Probabilistic top-3 pick (not always top-1 -- preserves variety)
     var topN=Math.min(3,scored.length);
     var weights=[0.6,0.28,0.12];
     var r=Math.random(),cum=0;
@@ -947,7 +947,7 @@ var VOXDNA=(function(){
       fragment:frag,
       macros:{humanity:Math.round(pr.humanContent*40),hollow:Math.round(pr.fragility*90),presence:Math.round(g*60),memory:Math.round((1-pr.clarity)*95),body:Math.round(pr.humanContent*30),bleed:Math.round(pr.fragility*70)}};
   }
-  // ── PUBLIC API ──
+  // -- PUBLIC API --
   return{
     version:'voxdna_scheduler_v1',
     // Called when VoxRitual ADN export is loaded
@@ -986,7 +986,7 @@ var VOXDNA=(function(){
       if(pkg.organism&&pkg.organism.temperatureProfile){var t=pkg.organism.temperatureProfile;_s.coherenceDesire+=((t.behavioralHints&&t.behavioralHints.driftAmount)||0)*.15;}
       console.log('[VOXDNA] ADN loaded:',frags.length,'fragments from',pkg.format||pkg.version||'unknown format');
     },
-    // Called every bar — feed current ecology state
+    // Called every bar -- feed current ecology state
     tick:function(eco){
       if(!eco)eco={};
       _s.tickTimeSec=eco.timeSec||(_s.tickTimeSec+(eco.deltaSec||2));_s.tickCount++;
@@ -1031,7 +1031,7 @@ var VOXDNA=(function(){
     // Expose VOXMEM to global scope for MIX_INTEL and VOX_ENTITY access
     getMem:function(){return VOXMEM;},
     _getFragment:function(id){return _s.fragments.find(f=>f.id===id)||null;},
-    // UI panel (VoxRitual slot display — now shows real metabolism)
+    // UI panel (VoxRitual slot display -- now shows real metabolism)
     _updateUI:function(){
       const el=document.getElementById('voxslots');if(!el)return;
       if(!this._built){this._built=true;el.innerHTML='';
@@ -1054,14 +1054,14 @@ var VOXDNA=(function(){
       if(dot('subconscious'))dot('subconscious').style.background=`rgba(130,80,255,${.08+_s.coherenceDesire*.25})`;
       if(lbl('subconscious'))lbl('subconscious').textContent=`D${Math.round(met.coherenceDesire*100)}%`;
       // Status label
-      const st=document.getElementById('voxdna-status');if(st)st.textContent='VOXDNA — '+(met.forcedSilence?'SILENCE':'ACTIVE');
+      const st=document.getElementById('voxdna-status');if(st)st.textContent='VOXDNA -- '+(met.forcedSilence?'SILENCE':'ACTIVE');
     }
   };
 })();
 
-// ══════════════════════════════════════════════════════════
-// DNA PACKS — BEHAVIORAL SPECIES
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// DNA PACKS -- BEHAVIORAL SPECIES
+// ==========================================================
 const BUILTIN_PACKS=[
   {id:'rust',   label:'RUST RITUAL',    short:'RUST',   kickF0:145,kickF1:22,kickDecay:.52,bassWave:'sine',    bassFilter:280,bassQ:4.5,hatFreq:7000,swing:.52,glitchAmt:.65,pitchDrift:.05,brightness:.35,subCharacter:'resonant', silenceAffinity:.15,instability:.4,fragmentation:.3, spatialSpread:.4,fogIntensity:.42,collapseProb:.003,fatigueResist:.7,ghostPersist:.55,col:'#b86833',pRgb:[184,104,51]},
   {id:'tape',   label:'BROKEN TAPE',    short:'TAPE',   kickF0:205,kickF1:28,kickDecay:.26,bassWave:'sawtooth',bassFilter:620,bassQ:2.5,hatFreq:8800,swing:.54,glitchAmt:.45,pitchDrift:.08,brightness:.55,subCharacter:'fragmented',silenceAffinity:.25,instability:.55,fragmentation:.6, spatialSpread:.6,fogIntensity:.28,collapseProb:.008,fatigueResist:.45,ghostPersist:.38,col:'#ccaa44',pRgb:[200,165,60]},
@@ -1072,9 +1072,9 @@ const BUILTIN_PACKS=[
 ];
 let PACKS=[...BUILTIN_PACKS];
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // DNA MORPHING
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const DNA={
   weights:null,morphWeights:null,anchorIdx:0,morphT:0,morphDur:0,active:{},
   init(){this.weights=new Float32Array(PACKS.length);this.morphWeights=new Float32Array(PACKS.length);this.weights[0]=1;this.morphWeights[0]=1;this.blend();this.rebuildPackUI();this.rebuildMorphUI();},
@@ -1105,7 +1105,7 @@ const DNA={
     this.rebuildPackUI();this.rebuildMorphUI();
   },
   importPack(data){
-    // ── Build bridge from raw Sound Forge fields if spukbeats_bridge absent ──
+    // -- Build bridge from raw Sound Forge fields if spukbeats_bridge absent --
     let d=data.spukbeats_bridge;
     if(!d&&data.forgeState){
       // Derive SpukBeatsOne params from Forge export
@@ -1174,9 +1174,9 @@ function hexToRgb(h){return[parseInt(h.slice(1,3),16)||153,parseInt(h.slice(3,5)
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
 function normW(w){let s=0;for(let i=0;i<w.length;i++)s+=w[i];if(s>0)for(let i=0;i<w.length;i++)w[i]/=s;}
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SPECTRAL WEATHER + WEATHER MEMORY
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const WEATHER_TYPES={
   CLEAR:       {col:'#aaccff',pRgb:[170,200,255],silenceMod:.0, glitchMod:.0, fogMod:.0, pressureMod:.0, droneMod:.3, energyMod:.0, densityMod:.0},
   FOG:         {col:'#7788aa',pRgb:[110,120,160],silenceMod:.18,glitchMod:.0, fogMod:.65,pressureMod:.15,droneMod:.6, energyMod:-.1,densityMod:-.12},
@@ -1206,12 +1206,12 @@ const WEATHMEM={
 };
 function buildWeatherUI(){const d=document.getElementById('weather-grid');if(!d)return;d.innerHTML='';Object.entries(WEATHER_TYPES).forEach(([key,w])=>{const b=document.createElement('div');b.className='wbtn'+(key==='CLEAR'?' on':'');b.dataset.w=key;b.textContent=key.replace('_',' ');b.style.color=w.col;b.addEventListener('click',()=>WEATHER.set(key));d.appendChild(b);});}
 
-// ══════════════════════════════════════════════════════════
-// SPECTRAL MEMORY — Active Pruning
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// SPECTRAL MEMORY -- Active Pruning
+// ==========================================================
 const SMEM={
   sub:0,glitch:0,brightness:0,silence:0,fatigue:0,
-  events:[],maxEvents:32,  // reduced from 64 — active pruning
+  events:[],maxEvents:32,  // reduced from 64 -- active pruning
   decayRate:.0015,
   record(type,freq,vel){
     this.events.push({type,freq:freq||80,vel:vel||.5,age:0,generation:0});
@@ -1245,34 +1245,34 @@ const SMEM={
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // CROSS-ORGANISM INFECTION
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const INFECT={
   txtToRhy:0,prsToGhost:0,frgToPoly:0,silToTxt:0,totalInfection:0,
   tick(){const d=.0014;this.txtToRhy=Math.max(0,Math.min(1,this.txtToRhy+SMEM.brightness*.003-d));this.prsToGhost=Math.max(0,Math.min(1,this.prsToGhost+SMEM.sub*.004-d));this.frgToPoly=Math.max(0,Math.min(1,this.frgToPoly+SMEM.glitch*.003-d));this.silToTxt=Math.max(0,Math.min(1,this.silToTxt+SMEM.silence*.003-d));this.totalInfection=Math.min(1,(this.txtToRhy+this.prsToGhost+this.frgToPoly+this.silToTxt)/4);}
 };
 
-// ══════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════
-// TEMPORAL CONSCIOUSNESS SYSTEM — Neurotemporal Architecture
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// ==========================================================
+// TEMPORAL CONSCIOUSNESS SYSTEM -- Neurotemporal Architecture
+// ==========================================================
 const TEMPORAL={
   // Set duration in minutes (set before playback)
   plannedDuration:20,        // default 20 min
   sessionStartAC:0,
   // Current temporal phase 0..1 within planned duration
   phase:0,
-  // Neurotemporal constants — all scaled by duration
+  // Neurotemporal constants -- all scaled by duration
   _params:{},
 
-  // ── NEUROTEMPORAL PARAMETER SCALING ──
+  // -- NEUROTEMPORAL PARAMETER SCALING --
   // Short sets need condensed narrative, long sets need geological time
   computeParams(durationMin){
     const d=durationMin;
     const p=this._params;
     // MICRO-TEMPORAL MODES (1-5min): compressed narrative metabolism
-    // Phase machine speed — micro modes are dramatically faster
+    // Phase machine speed -- micro modes are dramatically faster
     p.phaseMult=d<=1?0.06:d<=2?0.1:d<=3?0.14:d<=5?0.2:d<=8?0.3:d<=20?1.0:d<=45?2.2:d<=90?4.5:10.0;
     // Collapse rarity
     p.collapseMult=d<=1?4.0:d<=2?3.0:d<=3?2.5:d<=5?2.2:d<=8?2.0:d<=20?1.0:d<=45?0.45:d<=90?0.2:0.08;
@@ -1290,7 +1290,7 @@ const TEMPORAL={
     p.noveltySpikeP=d<=1?0.18:d<=2?0.14:d<=3?0.12:d<=5?0.1:d<=8?0.08:d<=20?0.04:d<=45?0.018:d<=90?0.008:0.003;
     // Silence windows (micro = every few bars)
     p.silenceWindowBars=d<=1?2:d<=2?3:d<=3?3:d<=5?4:d<=8?4:d<=20?8:d<=45?16:d<=90?28:55;
-    // Collapse cooldown (micro = very short — collapses can happen fast)
+    // Collapse cooldown (micro = very short -- collapses can happen fast)
     p.collapseCooldown=d<=1?2:d<=2?3:d<=3?4:d<=5?5:d<=8?8:d<=20?20:d<=45?45:d<=90?90:200;
     // Performer absence threshold
     p.absenceThresholdMs=d<=1?60000:d<=2?90000:d<=3?120000:d<=5?150000:d<=8?180000:d<=20?480000:d<=45?900000:d<=90?1800000:3600000;
@@ -1327,7 +1327,7 @@ const TEMPORAL={
     const elapsed=(ac.currentTime-this.sessionStartAC)/60; // minutes elapsed
     this.phase=Math.min(1,elapsed/Math.max(1,this.plannedDuration));
 
-    // ── NEUROTEMPORAL ADAPTATION ──
+    // -- NEUROTEMPORAL ADAPTATION --
     const p=this._params,ph=this.phase;
 
     // Adaptation curve: novelty spikes become rarer as ears adapt
@@ -1336,13 +1336,13 @@ const TEMPORAL={
       G.energy=Math.min(1,G.energy+.06);setTimeout(()=>{G.energy=Math.max(.0,G.energy-.06);},800);
     }
 
-    // Cognitive fatigue recovery windows — organism creates silence pockets
+    // Cognitive fatigue recovery windows -- organism creates silence pockets
     const barInWindow=barCount%Math.max(4,p.silenceWindowBars);
     if(barInWindow===0&&Math.random()<p.silCycles*.12+ph*.04){
       G.silenceInertia=Math.min(.75,G.silenceInertia+.04*(ph*.5+.5));
     }
 
-    // Long-session geological drift — everything slows
+    // Long-session geological drift -- everything slows
     if(ph>.5&&this.plannedDuration>=45){
       const geoFactor=1-(ph-.5)*.6;
       // FIELD nodes slow frequency drift
@@ -1354,7 +1354,7 @@ const TEMPORAL={
     META.gravity.strength=Math.min(1,META.gravity.strength+p.gravitySpeed);
   },
 
-  // Neurotemporal climax spacing — did we just do something intense?
+  // Neurotemporal climax spacing -- did we just do something intense?
   _lastClimax:0,
   canClimax(bar){
     if(bar-this._lastClimax<this._params.collapseCooldown)return false;
@@ -1362,40 +1362,40 @@ const TEMPORAL={
   }
 };
 
-// ══════════════════════════════════════════════════════════
-// META-ECOLOGY — Consciousness Coordinator
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// META-ECOLOGY -- Consciousness Coordinator
+// ==========================================================
 const META={
-  // Consensus vector — unified ecological read
+  // Consensus vector -- unified ecological read
   C:{activity:.5,silence:.0,pressure:.0,fragmentation:.0,spatial:.5},
-  // Ecological desire — internal motivation
+  // Ecological desire -- internal motivation
   desire:{state:null,strength:0,age:0},
   desireCooldown:0,
   DESIRE_LABELS:{SILENCE:'SILENCE ATTRACTION',TRANCE:'TRANCE SEEKING',SPECTRAL:'SPECTRAL OBSESSION',VOID:'VOID PULL',PRESSURE:'PRESSURE DESIRE',EROSION:'EROSION DRIVE'},
-  // Ritual gravity — organism's dominant identity center
+  // Ritual gravity -- organism's dominant identity center
   gravity:{state:'ritual_hypnosis',strength:.0,pullLabel:'RITUAL HYPNOSIS'},
-  // Nervous system protection — post-collapse recovery shielding
+  // Nervous system protection -- post-collapse recovery shielding
   nervousProtection:0,
-  // Narrative causality — cumulative performer trauma
+  // Narrative causality -- cumulative performer trauma
   narrativeMarks:{chaosOveruse:0,voidOveruse:0,pressureOveruse:0,ghostOveruse:0},
 
-  // ── READ: unified ecological state ──
+  // -- READ: unified ecological state --
   read(){
     const c=this.C;
-    // Silence consensus — weighted signals from multiple independent sources
+    // Silence consensus -- weighted signals from multiple independent sources
     const sigSilence=[G.c.silence*1.1,WEATHER.c.silenceMod+.25,SMEM.fatigue*.75,EMO.s.contemplate,WEATHMEM.residue.silenceBloom*1.8,GOVERNANCE._absencePhase*.55];
     c.silence=Math.min(1,sigSilence.reduce((a,b)=>a+b,0)/Math.max(1,sigSilence.filter(v=>v>.05).length*1.2));
-    // Activity — what wants to emerge
+    // Activity -- what wants to emerge
     c.activity=Math.min(1,G.c.energy*.5+G.c.density*.28+(1-SMEM.fatigue)*.22);
-    // Pressure — low-end tension consensus
+    // Pressure -- low-end tension consensus
     c.pressure=Math.min(1,SMEM.sub*.4+EMO.s.pressure_acc*.35+WEATHER.c.pressureMod*.25);
-    // Fragmentation — instability consensus
+    // Fragmentation -- instability consensus
     c.fragmentation=Math.min(1,SMEM.glitch*.42+EMO.s.cognitive_erosion*.35+BIO.traumaLevel*.23);
-    // Spatial — diffusion consensus
+    // Spatial -- diffusion consensus
     c.spatial=Math.min(1,(DNA.active.spatialSpread||.5)*.5+WEATHER.c.fogMod*.28+GOVERNANCE.autonomy*.22);
   },
 
-  // ── DESIRE RESOLUTION — organism motivation ──
+  // -- DESIRE RESOLUTION -- organism motivation --
   resolveDesire(){
     if(this.desireCooldown>0){this.desireCooldown--;return;}
     const c=this.C,e=EMO.s;
@@ -1415,7 +1415,7 @@ const META={
     }else{this.desire.age++;}
   },
 
-  // ── APPLY DESIRE — organism acts on its motivation ──
+  // -- APPLY DESIRE -- organism acts on its motivation --
   applyDesire(){
     if(!this.desire.state||this.desire.strength<.14)return;
     const s=this.desire.strength,d=this.desire.state,a=GOVERNANCE.autonomy;
@@ -1428,7 +1428,7 @@ const META={
     else if(d==='EROSION'&&a>.45)SMEM.glitch=Math.min(1,SMEM.glitch+s*.0008);
   },
 
-  // ── CONSENSUS APPLICATION — align all systems ──
+  // -- CONSENSUS APPLICATION -- align all systems --
   applyConsensus(){
     const c=this.C;
     // HIGH SILENCE CONSENSUS → converge all systems toward quiet
@@ -1441,7 +1441,7 @@ const META={
       // Pressure organism absence extends
       if(si>.7&&!BSS.absent&&Math.random()<.04)BSS.absenceCount=Math.max(BSS.absenceCount,3+Math.floor(si*4));
     }
-    // NERVOUS SYSTEM PROTECTION — post-collapse recovery shielding
+    // NERVOUS SYSTEM PROTECTION -- post-collapse recovery shielding
     if(this.nervousProtection>0){
       this.nervousProtection--;
       // Block volatile weather during recovery
@@ -1451,7 +1451,7 @@ const META={
       // Enforce saturation throttle
       BUDGET.satIndex=Math.max(BUDGET.satIndex,.42);
     }
-    // RITUAL GRAVITY — slow pull back to organism's identity center
+    // RITUAL GRAVITY -- slow pull back to organism's identity center
     if(this.gravity.strength>.3){
       const gState=this.gravity.state,gs=this.gravity.strength;
       if(EMO.s[gState]<.22&&Math.random()<.003*gs){
@@ -1460,7 +1460,7 @@ const META={
         else if(gState==='spectral_tension')G.tension=Math.min(.7,G.tension+.0003);
       }
     }
-    // NARRATIVE CAUSALITY — apply cumulative performer trauma
+    // NARRATIVE CAUSALITY -- apply cumulative performer trauma
     const nm=this.narrativeMarks;
     if(nm.chaosOveruse>.6)SMEM.glitch=Math.min(SMEM.glitch+.0002,1);
     if(nm.voidOveruse>.5)G.silenceInertia=Math.min(G.silenceInertia+.0001,.6);
@@ -1468,18 +1468,18 @@ const META={
     if(nm.ghostOveruse>.55)DNA.active.ghostPersist=Math.min((DNA.active.ghostPersist||.5)+.0001,.95);
   },
 
-  // ── NARRATIVE CAUSALITY — record performer overuse ──
+  // -- NARRATIVE CAUSALITY -- record performer overuse --
   recordGesture(type){
     const nm=this.narrativeMarks;
     if(type==='chaos')nm.chaosOveruse=Math.min(1,nm.chaosOveruse+.04);
     else if(type==='void')nm.voidOveruse=Math.min(1,nm.voidOveruse+.04);
     else if(type==='break'||type==='fill')nm.pressureOveruse=Math.min(1,nm.pressureOveruse+.02);
     else if(type==='ghost')nm.ghostOveruse=Math.min(1,nm.ghostOveruse+.04);
-    // Marks decay very slowly — they're meant to be semi-permanent
+    // Marks decay very slowly -- they're meant to be semi-permanent
     Object.keys(nm).forEach(k=>nm[k]=Math.max(0,nm[k]-.0008));
   },
 
-  // ── GRAVITY EVOLUTION — update session's dominant identity ──
+  // -- GRAVITY EVOLUTION -- update session's dominant identity --
   evolveGravity(bar){
     // Gravity speed now driven by TEMPORAL.tick based on session duration
     if(bar%8===0){
@@ -1489,7 +1489,7 @@ const META={
     }
   },
 
-  // ── RECOVERY INTELLIGENCE — called on BIO collapse ──
+  // -- RECOVERY INTELLIGENCE -- called on BIO collapse --
   onCollapse(){
     this.nervousProtection=14+Math.floor(Math.random()*8);
     // Collapse leaves narrative marks
@@ -1520,11 +1520,11 @@ const META={
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // BPM NEURODYNAMIC SYSTEM
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const BPMSTATE={
-  // Derived neurodynamic parameters — all non-linear
+  // Derived neurodynamic parameters -- all non-linear
   norm:.5,           // 0=70bpm → 1=140bpm (logistic curve)
   pressure:.5,       // cognitive pressure from tempo
   breathing:.5,      // inverse breathing depth: 1=deep(low bpm), 0=shallow(high)
@@ -1536,7 +1536,7 @@ const BPMSTATE={
   narrativeSpeed:.5, // how fast narrative events can emerge
   volatility:.5,     // weather/ecology volatility
 
-  // Perceived temporal density (BPM × duration interaction)
+  // Perceived temporal density (BPM x duration interaction)
   perceptualDensity:.5,
 
   update(){
@@ -1550,7 +1550,7 @@ const BPMSTATE={
     this.pressure=Math.max(0,Math.min(1,Math.pow(Math.max(0,(b-95)/55),1.6)));
     // BREATHING: inverse of pressure, deeper at low bpm
     this.breathing=1-this.norm;
-    // COGNITIVE LOAD: U-shaped? No — rises with pressure
+    // COGNITIVE LOAD: U-shaped? No -- rises with pressure
     this.cognitiveLoad=this.pressure*.7+this.norm*.3;
     // SPATIALITY: low bpm = wide, high bpm = tight
     this.spatiality=1-this.norm*.72;
@@ -1565,7 +1565,7 @@ const BPMSTATE={
     // VOLATILITY: high bpm = more volatile ecology
     this.volatility=this.pressure*.6+this.fragmentation*.4;
 
-    // PERCEPTUAL DENSITY: BPM × session duration interaction
+    // PERCEPTUAL DENSITY: BPM x session duration interaction
     // High BPM short session = very dense. Low BPM long = sparse
     const dur=TEMPORAL.plannedDuration||20;
     const bpmFactor=b/105; // normalized around equilibrium
@@ -1577,30 +1577,30 @@ const BPMSTATE={
     const n=this.norm,br=this.breathing,pr=this.pressure,sp=this.spatiality;
     const ds=this.decayScale,sl=this.silenceTolerance,vol=this.volatility;
 
-    // ── SMEM DECAY — low bpm = longer memory, high bpm = faster contamination decay ──
+    // -- SMEM DECAY -- low bpm = longer memory, high bpm = faster contamination decay --
     SMEM.decayRate=Math.max(.0004,.0015*(1.5-n*.9)); // 70bpm:.0022 | 105:.0015 | 140:.0006
     // But fragmentation accumulates faster at high bpm
     if(pr>.4)SMEM.glitch=Math.min(1,SMEM.glitch+pr*.0006);
 
-    // ── SILENCE INERTIA — high bpm inserts more silence to compensate density ──
+    // -- SILENCE INERTIA -- high bpm inserts more silence to compensate density --
     // High bpm: organism auto-inserts silence to protect cognitive load
     const densityComp=this.perceptualDensity>.68?((this.perceptualDensity-.68)*.04):0;
     if(densityComp>0&&!G.voidMode)G.silenceInertia=Math.min(.7,G.silenceInertia+densityComp*.002);
     // Low bpm: silence tolerance rises naturally
     if(br>.6)G.silenceInertia=Math.max(G.silenceInertia-.0002,G.silenceInertia);
 
-    // ── SPATIAL DRIFT — low bpm = wider slower arcs, high bpm = nervous jitter ──
+    // -- SPATIAL DRIFT -- low bpm = wider slower arcs, high bpm = nervous jitter --
     const spatDrift=sp*DNA.active.spatialSpread;
     Object.values(SPATIAL.positions).forEach(pos=>{
       // High bpm: add micro-jitter to pan velocities
       if(pr>.5)pos.vel.pan+=(Math.random()-.5)*.0018*pr;
     });
 
-    // ── WEATHER VOLATILITY — high bpm = faster weather transitions ──
-    // Already handled via WEATHER.tick speed — we modulate the setTargetAtTime rate
+    // -- WEATHER VOLATILITY -- high bpm = faster weather transitions --
+    // Already handled via WEATHER.tick speed -- we modulate the setTargetAtTime rate
     // (just influences GOVERNANCE autonomous weather drift probability)
 
-    // ── PRESSURE FIELD (FIELD nodes) — low bpm = deeper breathing, higher amplitude ──
+    // -- PRESSURE FIELD (FIELD nodes) -- low bpm = deeper breathing, higher amplitude --
     if(ac&&FIELD.running){
       const breathAmp=0.18+br*.22;  // low bpm: fuller drone
       FIELD.nodes.forEach((n2,i)=>{
@@ -1614,11 +1614,11 @@ const BPMSTATE={
       });
     }
 
-    // ── FOSSIL DURATION — scales with decay ──
+    // -- FOSSIL DURATION -- scales with decay --
     // Actual fossil spawn life is multiplied when spawned (see FOSSILS.spawn)
     FOSSILS._bpmLifeScale=ds*(TEMPORAL._params.fossilLifeScale||1);
 
-    // ── VOXRITUAL — high bpm → more stutter, shorter delay at high pressure ──
+    // -- VOXRITUAL -- high bpm → more stutter, shorter delay at high pressure --
     if(VOXRITUAL.active&&VOXRITUAL.C.desync&&ac){
       const bpmDelayMod=1+(pr*.35); // high bpm stretches perceived delay
       const baseDelay=VOXRITUAL.IDENTITIES[VOXRITUAL.state]?.delay||.04;
@@ -1636,23 +1636,23 @@ const BPMSTATE={
   get ghostDecay(){return this.decayScale*.9;},
 };
 
-// ══════════════════════════════════════════════════════════
-// SIMULATION MULTIPLIER — Ecological time acceleration (testing)
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// SIMULATION MULTIPLIER -- Ecological time acceleration (testing)
+// ==========================================================
 const SIM={
   mult:1,  // 1 / 2 / 4 / 8
-  // Effective elapsed time (real × mult for ecology only — NOT audio BPM)
+  // Effective elapsed time (real x mult for ecology only -- NOT audio BPM)
   effectiveElapsed(realElapsedMin){return realElapsedMin*this.mult;},
   set(m){
     this.mult=m;
     document.querySelectorAll('.sim-btn').forEach(b=>b.classList.toggle('on',parseInt(b.dataset.sim)===m));
-    const el=document.getElementById('dbg-sim');if(el)el.textContent=`×${m}`;
+    const el=document.getElementById('dbg-sim');if(el)el.textContent=`x${m}`;
   }
 };
 
-// ══════════════════════════════════════════════════════════
-// REBIRTH SYSTEM — Loopable death/emergence for installations
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// REBIRTH SYSTEM -- Loopable death/emergence for installations
+// ==========================================================
 const REBIRTH={
   enabled:false,
   phase:'NONE', // NONE / DYING / RESIDUAL / EMERGING
@@ -1698,7 +1698,7 @@ const REBIRTH={
   },
 
   _emerge(){
-    // Soft reset — preserve contamination traces and trauma
+    // Soft reset -- preserve contamination traces and trauma
     const inh=this.inherited;
     DESTINY.init(TEMPORAL.plannedDuration);
     ORCH.crystal.age=0.08;ORCH.crystal.label=inh.crystalFragment;
@@ -1709,14 +1709,14 @@ const REBIRTH={
     barCount=0;RHY.onBar();BSS.refresh();DNA.startMorph();
     TEMPORAL.sessionStartAC=ac?ac.currentTime:0;
     ORCH.crystal.locks={[inh.crystalFragment]:2}; // memory fragment
-    showToast('EMERGENCE — GENERATION '+(this._generation=(this._generation||1)+1));
+    showToast('EMERGENCE -- GENERATION '+(this._generation=(this._generation||1)+1));
   },
   _generation:0,
 };
 
-// ══════════════════════════════════════════════════════════
-// TEMPORAL DESTINY SYSTEM — Session Lifecycle Awareness
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// TEMPORAL DESTINY SYSTEM -- Session Lifecycle Awareness
+// ==========================================================
 const DESTINY={
   // Core lifecycle variables
   phase01:0,        // 0..1 normalized session progress
@@ -1765,45 +1765,45 @@ const DESTINY={
     this.remaining01=1-this.phase01;
     const p=this.phase01;
 
-    // ── EXHAUSTION — accumulates with density and time ──
+    // -- EXHAUSTION -- accumulates with density and time --
     const densityLoad=G.c.density*.003+BPMSTATE.pressure*.002+BUDGET.satIndex*.004;
     this.exhaustion=Math.min(1,this.exhaustion+densityLoad*(1-this.remaining01*.5));
     // Natural recovery during silences
     if(G.c.silence>.4)this.exhaustion=Math.max(0,this.exhaustion-.0008);
 
-    // ── TERMINAL GRAVITY — rises after terminalStart (82% default, earlier for micro) ──
+    // -- TERMINAL GRAVITY -- rises after terminalStart (82% default, earlier for micro) --
     const tStart=TEMPORAL._params.terminalStart||.82;
     this.terminalGravity=p<tStart?0:Math.pow((p-tStart)/(1-tStart),1.8);
 
-    // ── CLOSURE DESIRE — organic draw toward conclusion ──
+    // -- CLOSURE DESIRE -- organic draw toward conclusion --
     const exhaustFactor=this.exhaustion*.35;
     const termFactor=this.terminalGravity*.55;
     const crystalFactor=ORCH.crystal.age*.1;
     this.closureDesire=Math.min(1,exhaustFactor+termFactor+crystalFactor);
 
-    // ── CLIMAX DEBT — was there enough arc? ──
+    // -- CLIMAX DEBT -- was there enough arc? --
     const collapsesExpected=Math.max(1,Math.floor(this.totalMin/15));
     const collapsesHad=BIO.history.length;
     this.climaxDebt=Math.max(0,1-collapsesHad/collapsesExpected);
 
-    // ── SEMANTIC PROBABILITY — rare in middle, precious at end ──
+    // -- SEMANTIC PROBABILITY -- rare in middle, precious at end --
     // Bell-curve: low at start, lowest at 55%, then rises again near end
     const mid=1-Math.abs(p-.55)/.45;
     this.semanticProbability=p<.1?p*.3:p>.85?Math.pow(p-.85,1.5)*.8:(1-mid*.9)*.04;
 
-    // ── DISSOLUTION — terminal zone fade ──
+    // -- DISSOLUTION -- terminal zone fade --
     if(p>.88)this.dissolution=Math.min(1,(p-.88)/.12);
     else this.dissolution=0;
 
-    // ── END STATE CRYSTALLIZATION ──
+    // -- END STATE CRYSTALLIZATION --
     if(p>.82&&!this.endState)this._resolveEndState();
 
-    // ── APPLY DESTINY TO SYSTEMS ──
+    // -- APPLY DESTINY TO SYSTEMS --
     this._applyToSystems();
     this._applyToGovernance();
     this._updateUI();
 
-    // ── AUTO-CONCLUSION ── (autonomous mode only)
+    // -- AUTO-CONCLUSION -- (autonomous mode only)
     if(p>=1&&GOVERNANCE.autonomy>.5&&isPlaying){this._gracefulDeath();}
   },
 
@@ -1819,17 +1819,17 @@ const DESTINY={
   _applyToSystems(){
     const p=this.phase01,tg=this.terminalGravity,cl=this.closureDesire;
 
-    // ── EVENT BUDGET — reduce ceiling as session matures ──
+    // -- EVENT BUDGET -- reduce ceiling as session matures --
     BUDGET.circadianReduction=Math.max(BUDGET.circadianReduction,Math.floor(tg*6+this.exhaustion*4));
 
-    // ── SILENCE INERTIA — deepens in terminal zone ──
+    // -- SILENCE INERTIA -- deepens in terminal zone --
     if(tg>.1)G.silenceInertia=Math.min(.85,G.silenceInertia+tg*.0006);
 
-    // ── COLLAPSE COOLDOWN — late collapses become rarer, more spaced ──
+    // -- COLLAPSE COOLDOWN -- late collapses become rarer, more spaced --
     const terminalCollapseCooldown=Math.round(TEMPORAL._params.collapseCooldown*(1+tg*3));
     TEMPORAL._lastClimax=TEMPORAL._lastClimax; // (TEMPORAL.canClimax already reads cooldown)
 
-    // ── WEATHER — terminal zone stabilizes weather ──
+    // -- WEATHER -- terminal zone stabilizes weather --
     if(tg>.4&&Math.random()<tg*.008){
       // Settle into end-state-appropriate weather
       const weatherMap={
@@ -1841,7 +1841,7 @@ const DESTINY={
       if(WEATHER.target!==targetW&&Math.random()<.3)WEATHER.set(targetW);
     }
 
-    // ── DISSOLUTION — reduce all buses gradually in final ~5% ──
+    // -- DISSOLUTION -- reduce all buses gradually in final ~5% --
     if(this.dissolution>.0){
       const dFade=1-this.dissolution*.85;
       if(ac&&masterGain)masterGain.gain.setTargetAtTime(Math.max(.04,dFade*.72),ac.currentTime,2.5);
@@ -1849,7 +1849,7 @@ const DESTINY={
       if(ac&&masterGain&&masterGain.gain.value<.68)masterGain.gain.setTargetAtTime(.72,ac.currentTime,1.0);
     }
 
-    // ── CONTAMINATION DECAY — accelerate cleanup near end ──
+    // -- CONTAMINATION DECAY -- accelerate cleanup near end --
     if(p>.7){const decayBoost=1+(p-.7)*.5*tg;SMEM.glitch=Math.max(0,SMEM.glitch-SMEM.decayRate*decayBoost);SMEM.brightness=Math.max(0,SMEM.brightness-SMEM.decayRate*decayBoost);}
   },
 
@@ -1873,7 +1873,7 @@ const DESTINY={
     const p=this.phase01,tg=this.terminalGravity;
     if(tg<.05)return candidates;
     candidates.forEach(c=>{
-      // Terminal: fragmentation becomes very unlikely — the organism settles
+      // Terminal: fragmentation becomes very unlikely -- the organism settles
       if(c.id==='fragmentation')c.score*=(1-tg*.85);
       // Terminal: erosion fades
       if(c.id==='erosion')c.score*=(1-tg*.7);
@@ -1897,7 +1897,7 @@ const DESTINY={
     }
   },
 
-  // ── VISUAL OUTPUT ──
+  // -- VISUAL OUTPUT --
   get zone(){for(const[,z] of Object.entries(this.ZONES))if(this.phase01>=z.min&&this.phase01<z.max)return z;return this.ZONES.TERMINAL;},
   get lifecycleAlpha(){return Math.min(1,this.phase01*6);}, // fades in after start
 
@@ -1913,14 +1913,14 @@ const DESTINY={
     const nb=document.getElementById('node-budget');if(nb)nb.textContent=`NODES: ${BUDGET.nodeCount}/${BUDGET.MAX_NODES}`;}
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // PERCEPTUAL LEADERSHIP + ATTENTION ECOLOGY
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const ORCH={
-  // Active protagonist — which organism/force leads right now
+  // Active protagonist -- which organism/force leads right now
   protagonist:null,   // 'pressure' | 'fragmentation' | 'ghost' | 'silence' | 'trance' | 'erosion'
   strength:0,         // how strongly protagonist leads (0..1)
-  // Bus gain targets — ORCH sets them, BUS.updatePanners applies
+  // Bus gain targets -- ORCH sets them, BUS.updatePanners applies
   busTargets:{kick:1,snare:1,hat:1,pressure:1,texture:1,ghost:1,drone:1},
   // Visual focus weights (read by drawFrame)
   visual:{scars:1,echoes:1,arcs:1,particles:1,center:1,fog:1,trails:1},
@@ -1930,7 +1930,7 @@ const ORCH={
   crystal:{label:'',age:0,locks:{}},
   _crystalTimer:0,
 
-  // ── RESOLVE PROTAGONIST — who speaks now ──
+  // -- RESOLVE PROTAGONIST -- who speaks now --
   resolveProtagonist(){
     const e=EMO.s,m=META.C,bp=BPMSTATE,w=WEATHER.target;
     let candidates=[
@@ -1940,7 +1940,7 @@ const ORCH={
       {id:'silence',     score:m.silence*(e.contemplate*.7+bp.breathing*.3)+(w==='VOID'?.25:0)},
       {id:'trance',      score:e.ritual_hypnosis*(1-m.fragmentation*.6)*(1-bp.pressure*.4)},
       {id:'erosion',     score:m.fragmentation*e.cognitive_erosion*(1-e.ritual_hypnosis*.6)},
-      // VOICE protagonist — activated by NARRATIVE mode or high vox readiness
+      // VOICE protagonist -- activated by NARRATIVE mode or high vox readiness
       {id:'narrative',   score:(VOXECO.mode==='NARRATIVE'?.55:VOXECO.mode==='BALANCED'?.15:0)*(SAL.voxReady>0?.8:0)+e.contemplate*.12},
     ];
     // IKEDA mode: signal/pressure/silence/erosion dominate; trance/ghost organic reduced
@@ -1958,7 +1958,7 @@ const ORCH={
     const top=candidates[0];
     const newProto=top.score>.18?top.id:null;
     const newStrength=top.score>.18?Math.min(1,top.score):0;
-    // Soft blend — protagonist transitions over 2-4 bars, not instantly
+    // Soft blend -- protagonist transitions over 2-4 bars, not instantly
     if(newProto!==this.protagonist){
       // Previous protagonist recorded for canvas display
       this._prevProtagonist=this.protagonist;
@@ -1976,7 +1976,7 @@ const ORCH={
     if(typeof VOXECO!=='undefined')VOXECO.applyIntelligibility(this.protagonist);
   },
 
-  // ── APPLY PERCEPTUAL LEADERSHIP — buses + visual + event suppression ──
+  // -- APPLY PERCEPTUAL LEADERSHIP -- buses + visual + event suppression --
   applyLeadership(){
     if(!this.protagonist){
       // No clear protagonist: reset all to 1
@@ -2041,17 +2041,17 @@ const ORCH={
     Object.keys(this.visual).forEach(k=>this.visual[k]=Math.max(.04,Math.min(1.6,this.visual[k])));
   },
 
-  // ── APPLY BUS GAINS — smooth approach to targets ──
+  // -- APPLY BUS GAINS -- smooth approach to targets --
   applyBusGains(){
     if(!ac)return;
     const t=ac.currentTime;
     Object.entries(this.busTargets).forEach(([k,target])=>{
       const bus=BUS[k];if(!bus||!bus.gain)return;
-      bus.gain.gain.setTargetAtTime(target*.72,t,.8); // slow smooth — never hard switches
+      bus.gain.gain.setTargetAtTime(target*.72,t,.8); // slow smooth -- never hard switches
     });
   },
 
-  // ── COGNITIVE RECOVERY — after dense events ──
+  // -- COGNITIVE RECOVERY -- after dense events --
   triggerRecovery(intensity){
     if(this.recovery.active)return;
     this.recovery.active=true;
@@ -2073,7 +2073,7 @@ const ORCH={
     }
   },
 
-  // ── SESSION CRYSTALLIZATION — identity convergence over time ──
+  // -- SESSION CRYSTALLIZATION -- identity convergence over time --
   crystallize(bar){
     this._crystalTimer++;
     if(this._crystalTimer<16)return;
@@ -2088,7 +2088,7 @@ const ORCH={
     let maxCount=0,maxKey='ritual_hypnosis';
     Object.entries(this.crystal.locks).forEach(([k,v])=>{if(v>maxCount){maxCount=v;maxKey=k;}});
     this.crystal.age=Math.min(1,this.crystal.age+.008);
-    // Crystal label — session personality
+    // Crystal label -- session personality
     const CRYST_LABELS={
       ritual_hypnosis:'RITUAL',contemplate:'CONTEMPLATIVE',cognitive_erosion:'EROSION',
       pressure_acc:'INDUSTRIAL',spectral_tension:'SPECTRAL',fragile_recon:'FRAGILE',
@@ -2105,7 +2105,7 @@ const ORCH={
     this.tickRecovery();
     this.crystallize(bar);
     this._updateUI();
-    // Notify MIX_INTEL when rhythm/pressure takes over — non-voice protagonists
+    // Notify MIX_INTEL when rhythm/pressure takes over -- non-voice protagonists
     if(typeof MIX_INTEL!=='undefined'){
       const p=this.protagonist;
       if(p==='pressure'||p==='fragmentation')MIX_INTEL.requestAttention('pressure',.55,'pressure');
@@ -2115,16 +2115,16 @@ const ORCH={
   },
 
   _updateUI(){
-    // Crystal label in state-out — appears after ~5min
+    // Crystal label in state-out -- appears after ~5min
     const el=document.getElementById('crystal-label');
     if(el){el.textContent=this.crystal.age>.2?this.crystal.label:'';el.style.opacity=Math.min(1,this.crystal.age*3).toString();}
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // MICRO-TEMPORAL METABOLISM
 // Override TEMPORAL.computeParams for short-form modes
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const MICRO={
   // Compression factors per duration (minutes)
   profiles:{
@@ -2150,25 +2150,25 @@ const MICRO={
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // CONSCIOUSNESS GOVERNANCE LAYER
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const GOVERNANCE={
   // 0 = full PERFORMER, 1 = full AUTONOMOUS
   autonomy:.3,
   autoAutonomyCap:.75, // cap applied by performance mode
-  // Gesture pressure queue — macros inject here, not directly
+  // Gesture pressure queue -- macros inject here, not directly
   pressureQ:{break:0,fill:0,void:0,ghost:0,chaos:0,morph:0},
   // Metabolism speed (how fast organism digests injected pressure)
   metabolismRate:.04,
-  // Ecological resistance — how much organism resists performer over-use
+  // Ecological resistance -- how much organism resists performer over-use
   resistance:0,
   // Last interaction tracking for absence detection
   lastInteraction:Date.now(),
-  absenceDecayRate:.0003, // per frame — how fast performer influence recovers
+  absenceDecayRate:.0003, // per frame -- how fast performer influence recovers
   _absencePhase:0,        // 0 = performer present, 1 = organism fully reclaimed
 
-  // Refractory window — prevents instant opposite-state inversion
+  // Refractory window -- prevents instant opposite-state inversion
   refractoryWindow:0,       // bars remaining
   _lastGestureType:null,
   _gestureMemory:[],        // [{type,ts}] circular, last 4
@@ -2222,30 +2222,30 @@ const GOVERNANCE={
     // Refractory window countdown (per bar)
     if(this.refractoryWindow>0)this.refractoryWindow--;
 
-    // ── AUTONOMOUS EVOLUTION — always running, even during performance ──
+    // -- AUTONOMOUS EVOLUTION -- always running, even during performance --
     // This is the organism's internal life. It never stops.
     const auto=this.autonomy;
     this.resistance=Math.max(0,this.resistance-this.metabolismRate*.5);
 
-    // Autonomous weather drift — scaled by autonomy AND temporal params
+    // Autonomous weather drift -- scaled by autonomy AND temporal params
     const autoWeatherP=(auto*.003)+(TEMPORAL._params.noveltySpikeP||.02)*.3;
     if(Math.random()<autoWeatherP&&auto>.2){
       const emo=EMO.dominant;
       const weatherPref=emo==='contemplate'?['FOG','VOID']:emo==='cognitive_erosion'?['STORM','STATIC']:emo==='ritual_hypnosis'?['FOG','CLEAR']:emo==='pressure_acc'?['SUB_PRESSURE']:['CLEAR','FOG'];
       WEATHER.set(weatherPref[Math.floor(Math.random()*weatherPref.length)]);
     }
-    // Autonomous phase advance — organisms advances narrative on its own schedule
+    // Autonomous phase advance -- organisms advances narrative on its own schedule
     if(auto>.15&&PE.auto===false&&Math.random()<auto*.0012*(TEMPORAL._params.phaseMult||1)*.2){
       if(barCount%8===0)PE.advance();
     }
-    // Autonomous DNA morph nudge — very slow genetic drift
+    // Autonomous DNA morph nudge -- very slow genetic drift
     if(auto>.3&&Math.random()<auto*.0015)DNA.startMorph();
 
-    // ── PERFORMER ABSENCE — SEPARATE, MUCH SLOWER ──
+    // -- PERFORMER ABSENCE -- SEPARATE, MUCH SLOWER --
     // Only triggers after duration-scaled threshold. Observing ≠ abandoning.
     const absenceMs=TEMPORAL._params.absenceThresholdMs||480000;
     if(now-this.lastInteraction>absenceMs){
-      // Very slow reclamation — organism was already evolving, it just becomes more explicit
+      // Very slow reclamation -- organism was already evolving, it just becomes more explicit
       this._absencePhase=Math.min(1,this._absencePhase+.00008);
     } else {
       // Slow decay when performer re-engages
@@ -2256,7 +2256,7 @@ const GOVERNANCE={
       if(Math.random()<this._absencePhase*.002&&barCount%32===0)PE.advance();
     }
 
-    // ── METABOLIZE GESTURE PRESSURE ──
+    // -- METABOLIZE GESTURE PRESSURE --
     Object.keys(this.pressureQ).forEach(k=>{
       const p=this.pressureQ[k];if(p<.01)return;
       this._applyPressure(k,p);
@@ -2291,9 +2291,9 @@ const GOVERNANCE={
   clearModes(){G.breakMode=false;G.fillMode=false;G.voidMode=false;G.ghostForceMode=false;G.chaosMode=false;Object.keys(this.pressureQ).forEach(k=>this.pressureQ[k]=0);}
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // PERFORMER INTENTION ENGINE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const INTENTION={
   counts:{break:0,fill:0,void:0,ghost:0,chaos:0,morph:0},
   _window:[], // rolling 32-gesture window
@@ -2312,9 +2312,9 @@ const INTENTION={
   get label(){return this.VECTOR_LABELS[this.dominant]||'';}
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // EMOTIONAL ARC ENGINE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const EMO={
   s:{contemplate:.0,pressure_acc:.0,ritual_hypnosis:.0,cognitive_erosion:.0,fragile_recon:.0,spectral_tension:.0},
   dominant:'ritual_hypnosis',dominantLevel:0,
@@ -2339,9 +2339,9 @@ const EMO={
   get label(){return this.LABELS[this.dominant]||'RITUAL HYPNOSIS';}
 };
 
-// ══════════════════════════════════════════════════════════
-// CIRCADIAN DRIFT — Session darkening
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// CIRCADIAN DRIFT -- Session darkening
+// ==========================================================
 const CIRCADIAN={
   phase:0,sessionStart:0,
   DURATIONS:{SHORT:600,IMMERSION:1200,DEEP:2700,INST:7200},
@@ -2359,9 +2359,9 @@ const CIRCADIAN={
   get darkness(){return this.phase;}
 };
 
-// ══════════════════════════════════════════════════════════
-// SESSION IDENTITY — Persistent fingerprint
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// SESSION IDENTITY -- Persistent fingerprint
+// ==========================================================
 const SESSION_ID={
   id:null,dominantWeather:{},emoArc:[],collapseFingerprint:[],startTime:0,
   init(){this.id=Date.now().toString(36).toUpperCase();this.dominantWeather={};this.emoArc=[];this.collapseFingerprint=[];this.startTime=Date.now();},
@@ -2372,14 +2372,14 @@ const SESSION_ID={
   export(){return{sessionId:this.id,durationSec:Math.round((Date.now()-this.startTime)/1000),dominantWeather:this.dominantW,emoArc:this.emoArc,collapseFingerprint:this.collapseFingerprint,dnaBlend:Array.from(DNA.weights).map((w,i)=>({pack:PACKS[i].short,w:Math.round(w*100)})),circadianPhase:Math.round(CIRCADIAN.phase*100),traumaLevel:Math.round(BIO.traumaLevel*100),profile:Object.keys(PROFILES).find(k=>PROFILES[k]===activeProfile)||'IMMERSION'};}
 };
 
-// ══════════════════════════════════════════════════════════
-// AUDIO FOSSILS — Ultra-light persistent residues
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// AUDIO FOSSILS -- Ultra-light persistent residues
+// ==========================================================
 const FOSSILS={
   pool:[],MAX:3,visuals:[],
   spawn(freq,vol,lifeS){
     if(!ac||this.pool.length>=this.MAX)return;
-    // Scale fossil life by BPM neurodynamics — low BPM = much longer persistence
+    // Scale fossil life by BPM neurodynamics -- low BPM = much longer persistence
     const scale=typeof BPMSTATE!=='undefined'?(this._bpmLifeScale||BPMSTATE.decayScale):1.0;
     const scaledLife=Math.min(lifeS*scale,180); // cap at 3min for node safety
     try{
@@ -2403,9 +2403,9 @@ const FOSSILS={
   stopAll(){this.pool.forEach(f=>{try{f.osc.stop();}catch(e){}});this.pool=[];this.visuals=[];}
 };
 
-// ══════════════════════════════════════════════════════════
-// ECOLOGY COMPILER — Session preparation UI
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// ECOLOGY COMPILER -- Session preparation UI
+// ==========================================================
 const ECOLOGY_COMPILER={
   done:false,
   emotionalBias(dna){
@@ -2431,7 +2431,7 @@ const ECOLOGY_COMPILER={
       setTimeout(()=>{init.classList.add('active');init.style.color='#00ffff';},1050);
       init.addEventListener('click',doCompile,{once:true});
     }
-    // Auto-fire after progress bar completes — no tap needed
+    // Auto-fire after progress bar completes -- no tap needed
     setTimeout(doCompile,1700);
   },
   compile(){
@@ -2448,9 +2448,9 @@ const ECOLOGY_COMPILER={
   }
 };
 
-// ══════════════════════════════════════════════════════════
-// VOXRITUAL — Ecological Voice Identity Engine
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// VOXRITUAL -- Ecological Voice Identity Engine
+// ==========================================================
 const VOXRITUAL={
   active:false,micStream:null,micSource:null,
   // Permanent processing chain (6 nodes, initialized once)
@@ -2529,7 +2529,7 @@ const VOXRITUAL={
     this.C.desyncWet.gain.setTargetAtTime(id.mix,t,0.5);
     this.C.desyncDry.gain.setTargetAtTime(1-(id.mix*.65),t,0.5);
     this.C.input.gain.setTargetAtTime(id.gain*(0.88+G.c.energy*.24),t,0.3);
-    // Stutter gate — ecological rate modulation
+    // Stutter gate -- ecological rate modulation
     if(id.stutter>0&&id.sRate>0){
       this.stutterPhase+=id.sRate*.008*(1+G.c.tension*.5+INFECT.totalInfection*.3);
       const gate=Math.sin(this.stutterPhase)>(1-id.stutter*2)?1.0:id.stutter*.28;
@@ -2547,7 +2547,7 @@ const VOXRITUAL={
       btn.textContent=this.active?(this.IDENTITIES[this.state]?.label||'ACTIVE'):'MIC';
     }
     const status=document.getElementById('voxdna-status');
-    if(status)status.textContent=this.active?'VOXRITUAL — ACTIVE':'VOXRITUAL — IDLE';
+    if(status)status.textContent=this.active?'VOXRITUAL -- ACTIVE':'VOXRITUAL -- IDLE';
     // Identity display build
     const idDisp=document.getElementById('vox-identity-display');
     if(!idDisp)return;
@@ -2559,7 +2559,7 @@ const VOXRITUAL={
       if(nm){nm.style.color=isCur?'rgba(255,255,255,.82)':isPrev?'rgba(255,255,255,.3)':'rgba(255,255,255,.16)';}
       if(ac2){ac2.textContent=isCur?'◎':isPrev?'·':'';}
     });
-    // Param bar — shows delay mix as activity
+    // Param bar -- shows delay mix as activity
     const pf=document.getElementById('vox-param-fill');
     if(pf)pf.style.width=this.active?Math.round(this.IDENTITIES[this.state].mix*100)+'%':'0%';
     // Eco label
@@ -2568,9 +2568,9 @@ const VOXRITUAL={
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // BIOLOGICAL COLLAPSE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const BIO={
   collapsing:false,collapseT:0,collapseDur:0,collapseOrg:null,
   recovering:false,recoveryT:0,recoveryDur:0,
@@ -2586,9 +2586,9 @@ const BIO={
 };
 function flashCollapse(){const el=document.getElementById('collapse-flash');if(!el)return;el.style.opacity='1';setTimeout(()=>{el.style.transition='opacity 1.2s';el.style.opacity='0';setTimeout(()=>{el.style.transition='';},1400);},55);}
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SPATIAL
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const SPATIAL={
   positions:{kick:{pan:0,depth:.2,vel:{pan:.0,depth:.0}},snare:{pan:0,depth:.3,vel:{pan:.0,depth:.0}},hat:{pan:0,depth:.5,vel:{pan:.02,depth:.0}},pressure:{pan:0,depth:.1,vel:{pan:.0,depth:.0}},texture:{pan:0,depth:.6,vel:{pan:.03,depth:.01}},poly:{pan:0,depth:.7,vel:{pan:-.02,depth:.0}},ghost:{pan:0,depth:.9,vel:{pan:.04,depth:.02}}},
   activity:0,
@@ -2596,9 +2596,9 @@ const SPATIAL={
   drawMap(cv,cx){const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);cx.fillStyle='rgba(0,0,0,.3)';cx.fillRect(0,0,W,H);cx.strokeStyle='rgba(153,68,255,.12)';cx.lineWidth=.5;cx.beginPath();cx.moveTo(W/2,0);cx.lineTo(W/2,H);cx.stroke();[{t:'kick',c:'#ff00ff'},{t:'snare',c:'#00ffff'},{t:'hat',c:'#ffaa00'},{t:'pressure',c:'#4444ff'},{t:'texture',c:'#44ff88'},{t:'poly',c:'#ff44aa'},{t:'ghost',c:'#ffffff'}].forEach(d=>{const pos=this.positions[d.t];if(!pos)return;cx.beginPath();cx.arc(((pos.pan+1)/2)*W,(1-pos.depth)*H,2.2,0,Math.PI*2);cx.fillStyle=d.c+'bb';cx.fill();});}
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // PHASES
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const PHASES=[
   {name:'EMERGENCE',     dur:45, e:.30,t:.16,d:.28,m:.40,si:.18,weather:'CLEAR'},
   {name:'STABILIZATION', dur:65, e:.52,t:.26,d:.52,m:.16,si:.07,weather:'CLEAR'},
@@ -2620,11 +2620,11 @@ const PE={
   tick(){if(!this.auto||!ac)return;if(ac.currentTime-this.startAC>=this.cur.dur*activeProfile.phaseMult)this.advance();const p=this.cur,s=.004;G.energy+=(p.e-G.energy)*s;G.tension+=(p.t-G.tension)*s;G.density+=(p.d-G.density)*s;G.mut+=(p.m-G.mut)*s;G.silenceInertia+=(p.si-G.silenceInertia)*s;throttleSliderUpdate();}
 };
 
-// ══════════════════════════════════════════════════════════
-// AUDIO CONTEXT — PERMANENT BUS ARCHITECTURE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// AUDIO CONTEXT -- PERMANENT BUS ARCHITECTURE
+// ==========================================================
 let ac=null,masterGain,comp,noiseBuf;
-// Permanent organism buses — fixed graph, no dynamic allocation
+// Permanent organism buses -- fixed graph, no dynamic allocation
 const BUS={
   kick:null,snare:null,hat:null,pressure:null,texture:null,ghost:null,drone:null,
   init(){
@@ -2647,13 +2647,13 @@ const BUS={
     VOXRITUAL.initChain();
   },
   updatePanners(){
-    // Spatial pan positions only — gain levels are set by ORCH.applyBusGains
+    // Spatial pan positions only -- gain levels are set by ORCH.applyBusGains
     ['kick','snare','hat','pressure','texture','ghost'].forEach(t=>{
       if(!this[t]||!this[t].panner)return;
       const pos=SPATIAL.positions[t];if(!pos)return;
       this[t].panner.pan.setTargetAtTime(pos.pan*DNA.active.spatialSpread,ac.currentTime,.3);
     });
-    // ORCH handles gain — we only override ghost/drone depth here if ORCH has no protagonist
+    // ORCH handles gain -- we only override ghost/drone depth here if ORCH has no protagonist
     if(!ORCH||!ORCH.protagonist){
       if(this.ghost)this.ghost.gain.gain.setTargetAtTime(G.immersiveMode?.12+Math.random()*.06:.32+Math.random()*.12,ac.currentTime,.3);
     }
@@ -2663,22 +2663,22 @@ const BUS={
 };
 
 let isPlaying=false,bpm=120;
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SAMPLE ACTIVATION LAYER
 // 3 states per slot: EMPTY → QUEUED → ACTIVE
 // Forge DNA = synthesis parameters (always active)
 // Audio samples = loaded separately, override synth when active
 // VoxRitual fragments = voice slots, bound to audio files by name
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const SAL={
   // Sample priority: 'synth' | 'mixed' | 'sample'
-  // SAMPLE is default — synth acts as fallback/glue when no sample loaded
+  // SAMPLE is default -- synth acts as fallback/glue when no sample loaded
   priorityMode:'sample',
   voxSolo:false,
   // Last audio event for debug monitor
-  lastEvent:'—',
+  lastEvent:'--',
   _lastEventT:0,
-  // Synthesis routing state — explicit, never ambiguous
+  // Synthesis routing state -- explicit, never ambiguous
   routes:{
     kick:   {mode:'synth',buffer:null,state:'EMPTY',compGain:1},  // EMPTY|QUEUED|ACTIVE
     snare:  {mode:'synth',buffer:null,state:'EMPTY',compGain:1},
@@ -2691,7 +2691,7 @@ const SAL={
 
   markEvent(label){this.lastEvent=label;this._lastEventT=Date.now();},
 
-  // RMS/peak normalization — brings every buffer to consistent loudness
+  // RMS/peak normalization -- brings every buffer to consistent loudness
   normalizeBuffer(buffer){
     if(!buffer)return 1;
     let peak=0,sumSq=0,n=0;
@@ -2733,7 +2733,7 @@ const SAL={
     this._updateVoxUI();
   },
 
-  // Load audio file into a slot — iOS canonical pattern
+  // Load audio file into a slot -- iOS canonical pattern
   loadSlot(role,file,onDone){
     if(!ac)return;
     const slot=this.routes[role];if(!slot)return;
@@ -2754,7 +2754,7 @@ const SAL={
     reader.readAsArrayBuffer(file);
   },
 
-  // ── AUDIO RESOLUTION LAYER ──
+  // -- AUDIO RESOLUTION LAYER --
   // entities: {id, name, audio, buffer, ready, failed, state}
   entities:{},
 
@@ -2765,7 +2765,7 @@ const SAL={
     try{
       // iOS Safari: AC must be running before decodeAudioData
       if(ac&&ac.state!=='running')await ac.resume();
-      // FileReader + slice(0) — canonical iOS pattern
+      // FileReader + slice(0) -- canonical iOS pattern
       const buf=await new Promise((res,rej)=>{
         const reader=new FileReader();
         reader.onload=ev=>{
@@ -2808,7 +2808,7 @@ const SAL={
       const ftype=s.fragmentIdentity?.type||s.entityType||s.type||'fragment';
       if(!this.voxSlots[id])
         this.voxSlots[id]={state:'EMPTY',buffer:null,ready:false,failed:false,name,fragType:ftype,audio:s.audio,duration:s.duration||0};
-      // Auto-decode if audioData (base64) is embedded — no BIND required
+      // Auto-decode if audioData (base64) is embedded -- no BIND required
       if(s.audioData&&this.voxSlots[id].state==='EMPTY'){
         this.voxSlots[id].state='QUEUED';
         this._decodeDataURL(id,s.audioData,s.duration);
@@ -2855,7 +2855,7 @@ const SAL={
     }
   },
 
-  // Call this after AC.resume() — flushes any slots that were imported before AC existed
+  // Call this after AC.resume() -- flushes any slots that were imported before AC existed
   async retryPending(){
     const ids=Object.keys(this._pendingDecodes);
     if(ids.length===0)return;
@@ -2870,7 +2870,7 @@ const SAL={
     this._autoArm();
   },
 
-  // AUTO ARM — called after any decode completes or pack registers
+  // AUTO ARM -- called after any decode completes or pack registers
   // Automatically sets SAMPLE priority and notifies SYS when buffers are ready
   _autoArm(){
     if(this.voxReady===0)return;
@@ -2893,14 +2893,14 @@ const SAL={
   get voxReady(){return Object.values(this.voxSlots).filter(s=>s.state==='ACTIVE').length;},
   get voxTotal(){return Object.keys(this.voxSlots).length;},
 
-  // Clear a slot — back to synth
+  // Clear a slot -- back to synth
   clearSlot(role){
     const slot=this.routes[role];if(!slot)return;
     slot.buffer=null;slot.mode='synth';slot.state='EMPTY';
     this._updateUI(role);
   },
 
-  // Get buffer for a role — null means use synth.
+  // Get buffer for a role -- null means use synth.
   // In 'synth' mode always returns null (ignore samples).
   get(role){
     if(this.priorityMode==='synth')return null;
@@ -2932,7 +2932,7 @@ const SAL={
         }
       });
     }else{
-      // synth or mixed — restore via ORCH
+      // synth or mixed -- restore via ORCH
       if(window.ORCH)ORCH.applyBusGains();
     }
   },
@@ -2954,12 +2954,12 @@ const SAL={
     const statusEl=document.getElementById('voxdna-status');
     if(statusEl){
       const allReady=ready===total&&total>0;
-      statusEl.textContent=total>0?`VOXDNA — ${ready}/${total} READY`:'VOXRITUAL — IDLE';
+      statusEl.textContent=total>0?`VOXDNA -- ${ready}/${total} READY`:'VOXRITUAL -- IDLE';
       statusEl.style.color=allReady?'rgba(0,255,200,.8)':ready>0?'rgba(255,180,0,.7)':'rgba(0,255,180,.4)';
     }
     el.innerHTML='';
     if(total>0){
-      // BIND ALL button — pick multiple files, auto-match by filename
+      // BIND ALL button -- pick multiple files, auto-match by filename
       const bindAll=document.createElement('button');
       bindAll.style.cssText='width:100%;font-size:8px;font-family:JetBrains Mono,monospace;padding:4px;border:1px solid rgba(0,255,180,.25);background:rgba(0,255,180,.05);color:rgba(0,255,180,.6);border-radius:3px;cursor:pointer;margin-bottom:4px;-webkit-tap-highlight-color:transparent;letter-spacing:.08em';
       bindAll.textContent=ready===total?`ALL BOUND (${total}/${total})`:`BIND ALL AUDIO (${ready}/${total} done)`;
@@ -2983,7 +2983,7 @@ const SAL={
             });
             if(matchId){bound++;await this.bindAndDecode(matchId,file);}
           }
-          if(bound===0)showToast('NO MATCHES FOUND — CHECK FILENAMES');
+          if(bound===0)showToast('NO MATCHES FOUND -- CHECK FILENAMES');
           else showToast(`BOUND ${bound}/${files.length} FILES`);
         };
         inp.click();
@@ -3021,7 +3021,7 @@ const SAL={
   allActive(){return Object.values(this.routes).every(s=>s.state==='ACTIVE');},
   anyActive(){return Object.values(this.routes).some(s=>s.state==='ACTIVE');},
 };
-// Legacy alias — existing code uses sampleBank.kick etc.
+// Legacy alias -- existing code uses sampleBank.kick etc.
 const sampleBank={
   get kick(){return SAL.get('kick');},
   get snare(){return SAL.get('snare');},
@@ -3029,21 +3029,21 @@ const sampleBank={
   get bass(){return SAL.get('bass');},
   get texture(){return SAL.get('texture');},
 };
-// ══════════════════════════════════════════════════════════
-// CONDUCTOR ENGINE — Event intent layer
+// ==========================================================
+// CONDUCTOR ENGINE -- Event intent layer
 // Decides WHAT events happen and WHEN. Never handles audio.
 // Reads ecology → produces EventIntent → Material executes.
-// ══════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════
-// TENSION ENGINE — explicit tension curve management
+// ==========================================================
+// ==========================================================
+// TENSION ENGINE -- explicit tension curve management
 // The CONDUCTOR knows it is building toward something.
 // Separates "what is happening" from "where are we going".
-// ══════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════
-// TEMPO CURVE — BPM tied to narrative arc, not free-float
+// ==========================================================
+// ==========================================================
+// TEMPO CURVE -- BPM tied to narrative arc, not free-float
 // Performer controls tempoOffset (±20 BPM), not absolute BPM.
 // The system owns the tempo intention; performer modulates it.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const TEMPO_CURVE={
   // Target BPM per VOX_ARC phase (can be overridden by behavioral profile)
   phaseBPM:{
@@ -3054,7 +3054,7 @@ const TEMPO_CURVE={
   },
   // Performer offset: ±20 BPM, centered at 0
   performerOffset:0,   // set by UI slider or gesture
-  // Smooth ramp — never jump BPM directly (causes audio glitch)
+  // Smooth ramp -- never jump BPM directly (causes audio glitch)
   _targetBPM:120,
   _currentBPM:120,
   _rampRate:.4,        // BPM per tick (0.4 = ~6s to move 15 BPM)
@@ -3096,8 +3096,8 @@ const TEMPO_CURVE={
 
   // Phase BPM targets are readable from UI
   phaseLabel(){
-    if(!this.active)return '—';
-    const phase=typeof VOX_ARC!=='undefined'?VOX_ARC._phaseName[VOX_ARC.phase]:'—';
+    if(!this.active)return '--';
+    const phase=typeof VOX_ARC!=='undefined'?VOX_ARC._phaseName[VOX_ARC.phase]:'--';
     return phase+' → '+this._targetBPM+'bpm';
   },
 };
@@ -3147,7 +3147,7 @@ const TENSION_ENGINE={
     if(tg>.7){this.value=Math.min(this.value,1-tg*.5);this.mode='releasing';}
   },
 
-  // CONDUCTOR calls this — should new rhythmic events fire?
+  // CONDUCTOR calls this -- should new rhythmic events fire?
   allowEvent(weight){
     if(this.mode==='silence'&&this._silenceWindow>0){
       // During planned silence: only very light events (<.25 weight) at low prob
@@ -3168,11 +3168,11 @@ const TENSION_ENGINE={
   isSilence(){return this.mode==='silence'&&this._silenceWindow>0;},
 };
 
-// ══════════════════════════════════════════════════════════
-// VOX NARRATIVE ARC — sequential entity emergence
+// ==========================================================
+// VOX NARRATIVE ARC -- sequential entity emergence
 // Voices follow a narrative progression tied to session lifecycle.
-// Not a rigid script — a probabilistic narrative tendency.
-// ══════════════════════════════════════════════════════════
+// Not a rigid script -- a probabilistic narrative tendency.
+// ==========================================================
 const VOX_ARC={
   phase:0, // 0=opening 1=development 2=climax 3=memory
   _phaseName:['OPENING','DEVELOPMENT','CLIMAX','MEMORY'],
@@ -3212,13 +3212,13 @@ const VOX_ARC={
   },
 };
 
-// ══════════════════════════════════════════════════════════
-// SILENCE ARCH — architectural silence manager
-// Silence is not absence — it is accumulated structure.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// SILENCE ARCH -- architectural silence manager
+// Silence is not absence -- it is accumulated structure.
+// ==========================================================
 const SILENCE_ARCH={
   active:false,
-  _depth:0,      // 0..1 — how deep the silence is
+  _depth:0,      // 0..1 -- how deep the silence is
   _remainBars:0,
 
   // Called by TENSION_ENGINE when silence window starts
@@ -3257,7 +3257,7 @@ const SILENCE_ARCH={
 };
 
 const CONDUCTOR={
-  // Current step intent — built once per step, consumed by schedStep/Material
+  // Current step intent -- built once per step, consumed by schedStep/Material
   intent:{
     kick:false,   kickVel:0,   kickProfile:'default',
     snare:false,  snareVel:0,
@@ -3280,23 +3280,23 @@ const CONDUCTOR={
 
     if(muteMode||breakMode||bioCollapsed)return i;
     const bm=breathMod||1;
-    // Tension engine gates density — silence windows suppress most events
+    // Tension engine gates density -- silence windows suppress most events
     const tenAllow=(t)=>TENSION_ENGINE.allowEvent(t)*TENSION_ENGINE.densityMod();
 
-    // ── Kick intent ──
+    // -- Kick intent --
     if(!fillMode&&pattern.kick[step]>0&&!silenced('kick')&&!packetLoss&&densityGate&&!pressureVacuum
        &&TENSION_ENGINE.allowEvent(.6)){
       i.kick=true;
       i.kickVel=pattern.kick[step]*(0.58+energy*.42)*bm*(bioRecovering?.62:1)*TENSION_ENGINE.densityMod();
       i.kickProfile=BEHAVIORAL_PROFILES.kickProfile(protagonist,mass,ikeda);
     }
-    // ── Snare intent ──
+    // -- Snare intent --
     if(pattern.snare[step]>0&&!silenced('snare')&&!packetLoss&&!pressureVacuum
        &&TENSION_ENGINE.allowEvent(.55)){
       i.snare=true;
       i.snareVel=pattern.snare[step]*(0.53+energy*.47)*bm*(bioRecovering?.68:1)*TENSION_ENGINE.densityMod();
     }
-    // ── Hat intent — binary in IKEDA, groove in organic ──
+    // -- Hat intent -- binary in IKEDA, groove in organic --
     const hatGate=ikeda?(pattern.hat[step]>0&&Math.random()>(0.08+silence*.15)):pattern.hat[step]>0;
     if(hatGate&&!silenced('hat')){
       i.hat=true;
@@ -3325,24 +3325,24 @@ const CONDUCTOR={
   },
 };
 
-// ══════════════════════════════════════════════════════════
-// BEHAVIORAL PROFILES — Ecosystem-level behavior definitions
+// ==========================================================
+// BEHAVIORAL PROFILES -- Ecosystem-level behavior definitions
 // Not presets. Each profile reshapes Conductor + Material + VOX
 // simultaneously. Inspired by signal art references.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const BEHAVIORAL_PROFILES={
-  // Active profile — composites of reference aesthetics
+  // Active profile -- composites of reference aesthetics
   // IKEDA | TOBIN | BRETSCHNEIDER | NICOLAI | ORGANIC
   active: 'ORGANIC',
 
   PROFILES:{
     ORGANIC:{
-      // Current default behavior — ecological + expressive
+      // Current default behavior -- ecological + expressive
       kickProfile:   'organic',
       densityBias:   .75,
       packetLossBase:.04,
       swingEnabled:  true,
-      humanizeScale: .4, // reduced — less human drummer feel
+      humanizeScale: .4, // reduced -- less human drummer feel
       silenceWeight: .6,   // how much silence tension builds
       voxPresence:   .9,   // VOX_ENTITY emergence multiplier
       debrisDensity: .3,
@@ -3455,9 +3455,9 @@ const BEHAVIORAL_PROFILES={
 
 const BASS_ROOT_HZ=110;
 
-// ══════════════════════════════════════════════════════════
-// RHYTHM DNA — Signal Ecology Architecture
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// RHYTHM DNA -- Signal Ecology Architecture
+// ==========================================================
 const RHYTHM_DNA={
   // ORGANIC | HYBRID | DIGITALIST | IKEDA
   mode:'ORGANIC',
@@ -3493,16 +3493,16 @@ const RHYTHM_DNA={
   },
 };
 
-// ── PRESSURE BUS ACCUMULATOR ────────────────────────────────────────────
-// Simulates a dedicated mono sub-pressure path — no new WebAudio nodes.
+// -- PRESSURE BUS ACCUMULATOR --------------------------------------------
+// Simulates a dedicated mono sub-pressure path -- no new WebAudio nodes.
 // Controls masterGain transient boosts and tracks accumulated energy.
-// ══════════════════════════════════════════════════════════
-// SPUKPACK v2 — Unified Pack Container + Live Memory System
+// ==========================================================
+// SPUKPACK v2 -- Unified Pack Container + Live Memory System
 // One JSON ingests everything: rhythm DNA, vox entities,
 // ecology biases, rituals, weather affinity, live macros.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 
-// ── SpukPack v2 Schema validator + normalizer ─────────────
+// -- SpukPack v2 Schema validator + normalizer -------------
 const SPUKPACK={
   version:'spukpack_v2',
 
@@ -3601,7 +3601,7 @@ const SPUKPACK={
   },
 };
 
-// ── PACK_MEM — 3-layer live memory architecture ───────────
+// -- PACK_MEM -- 3-layer live memory architecture -----------
 // HOT: fully loaded in AudioBuffers (current pack, immediate)
 // WARM: metadata + pending decode (next 1-2 packs)
 // COLD: metadata only (rest of bank)
@@ -3722,11 +3722,11 @@ const PACK_MEM={
   getHot(){return this.bank.filter(e=>e.state==='HOT').map(e=>e.pack);},
 };
 
-// ══════════════════════════════════════════════════════════
-// SPUK_STATE_BUS — Clean ecological state export
+// ==========================================================
+// SPUK_STATE_BUS -- Clean ecological state export
 // Future visual bridge. No rendering logic here.
 // Updated every frame. Exposed as window.SPUK_STATE_BUS.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const SPUK_STATE_BUS={
   protagonist:null, protagonistStrength:0,
   lifecycle:0,      terminalGravity:0,
@@ -3800,9 +3800,9 @@ const PRESSURE_ACC={
   },
 };
 
-// Signal ecology — silence carries structural tension
+// Signal ecology -- silence carries structural tension
 const SIGNAL_ECOLOGY={
-  silenceTension:0,   // 0..1 — rises with silence, drops with events
+  silenceTension:0,   // 0..1 -- rises with silence, drops with events
   _lastEvent:0,
   tick(deltaBarSec){
     const silW=typeof BEHAVIORAL_PROFILES!=='undefined'?BEHAVIORAL_PROFILES.cfg.silenceWeight:1;
@@ -3818,7 +3818,7 @@ const SIGNAL_ECOLOGY={
   densityBias(){return RHYTHM_DNA.isIkeda()?Math.max(0,1-this.silenceTension*.8):.7+Math.random()*.3;},
 };
 
-// Signal burst — hyper-dense cluster → mandatory silence
+// Signal burst -- hyper-dense cluster → mandatory silence
 const SIGNAL_BURST={
   active:false,
   density:0,
@@ -3861,11 +3861,11 @@ function initAC(){
   BOOT.trace('BUS init done AC:'+ac.state);
   SYS._onACReady();
 }
-// ── SYS — System Ready State Manager ──────────────────────────────────────
+// -- SYS -- System Ready State Manager --------------------------------------
 // PLAY is safe only when all critical subsystems are ready.
 const SYS={
   state:'BOOTING',
-  // Deterministic boot phase — one-way progression
+  // Deterministic boot phase -- one-way progression
   bootPhase:'IDLE', // IDLE→AC_READY→DNA_READY→VOX_READY→INITIALIZED→RUNNING
   pendingDecodeCount:0,
   _initPending:false,
@@ -3898,7 +3898,7 @@ const SYS={
     this.pendingDecodeCount=Math.max(0,this.pendingDecodeCount-1);
     if(this.pendingDecodeCount===0&&this._initPending){
       this._initPending=false;
-      if(this.bootPhase!=='RUNNING')showToast('DECODING COMPLETE — READY');
+      if(this.bootPhase!=='RUNNING')showToast('DECODING COMPLETE -- READY');
     }
     this.onVoxReady();
     this._updateUI();
@@ -3963,14 +3963,14 @@ const SYS={
       showToast('HYBRID MODE');
     }
   },};
-// ── VOX ECOLOGY ENGINE ────────────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════
-// MIX INTELLIGENCE LAYER — Perceptual Traffic Control
+// -- VOX ECOLOGY ENGINE ----------------------------------------------------
+// ==========================================================
+// MIX INTELLIGENCE LAYER -- Perceptual Traffic Control
 // The explicit attention director. Single source of truth for
 // what deserves focus RIGHT NOW.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const MIX_INTEL={
-  // Current attention focus — the "director's gaze"
+  // Current attention focus -- the "director's gaze"
   attention:'rhythm',  // rhythm|pressure|voice|silence|ambient
   _prevAttention:'rhythm',
   _attentionAge:0,     // bars holding current attention
@@ -3983,7 +3983,7 @@ const MIX_INTEL={
     const priority={command:1.0,ritual:.9,silence:.85,ghost:.7,fragment:.6,
                     rhythm:.5,pressure:.5,noise:.4,pulse:.4,ambient:.3};
     const p=priority[type]||priority[entity]||.5;
-    // Only grant if weight × priority beats current attention level
+    // Only grant if weight x priority beats current attention level
     const threshold=this._attentionAge<3?.6:.35; // fresh attention is sticky
     if(p*w>threshold||this.attention==='ambient'){
       this._grant(entity,type);return true;
@@ -4017,7 +4017,7 @@ const MIX_INTEL={
     }
   },
 
-  // Apply bus treatment for each attention state — the actual director action
+  // Apply bus treatment for each attention state -- the actual director action
   _applyTreatment(state){
     if(!ac||!window.BUS||window.FOCUS?.active)return;
     const t=ac.currentTime;
@@ -4054,7 +4054,7 @@ const MIX_INTEL={
     return true; // rhythm/pressure/ambient: permissive
   },
 
-  // Called by FOCUS when a real VOX fires — elevates attention
+  // Called by FOCUS when a real VOX fires -- elevates attention
   onVoxFired(voxType){
     const typeToAttention={command:'command',ritual:'ritual',fragment:'fragment',
       ghost:'voice',noise:'voice',pulse:'fragment',subconscious:'ambient'};
@@ -4062,15 +4062,15 @@ const MIX_INTEL={
   },
 };
 
-// ══════════════════════════════════════════════════════════
-// VOX ENTITY ENGINE — 6 typed voice behaviors
+// ==========================================================
+// VOX ENTITY ENGINE -- 6 typed voice behaviors
 // Each type has: timing logic, mix treatment, probability rules,
 // unique behavior. Built on top of VOXDNA/SAL, not replacing them.
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const VOX_ENTITY={
   // Entity type definitions
   TYPES:{
-    // 1. Ghost Vox — subconscious, distant, spectral, low priority
+    // 1. Ghost Vox -- subconscious, distant, spectral, low priority
     ghost:{
       label:'GHOST',
       minIntervalSec:12,
@@ -4084,10 +4084,10 @@ const VOX_ENTITY={
       focusEntity:'ghost',
       _lastFired:0,
     },
-    // 2. Command Vox — dominant, foreground, full perceptual priority
+    // 2. Command Vox -- dominant, foreground, full perceptual priority
     command:{
       label:'CMD',
-      minIntervalSec:45,  // rare — carries structural weight
+      minIntervalSec:45,  // rare -- carries structural weight
       gainMult:1.15,
       pan:()=>0,           // center always
       playbackRate:()=>1,
@@ -4098,10 +4098,10 @@ const VOX_ENTITY={
       focusEntity:'narrative',
       _lastFired:0,
     },
-    // 3. Fragment Vox — rhythmic micro-cuts, synced to beat grid
+    // 3. Fragment Vox -- rhythmic micro-cuts, synced to beat grid
     fragment:{
       label:'FRAG',
-      minIntervalSec:3,        // frequent — rhythmic integration
+      minIntervalSec:3,        // frequent -- rhythmic integration
       gainMult:.72,
       pan:()=>(Math.random()-.5)*.55,
       playbackRate:()=>.85+Math.random()*.5,  // pitch shifts
@@ -4121,10 +4121,10 @@ const VOX_ENTITY={
         return Math.random()<.5?0:step16-phase; // snap to next 16th or next 8th
       },
     },
-    // 4. Ritual Vox — recurring identity, symbolic presence, memory
+    // 4. Ritual Vox -- recurring identity, symbolic presence, memory
     ritual:{
       label:'RITUAL',
-      minIntervalSec:60,   // patient — comes back periodically
+      minIntervalSec:60,   // patient -- comes back periodically
       gainMult:.9,
       pan:()=>0,
       playbackRate:()=>1+(Math.random()-.5)*.04, // tiny drift
@@ -4136,7 +4136,7 @@ const VOX_ENTITY={
       _lastFired:0,
       _ritualMemory:[], // remembers its own history
     },
-    // 5. Noise Vox — industrial vocal texture, distorted fragments
+    // 5. Noise Vox -- industrial vocal texture, distorted fragments
     noise:{
       label:'NOISE',
       minIntervalSec:20,
@@ -4150,7 +4150,7 @@ const VOX_ENTITY={
       focusEntity:'ghost',
       _lastFired:0,
     },
-    // 6. Pulse Vox — percussive vocal impulses, rhythm-fused
+    // 6. Pulse Vox -- percussive vocal impulses, rhythm-fused
     pulse:{
       label:'PULSE',
       minIntervalSec:4,
@@ -4205,7 +4205,7 @@ const VOX_ENTITY={
     return 'ghost';
   },
 
-  // Fire an entity — picks fragment, requests attention, plays buffer
+  // Fire an entity -- picks fragment, requests attention, plays buffer
   fire(entityTypeName, fragment, slot, eco){
     const def=this.TYPES[entityTypeName];if(!def)return false;
     const now=Date.now()/1000;
@@ -4219,7 +4219,7 @@ const VOX_ENTITY={
     if(!MIX_INTEL.canFire(entityTypeName))return false;
     // Narrative arc: entity must be allowed in current session phase
     if(!VOX_ARC.allows(entityTypeName))return false;
-    // Phase weight: probabilistic gate (not absolute — preserves ecology feel)
+    // Phase weight: probabilistic gate (not absolute -- preserves ecology feel)
     const arcW=VOX_ARC.phaseWeight(entityTypeName);
     if(Math.random()>arcW+.25)return false; // +.25 so it's not too strict
     if(!slot?.ready||!slot.buffer)return false;
@@ -4229,7 +4229,7 @@ const VOX_ENTITY={
     const gain=def.gainMult*(slot.compGain||1)*(SAL.voxSolo?1.8:1);
     const pan=def.pan();
     const rate=typeof def.playbackRate==='function'?def.playbackRate():def.playbackRate||1;
-    // Fragment: rhythmic grid offset — snaps to next 16th note
+    // Fragment: rhythmic grid offset -- snaps to next 16th note
     const tOffset=(entityTypeName==='fragment'&&def.rhythmicOffset)?def.rhythmicOffset():0;
     const offset=def.grainOffset?def.grainOffset()*Math.max(0,slot.buffer.duration-.3):0;
     const rawDur=def.maxDur?(typeof def.maxDur==='function'?def.maxDur():def.maxDur):null;
@@ -4388,7 +4388,7 @@ const VOXECO={
     return this.cfg.subFireP*(salMode?1.4:1);
   },
 
-  // Apply intelligibility — reduce masking when VOICE leads or NARRATIVE mode
+  // Apply intelligibility -- reduce masking when VOICE leads or NARRATIVE mode
   applyIntelligibility(protagonist){
     const isVoice=this.mode==='NARRATIVE'||protagonist==='narrative'||protagonist==='ghost';
     this.speechFocus=isVoice;
@@ -4401,13 +4401,13 @@ const VOXECO={
     }
   },
 
-  lastFragment:'—',
-  lastPlayback:'—',
+  lastFragment:'--',
+  lastPlayback:'--',
   duckActive:false,
 };
 function mkNoise(){const n=ac.sampleRate*2,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;return b;}
 
-// ── SYNTHESIS — minimal nodes per event (source + envelope gain only, route to permanent bus) ──
+// -- SYNTHESIS -- minimal nodes per event (source + envelope gain only, route to permanent bus) --
 function playSample(buf,t,vel,opts,type){
   if(!buf||!BUDGET.canFire(type||'texture'))return false;
   const src=ac.createBufferSource();src.buffer=buf;
@@ -4423,14 +4423,14 @@ function playSample(buf,t,vel,opts,type){
   BUDGET.addEvent();src.onended=()=>BUDGET.releaseNode();
   return true;
 }
-// Transient ducking — open perceptual space when a VOX fragment plays
+// Transient ducking -- open perceptual space when a VOX fragment plays
 // Intentionally does NOT touch drone or fossils
-// ── FOCUS LISTEN MODE ─────────────────────────────────────────────────────
+// -- FOCUS LISTEN MODE -----------------------------------------------------
 // Gradient voice protagonism: peripheral → emerging → dominant → dissolving
 // Recovery proportional to narrative weight. Brain keeps processing language.
 const FOCUS={
   active:false,
-  phase:'—',
+  phase:'--',
   deepListenActive:false,
   _recoverTimer:null,_dissolveTimer:null,
 
@@ -4458,7 +4458,7 @@ const FOCUS={
         droneMult:.15,
         fossils: .02,
       };
-    }else{ // subconscious — minimal suppression, just opens ghost
+    }else{ // subconscious -- minimal suppression, just opens ghost
       return{
         pressure:.35,
         kick:    .55,
@@ -4480,12 +4480,12 @@ const FOCUS={
     const holds={narrative:[4000,8000],ghost:[1000,2000],subconscious:[2000,4000]};
     const[minH,maxH]=holds[entity]||holds.ghost;
     const holdMs=minH+Math.random()*(maxH-minH);
-    // DEEP LISTEN MODE — ritual listening state: narrative leads, high autonomy
+    // DEEP LISTEN MODE -- ritual listening state: narrative leads, high autonomy
     const deep=entity==='narrative'&&typeof VOXECO!=='undefined'&&VOXECO.mode==='NARRATIVE'
       &&typeof ORCH!=='undefined'&&(ORCH.protagonist==='narrative'||ORCH.protagonist==='silence')
       &&typeof G!=='undefined'&&G.autonomy>.5;
     this.deepListenActive=deep;
-    // EMERGING — voicePriorityCurve per entity type
+    // EMERGING -- voicePriorityCurve per entity type
     this.phase='emerging';
     const vpc=this.voicePriorityCurve(entity,deep);
     if(BUS.pressure)BUS.pressure.gain.gain.setTargetAtTime(vpc.pressure,t,.06);
@@ -4498,7 +4498,7 @@ const FOCUS={
     if(window.FOSSILS&&FOSSILS.nodes)FOSSILS.nodes.forEach(n=>{if(n.gain)n.gain.gain.setTargetAtTime(vpc.fossils,t,.08);});
     // DOMINANT
     setTimeout(()=>{if(!this.active)return;this.phase='dominant';if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.82,ac.currentTime,.4);},300);
-    // DISSOLVING — gradual restoration
+    // DISSOLVING -- gradual restoration
     this._dissolveTimer=setTimeout(()=>{
       if(!this.active)return;this.phase='dissolving';VOXECO.duckActive=false;this.deepListenActive=false;
       if(BUS.kick)    BUS.kick.gain.gain.setTargetAtTime(.55,ac.currentTime,1.2);
@@ -4510,7 +4510,7 @@ const FOCUS={
     this._recoverTimer=setTimeout(()=>this._recover(),holdMs+3000);
   },
   _recover(){
-    this.active=false;this.phase='—';this.deepListenActive=false;VOXECO.duckActive=false;if(!ac)return;
+    this.active=false;this.phase='--';this.deepListenActive=false;VOXECO.duckActive=false;if(!ac)return;
     try{if(window.ORCH)ORCH.applyBusGains();}catch(e){}
     if(window.FIELD&&FIELD.running)FIELD.nodes.forEach(n=>{n.gain.gain.setTargetAtTime(.08,ac.currentTime,1.5);});
     if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(SAL.voxSolo?.9:.32,ac.currentTime,1.2);
@@ -4528,13 +4528,13 @@ function synthKick(t,v){
     const focusActive=window.FOCUS&&FOCUS.active;
     const nodeHigh=BUDGET.nodeCount>BUDGET.MAX_NODES-8;
 
-    // ── SECTION A: DUAL-STAGE MASS ENGINE ─────────────────────────────────
-    // STAGE 1: TRANSIENT LAYER — 2–8ms click/spike (2 nodes)
+    // -- SECTION A: DUAL-STAGE MASS ENGINE ---------------------------------
+    // STAGE 1: TRANSIENT LAYER -- 2-8ms click/spike (2 nodes)
     if(BUDGET.canFire('kick')&&!nodeHigh){
-      const tDur=.002+Math.random()*.006;     // 2–8ms
+      const tDur=.002+Math.random()*.006;     // 2-8ms
       const s=ac.createBufferSource();s.buffer=noiseBuf;
       const tg=ac.createGain();
-      // Bandpass-like: boost transient freq 1.8k–4.5k
+      // Bandpass-like: boost transient freq 1.8k-4.5k
       const tFreq=1800+Math.random()*2700;
       tg.gain.setValueAtTime(v*(focusActive?.4:.88),t);
       tg.gain.exponentialRampToValueAtTime(.001,t+tDur);
@@ -4543,11 +4543,11 @@ function synthKick(t,v){
       s.onended=()=>BUDGET.releaseNode();BUDGET.addEvent();
     }
 
-    // STAGE 2: MASS BODY — descending sweep (2 nodes), skipped when SILENCE protagonist or FOCUS
+    // STAGE 2: MASS BODY -- descending sweep (2 nodes), skipped when SILENCE protagonist or FOCUS
     if(mass>.08&&!focusActive&&proto!=='silence'&&BUDGET.canFire('kick')){
-      const f0=DNA.active.kickF0*(2.8+Math.random()*1.4); // startFreq 2.8–4.2× kickF0
-      const f1=DNA.active.kickF0*(.45+Math.random()*.25); // endFreq 0.45–0.7× kickF0
-      const sweepT=.09+mass*.15;                          // 90–240ms
+      const f0=DNA.active.kickF0*(2.8+Math.random()*1.4); // startFreq 2.8-4.2x kickF0
+      const f1=DNA.active.kickF0*(.45+Math.random()*.25); // endFreq 0.45-0.7x kickF0
+      const sweepT=.09+mass*.15;                          // 90-240ms
       const o=ac.createOscillator(),g=ac.createGain();
       o.type='sine';
       o.frequency.setValueAtTime(f0,t);
@@ -4564,10 +4564,10 @@ function synthKick(t,v){
       o.start(t);o.stop(t+sweepT+.06);
       o.onended=()=>BUDGET.releaseNode();BUDGET.addEvent();
 
-      // STAGE 3: PRESSURE TAIL — only for PRESSURE/EROSION protagonist, budget permitting
+      // STAGE 3: PRESSURE TAIL -- only for PRESSURE/EROSION protagonist, budget permitting
       const tailProto=proto==='pressure'||proto==='erosion';
       if(mass>.5&&tailProto&&!focusActive&&BUDGET.nodeCount<BUDGET.MAX_NODES-5){
-        const tailDur=.12+mass*.38; // 120–500ms
+        const tailDur=.12+mass*.38; // 120-500ms
         const ts=ac.createBufferSource();ts.buffer=noiseBuf;
         const tsg=ac.createGain();
         tsg.gain.setValueAtTime(0,t+.018);
@@ -4597,7 +4597,7 @@ function synthKick(t,v){
 }
 function synthSnare(t,v){
   if(RHYTHM_DNA.isIkeda()){
-    // IKEDA snare: ultra-short noise burst — data corruption click
+    // IKEDA snare: ultra-short noise burst -- data corruption click
     const dur=.005+Math.random()*.018; // 5-23ms
     const s=ac.createBufferSource();s.buffer=noiseBuf;const g=ac.createGain();
     g.gain.setValueAtTime(v*.65,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
@@ -4615,7 +4615,7 @@ function synthSnare(t,v){
 }
 function synthHat(t,v,open){
   if(RHYTHM_DNA.isIkeda()){
-    // ── DATA TICK — telemetry pulse, no swing, binary logic ──
+    // -- DATA TICK -- telemetry pulse, no swing, binary logic --
     // Occasional packet-loss gaps handled in schedStep
     const dur=open?.04:.003+Math.random()*.009; // 3-12ms closed, 40ms open
     const s=ac.createBufferSource();s.buffer=noiseBuf;const g=ac.createGain();
@@ -4631,7 +4631,7 @@ function synthHat(t,v,open){
 }
 function subCluster(t,freq,dur,v){
   if(RHYTHM_DNA.isIkeda()){
-    // PRESSURE FIELD — architectural static sub
+    // PRESSURE FIELD -- architectural static sub
     const o=ac.createOscillator();o.type='sine';
     o.frequency.setValueAtTime(freq*.5,t);
     o.frequency.setValueAtTime(freq*.5*(1+(Math.random()-.5)*.004),t+dur*.3);
@@ -4656,7 +4656,7 @@ function subCluster(t,freq,dur,v){
   const sg=ac.createGain();sg.gain.setValueAtTime(v*.22,t);sg.gain.exponentialRampToValueAtTime(.001,t+dur*.75);
   sub.connect(sg);sg.connect(masterGain);sub.start(t);sub.stop(t+dur+.01);sub.onended=()=>BUDGET.releaseNode();BUDGET.addEvent();
 }
-// ── DEBRIS SYSTEM — spectral shards after transients ─────────────────────
+// -- DEBRIS SYSTEM -- spectral shards after transients ---------------------
 const DEBRIS={
   _activeCount:0,_MAX:4,
   spawn(t,vel,weather,proto){
@@ -4752,11 +4752,11 @@ function synthGlitch(t,v){
   o.onended=()=>BUDGET.releaseNode();BUDGET.addEvent();
 }
 
-// ── FIRE HELPERS ──
+// -- FIRE HELPERS --
 function fireKick(t,vel,kickProfile){
   if(!BUDGET.canFire('percussion'))return;
   if(SAL.voxSolo)return;
-  // Dynamic drum identity — now driven by CONDUCTOR intent profile
+  // Dynamic drum identity -- now driven by CONDUCTOR intent profile
   let v=vel;
   const profile=kickProfile||BEHAVIORAL_PROFILES.kickProfile(window.ORCH?.protagonist,RHYTHM_DNA.mass,RHYTHM_DNA.isIkeda());
   if(RHYTHM_DNA.isIkeda()){
@@ -4814,18 +4814,18 @@ function fireGhostEvent(t,forceful){
   VOXDNA.onGhostEvent(ge);
 }
 
-// ══════════════════════════════════════════════════════════
-// CONTINUOUS PRESSURE FIELD — Permanent nodes, no per-tick creation
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// CONTINUOUS PRESSURE FIELD -- Permanent nodes, no per-tick creation
+// ==========================================================
 const FIELD={nodes:[],running:false,
   init(){if(!ac||this.running)return;this.running=true;[28,41,55,73].forEach((f,i)=>{const osc=ac.createOscillator();osc.type='sine';osc.frequency.value=f;const g=ac.createGain();g.gain.value=0;osc.connect(g);g.connect(masterGain);osc.start();this.nodes.push({osc,gain:g,baseFreq:f,phase:Math.random()*Math.PI*2});BUDGET.nodeCount+=2;});},
   stop(){this.nodes.forEach(n=>{try{n.osc.stop();BUDGET.nodeCount-=2;}catch(e){}});this.nodes=[];this.running=false;},
   tick(){if(!this.running)return;const base=G.c.tension*WEATHER.c.droneMod*(G.immersiveMode?.72:.4)*(1-SMEM.fatigue*.28);this.nodes.forEach((n,i)=>{n.phase+=.0002*(1+i*.3);const lv=base*(0.36+Math.sin(n.phase)*.32+SMEM.sub*.26+WEATHER.c.pressureMod*.3);const fr=n.baseFreq*(1+(Math.sin(n.phase*.7)*DNA.active.instability*.035));n.gain.gain.setTargetAtTime(Math.max(0,Math.min(.15,lv)),ac.currentTime,.6);n.osc.frequency.setTargetAtTime(fr,ac.currentTime,1.0);});}
 };
 
-// ══════════════════════════════════════════════════════════
-// RECORDER — lazy init, proper routing
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// RECORDER -- lazy init, proper routing
+// ==========================================================
 const REC={
   isRunning:false,buffers:[[],[]],recNode:null,startTime:0,_timerH:null,_snapH:null,_printH:null,
   timeline:{weatherEvents:[],phaseTransitions:[],contaminationSnapshots:[],collapseEvents:[],dnaMorphSnapshots:[]},
@@ -4876,9 +4876,9 @@ const REC={
   }
 };
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SAMPLE LOADING
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 function loadSample(role){
   if(!ac)initAC();
   // iOS canonical: ac.resume() inside user gesture, BEFORE file picker
@@ -4888,7 +4888,7 @@ function loadSample(role){
   inp.click();
 }
 function clearSample(role){SAL.clearSlot(role);}
-// ── Pack Bank UI ─────────────────────────────────────────
+// -- Pack Bank UI -----------------------------------------
 function _updatePackBankUI(){
   const el=document.getElementById('pack-bank-list');if(!el)return;
   el.innerHTML='';
@@ -4958,20 +4958,20 @@ async function _ingestPack(data,filename){
   const ids=frags.map(f=>f.id).filter(Boolean);
   const dupes=ids.filter((id,i)=>ids.indexOf(id)!==i).length;
   const durs=frags.filter(f=>f.duration>0).map(f=>f.duration);
-  const avgDur=durs.length?(durs.reduce((a,b)=>a+b,0)/durs.length).toFixed(1):'—';
+  const avgDur=durs.length?(durs.reduce((a,b)=>a+b,0)/durs.length).toFixed(1):'--';
   PACK_MEM.register(pack,true);
   const pname=(pack.meta?.name||'PACK').toUpperCase().slice(0,14);
   let msg=pname;
   if(pack.rhythmDNA)msg+=' · RHYTHM';
   if(frags.length)msg+=' · '+frags.length+'VOX';
   if(embedded)msg+=' '+embedded+'EMB';
-  if(avgDur!=='—')msg+=' avg'+avgDur+'s';
+  if(avgDur!=='--')msg+=' avg'+avgDur+'s';
   if(dupes)msg+=' ⚠'+dupes+'DUP';
   showToast(msg);
   setTimeout(()=>{SAL.enforceMemoryLimit();if(SAL.voxReady>0)SYS.onVoxReady();SYS._check();},2500);
   BOOT.trace('_ingestPack OK: '+pname+' ('+PACK_MEM.summary()+')');
 }
-// ── fireMacro — workspace button → existing ecology macro system ──────────
+// -- fireMacro -- workspace button → existing ecology macro system ----------
 function fireMacro(m){
   if(!isPlaying&&m!=='mute'){showToast('PLAY FIRST');return;}
   // Trigger same as mpad click
@@ -4992,7 +4992,7 @@ function fireMacro(m){
   showToast(m.toUpperCase());
 }
 
-// ── RHYTHM DNA Code Parser ─────────────────────────────────────────────────
+// -- RHYTHM DNA Code Parser -------------------------------------------------
 // Parses a simple declarative DNA block and applies to ecology
 function parseRDNACode(code){
   const result={};
@@ -5029,16 +5029,16 @@ function applyRDNACode(params){
 
 function showToast(msg){const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(153,68,255,.82);color:#fff;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.1em;padding:6px 14px;border-radius:4px;z-index:999;pointer-events:none';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';setTimeout(()=>t.remove(),600);},2000);}
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SCALES
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const KEYS={0:{root:33},1:{root:36},2:{root:38},3:{root:40}};const PENT=[0,3,5,7,10];let curKey=0;
 function noteHz(m){return 440*Math.pow(2,(m-69)/12)}
 function scaleHz(deg,oct){const r=KEYS[curKey].root;return noteHz(r+PENT[deg%PENT.length]+Math.floor(deg/PENT.length)*12+oct*12)}
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // GLOBAL STATE
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const G={
   energy:.5,tension:.3,density:.5,mut:.2,silenceInertia:.08,
   c:{energy:.5,tension:.3,density:.5,mut:.2,inst:.25,silence:.08},
@@ -5065,17 +5065,17 @@ const G={
 };
 function silenced(cat){const si=G.c.silence+(G.voidMode?.62:0)+(DNA.active.silenceAffinity*.46)+WEATHER.c.silenceMod*.26+WEATHMEM.residue.silenceBloom*.28;if(cat==='kick')return Math.random()<si*.43;if(cat==='snare')return Math.random()<si*.52;if(cat==='hat')return Math.random()<si*.62;if(cat==='bass')return Math.random()<si*.34;return Math.random()<si*.18;}
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // DRIFT
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const stepDrifts=new Float32Array(16),driftTargets=new Float32Array(16);
 function initDrifts(){for(let i=0;i<16;i++){stepDrifts[i]=0;driftTargets[i]=(Math.random()-.5)*.024;}}
 function evolveDrifts(){for(let i=0;i<16;i++){if(Math.random()<.04)driftTargets[i]=(Math.random()-.5)*(.032+G.c.inst*.05+SMEM.glitch*.028+INFECT.txtToRhy*.018);stepDrifts[i]+=(driftTargets[i]-stepDrifts[i])*.013;}}
 initDrifts();
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // ORGANISMS
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 class Rhythm{
   constructor(){this.pat=this.mkPat('moderate');this.mem=[];this.bars=0;this.breathLeft=0}
   mkPat(s){const T={minimal:{kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hat:[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],ohat:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},moderate:{kick:[1,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],ohat:[0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0]},dense:{kick:[1,0,0,1,0,0,1,0,1,0,1,0,0,0,0,1],snare:[0,0,0,0,1,0,0,1,0,0,0,0,1,0,1,0],hat:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],ohat:[0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0]}};const src=T[s]||T.moderate,r={};Object.keys(src).forEach(k=>{r[k]=src[k].map(v=>v?(0.54+Math.random()*.46):0);});return r;}
@@ -5109,9 +5109,9 @@ class PolyLayer{
 }
 let POLY5,POLY7;
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // SCHEDULER
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 const SAHEAD=.11,SINT=26;
 let schedH=null,nextT=0,curStep=0,barCount=0,nextSublimT=0;
 const RHY=new Rhythm(),BSS=new PressureOrganism();
@@ -5122,9 +5122,9 @@ function schedStep(step,t){
   const ikeda=RHYTHM_DNA.isIkeda();
   const bp=BEHAVIORAL_PROFILES.cfg;
 
-  // ── Timing — Conductor resolves, Material executes ──────────────────────
+  // -- Timing -- Conductor resolves, Material executes ----------------------
   // Profile-aware timing: swing/drift/humanize controlled by behavioral profile
-  const swing=(!ikeda&&bp.swingEnabled&&step%2===1)?sps*(DNA.active.swing-.5)*.5:0; // reduced 50% — less groove feel
+  const swing=(!ikeda&&bp.swingEnabled&&step%2===1)?sps*(DNA.active.swing-.5)*.5:0; // reduced 50% -- less groove feel
   const drift=(!ikeda)?stepDrifts[step]*G.driftAmt*(1+SMEM.subInstability*.45)*bp.humanizeScale:0;
   const hum=(bp.humanizeScale>0&&G.humanize)?(Math.random()-.5)*.01*bp.humanizeScale:0;
   const clockJitter=ikeda?((Math.random()-.5)*.008):0;
@@ -5134,7 +5134,7 @@ function schedStep(step,t){
   const asyncDisplace=ikeda&&RHYTHM_DNA.mass>.3&&Math.random()<.07;
   const stA=asyncDisplace?(st+.006+Math.random()*.07):st;
 
-  // ── Ecology state → CONDUCTOR.resolve() ────────────────────────────────
+  // -- Ecology state → CONDUCTOR.resolve() --------------------------------
   const breathMod=RHY.breathLeft>0?.14:1;
   const densityBias=SIGNAL_ECOLOGY.densityBias?SIGNAL_ECOLOGY.densityBias():1;
   // Profile-aware packet loss: denser profiles lose fewer packets
@@ -5153,7 +5153,7 @@ function schedStep(step,t){
   };
   const intent=CONDUCTOR.resolve(step,RHY.pat,ecology);
 
-  // ── Material execution — fires based on CONDUCTOR intent ───────────────
+  // -- Material execution -- fires based on CONDUCTOR intent ---------------
   if(G.rhythmOn&&!BIO.isCollapsed('rhythm')){
     if(intent.kick&&intent.kickVel>.05)  fireKick(stA,intent.kickVel,intent.kickProfile);
     if(intent.snare&&intent.snareVel>.04) fireSnare(stA,intent.snareVel);
@@ -5163,7 +5163,7 @@ function schedStep(step,t){
 
   if(G.pressureOn&&!G.muteMode&&!BSS.absent&&!BIO.isCollapsed('pressure')){
     const bs=BSS.motif[step];
-    // IKEDA pressure: longer plateaus, rare movement — architectural
+    // IKEDA pressure: longer plateaus, rare movement -- architectural
     const pressDur=ikeda?sps*(bs?.dur||.8)*2.5:sps*(bs?.dur||.8)*(1+G.c.silence*.42+WEATHER.c.pressureMod*.28)*(BIO.isRecovering()?1.4:1);
     if(bs&&bs.active&&!silenced('bass')&&(!ikeda||!packetLoss)){
       const dur=pressDur;
@@ -5184,7 +5184,7 @@ function schedStep(step,t){
     if(G.immersiveMode&&Math.random()<.04&&ra<.06)resonantClick(st,120+Math.random()*340,.08+G.c.tension*.14);
   }
 
-  // Subliminal — always present, very sparse
+  // Subliminal -- always present, very sparse
   if(ac&&st>nextSublimT&&Math.random()<.06+SMEM.silence*.1+WEATHER.c.fogMod*.07+WEATHMEM.residue.fogPersist*.04){
     subliminalHum(st,38+Math.random()*105,.015+SMEM.sub*.03);
     // Low BPM = spacious subliminal spacing; high BPM = denser (compensated by shorter duration)
@@ -5200,7 +5200,7 @@ function schedStep(step,t){
   if(step===15){
     barCount++;RHY.onBar();BSS.onBar();
     SMEM.tick();DNA.tick();WEATHER.tick();SPATIAL.tick();FIELD.tick();
-    BPMSTATE.update();BPMSTATE.apply();  // neurodynamic update — runs before all ecology
+    BPMSTATE.update();BPMSTATE.apply();  // neurodynamic update -- runs before all ecology
     INFECT.tick();WEATHMEM.recordBar(WEATHER.target);WEATHMEM.tick();
     BIO.tick(barCount);BUDGET.onBar();
     EMO.tick();EMO.applyInfluence();CIRCADIAN.tick();FOSSILS.tick(barCount);
@@ -5212,7 +5212,7 @@ function schedStep(step,t){
     REBIRTH.tick();
     ORCH.tick(barCount);
     MIX_INTEL.tick(barCount);
-    // ── TENSION + NARRATIVE ARC + SILENCE ─────────────────────────────────
+    // -- TENSION + NARRATIVE ARC + SILENCE ---------------------------------
     TENSION_ENGINE.tick(barCount);
     VOX_ARC.tick();
     SILENCE_ARCH.tick();
@@ -5223,14 +5223,14 @@ function schedStep(step,t){
     }
     if(SILENCE_ARCH.active)SILENCE_ARCH.applyBuses();
 
-    // ── TERMINAL GRAVITY — organic ending refinement ──────────────────────
+    // -- TERMINAL GRAVITY -- organic ending refinement ----------------------
     const tg=DESTINY.terminalGravity;
     if(tg>.25&&SAL.voxReady>0&&VOXECO.mode!=='SPARSE'){
       // Ghost emerges frequently near end
       VOXDNA.forceEmergence('ghost');
     }
     if(tg>.72){
-      // Organism stops seeking novelty — narrative drops, subconscious rises
+      // Organism stops seeking novelty -- narrative drops, subconscious rises
       // Protagonist transitions slow dramatically (extend blend duration)
       if(ORCH._blendDur!==undefined&&Math.random()<.3)ORCH._blendDur=Math.min(8,ORCH._blendDur+1);
       // Weather changes become rare
@@ -5245,9 +5245,9 @@ function schedStep(step,t){
       if(ac&&BUS.hat)BUS.hat.gain.gain.setTargetAtTime(.08,ac.currentTime,4);
     }
     const barDurSec=(60/bpm)*4;
-    // VOXMEM decay — runs every bar
+    // VOXMEM decay -- runs every bar
     try{VOXDNA._getFragment&&VOXDNA.getMem().tick(barDurSec);}catch(e){}
-    // Signal ecology — silence tension + burst lifecycle
+    // Signal ecology -- silence tension + burst lifecycle
     if(RHYTHM_DNA.isIkeda()){
       SIGNAL_ECOLOGY.tick(barDurSec);
       SIGNAL_BURST.tick();
@@ -5272,8 +5272,8 @@ function schedStep(step,t){
     const voxDec=VOXDNA.tick(voxEco);
     VOXDNA._updateUI();
 
-    // Execute voice decisions — audio synthesis only when VoxRitual mic active
-    // ── VOX ENTITY ENGINE ─────────────────────────────────────────────────
+    // Execute voice decisions -- audio synthesis only when VoxRitual mic active
+    // -- VOX ENTITY ENGINE -------------------------------------------------
     // All voice playback now routes through VOX_ENTITY + MIX_INTEL.
     // Legacy fallback functions handle edge cases.
     if(VOXRITUAL.active||SAL.voxReady>0){
@@ -5308,7 +5308,7 @@ function _doStartPlay(){
   nextT=ac.currentTime+.05;curStep=0;barCount=0;
   POLY5=new PolyLayer(5,4/5);POLY7=new PolyLayer(7,4/7);
   POLY5.nextT=nextT;POLY7.nextT=nextT;nextSublimT=nextT;
-  // Each ecology system init wrapped — failure = safe mode, transport still starts
+  // Each ecology system init wrapped -- failure = safe mode, transport still starts
   try{FIELD.init();}catch(e){BOOT.warn('FIELD.init: '+e.message);}
   try{PE.start();}catch(e){BOOT.warn('PE.start: '+e.message);}
   try{DNA.startMorph();}catch(e){BOOT.warn('DNA.startMorph: '+e.message);}
@@ -5327,8 +5327,8 @@ function startPlay(){
     if(!ac){initAC();BOOT.trace('AC created in startPlay');}
     try{ac.resume();}catch(e){BOOT.warn('ac.resume failed: '+e.message);}
     if(!ac||ac.state==='closed'){
-      BOOT.fatal('AC closed or null — cannot start');
-      showToast('AUDIO ERROR — reload page');return;
+      BOOT.fatal('AC closed or null -- cannot start');
+      showToast('AUDIO ERROR -- reload page');return;
     }
     // Show compiler overlay if not done yet (non-blocking: user can still start)
     if(!ECOLOGY_COMPILER.done){
@@ -5347,9 +5347,9 @@ function startPlay(){
 }
 function stopPlay(){isPlaying=false;clearTimeout(schedH);schedH=null;FIELD.stop();FOSSILS.stopAll();if(REC.isRunning)REC.stop();if(VOXRITUAL.active)VOXRITUAL.deactivate();setBeatDots(-1);setStepPip(-1);}
 
-// ══════════════════════════════════════════════════════════
-// VISUAL ENGINE — budgeted
-// ══════════════════════════════════════════════════════════
+// ==========================================================
+// VISUAL ENGINE -- budgeted
+// ==========================================================
 const cv=document.getElementById('mc'),cx2=cv.getContext('2d');
 const scv=document.getElementById('smc'),scx=scv.getContext('2d');
 let W,H,CX,CY;
@@ -5398,13 +5398,13 @@ function vEvent(type,intensity,audioT,ex,ey){
   if(Echoes.length<MAX_ECHOES&&(type==='kick'||type==='bass'))Echoes.push({x:ex,y:ey,r:5,maxR:type==='kick'?165:125,age:0,maxAge:82,type});
   if(Scars.length<MAX_SCARS){if(type==='glitch')Scars.push(new Scar(ex,ey,'glitch'));else if(type==='collapse')for(let i=0;i<Math.min(3,MAX_SCARS-Scars.length);i++)Scars.push(new Scar(CX+(Math.random()-.5)*W*.75,CY+(Math.random()-.5)*H*.75,'collapse'));}
 }
-// ── VISUAL AUDIO CONFIRMATION — subtle engine-type indicator ──
+// -- VISUAL AUDIO CONFIRMATION -- subtle engine-type indicator --
 const AudioConfirm=[];
-// VOX subtitle — narrative memory surface, opacity 0.08-0.18, slow fade
+// VOX subtitle -- narrative memory surface, opacity 0.08-0.18, slow fade
 const _voxSubtitle={text:'',alpha:0,_timer:null,
   show(label){
     if(!label||label.length<3)return;
-    // Clean label — strip IDs, use semantic label
+    // Clean label -- strip IDs, use semantic label
     this.text=label.slice(0,32).toUpperCase();
     this.alpha=0;
     clearTimeout(this._timer);
@@ -5415,7 +5415,7 @@ const _voxSubtitle={text:'',alpha:0,_timer:null,
     // Hold 8s then fade out over 6s
     this._timer=setTimeout(()=>{const t1=Date.now();const out=()=>{this.alpha=Math.max(0,.14-(Date.now()-t1)/6000*.14);if(this.alpha>0)requestAnimationFrame(out);};requestAnimationFrame(out);},8000);
   },
-  tick(){} // called per frame — alpha managed by show()
+  tick(){} // called per frame -- alpha managed by show()
 };
 function audioConfirm(engine,x,y){
   if(AudioConfirm.length>24)AudioConfirm.shift();
@@ -5442,7 +5442,7 @@ let arcT=0;const arcs=[];let isoFlash=null,isoT=0;
 
 function drawFrame(){
   requestAnimationFrame(drawFrame);G.update();PE.tick();
-  // Update STATE_BUS every frame (lightweight — no rendering)
+  // Update STATE_BUS every frame (lightweight -- no rendering)
   SPUK_STATE_BUS.update();
 
   const en=G.c.energy,tn=G.c.tension,inst=G.c.inst;
@@ -5451,33 +5451,33 @@ function drawFrame(){
   const OV=ORCH.visual;
   const tg=DESTINY.terminalGravity;
 
-  // ── BIOSIGNAL MONITOR CANVAS — telemetry, not art ─────────────────────
+  // -- BIOSIGNAL MONITOR CANVAS -- telemetry, not art ---------------------
   // BG: near-opaque for monitor feel (no long trails)
   cx2.fillStyle=`rgba(6,5,13,${.94+en*.04})`;cx2.fillRect(0,0,W,H);
 
   // Terminal gravity: progressive darkening (structural information)
   if(tg>.05){cx2.fillStyle=`rgba(0,0,0,${tg*.25})`;cx2.fillRect(0,0,W,H);}
-  // Collapse pulse (retained — essential system signal)
+  // Collapse pulse (retained -- essential system signal)
   if(BIO.collapsing)cx2.fillStyle=`rgba(255,8,8,${Math.sin(BIO.collapseT*.6)*.03})`,cx2.fillRect(0,0,W,H);
   // Silence tension: very faint blue tint (signal state)
   const silT=TENSION_ENGINE.isSilence()?SILENCE_ARCH._depth:0;
   if(silT>.1){cx2.fillStyle=`rgba(20,40,80,${silT*.06})`;cx2.fillRect(0,0,W,H);}
 
-  // Lifecycle bar — top edge (replaces decorative phase fill)
+  // Lifecycle bar -- top edge (replaces decorative phase fill)
   cx2.fillStyle=`rgba(${pr[0]},${pr[1]},${pr[2]},0.06)`;cx2.fillRect(0,0,W,2);
   cx2.fillStyle=`rgba(${pr[0]},${pr[1]},${pr[2]},0.55)`;cx2.fillRect(0,0,W*PE.progress,2);
-  // Tension level bar — bottom edge
+  // Tension level bar -- bottom edge
   const tenCol=TENSION_ENGINE.mode==='peak'?'255,80,60':TENSION_ENGINE.mode==='building'?'255,180,50':'80,200,255';
   cx2.fillStyle=`rgba(${tenCol},0.04)`;cx2.fillRect(0,H-2,W,2);
   cx2.fillStyle=`rgba(${tenCol},0.5)`;cx2.fillRect(0,H-2,W*TENSION_ENGINE.value,2);
 
-  // Fossil residue — reduced, max opacity 0.08 (topology trace)
+  // Fossil residue -- reduced, max opacity 0.08 (topology trace)
   FOSSILS.visuals.forEach(fv=>{const prog=fv.age/fv.maxAge;const al=fv.alpha*(1-prog)*.5;if(al>.003){cx2.beginPath();cx2.arc(fv.x,fv.y,1.5,0,Math.PI*2);cx2.fillStyle=`rgba(100,60,200,${al})`;cx2.fill();}});
 
-  // Scars (structural — keep)
+  // Scars (structural -- keep)
   for(let i=Scars.length-1;i>=0;i--){if(OV.scars>.04){Scars[i]._orchAlpha=OV.scars*.6;Scars[i].draw();}if(Scars[i].done)Scars.splice(i,1);}
 
-  // Event rings — reduced opacity, thinner lines
+  // Event rings -- reduced opacity, thinner lines
   for(let i=VEVTs.length-1;i>=0;i--){
     const ev=VEVTs[i];ev.age++;if(ev.age>ev.maxAge){VEVTs.splice(i,1);continue;}
     if(ev.age===1)PARTs.forEach(p=>p.imp(ev.x,ev.y,ev.intensity*1.4));
@@ -5488,7 +5488,7 @@ function drawFrame(){
     cx2.beginPath();cx2.arc(ev.x,ev.y,r,0,Math.PI*2);cx2.strokeStyle=sc;cx2.lineWidth=.8;cx2.stroke();
   }
 
-  // Particles — minimal (every 3rd frame for connections, reduced threshold)
+  // Particles -- minimal (every 3rd frame for connections, reduced threshold)
   for(let i=0;i<PARTs.length;i++){
     PARTs[i].tick(en,tn,imm);
     if(arcT%3===0)for(let j=i+1;j<PARTs.length;j++){
@@ -5500,13 +5500,13 @@ function drawFrame(){
   }
   PARTs.forEach(p=>{const aop=p.op*(.18+en*.22);cx2.beginPath();cx2.arc(p.x,p.y,p.sz*.7,0,Math.PI*2);cx2.fillStyle=p.col===0?`rgba(0,200,220,${aop})`:`rgba(180,60,255,${aop})`;cx2.fill();});
 
-  // Center point — protagonist indicator only (no glow bloom)
+  // Center point -- protagonist indicator only (no glow bloom)
   if(ORCH.protagonist&&ORCH.strength>.25){
     const protoColor={pressure:'255,100,50',silence:'80,180,255',ghost:'130,80,255',fragmentation:'200,100,255',trance:'60,200,180',erosion:'255,140,60'}[ORCH.protagonist]||'120,80,200';
     cx2.beginPath();cx2.arc(CX,CY,3+ORCH.strength*4,0,Math.PI*2);cx2.fillStyle=`rgba(${protoColor},${ORCH.strength*.6})`;cx2.fill();
   }
 
-  // Vignette — lighter (monitor feel, not cinematic)
+  // Vignette -- lighter (monitor feel, not cinematic)
   const vg=cx2.createRadialGradient(CX,CY,Math.min(W,H)*.3,CX,CY,Math.max(W,H)*.7);
   vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(0,0,0,.35)`);
   cx2.fillStyle=vg;cx2.fillRect(0,0,W,H);
@@ -5519,13 +5519,13 @@ function drawFrame(){
   if(BIO.collapsing){cx2.fillStyle=`rgba(255,28,28,${.28+Math.random()*.18})`;cx2.textAlign='center';cx2.fillText('COLLAPSE: '+BIO.collapseOrg.toUpperCase(),CX,20);}
   else if(BIO.recovering){cx2.fillStyle='rgba(255,195,0,.22)';cx2.textAlign='center';cx2.fillText('RECOVERING',CX,20);}
   else if(ORCH.protagonist&&ORCH.strength>.35){
-    // Protagonist label — very subtle, only when strong leadership exists
+    // Protagonist label -- very subtle, only when strong leadership exists
     const pLabel={pressure:'PRESSURE LEADS',fragmentation:'FRAGMENTATION LEADS',ghost:'GHOST LEADS',silence:'SILENCE LEADS',trance:'TRANCE LEADS',erosion:'EROSION LEADS'}[ORCH.protagonist]||'';
     cx2.fillStyle=`rgba(255,255,255,${(ORCH.strength-.35)*.12})`;cx2.textAlign='center';cx2.fillText(pLabel,CX,20);
   }
   else if(EMO.dominantLevel>.42){cx2.fillStyle=`rgba(153,68,255,${(EMO.dominantLevel-.42)*.2})`;cx2.textAlign='center';cx2.fillText(EMO.label,CX,20);}
   else if(imm){cx2.fillStyle='rgba(0,255,255,.12)';cx2.textAlign='center';cx2.fillText('IMMERSIVE',CX,20);}
-  // Crystal session identity — appears very faintly, bottom-left, after crystallization
+  // Crystal session identity -- appears very faintly, bottom-left, after crystallization
   if(ORCH.crystal.age>.25){cx2.fillStyle=`rgba(255,255,255,${(ORCH.crystal.age-.25)*.08})`;cx2.textAlign='left';cx2.font="italic 8px 'JetBrains Mono',monospace";cx2.fillText(ORCH.crystal.label,12,H-6);cx2.font="italic 9px 'JetBrains Mono',monospace";}
   if(GOVERNANCE.autonomy>.7){cx2.fillStyle=`rgba(153,68,255,${(GOVERNANCE.autonomy-.7)*.22})`;cx2.textAlign='center';cx2.fillText('AUTONOMOUS',CX,12);}
   else if(GOVERNANCE._absencePhase>.4){cx2.fillStyle=`rgba(153,68,255,${GOVERNANCE._absencePhase*.1})`;cx2.textAlign='center';cx2.fillText('RECLAIMING',CX,12);}
@@ -5542,11 +5542,11 @@ function drawFrame(){
   }
   {const bpText=BPMSTATE.pressure>.58?'HYPERVENTILATING':BPMSTATE.breathing>.65?'DEEP BREATH':'';if(bpText){cx2.font="italic 8px 'JetBrains Mono',monospace";const bpa=BPMSTATE.pressure>.58?(BPMSTATE.pressure-.58)*.18:BPMSTATE.breathing>.65?(BPMSTATE.breathing-.65)*.14:0;cx2.fillStyle=`rgba(0,255,200,${bpa})`;cx2.textAlign='right';cx2.fillText(bpText,W-12,H-6);cx2.font="italic 9px 'JetBrains Mono',monospace";}}
   cx2.textAlign='left';
-  // Audio confirmation particles — engine-type debug feedback
+  // Audio confirmation particles -- engine-type debug feedback
   drawAudioConfirm();
   // Tobin dark flash on massive kicks
   if(typeof drawTobinFlash!=='undefined')drawTobinFlash();
-  // VOX memory surface — narrative/ritual fragments surface as faint memory
+  // VOX memory surface -- narrative/ritual fragments surface as faint memory
   // Feels like recall, not captions. Never shown for subconscious.
   if(VOXECO.lastFragment&&VOXECO.lastPlayback.startsWith('narrative')&&typeof _voxSubtitle!=='undefined'){
     _voxSubtitle.tick();
@@ -5557,7 +5557,7 @@ function drawFrame(){
       cx2.textAlign='left';
     }
   }
-  // VOX SOLO / TEST VOX overlay labels — faint debug feedback
+  // VOX SOLO / TEST VOX overlay labels -- faint debug feedback
   if(window._voxTestLabel){
     cx2.font="italic 11px 'JetBrains Mono',monospace";
     cx2.fillStyle='rgba(0,255,180,.16)';cx2.textAlign='center';
@@ -5574,9 +5574,9 @@ function drawFrame(){
   updateReadout();
 }
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // UI
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 function setBeatDots(beat){for(let i=0;i<4;i++){const el=document.getElementById('bd'+i);if(!el)return;el.className='bdot'+(i===beat?(beat===0?' b1':' on'):'');}}
 let lastPip=-1;
 function setStepPip(s){if(s===lastPip)return;if(lastPip>=0){const e=document.getElementById('sp'+lastPip);if(e)e.classList.remove('cur');}if(s>=0){const e=document.getElementById('sp'+s);if(e)e.classList.add('cur');}lastPip=s;}
@@ -5588,9 +5588,9 @@ function updateReadout(){
   const lbl=BIO.collapsing?'COLLAPSE':BIO.recovering?'RECOVERY':inst<18?'STABLE':inst<42?'EVOLVING':inst<68?'MORPHING':'CHAOTIC';
   const lc=BIO.collapsing?'#ff2222':BIO.recovering?'#ffaa00':inst<18?'#00ffff':inst<42?'#9944ff':inst<68?'#ff00ff':'#ff8800';
   const ob=id=>document.getElementById(id);
-  // ── CONDUCTOR state bar — live attention + protagonist + vox ──
-  const attn=typeof MIX_INTEL!=='undefined'?MIX_INTEL.attention.toUpperCase():'—';
-  const proto=window.ORCH?ORCH.protagonist||'—':'—';
+  // -- CONDUCTOR state bar -- live attention + protagonist + vox --
+  const attn=typeof MIX_INTEL!=='undefined'?MIX_INTEL.attention.toUpperCase():'--';
+  const proto=window.ORCH?ORCH.protagonist||'--':'--';
   const voxActive=typeof FOCUS!=='undefined'&&FOCUS.active;
   const cA=ob('cond-attention'),cP=ob('cond-protagonist'),cV=ob('cond-vox');
   if(cA){
@@ -5599,12 +5599,12 @@ function updateReadout(){
     const c={BUILDING:'rgba(255,180,50,.75)',PEAK:'rgba(255,80,60,.85)',RELEASING:'rgba(0,200,255,.7)',SILENCE:'rgba(100,220,255,.55)',NEUTRAL:'rgba(153,68,255,.45)'}[tenStr]||'rgba(153,68,255,.4)';
     cA.style.color=c;cA.style.borderColor=c.slice(0,-2)+'.18)';
   }  if(cP){
-    const arcPhase=VOX_ARC._phaseName[VOX_ARC.phase]||'—';
+    const arcPhase=VOX_ARC._phaseName[VOX_ARC.phase]||'--';
     const p=proto==='narrative'?'VOICE':proto;
     cP.textContent=p.toUpperCase()+' · '+arcPhase;
     const c=proto==='pressure'?'rgba(255,100,50,.6)':proto==='silence'?'rgba(80,200,255,.5)':proto==='ghost'?'rgba(130,80,255,.5)':'rgba(153,68,255,.4)';
     cP.style.color=c;cP.style.borderColor=c.slice(0,-2)+'.15)';
-  }  if(cV){const _dn={ORGANIC:'ORGANIC',IKEDA:'SIGNAL',TOBIN:'MASS',BRETSCHNEIDER:'GEOMETRY',NICOLAI:'SILENCE'};const eng=_dn[BEHAVIORAL_PROFILES.active]||BEHAVIORAL_PROFILES.active;const vst=SAL.voxReady>0?(voxActive?'VOX ACTIVE':'VOX '+SAL.voxReady+'/'+SAL.voxTotal):'VOX —';cV.textContent=vst+' · '+eng;cV.style.color=SAL.voxReady>0?(voxActive?'rgba(0,255,180,.85)':'rgba(0,255,180,.45)'):'rgba(153,68,255,.25)';cV.style.borderColor=SAL.voxReady>0?'rgba(0,255,180,.2)':'rgba(153,68,255,.1)';}
+  }  if(cV){const _dn={ORGANIC:'ORGANIC',IKEDA:'SIGNAL',TOBIN:'MASS',BRETSCHNEIDER:'GEOMETRY',NICOLAI:'SILENCE'};const eng=_dn[BEHAVIORAL_PROFILES.active]||BEHAVIORAL_PROFILES.active;const vst=SAL.voxReady>0?(voxActive?'VOX ACTIVE':'VOX '+SAL.voxReady+'/'+SAL.voxTotal):'VOX --';cV.textContent=vst+' · '+eng;cV.style.color=SAL.voxReady>0?(voxActive?'rgba(0,255,180,.85)':'rgba(0,255,180,.45)'):'rgba(153,68,255,.25)';cV.style.borderColor=SAL.voxReady>0?'rgba(0,255,180,.2)':'rgba(153,68,255,.1)';}
   if(ob('ob-rh')&&G.rhythmOn)ob('ob-rh').style.width=Math.round((RHY.pat.kick.filter(v=>v>0).length+RHY.pat.hat.filter(v=>v>0).length)*4)+'%';
   if(ob('ob-pr')&&G.pressureOn)ob('ob-pr').style.width=Math.min(95,Math.round(BSS.motif.filter(s=>s.active).length/BSS.motif.length*100))+'%';
   if(ob('ob-tx')&&G.textureOn)ob('ob-tx').style.width=Math.min(90,Math.round(d*.48+inst*.52))+'%';
@@ -5682,13 +5682,13 @@ function _updateDebugHUD(){
   ob('dbg-zone')&&(ob('dbg-zone').textContent=DESTINY.zone.label);
   ob('dbg-tg')&&(ob('dbg-tg').textContent=DESTINY.terminalGravity.toFixed(3));
   ob('dbg-cl')&&(ob('dbg-cl').textContent=DESTINY.closureDesire.toFixed(3));
-  ob('dbg-prot')&&(ob('dbg-prot').textContent=ORCH.protagonist||'—');
+  ob('dbg-prot')&&(ob('dbg-prot').textContent=ORCH.protagonist||'--');
   ob('dbg-str')&&(ob('dbg-str').textContent=ORCH.strength.toFixed(3));
-  ob('dbg-end')&&(ob('dbg-end').textContent=DESTINY.endState?.label||'—');
+  ob('dbg-end')&&(ob('dbg-end').textContent=DESTINY.endState?.label||'--');
   ob('dbg-rec')&&(ob('dbg-rec').textContent=ORCH.recovery.active?`${ORCH.recovery.barsLeft}b`:'off');
   ob('dbg-auto')&&(ob('dbg-auto').textContent=`${Math.round(GOVERNANCE.autonomy*100)}%`);
-  ob('dbg-cryst')&&(ob('dbg-cryst').textContent=ORCH.crystal.label||'—');
-  // DNA.active diagnostic — shows if imported pack is actually being used
+  ob('dbg-cryst')&&(ob('dbg-cryst').textContent=ORCH.crystal.label||'--');
+  // DNA.active diagnostic -- shows if imported pack is actually being used
   const a=DNA.active;
   let dnaRows=h.querySelector('#dbg-dna-section');
   if(!dnaRows){
@@ -5707,7 +5707,7 @@ function _updateDebugHUD(){
   const evAge=((Date.now()-SAL._lastEventT)/1000).toFixed(1);
   const priCol={synth:'rgba(255,150,40,.85)',mixed:'rgba(0,200,255,.85)',sample:'rgba(0,255,140,.85)'}[SAL.priorityMode];
   const sysCol={READY:'rgba(0,255,140,.8)',PARTIAL:'rgba(0,200,255,.8)',BOOTING:'rgba(255,180,0,.7)',DECODING:'rgba(255,180,0,.85)',ERROR:'rgba(255,80,80,.8)'}[SYS.state]||'#888';
-  const protoName=window.ORCH?ORCH.protagonist||'—':'—';
+  const protoName=window.ORCH?ORCH.protagonist||'--':'--';
   const prevProto=ORCH._prevProtagonist;
   const protoDisplay=prevProto?`${prevProto}→${protoName}`:(protoName==='narrative'?'VOICE':protoName);
   const mem_vm=VOXDNA.memStatus?VOXDNA.memStatus():{size:0,fatigue:'0.00'};
@@ -5724,11 +5724,11 @@ function _updateDebugHUD(){
     `<div style="color:rgba(80,200,255,.8)"><span class="dl">ATTENTION</span> ${MIX_INTEL.attention.toUpperCase()} (${MIX_INTEL._attentionAge}b) ← ${MIX_INTEL._prevAttention}</div>`+
     `<div style="color:${VOXECO.duckActive?'rgba(0,255,140,.8)':'rgba(255,255,255,.22)'}"><span class="dl">FOCUS</span> ${FOCUS.phase}${FOCUS.deepListenActive?' DEEP':''}</div>`+
     `<div><span class="dl">MEM</span> sz:${mem_vm.size} fat:${mem_vm.fatigue} | RFRAC:${rfrac}</div>`+
-    `<div><span class="dl">LAST FRAG</span> ${(VOXECO.lastFragment||'—').slice(0,18)}</div>`+
+    `<div><span class="dl">LAST FRAG</span> ${(VOXECO.lastFragment||'--').slice(0,18)}</div>`+
     `<div style="color:rgba(180,140,255,.8)"><span class="dl">LAST EV</span> ${SAL.lastEvent} (${evAge}s)</div>`+
     `<div><span class="dl">PACKS</span> ${PACK_MEM.summary()}</div>`+
     `<div><span class="dl">NODE/MEM</span> ${BUDGET.nodeCount}/${BUDGET.MAX_NODES} | ${mem.toFixed(1)}MB${mem>160?' ⚠':''}</div>`+
-    (RHYTHM_DNA.isIkeda()?`<div style="color:rgba(80,200,255,.7)"><span class="dl">SIGNAL</span> tension:${SIGNAL_ECOLOGY.silenceTension.toFixed(2)} burst:${SIGNAL_BURST.active?'ON('+SIGNAL_BURST._barsLeft+'b)':'—'} rec:${SIGNAL_BURST._recoverBars}b</div>`:'')+
+    (RHYTHM_DNA.isIkeda()?`<div style="color:rgba(80,200,255,.7)"><span class="dl">SIGNAL</span> tension:${SIGNAL_ECOLOGY.silenceTension.toFixed(2)} burst:${SIGNAL_BURST.active?'ON('+SIGNAL_BURST._barsLeft+'b)':'--'} rec:${SIGNAL_BURST._recoverBars}b</div>`:'')+
     (RHYTHM_DNA.isIkeda()?`<div style="color:rgba(80,200,255,.55)"><span class="dl">TOBIN</span> MASS:${Math.round(RHYTHM_DNA.mass*100)}% ACC:${PRESSURE_ACC.level.toFixed(2)} DEBRIS:${typeof DEBRIS!=='undefined'?DEBRIS._activeCount:0}/${typeof DEBRIS!=='undefined'?DEBRIS._MAX:0}</div>`:'');
 }
 
@@ -5738,7 +5738,7 @@ function initMacros(){
     function on(){
       if(m==='mute'){G.muteMode=!G.muteMode;pad.classList.toggle('on',G.muteMode);GOVERNANCE.lastInteraction=Date.now();return;}
       pad.classList.add('pressing');
-      // All macros now inject ecological pressure — organism metabolizes at its own pace
+      // All macros now inject ecological pressure -- organism metabolizes at its own pace
       if(m==='morph'){GOVERNANCE.injectGesture('morph',0.7);setTimeout(()=>pad.classList.remove('pressing'),350);return;}
       if(m==='break')GOVERNANCE.injectGesture('break',0.85);
       if(m==='fill') GOVERNANCE.injectGesture('fill', 0.85);
@@ -5746,7 +5746,7 @@ function initMacros(){
       if(m==='ghost')GOVERNANCE.injectGesture('ghost',0.8);
       if(m==='chaos')GOVERNANCE.injectGesture('chaos',0.9);
       if(m==='conclude'){
-        // CONCLUDE — manual ritual closure gesture
+        // CONCLUDE -- manual ritual closure gesture
         // Pushes phase forward gently, strengthens terminal gravity, stabilizes weather
         GOVERNANCE.injectGesture('conclude',0.7);
         DESTINY.phase01=Math.min(1,DESTINY.phase01+.012);
@@ -5797,13 +5797,13 @@ function initGovernance(){
 }
 
 
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 // INIT
-// ══════════════════════════════════════════════════════════
+// ==========================================================
 window.addEventListener('load',()=>{
   BOOT.trace('load event fired');
   resizeCv();initParts();buildStepRow();
-  // ── Core transport listeners — must be in load handler for iOS DOM safety ──
+  // -- Core transport listeners -- must be in load handler for iOS DOM safety --
   document.getElementById('tap-btn')?.addEventListener('click',()=>{const now=Date.now();tapTs.push(now);if(tapTs.length>5)tapTs.shift();if(tapTs.length>=2){const diffs=[];for(let i=1;i<tapTs.length;i++)diffs.push(tapTs[i]-tapTs[i-1]);bpm=Math.round(Math.max(70,Math.min(185,60000/(diffs.reduce((a,b)=>a+b)/diffs.length))));document.getElementById('bpmv').textContent=bpm;}});
   document.getElementById('play-btn')?.addEventListener('click',()=>{if(!ac)initAC();else ac.resume();if(isPlaying){stopPlay();document.getElementById('play-btn').textContent='PLAY';document.getElementById('play-btn').classList.remove('on');}else{startPlay();document.getElementById('play-btn').textContent='STOP';document.getElementById('play-btn').classList.add('on');}});
   document.getElementById('imm-btn')?.addEventListener('click',function(){G.immersiveMode=!G.immersiveMode;this.classList.toggle('on',G.immersiveMode);if(G.immersiveMode){G.silenceInertia=Math.max(G.silenceInertia,.18);G.density=Math.min(G.density,.48);G.energy=Math.min(G.energy,.54);throttleSliderUpdate();}});
@@ -5814,7 +5814,7 @@ window.addEventListener('load',()=>{
   document.getElementById('exp-print')?.addEventListener('click',()=>{if(!ac||!isPlaying){showToast('START PLAYBACK FIRST');return;}if(!REC.isRunning)REC.startPrint();});
   DNA.init();WEATHER.set('CLEAR');buildWeatherUI();
   initSliders();initOrgs();initProfiles();initDuration();
-  // ── EVENT STREAM — narrative log ─────────────────────────────────────
+  // -- EVENT STREAM -- narrative log -------------------------------------
   const EVENT_STREAM={
     _lines:[],_MAX:5,
     // Event type → display label + color
@@ -5852,7 +5852,7 @@ window.addEventListener('load',()=>{
   };
   window.EVENT_STREAM=EVENT_STREAM;
 
-  // ── GESTURE LAYER — canvas touch gestures for live performance ───────
+  // -- GESTURE LAYER -- canvas touch gestures for live performance -------
   // Robust, slow, theatrical. No multitouch complexity.
   const GESTURE={
     _t0:0,_x0:0,_y0:0,_active:false,_holdTimer:null,
@@ -5878,7 +5878,7 @@ window.addEventListener('load',()=>{
         const dist=Math.sqrt(dx*dx+dy*dy);
         this._active=false;
 
-        if(dist<18&&dt<350)  return; // tap on button — ignore
+        if(dist<18&&dt<350)  return; // tap on button -- ignore
         if(dist<18&&dt<800)  {this._fire('double_tap');return;}
         if(dist>60&&dy>40&&Math.abs(dx)<Math.abs(dy)*1.4) {this._fire('swipe_down');return;}
         if(dist>60&&dy<-40&&Math.abs(dx)<Math.abs(dy)*1.4){this._fire('swipe_up');return;}
@@ -5950,7 +5950,7 @@ window.addEventListener('load',()=>{
   document.querySelectorAll('.ss-clr').forEach(btn=>{btn.addEventListener('click',()=>clearSample(btn.dataset.role));});
   initToggle('tgl-mem','phraseMemory');initToggle('tgl-hum','humanize');initToggle('tgl-lock','lockGroove');
   initKeys();initBPM();initPhase();initMacros();initGovernance();
-  // VOX MONITOR button — suppresses rhythm/pressure/texture, amplifies ghost bus
+  // VOX MONITOR button -- suppresses rhythm/pressure/texture, amplifies ghost bus
   let voxMonitor=false;
   document.getElementById('vox-mon-btn')?.addEventListener('click',function(){
     voxMonitor=!voxMonitor;
@@ -5974,7 +5974,7 @@ window.addEventListener('load',()=>{
     }
   });
 
-  // SAMPLE PRIORITY MODE — SYNTH / MIXED / SAMPLE
+  // SAMPLE PRIORITY MODE -- SYNTH / MIXED / SAMPLE
   function setPriorityMode(mode){
     SAL.priorityMode=mode;
     document.querySelectorAll('.prio-btn').forEach(b=>{
@@ -6006,7 +6006,7 @@ window.addEventListener('load',()=>{
     if(!ac)initAC();ac.resume();setPriorityMode(next);
   });
 
-  // VOX SOLO — mute percussion/bass/texture, amplify voices
+  // VOX SOLO -- mute percussion/bass/texture, amplify voices
   document.getElementById('vox-solo-btn')?.addEventListener('click',function(){
     SAL.voxSolo=!SAL.voxSolo;
     this.style.background=SAL.voxSolo?'rgba(180,90,255,.18)':'transparent';
@@ -6018,13 +6018,13 @@ window.addEventListener('load',()=>{
         ['kick','snare','hat','pressure','texture'].forEach(k=>{if(BUS[k])BUS[k].gain.gain.setTargetAtTime(0,t,.4);});
         if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.9,t,.4);
         if(BUS.drone)BUS.drone.gain.gain.setTargetAtTime(.12,t,.4);
-        // FEEDBACK ELIMINATION — MIC + VOX SOLO risk
+        // FEEDBACK ELIMINATION -- MIC + VOX SOLO risk
         if(typeof VOXRITUAL!=='undefined'&&VOXRITUAL.active){
           // Reduce ghost bus feedback path to prevent acoustic coupling
           if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.5,t,.4);
           showToast('VOX SOLO + MIC: FEEDBACK GUARD ON');
         }else{
-          showToast('VOX SOLO ON — '+SAL.voxReady+'/'+SAL.voxTotal+' READY');
+          showToast('VOX SOLO ON -- '+SAL.voxReady+'/'+SAL.voxTotal+' READY');
         }
       }else{
         if(window.ORCH)ORCH.applyBusGains();
@@ -6034,7 +6034,7 @@ window.addEventListener('load',()=>{
     }
   });
 
-  // TEST VOX — fire narrative, subconscious, ghost sequentially with elevated gain
+  // TEST VOX -- fire narrative, subconscious, ghost sequentially with elevated gain
   document.getElementById('test-vox-btn')?.addEventListener('click',function(){
     if(!ac){initAC();ac.resume();}
     else ac.resume();
@@ -6062,7 +6062,7 @@ window.addEventListener('load',()=>{
       delay+=1400;
     });
   });
-  // DBG toggle — targets the canvas-embedded debug-hud
+  // DBG toggle -- targets the canvas-embedded debug-hud
   document.getElementById('dbg-btn')?.addEventListener('click',function(){
     const h=document.getElementById('debug-hud');
     if(h){const on=h.classList.toggle('on');
@@ -6079,7 +6079,7 @@ window.addEventListener('load',()=>{
   document.querySelectorAll('.perf-btn').forEach(b=>{
     b.addEventListener('click',()=>SYS.setPerfMode(b.dataset.perf));
   });
-  // SAFE MODE — caps node budget, limits simultaneous voices, reduces CPU
+  // SAFE MODE -- caps node budget, limits simultaneous voices, reduces CPU
   document.getElementById('safe-mode-btn')?.addEventListener('click',function(){
     SYS.safeMode=!SYS.safeMode;
     this.style.background=SYS.safeMode?'rgba(255,180,40,.15)':'transparent';
@@ -6087,14 +6087,14 @@ window.addEventListener('load',()=>{
     this.style.borderColor=SYS.safeMode?'rgba(255,180,40,.4)':'rgba(255,180,40,.2)';
     if(SYS.safeMode){
       BUDGET.MAX_NODES=22;  // aggressive cap
-      showToast('SAFE MODE ON — nodes capped at 22');
+      showToast('SAFE MODE ON -- nodes capped at 22');
     }else{
       BUDGET.MAX_NODES=40;
       showToast('SAFE MODE OFF');
     }
     SYS._updateUI();
   });
-  // TIMELINE SCRUB — show/hide with DBG, wire buttons
+  // TIMELINE SCRUB -- show/hide with DBG, wire buttons
   document.querySelectorAll('.tl-scrub').forEach(b=>{
     b.addEventListener('click',()=>{
       const pct=parseFloat(b.dataset.pct);
@@ -6122,7 +6122,7 @@ window.addEventListener('load',()=>{
   // Pack buttons
   document.querySelector('#import-multi-btn')?.addEventListener('click',()=>importSpukPack({multi:true}));
 
-  // ── WORKSPACE TAB SYSTEM ────────────────────────────────────────────────
+  // -- WORKSPACE TAB SYSTEM ------------------------------------------------
   document.querySelectorAll('.ws-tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
       const id=tab.dataset.tab;
@@ -6139,7 +6139,7 @@ window.addEventListener('load',()=>{
     this.textContent=open?'▼':'▲';
   });
 
-  // ── RHYTHM DNA CODE PARSER ──────────────────────────────────────────────
+  // -- RHYTHM DNA CODE PARSER ----------------------------------------------
   document.getElementById('rdna-apply-btn')?.addEventListener('click',()=>{
     const code=document.getElementById('rdna-code').value;
     const status=document.getElementById('rdna-parse-status');
@@ -6163,35 +6163,35 @@ window.addEventListener('load',()=>{
     b.addEventListener('click',()=>fireMacro(b.dataset.macro));
   });
 
-  // ── ORCHESTRATOR BAR UPDATES ─────────────────────────────────────────────
+  // -- ORCHESTRATOR BAR UPDATES ---------------------------------------------
   const _dn={ORGANIC:'ORG',IKEDA:'SIG',TOBIN:'MASS',BRETSCHNEIDER:'GEO',NICOLAI:'SIL'};
   setInterval(()=>{
-    const proto=window.ORCH?.protagonist||'—';
+    const proto=window.ORCH?.protagonist||'--';
     const tens=TENSION_ENGINE.mode.toUpperCase();
-    const arc=VOX_ARC._phaseName?.[VOX_ARC.phase]||'—';
+    const arc=VOX_ARC._phaseName?.[VOX_ARC.phase]||'--';
     const eng=_dn[BEHAVIORAL_PROFILES.active]||BEHAVIORAL_PROFILES.active;
     const bpmEl=document.getElementById('ob-bpm-display');if(bpmEl)bpmEl.textContent=bpm;
     const pEl=document.getElementById('ob-proto');if(pEl){pEl.textContent=(proto==='narrative'?'VOICE':proto).toUpperCase();pEl.className='ob-chip'+(proto==='pressure'?' warn':proto==='ghost'?' ghost':'');}
     const tEl=document.getElementById('ob-tension');if(tEl){tEl.textContent=tens+' '+Math.round(TENSION_ENGINE.value*100)+'%';tEl.className='ob-chip'+(TENSION_ENGINE.mode==='peak'?' warn':TENSION_ENGINE.isSilence()?' live':'');}
     const tfEl=document.getElementById('ob-tension-fill');if(tfEl)tfEl.style.width=(TENSION_ENGINE.value*100)+'%';
     const arcEl=document.getElementById('ob-arc');if(arcEl)arcEl.textContent=arc;
-    const vEl=document.getElementById('ob-vox');if(vEl){vEl.textContent=SAL.voxReady>0?(FOCUS.active?'VOX ACTIVE':'VOX '+SAL.voxReady+'/'+SAL.voxTotal):'VOX —';vEl.className='ob-chip'+(FOCUS.active?' live':'');}
+    const vEl=document.getElementById('ob-vox');if(vEl){vEl.textContent=SAL.voxReady>0?(FOCUS.active?'VOX ACTIVE':'VOX '+SAL.voxReady+'/'+SAL.voxTotal):'VOX --';vEl.className='ob-chip'+(FOCUS.active?' live':'');}
     const engEl=document.getElementById('ob-engine');if(engEl)engEl.textContent=eng;
     // State bus export view
     const sbv=document.getElementById('state-bus-view');
     if(sbv&&document.getElementById('tab-export')?.classList.contains('active')){
       const sb=SPUK_STATE_BUS;
-      sbv.textContent=`protagonist: ${sb.protagonist||'—'}\nlifecycle:   ${(sb.lifecycle*100).toFixed(0)}%\ntension:     ${sb.signalState?.mode} ${((sb.signalState?.tension||0)*100).toFixed(0)}%\narc:         ${sb.arcPhase}\nweather:     ${sb.weather}\ndna:         ${sb.rhythmDNA}\nbpm:         ${sb.bpm}`;
+      sbv.textContent=`protagonist: ${sb.protagonist||'--'}\nlifecycle:   ${(sb.lifecycle*100).toFixed(0)}%\ntension:     ${sb.signalState?.mode} ${((sb.signalState?.tension||0)*100).toFixed(0)}%\narc:         ${sb.arcPhase}\nweather:     ${sb.weather}\ndna:         ${sb.rhythmDNA}\nbpm:         ${sb.bpm}`;
     }
   },800);
-  // FORCE VOX — dblclick DBG fires voices immediately
+  // FORCE VOX -- dblclick DBG fires voices immediately
   document.getElementById('dbg-btn')?.addEventListener('dblclick',()=>{
     if(!ac||!isPlaying){showToast('PLAY FIRST');return;}
     VOXDNA.forceEmergence('narrative');
     VOXDNA.forceEmergence('ghost');
-    showToast('VOX FORCED — '+SAL.voxReady+'/'+SAL.voxTotal+' ready');
+    showToast('VOX FORCED -- '+SAL.voxReady+'/'+SAL.voxTotal+' ready');
   });
-  // DEBUG START — bypass ecology compiler, force transport
+  // DEBUG START -- bypass ecology compiler, force transport
   document.getElementById('dbg-start-btn')?.addEventListener('click',()=>{
     BOOT.trace('DEBUG START pressed');
     if(!ac)initAC();
@@ -6202,7 +6202,7 @@ window.addEventListener('load',()=>{
       try{_doStartPlay();}catch(e){BOOT.fatal('DEBUG START: '+e.message);}
       document.getElementById('play-btn').textContent='STOP';
       document.getElementById('play-btn').classList.add('on');
-      showToast('DEBUG START — ecology bypassed');
+      showToast('DEBUG START -- ecology bypassed');
     }
   });
   BOOT.trace('macros init done');
