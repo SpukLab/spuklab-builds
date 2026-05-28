@@ -2959,6 +2959,7 @@ const SAL={
       // If no AC yet, park for retry when PLAY starts
       if(!ac||ac.state==='suspended'){
         this._pendingDecodes[id]=dataURL;
+        if(typeof SYS!=='undefined')SYS.endDecode(); // FIX: balance the begin
         return;
       }
       const resp=await fetch(dataURL);
@@ -5212,13 +5213,20 @@ async function _ingestPack(data,filename){
   PACK_MEM.register(pack,true);
   const pname=(pack.meta?.name||'PACK').toUpperCase().slice(0,14);
   let msg=pname;
-  if(pack.rhythmDNA)msg+=' · RHYTHM';
-  if(frags.length)msg+=' · '+frags.length+'VOX';
+  if(pack.rhythmDNA)msg+=' RHYTHM';
+  if(frags.length)msg+=' '+frags.length+'VOX';
   if(embedded)msg+=' '+embedded+'EMB';
-  if(avgDur!=='--')msg+=' avg'+avgDur+'s';
-  if(dupes)msg+=' ⚠'+dupes+'DUP';
+  if(dupes)msg+=' DUP'+dupes;
   showToast(msg);
-  setTimeout(()=>{SAL.enforceMemoryLimit();if(SAL.voxReady>0)SYS.onVoxReady();SYS._check();},2500);
+  // Poll for decode completion instead of blind timeout
+  let _polls=0;
+  const _checkReady=()=>{
+    _polls++;
+    SAL.enforceMemoryLimit();
+    if(SAL.voxReady>0){SYS.onVoxReady();SYS._check();SAL._updateVoxUI();_updatePackBankUI();}
+    if(SAL.pendingCount&&SAL.pendingCount()>0&&_polls<20){setTimeout(_checkReady,400);}
+  };
+  setTimeout(_checkReady,300);
   BOOT.trace('_ingestPack OK: '+pname+' ('+PACK_MEM.summary()+')');
 }
 // -- fireMacro -- workspace button → existing ecology macro system ----------
@@ -6706,6 +6714,25 @@ async function _processJsonFile(file){
 // ============================================================
 // IMPORT_PIPELINE v43 -- hardened state machine
 // ============================================================
+// IMPORT_TRACE -- deterministic stage timestamps for audit
+const IMPORT_TRACE={
+  stages:[],
+  t0:0,
+  start(){this.stages=[];this.t0=Date.now();this.mark('START');},
+  mark(stage,detail){
+    const dt=Date.now()-this.t0;
+    this.stages.push({stage,dt,detail:detail||'',ok:true});
+    console.log('[IMPORT_TRACE +'+dt+'ms] '+stage+(detail?' :: '+detail:''));
+  },
+  fail(stage,detail){
+    const dt=Date.now()-this.t0;
+    this.stages.push({stage,dt,detail:detail||'',ok:false});
+    console.error('[IMPORT_TRACE FAIL +'+dt+'ms] '+stage+(detail?' :: '+detail:''));
+  },
+  dump(){return this.stages.map(s=>(s.ok?'':'X ')+s.stage+' +'+s.dt+'ms'+(s.detail?' '+s.detail:'')).join('\n');},
+};
+window.IMPORT_TRACE=IMPORT_TRACE;
+
 const IMPORT_PIPELINE={
   state:'IDLE',
   report:{zip:false,manifest:false,vox:0,voxTotal:0,decode:false,register:false,playback:false},
@@ -6724,8 +6751,8 @@ window.IMPORT_PIPELINE=IMPORT_PIPELINE;
 const _wait=ms=>new Promise(r=>setTimeout(r,ms||25));
 
 async function _ingestSpukpackZip(zip,filename){
-  IMPORT_PIPELINE.reset();
-  IMPORT_PIPELINE.setState('VALIDATING...');
+  IMPORT_PIPELINE.reset();IMPORT_TRACE.start();
+  IMPORT_PIPELINE.setState('VALIDATING...');IMPORT_TRACE.mark('VALIDATE_ZIP');
   const allFiles={};zip.forEach((p,f)=>{if(!f.dir)allFiles[p]=f;});
   if(!Object.keys(allFiles).length){IMPORT_PIPELINE.fail('empty ZIP');return;}
   IMPORT_PIPELINE.report.zip=true;IMPORT_PIPELINE.renderReport();
@@ -6735,7 +6762,7 @@ async function _ingestSpukpackZip(zip,filename){
   let manifest;
   try{manifest=JSON.parse(await allFiles['manifest.json'].async('string'));}
   catch(e){IMPORT_PIPELINE.fail('manifest corrupt',e.message);return;}
-  IMPORT_PIPELINE.report.manifest=true;IMPORT_PIPELINE.renderReport();
+  IMPORT_PIPELINE.report.manifest=true;IMPORT_PIPELINE.renderReport();IMPORT_TRACE.mark('MANIFEST_OK',manifest.name);
 
   const pack={schema:'spukpack_v2',
     meta:{name:manifest.name||filename,author:manifest.author||'SpukLab',
@@ -6752,7 +6779,7 @@ async function _ingestSpukpackZip(zip,filename){
     pack.fragments=vd.fragments||vd.samples||[];
   }catch(e){BOOT.warn('vox_dna:'+e.message);}}
 
-  IMPORT_PIPELINE.setState('INDEXING...');
+  IMPORT_PIPELINE.setState('INDEXING...');IMPORT_TRACE.mark('INDEXING');
   const ALLOWED=['wav','mp3','m4a','aiff','ogg'];
   const idx={};
   Object.entries(allFiles).forEach(([p,f])=>{
@@ -6771,7 +6798,7 @@ async function _ingestSpukpackZip(zip,filename){
 
   const queue=pack.fragments.filter(f=>f._af&&!f.audioData);
   IMPORT_PIPELINE.report.voxTotal=queue.length;
-  IMPORT_PIPELINE.setState('DECODING 0/'+queue.length);
+  IMPORT_PIPELINE.setState('DECODING 0/'+queue.length);IMPORT_TRACE.mark('DECODE_START',queue.length+' files');
   let decoded=0,failed=0;
 
   for(const frag of queue){
@@ -6799,9 +6826,9 @@ async function _ingestSpukpackZip(zip,filename){
   }
 
   if(decoded===0&&queue.length>0){IMPORT_PIPELINE.fail('all decodes failed');return;}
-  IMPORT_PIPELINE.report.decode=true;IMPORT_PIPELINE.renderReport();
+  IMPORT_PIPELINE.report.decode=true;IMPORT_PIPELINE.renderReport();IMPORT_TRACE.mark('DECODE_DONE',decoded+'/'+queue.length);
 
-  IMPORT_PIPELINE.setState('REGISTERING...');
+  IMPORT_PIPELINE.setState('REGISTERING...');IMPORT_TRACE.mark('REGISTER');
   await _ingestPack(pack,filename);
   await _wait(600);
   IMPORT_PIPELINE.report.register=true;IMPORT_PIPELINE.renderReport();
@@ -6816,7 +6843,9 @@ async function _ingestSpukpackZip(zip,filename){
       src.start(ac.currentTime,0,Math.min(1.2,sl.buffer.duration));
       src.onended=()=>BUDGET.releaseNode();BUDGET.addEvent(2);
       IMPORT_PIPELINE.report.playback=true;IMPORT_PIPELINE.renderReport();
+      IMPORT_TRACE.mark('PLAYBACK_OK');IMPORT_TRACE.mark('READY');
       IMPORT_PIPELINE.setState('READY: '+decoded+'vox'+(failed?' +'+failed+'err':''));
+      BOOT.trace('IMPORT_TRACE:\n'+IMPORT_TRACE.dump());
     }catch(e){IMPORT_PIPELINE.setState('FAIL_PB:'+e.message.slice(0,28));}
   }else{
     IMPORT_PIPELINE.setState('READY(PLAY first): '+decoded+'vox');
