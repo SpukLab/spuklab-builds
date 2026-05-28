@@ -14,10 +14,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:linear-gradient(155d
 body{display:grid;grid-template-rows:48px 36px 1fr;grid-template-columns:1fr;grid-template-areas:"hdr""orch""cvs";padding-bottom:36px}
 /* ── LIVE MODE ────────────────────────────────────────────────────────── */
 body.live-mode #lft{display:none}
-#rgt{display:none}
-/* Hide all _h suffixed legacy panels */
-[id$="_h"]{display:none!important}
-div[id="lft_h"],div[id="rgt_h"]{display:none!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;visibility:hidden!important}
 body.live-mode{grid-template-columns:1fr!important}
 body.live-mode #debug-hud{display:none!important}
 body.live-mode #pack-bank-list,body.live-mode #pack-mem-summary,body.live-mode #dna-morph-display,body.live-mode #pack-grid,body.live-mode #dna-import-btn{display:none}
@@ -326,6 +322,7 @@ header#hdr{grid-area:hdr;display:flex;align-items:center;gap:6px;padding:0 10px;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
+<input type="file" id="fi-pack" accept="*/*" multiple style="display:none;position:absolute;opacity:0;width:0;height:0">
 <header id="hdr">
   <div id="logo"><span class="sp">SPUK</span><span class="lb">LAB</span><span class="pr">BeatsOne v42</span></div>
   <div id="beat-ind"><div class="bdot" id="bd0"></div><div class="bdot" id="bd1"></div><div class="bdot" id="bd2"></div><div class="bdot" id="bd3"></div></div>
@@ -6414,6 +6411,14 @@ window.addEventListener('load',()=>{
     BOOT.trace('Tectonic defaults applied v42');
   },500);
 
+  // Persistent file input wiring (iOS Safari safe)
+  const fiPack=document.getElementById('fi-pack');
+  if(fiPack)fiPack.addEventListener('change',function(e){_handlePackFiles(e.target.files);});
+  // All buttons trigger the persistent input
+  document.querySelector('#import-multi-btn')?.addEventListener('click',_triggerPackPicker);
+  document.querySelector('#import-any-btn')?.addEventListener('click',_triggerPackPicker);
+  document.querySelector('#dna-import-btn')?.addEventListener('click',_triggerPackPicker);
+
   // -- WORKSPACE TAB SYSTEM ------------------------------------------------
   document.querySelectorAll('.ws-tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
@@ -6630,48 +6635,101 @@ window.addEventListener('load',()=>{
 window.addEventListener('resize',()=>{resizeCv();PARTs.forEach(p=>p.rst(true));});
 
 // ============================================================
+// iOS SAFE FILE IMPORT -- persistent DOM inputs only
+// ============================================================
+
+function importDNAPack(){_triggerPackPicker();}
+function importSpukPack(){_triggerPackPicker();}
+
+function _triggerPackPicker(){
+  const inp=document.getElementById('fi-pack');
+  if(!inp){showToast('INPUT MISSING');return;}
+  inp.value='';inp.click();
+}
+
+async function _handlePackFiles(files){
+  if(!files||!files.length)return;
+  if(!ac)initAC();
+  if(ac&&ac.state==='suspended')await ac.resume();
+  for(const file of Array.from(files)){
+    IMPORT_PIPELINE.setState('READING: '+file.name.slice(0,22));
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(ext==='zip'||ext==='spukpack'||file.type==='application/zip'||file.type==='application/octet-stream'){
+      await _processZipFile(file);
+    }else if(ext==='json'){
+      await _processJsonFile(file);
+    }else{
+      // Unknown ext -- try ZIP first then JSON
+      try{await _processZipFile(file);}catch(e){await _processJsonFile(file);}
+    }
+  }
+  _updatePackBankUI();
+}
+
+async function _processZipFile(file){
+  await new Promise(async res=>{
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      try{
+        if(typeof JSZip==='undefined'){
+          IMPORT_PIPELINE.setState('LOADING JSZip...');
+          await new Promise((rr,rj)=>{
+            const sc=document.createElement('script');
+            sc.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            sc.onload=rr;sc.onerror=()=>rj(new Error('JSZip CDN failed'));
+            document.head.appendChild(sc);
+          });
+        }
+        const zip=await JSZip.loadAsync(ev.target.result);
+        await _ingestSpukpackZip(zip,file.name);
+      }catch(err){IMPORT_PIPELINE.fail('ZIP: '+err.message.slice(0,40));console.error(err);}
+      res();
+    };
+    reader.onerror=()=>{IMPORT_PIPELINE.fail('read error');res();};
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function _processJsonFile(file){
+  await new Promise(res=>{
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      try{const data=JSON.parse(ev.target.result);await _ingestPack(data,file.name);}
+      catch(e){showToast('JSON ERR: '+e.message.slice(0,25));}
+      res();
+    };
+    reader.onerror=()=>res();
+    reader.readAsText(file);
+  });
+}
+
+// ============================================================
 // IMPORT_PIPELINE v43 -- hardened state machine
-// Sequential, observable, Safari-safe, no silent failures
 // ============================================================
 const IMPORT_PIPELINE={
   state:'IDLE',
   report:{zip:false,manifest:false,vox:0,voxTotal:0,decode:false,register:false,playback:false},
   _failed:false,
-  setState(s){
-    this.state=s;BOOT.trace('IMPORT: '+s);
-    showToast(s.slice(0,36));
-    const st=document.getElementById('rdna-parse-status');
-    if(st){st.textContent=s.slice(0,40);st.style.color=s.startsWith('FAIL')?'rgba(255,80,80,.8)':'rgba(0,200,255,.7)';}
-    const rp=document.getElementById('import-report');if(rp)rp.textContent=s.slice(0,50);
-  },
-  fail(reason,detail){
-    this._failed=true;
-    const msg='FAIL: '+reason+(detail?' '+detail.slice(0,20):'');
-    this.setState(msg);console.error('[IMPORT]',msg);
-  },
-  renderReport(){
-    const r=this.report;
-    const txt='ZIP:'+(r.zip?'OK':'--')+' MAN:'+(r.manifest?'OK':'--')+
-      ' VOX:'+r.vox+'/'+r.voxTotal+' DEC:'+(r.decode?'OK':'--')+
-      ' REG:'+(r.register?'OK':'--')+' PB:'+(r.playback?'OK':'--');
-    const el=document.getElementById('import-report');if(el)el.textContent=txt;
-  },
-  reset(){this.state='IDLE';this._failed=false;
-    this.report={zip:false,manifest:false,vox:0,voxTotal:0,decode:false,register:false,playback:false};}
+  setState(s){this.state=s;BOOT.trace('IMPORT:'+s);showToast(s.slice(0,36));
+    const st=document.getElementById('rdna-parse-status');if(st){st.textContent=s.slice(0,40);st.style.color=s.startsWith('FAIL')?'rgba(255,80,80,.8)':'rgba(0,200,255,.7)';}
+    const rp=document.getElementById('import-report');if(rp)rp.textContent=s.slice(0,50);},
+  fail(r,d){this._failed=true;const m='FAIL: '+r+(d?' '+d.slice(0,20):'');this.setState(m);console.error('[IMPORT]',m);},
+  renderReport(){const r=this.report;
+    const t='ZIP:'+(r.zip?'OK':'--')+' MAN:'+(r.manifest?'OK':'--')+' VOX:'+r.vox+'/'+r.voxTotal+' DEC:'+(r.decode?'OK':'--')+' REG:'+(r.register?'OK':'--')+' PB:'+(r.playback?'OK':'--');
+    const el=document.getElementById('import-report');if(el)el.textContent=t;},
+  reset(){this.state='IDLE';this._failed=false;this.report={zip:false,manifest:false,vox:0,voxTotal:0,decode:false,register:false,playback:false};}
 };
 window.IMPORT_PIPELINE=IMPORT_PIPELINE;
 
-const _wait=(ms)=>new Promise(r=>setTimeout(r,ms||25));
+const _wait=ms=>new Promise(r=>setTimeout(r,ms||25));
 
 async function _ingestSpukpackZip(zip,filename){
   IMPORT_PIPELINE.reset();
-  // STEP 1: Validate ZIP
   IMPORT_PIPELINE.setState('VALIDATING...');
   const allFiles={};zip.forEach((p,f)=>{if(!f.dir)allFiles[p]=f;});
   if(!Object.keys(allFiles).length){IMPORT_PIPELINE.fail('empty ZIP');return;}
   IMPORT_PIPELINE.report.zip=true;IMPORT_PIPELINE.renderReport();
 
-  // STEP 2: Manifest
   IMPORT_PIPELINE.setState('MANIFEST...');
   if(!allFiles['manifest.json']){IMPORT_PIPELINE.fail('no manifest.json');return;}
   let manifest;
@@ -6679,18 +6737,14 @@ async function _ingestSpukpackZip(zip,filename){
   catch(e){IMPORT_PIPELINE.fail('manifest corrupt',e.message);return;}
   IMPORT_PIPELINE.report.manifest=true;IMPORT_PIPELINE.renderReport();
 
-  // STEP 3: Build pack
   const pack={schema:'spukpack_v2',
     meta:{name:manifest.name||filename,author:manifest.author||'SpukLab',
       generation:manifest.generation||0,created:manifest.created||new Date().toISOString()},
     rhythmDNA:null,voxDNA:null,ecology:manifest.ecology||{},fragments:[],rituals:[]};
 
-  // STEP 4: DNA files
   const rDNA=allFiles['rhythm_dna.json']||allFiles['sound_dna.json'];
   if(rDNA){try{const rd=JSON.parse(await rDNA.async('string'));
-    pack.rhythmDNA={bridge:rd.spukbeats_bridge||rd,forgeState:rd.forgeState||null,
-      carving:rd.carving||null,material:rd.material||null,
-      temporalDNA:rd.temporal_dna||null,saturationDNA:rd.saturationDNA||null};
+    pack.rhythmDNA={bridge:rd.spukbeats_bridge||rd,forgeState:rd.forgeState||null,carving:rd.carving||null,material:rd.material||null,temporalDNA:rd.temporal_dna||null,saturationDNA:rd.saturationDNA||null};
   }catch(e){BOOT.warn('rhythm_dna:'+e.message);}}
   const vDNA=allFiles['vox_dna.json'];
   if(vDNA){try{const vd=JSON.parse(await vDNA.async('string'));
@@ -6698,7 +6752,6 @@ async function _ingestSpukpackZip(zip,filename){
     pack.fragments=vd.fragments||vd.samples||[];
   }catch(e){BOOT.warn('vox_dna:'+e.message);}}
 
-  // STEP 5: Index audio files (case-insensitive, all audio folders)
   IMPORT_PIPELINE.setState('INDEXING...');
   const ALLOWED=['wav','mp3','m4a','aiff','ogg'];
   const idx={};
@@ -6708,21 +6761,14 @@ async function _ingestSpukpackZip(zip,filename){
     const name=p.split('/').pop().replace(/\.[^.]+$/,'');
     idx[name]=f;idx[name.toLowerCase()]=f;idx[p]=f;idx[p.toLowerCase()]=f;
   });
-  BOOT.trace('indexed audio keys: '+Object.keys(idx).filter((_,i)=>i%2===0).slice(0,6).join(','));
 
-  // STEP 5b: Match fragments
-  const missing=[];
   for(const frag of pack.fragments){
     if(frag.audioData)continue;
     const key=(frag.id||frag.name||frag.audio||'').replace(/\.[^.]+$/,'');
     const ap=frag.audio||'';
     frag._af=idx[key]||idx[key.toLowerCase()]||idx[ap]||idx[ap.toLowerCase()];
-    if(!frag._af)missing.push(frag.id||ap);
   }
-  if(missing.length){BOOT.warn('MISSING: '+missing.join(','));
-    IMPORT_PIPELINE.setState('WARN: '+missing.length+' missing');await _wait(600);}
 
-  // STEP 6: SEQUENTIAL DECODE -- one file at a time, Safari safe
   const queue=pack.fragments.filter(f=>f._af&&!f.audioData);
   IMPORT_PIPELINE.report.voxTotal=queue.length;
   IMPORT_PIPELINE.setState('DECODING 0/'+queue.length);
@@ -6733,14 +6779,13 @@ async function _ingestSpukpackZip(zip,filename){
     SYS.beginDecode();
     try{
       const ext=(frag.audio||frag.id||'wav').split('.').pop().toLowerCase()||'wav';
-      if(!ALLOWED.includes(ext)){SYS.endDecode();failed++;BOOT.warn('UNSUPPORTED: '+frag.id+'.'+ext);continue;}
-      // Timeout 10s + clone ArrayBuffer for Safari
+      if(!ALLOWED.includes(ext)){SYS.endDecode();failed++;continue;}
       const ab=await Promise.race([
         frag._af.async('arraybuffer'),
         new Promise((_,rj)=>setTimeout(()=>rj(new Error('timeout')),10000))
       ]);
-      if(!ab||ab.byteLength<100){SYS.endDecode();failed++;BOOT.warn('EMPTY: '+frag.id);continue;}
-      const safe=ab.slice(0); // Safari: clone before use
+      if(!ab||ab.byteLength<100){SYS.endDecode();failed++;BOOT.warn('EMPTY:'+frag.id);continue;}
+      const safe=ab.slice(0);
       const bytes=new Uint8Array(safe);
       let b64='';const chunk=8192;
       for(let i=0;i<bytes.length;i+=chunk)b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));
@@ -6748,26 +6793,19 @@ async function _ingestSpukpackZip(zip,filename){
       delete frag._af;
       decoded++;IMPORT_PIPELINE.report.vox=decoded;IMPORT_PIPELINE.renderReport();
       IMPORT_PIPELINE.setState('DECODING '+decoded+'/'+queue.length);
-    }catch(e){
-      failed++;BOOT.warn('DECODE: '+frag.id+': '+e.message);
-      IMPORT_PIPELINE.setState('WARN: '+frag.id.slice(0,14)+' '+e.message.slice(0,16));
-    }
+    }catch(e){failed++;BOOT.warn('DECODE:'+frag.id+':'+e.message);}
     SYS.endDecode();
-    await _wait(22+Math.random()*18); // Safari breathing room
+    await _wait(25);
   }
 
-  if(decoded===0&&queue.length>0){IMPORT_PIPELINE.fail('all decodes failed: '+failed+' errors');return;}
+  if(decoded===0&&queue.length>0){IMPORT_PIPELINE.fail('all decodes failed');return;}
   IMPORT_PIPELINE.report.decode=true;IMPORT_PIPELINE.renderReport();
 
-  // STEP 7: Register
   IMPORT_PIPELINE.setState('REGISTERING...');
   await _ingestPack(pack,filename);
   await _wait(600);
   IMPORT_PIPELINE.report.register=true;IMPORT_PIPELINE.renderReport();
 
-  // STEP 8: Playback test -- bypass all ecology
-  IMPORT_PIPELINE.setState('TESTING...');
-  await _wait(400);
   const slots=Object.values(SAL.voxSlots||{}).filter(s=>s.ready&&s.buffer);
   if(slots.length>0&&ac&&ac.state==='running'){
     try{
@@ -6779,9 +6817,9 @@ async function _ingestSpukpackZip(zip,filename){
       src.onended=()=>BUDGET.releaseNode();BUDGET.addEvent(2);
       IMPORT_PIPELINE.report.playback=true;IMPORT_PIPELINE.renderReport();
       IMPORT_PIPELINE.setState('READY: '+decoded+'vox'+(failed?' +'+failed+'err':''));
-    }catch(e){IMPORT_PIPELINE.setState('FAIL_PB: '+e.message.slice(0,28));}
+    }catch(e){IMPORT_PIPELINE.setState('FAIL_PB:'+e.message.slice(0,28));}
   }else{
-    IMPORT_PIPELINE.setState('READY (PLAY first): '+decoded+'vox');
+    IMPORT_PIPELINE.setState('READY(PLAY first): '+decoded+'vox');
     IMPORT_PIPELINE.report.playback=true;IMPORT_PIPELINE.renderReport();
   }
 }
@@ -6885,7 +6923,6 @@ async function _ingestSpukpackZip(zip,filename){
           <div id="pack-mem-summary" style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(153,68,255,.3);margin-bottom:6px">HOT:0 WARM:0 COLD:0 | 0.0MB</div>
           <button class="ws-btn accent" id="import-multi-btn">+ LOAD PACKS</button>
           <button class="ws-btn" id="dna-import-btn" style="margin-left:4px">+ INJECT PACK</button>
-          <button class="ws-btn" id="import-any-btn" style="margin-left:4px;color:rgba(255,180,50,.7);border-color:rgba(255,180,50,.3)">+ ANY FILE</button>
         </div>
         <div style="flex:1">
           <div class="ws-label">DNA IDENTITY</div>
