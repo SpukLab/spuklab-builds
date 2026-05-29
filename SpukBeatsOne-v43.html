@@ -904,13 +904,33 @@ var VOXDNA=(function(){
   };
 
   function _pickReadyFragment(entityType){
-    var frags=_s.fragments.filter(function(f){
+    // SINGLE SOURCE OF TRUTH: only pick fragments whose buffer is READY in SAL
+    var ready=_s.fragments.filter(function(f){
+      var sl=typeof SAL!=='undefined'&&SAL.voxSlots[f.id];
+      return sl&&sl.ready&&sl.buffer;
+    });
+    // If SAL has ready slots that aren't in _s.fragments, sync them in
+    if(typeof SAL!=='undefined'){
+      Object.keys(SAL.voxSlots).forEach(function(id){
+        var sl=SAL.voxSlots[id];
+        if(sl.ready&&sl.buffer&&!_s.fragments.find(function(f){return f.id===id;})){
+          _s.fragments.push({id:id,name:sl.name||id,fragType:sl.fragType||'fragment',
+            spawnProbability:0.5,semanticTrigger:'fragile',duration:sl.duration||0});
+        }
+      });
+      // recompute ready after sync
+      ready=_s.fragments.filter(function(f){
+        var sl=SAL.voxSlots[f.id];return sl&&sl.ready&&sl.buffer;
+      });
+    }
+    if(ready.length===0)return null; // nothing decoded yet -- stay silent, no fake refs
+    var frags=ready.filter(function(f){
       var ft=f.fragType||f.entityType||f.type||'';
       if(entityType==='subconscious')return ft==='subconscious';
       if(entityType==='narrative')return ft!=='subconscious';
       return true;
     });
-    if(frags.length===0)frags=_s.fragments.slice();
+    if(frags.length===0)frags=ready.slice();
     if(frags.length===0)return null;
     // VOXMEM weighted scoring
     var weather=_s.currentWeather||'CLEAR';
@@ -970,14 +990,14 @@ var VOXDNA=(function(){
       var frags=[];
       const source=pkg.entities||pkg.samples||[];
       source.forEach(function(s){
-        // New format: entity has fields directly
-        if(s.semanticId||s.entityType){
+        // SpukPack v2 / new entity / direct-field format -- accept if it has an id
+        if(s.id||s.semanticId||s.entityType){
           frags.push({
             id:s.id||s.semanticId,
-            name:s.name||(s.audio&&s.audio.replace('.wav','').replace('.mp3',''))||s.semanticId,
-            fragType:s.type||s.entityType||'fragment',
+            name:s.name||(s.audio&&s.audio.replace(/\.[^.]+$/,''))||s.id||s.semanticId,
+            fragType:s.type||s.fragType||s.entityType||(s.fragmentIdentity&&s.fragmentIdentity.type)||'fragment',
             spawnProbability:s.spawnProbability||s.emergenceProbability||0.5,
-            semanticTrigger:s.semState||'fragile',
+            semanticTrigger:s.semState||s.semanticTrigger||'fragile',
             decayState:s.decayState||false,
             duration:s.duration,
             audio:s.audio,
@@ -988,7 +1008,7 @@ var VOXDNA=(function(){
             spatialWidth:s.spatialWidth,
           });
         } else if(s.beatsOnePayload){
-          // Old format
+          // Legacy payload format
           var p=s.beatsOnePayload;
           p.id=s.id;p.name=s.name;p.duration=s.duration;
           p.fragType=p.fragType||(s.fragmentIdentity&&s.fragmentIdentity.type)||'fragment';
@@ -1044,6 +1064,7 @@ var VOXDNA=(function(){
     // Expose VOXMEM to global scope for MIX_INTEL and VOX_ENTITY access
     getMem:function(){return VOXMEM;},
     _getFragment:function(id){return _s.fragments.find(f=>f.id===id)||null;},
+    getFragCount:function(){return _s.fragments.length;},
     // UI panel (VoxRitual slot display -- now shows real metabolism)
     _updateUI:function(){
       const el=document.getElementById('voxslots');if(!el)return;
@@ -3812,8 +3833,10 @@ const PACK_MEM={
   // Activate a pack: dispatch to all relevant systems
   _activatePack(pack){
     const fmt=pack.schema;
+    console.log('[TRACE] _activatePack ENTRY pack='+(pack.meta?.name||'?')+' forge='+(!!(pack.rhythmDNA))+' vox='+(pack.fragments?.length||0));
     // Rhythm DNA
     if(pack.rhythmDNA?.forgeState||pack.rhythmDNA?.bridge){
+      const beforeAnchor=DNA.anchorIdx, beforePacks=PACKS.length;
       const forgeData=this._reconstructForgeData(pack);
       const idx=DNA.importPack(forgeData);
       DNA.weights=new Float32Array(PACKS.length);DNA.morphWeights=new Float32Array(PACKS.length);
@@ -3821,14 +3844,20 @@ const PACK_MEM={
       normW(DNA.weights);DNA.blend();DNA.morphT=0;DNA.morphDur=99999;
       DNA.rebuildPackUI();DNA.rebuildMorphUI();
       SYS.onForgeLoaded();
-      BOOT.trace('PACK_MEM: rhythm DNA loaded');
+      console.log('[TRACE] DNA.importPack OK packs='+beforePacks+'->'+PACKS.length+' anchor='+beforeAnchor+'->'+DNA.anchorIdx+' active='+(DNA.active?'set':'null'));
+    }else{
+      console.log('[TRACE] _activatePack NO rhythmDNA in pack');
     }
     // Vox DNA + fragments
     if(pack.fragments&&pack.fragments.length>0){
+      const beforeSlots=Object.keys(SAL.voxSlots).length;
       VOXDNA.loadADN({samples:pack.fragments,organism:pack.voxDNA?.organism});
       SAL.registerVoxPack(pack.fragments);
       const embedded=pack.fragments.filter(f=>f.audioData).length;
-      BOOT.trace('PACK_MEM: '+pack.fragments.length+' fragments, '+embedded+' embedded audio');
+      const afterSlots=Object.keys(SAL.voxSlots).length;
+      console.log('[TRACE] VOX register: frags='+pack.fragments.length+' embedded='+embedded+' slots='+beforeSlots+'->'+afterSlots+' VOXDNA.frags='+(VOXDNA.getFragCount?VOXDNA.getFragCount():'?'));
+    }else{
+      console.log('[TRACE] _activatePack NO fragments in pack');
     }
     // Ecology biases
     if(pack.ecology?.weatherBias&&typeof WEATHER!=='undefined'){
