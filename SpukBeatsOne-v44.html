@@ -6717,7 +6717,23 @@ async function _processZipFile(file){
             document.head.appendChild(sc);
           });
         }
-        const zip=await JSZip.loadAsync(ev.target.result);
+        let zip;
+        try{
+          zip=await JSZip.loadAsync(ev.target.result,{checkCRC32:false,createFolders:false});
+        }catch(zerr){
+          // Fallback: some ZIPs have corrupt central directory but valid local headers.
+          // Retry with the most tolerant options possible.
+          IMPORT_PIPELINE.setState('ZIP retry (tolerant mode)...');
+          try{
+            zip=await JSZip.loadAsync(ev.target.result,{checkCRC32:false,createFolders:false,optimizedBinaryString:false});
+          }catch(zerr2){
+            // Last resort: manual local-header extraction
+            IMPORT_PIPELINE.setState('ZIP manual parse...');
+            const manual=await _manualZipExtract(ev.target.result);
+            if(manual){await _ingestManualZip(manual,file.name);return res&&res();}
+            throw zerr2;
+          }
+        }
         await _ingestSpukpackZip(zip,file.name);
       }catch(err){IMPORT_PIPELINE.fail('ZIP: '+err.message.slice(0,40));console.error(err);}
       res();
@@ -6797,6 +6813,116 @@ const IMPORT_PIPELINE={
 window.IMPORT_PIPELINE=IMPORT_PIPELINE;
 
 const _wait=ms=>new Promise(r=>setTimeout(r,ms||25));
+
+// MANUAL ZIP EXTRACTOR -- reads local file headers directly.
+// Bypasses corrupt central directory (Sound Forge ZIPs have valid local
+// headers but broken EOCD). Only handles method 0 (stored) + method 8 (deflate).
+async function _manualZipExtract(arrayBuffer){
+  const data=new Uint8Array(arrayBuffer);
+  const dv=new DataView(arrayBuffer);
+  const files={};
+  let offset=0;
+  let found=0;
+  const LFH_SIG=0x04034b50; // PK\x03\x04
+  while(offset<data.length-4){
+    const sig=dv.getUint32(offset,true);
+    if(sig!==LFH_SIG){
+      // Search forward for next local header
+      const next=_findBytes(data,[0x50,0x4b,0x03,0x04],offset+1);
+      if(next<0)break;
+      offset=next;continue;
+    }
+    try{
+      const method=dv.getUint16(offset+8,true);
+      let compSize=dv.getUint32(offset+18,true);
+      const uncompSize=dv.getUint32(offset+22,true);
+      const fnLen=dv.getUint16(offset+26,true);
+      const efLen=dv.getUint16(offset+28,true);
+      const flags=dv.getUint16(offset+6,true);
+      const nameBytes=data.subarray(offset+30,offset+30+fnLen);
+      const fname=new TextDecoder().decode(nameBytes);
+      const dataStart=offset+30+fnLen+efLen;
+      // If sizes are zero (streamed with data descriptor), find next PK header
+      if(compSize===0&&(flags&0x08)){
+        const nextPK=_findBytes(data,[0x50,0x4b],dataStart);
+        compSize=(nextPK<0?data.length:nextPK)-dataStart;
+      }
+      if(fname&&!fname.endsWith('/')&&dataStart+compSize<=data.length){
+        const raw=arrayBuffer.slice(dataStart,dataStart+compSize);
+        files[fname]={method,raw,uncompSize};
+        found++;
+      }
+      offset=dataStart+compSize;
+    }catch(e){
+      const next=_findBytes(data,[0x50,0x4b,0x03,0x04],offset+4);
+      if(next<0)break;offset=next;
+    }
+  }
+  if(found===0)return null;
+  BOOT.trace('manualZip: extracted '+found+' files');
+  return files;
+}
+
+function _findBytes(haystack,needle,from){
+  for(let i=from;i<=haystack.length-needle.length;i++){
+    let ok=true;
+    for(let j=0;j<needle.length;j++){if(haystack[i+j]!==needle[j]){ok=false;break;}}
+    if(ok)return i;
+  }
+  return -1;
+}
+
+// Inflate a deflate-compressed file via DecompressionStream (modern Safari)
+async function _inflateRaw(arrayBuffer){
+  if(typeof DecompressionStream==='undefined')throw new Error('no DecompressionStream');
+  const ds=new DecompressionStream('deflate-raw');
+  const stream=new Response(arrayBuffer).body.pipeThrough(ds);
+  return await new Response(stream).arrayBuffer();
+}
+
+// Ingest a manually-extracted ZIP (files = {name:{method,raw,uncompSize}})
+async function _ingestManualZip(files,filename){
+  IMPORT_PIPELINE.reset();IMPORT_TRACE.start();
+  IMPORT_PIPELINE.report.zip=true;IMPORT_PIPELINE.renderReport();
+  IMPORT_PIPELINE.setState('MANUAL: decoding files...');
+
+  // Decompress all entries to ArrayBuffers
+  const resolved={};
+  for(const[name,entry]of Object.entries(files)){
+    try{
+      if(entry.method===0){resolved[name]=entry.raw;}
+      else if(entry.method===8){resolved[name]=await _inflateRaw(entry.raw);}
+      else{BOOT.warn('manualZip: unsupported method '+entry.method+' for '+name);}
+    }catch(e){BOOT.warn('manualZip inflate '+name+': '+e.message);}
+  }
+
+  // Parse manifest
+  if(!resolved['manifest.json']){IMPORT_PIPELINE.fail('manual: no manifest');return;}
+  let manifest;
+  try{manifest=JSON.parse(new TextDecoder().decode(resolved['manifest.json']));}
+  catch(e){IMPORT_PIPELINE.fail('manual: manifest parse',e.message);return;}
+  IMPORT_PIPELINE.report.manifest=true;IMPORT_PIPELINE.renderReport();
+  IMPORT_TRACE.mark('MANUAL_MANIFEST_OK');
+
+  // Build a pseudo-zip object with .file() and forEach to reuse _ingestSpukpackZip logic
+  const pseudoZip={
+    _files:resolved,
+    file(path){
+      if(!resolved[path])return null;
+      const buf=resolved[path];
+      return{
+        async(type){
+          if(type==='string')return new TextDecoder().decode(buf);
+          if(type==='arraybuffer')return buf;
+          return buf;
+        }
+      };
+    },
+    forEach(cb){Object.keys(resolved).forEach(p=>cb(p,{dir:p.endsWith('/'),
+      async:(t)=>t==='string'?new TextDecoder().decode(resolved[p]):resolved[p]}));},
+  };
+  await _ingestSpukpackZip(pseudoZip,filename);
+}
 
 async function _ingestSpukpackZip(zip,filename){
   IMPORT_PIPELINE.reset();IMPORT_TRACE.start();
