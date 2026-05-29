@@ -14,6 +14,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:linear-gradient(155d
 body{display:grid;grid-template-rows:48px 36px 1fr;grid-template-columns:1fr;grid-template-areas:"hdr""orch""cvs";padding-bottom:36px}
 /* ── LIVE MODE ────────────────────────────────────────────────────────── */
 body.live-mode #lft{display:none}
+[id$="_h"]{display:none!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;left:-9999px!important;visibility:hidden!important}
 body.live-mode{grid-template-columns:1fr!important}
 body.live-mode #debug-hud{display:none!important}
 body.live-mode #pack-bank-list,body.live-mode #pack-mem-summary,body.live-mode #dna-morph-display,body.live-mode #pack-grid,body.live-mode #dna-import-btn{display:none}
@@ -3994,6 +3995,10 @@ const PACK_MEM={
 // Controls duck depth, voice gain, focus hold, mid opening.
 // Default 0.62 -- voices are intentional narrative entities.
 // ============================================================
+// PURE PACK mode: only pack samples + kick/sub reinforcement sound.
+// Silences synth snare, hat, and any non-essential synth. For testing voices+atmosphere.
+window.PURE_PACK=false;
+
 const VOX_PRESENCE={
   value:.62, // 0=subconscious residue, 1=dominant narrative
 
@@ -4997,6 +5002,7 @@ function subCluster(t,freq,dur,v){
 const DEBRIS={
   _activeCount:0,_MAX:4,
   spawn(t,vel,weather,proto){
+    if(window.PURE_PACK)return;
     if(typeof FOCUS!=='undefined'&&FOCUS.active)return;
     if(this._activeCount>=this._MAX)return;
     if(!RHYTHM_DNA.isIkeda())return;
@@ -5036,6 +5042,7 @@ function drawTobinFlash(){
 }
 
 function spectralHum(t,freq,dur,v){
+  if(window.PURE_PACK)return;
   const s=ac.createBufferSource();s.buffer=noiseBuf;const g=ac.createGain();
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v*.28,t+dur*.14);g.gain.exponentialRampToValueAtTime(.001,t+dur);
   s.connect(g);g.connect(BUS.get('pressure'));s.start(t);s.stop(t+dur+.01);
@@ -5054,6 +5061,7 @@ function subFragment(t,freq,v){
   }
 }
 function subliminalHum(t,freq,v){
+  if(window.PURE_PACK)return;
   const s=ac.createBufferSource();s.buffer=noiseBuf;const g=ac.createGain();
   const dur=typeof BPMSTATE!=='undefined'?BPMSTATE.subliminalDuration:1.1;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v*.045,t+dur*.16);g.gain.exponentialRampToValueAtTime(.001,t+dur);
@@ -5121,7 +5129,7 @@ function fireSnare(t,vel){
   if(SAL.voxSolo)return;
   const u=sampleBank.snare&&playSample(sampleBank.snare,t,vel,{fcutoff:800+G.c.energy*11000,fQ:.9,maxDur:.9},'snare');
   if(u)SAL.markEvent('snare_sample');
-  else if(!SAL.suppressSynth('snare')){synthSnare(t,vel);SAL.markEvent('synth_snare');}
+  else if(!window.PURE_PACK&&!SAL.suppressSynth('snare')){synthSnare(t,vel);SAL.markEvent('synth_snare');}
   vEvent('snare',vel,t,CX+(Math.random()-.5)*100,CY+(Math.random()-.5)*80);
 }
 function fireHat(t,vel,open){
@@ -5129,7 +5137,7 @@ function fireHat(t,vel,open){
   if(SAL.voxSolo)return;
   const u=sampleBank.hat&&playSample(sampleBank.hat,t,vel,{ftype:'highpass',maxDur:open?.5:.12},'hat');
   if(u)SAL.markEvent('hat_sample');
-  else if(!SAL.suppressSynth('hat')){synthHat(t,vel,open);SAL.markEvent('synth_hat');}
+  else if(!window.PURE_PACK&&!SAL.suppressSynth('hat')){synthHat(t,vel,open);SAL.markEvent('synth_hat');}
 }
 function firePressure(t,freq,dur,vel){
   // Sub breathing -- Tobin: void makes next kick massive
@@ -5533,7 +5541,7 @@ function schedStep(step,t){
     if(intent.kick&&intent.kickVel>.05)  fireKick(stA,intent.kickVel,intent.kickProfile);
     if(intent.snare&&intent.snareVel>.04) fireSnare(stA,intent.snareVel);
     if(intent.hat)                        fireHat(st,intent.hatVel,false); // always closed
-    if(intent.extraHat)                   fireHat(st+sps*.5,intent.extraHatVel,false);
+    if(intent.extraHat&&!window.PURE_PACK)fireHat(st+sps*.5,intent.extraHatVel,false);
   }
 
   if(G.pressureOn&&!G.muteMode&&!BSS.absent&&!BIO.isCollapsed('pressure')){
@@ -6343,7 +6351,7 @@ window.addEventListener('load',()=>{
     const el=document.getElementById('tempo-curve-phase');
     if(el)el.textContent=TEMPO_CURVE.active?TEMPO_CURVE.phaseLabel():'CURVE OFF';
   },2000);
-  document.getElementById('dna-import-btn')?.addEventListener('click',()=>importSpukPack());
+  // (wired below via _triggerPackPicker)
   document.querySelectorAll('.ss-load').forEach(btn=>{btn.addEventListener('click',()=>loadSample(btn.dataset.role));});
   document.querySelectorAll('.ss-clr').forEach(btn=>{btn.addEventListener('click',()=>clearSample(btn.dataset.role));});
   initToggle('tgl-mem','phraseMemory');initToggle('tgl-hum','humanize');initToggle('tgl-lock','lockGroove');
@@ -6358,13 +6366,18 @@ window.addEventListener('load',()=>{
     if(ac&&BUS){
       const t=ac.currentTime;
       if(voxMonitor){
-        // Suppress instrument buses, boost ghost
-        ['kick','snare','hat','pressure','texture'].forEach(k=>{if(BUS[k])BUS[k].gain.gain.setTargetAtTime(.04,t,.5);});
-        if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.85,t,.5);
-        if(BUS.drone)BUS.drone.gain.gain.setTargetAtTime(.15,t,.5);
-        showToast('VOX MONITOR ON');
+        window.PURE_PACK=true; // silence non-essential synths (hum/debris/snare/hat)
+        // Keep kick + sub as reinforcement; silence snare/hat/texture noise
+        if(BUS.snare)BUS.snare.gain.gain.setTargetAtTime(0,t,.4);
+        if(BUS.hat)BUS.hat.gain.gain.setTargetAtTime(0,t,.4);
+        if(BUS.texture)BUS.texture.gain.gain.setTargetAtTime(.12,t,.5);
+        if(BUS.kick)BUS.kick.gain.gain.setTargetAtTime(.55,t,.5);     // reinforcement
+        if(BUS.pressure)BUS.pressure.gain.gain.setTargetAtTime(.5,t,.5); // sub reinforcement
+        if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(1.0,t,.5);   // voices full
+        if(BUS.drone)BUS.drone.gain.gain.setTargetAtTime(.2,t,.5);
+        showToast('VOX MONITOR -- pack + kick/sub only');
       }else{
-        // Restore
+        window.PURE_PACK=false;
         ORCH.applyBusGains();
         if(BUS.ghost)BUS.ghost.gain.gain.setTargetAtTime(.18,t,.5);
         showToast('VOX MONITOR OFF');
@@ -6518,7 +6531,7 @@ window.addEventListener('load',()=>{
     b.addEventListener('click',()=>{if(!ac)initAC();ac.resume();BEHAVIORAL_PROFILES.setProfile(b.dataset.bp);});
   });
   // Pack buttons
-  document.querySelector('#import-multi-btn')?.addEventListener('click',()=>importSpukPack({multi:true}));
+  // (wired below via _triggerPackPicker)
   // VOX PRESENCE
   document.getElementById('vox-presence-slider')?.addEventListener('input',function(){
     VOX_PRESENCE.set(+this.value/100);
