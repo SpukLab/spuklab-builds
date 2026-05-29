@@ -723,7 +723,7 @@ var VOXDNA=(function(){
     none:    {clarity:.80,fragility:.20,lateralize:.0,grainDensity:.05,humanContent:.9},
   };
   var ENTITY={
-    narrative:{preferredStates:['hollow','mask','memory'],gainRange:[.55,.85],
+    narrative:{preferredStates:['hollow','mask','memory'],gainRange:[.85,1.15],
       minIntervalSec:{EMERGENCE:90,STABILIZATION:180,PRESSURE_BUILD:480,RITUAL_TRANCE:480,FRAGMENTATION:120,RECOVERY:90,COLLAPSE:60,REBIRTH:60},
       maxIntervalSec:{EMERGENCE:180,STABILIZATION:360,PRESSURE_BUILD:900,RITUAL_TRANCE:900,FRAGMENTATION:300,RECOVERY:180,COLLAPSE:120,REBIRTH:120}},
     ghost:{preferredStates:['radio','choir','drift'],gainRange:[.18,.42],baseDensityPerMin:1.8},
@@ -972,6 +972,9 @@ var VOXDNA=(function(){
     var wm=WEATHER_VOICE_MAP[_s.currentWeather]||WEATHER_VOICE_MAP.CLEAR;
     var g=ENTITY.narrative.gainRange[0]+Math.random()*(ENTITY.narrative.gainRange[1]-ENTITY.narrative.gainRange[0]);
     g*=(wm.gainMult||1);
+    // VOICE ALWAYS LEGIBLE: floor the narrative gain so voices are never buried
+    const presV=window.VOX_PRESENCE?.value||.72;
+    g=Math.max(g,.7+presV*.4); // floor 0.7-1.1
     var frag=_pickReadyFragment('narrative');
     return{shouldEmerge:true,entity:'narrative',identity:st,gain:g,clarity:pr.clarity,lateralize:pr.lateralize,
       fragment:frag,
@@ -3754,10 +3757,24 @@ const SPUKPACK={
   },
 
   // Normalize any known format into SpukPack v2 schema
+  // Canonicalize fragment types so the scheduler recognizes spoken voices
+  _canonFragTypes(data){
+    if(data.fragments&&Array.isArray(data.fragments)){
+      data.fragments.forEach(f=>{
+        const canon=(typeof _canonicalVoxType==='function')
+          ?_canonicalVoxType(f.type,f.spectralRole):f.type;
+        f.sourceType=f.type;
+        f.type=canon;
+        f.fragType=canon;
+      });
+    }
+    return data;
+  },
+
   normalize(data){
     const fmt=this.detect(data);
     switch(fmt){
-      case 'spukpack_v2':   return data; // already correct
+      case 'spukpack_v2':   return this._canonFragTypes(data); // canonicalize types
       case 'forge_dna':     return this._fromForge(data);
       case 'vox_pack_v1':
       case 'vox_entities':
@@ -4737,9 +4754,9 @@ const FOCUS={
   voicePriorityCurve(entity,deep){
     if(entity==='narrative'){
       return{
-        pressure:deep?.03:.06,   // -24dB deep, -15dB normal
-        kick:    deep?.10:.22,
-        snare:   deep?.06:.15,
+        pressure:deep?.02:.04,   // duck hard -- voice must dominate
+        kick:    deep?.06:.14,
+        snare:   deep?.04:.10,
         hat:     .03,
         texture: .02,
         ghost:   .94,
@@ -6515,7 +6532,7 @@ window.addEventListener('load',()=>{
     SUB_BREATH._rate=.012;
     VOX_PRESENCE.set(.72); // VOX FIRST
     // Default weather: SUB_PRESSURE (low-end dominant)
-    if(typeof WEATHER!=='undefined')WEATHER.set('SUB_PRESSURE');
+    if(typeof WEATHER!=='undefined')WEATHER.set('FOG'); // allows narrative voices
     BOOT.trace('Tectonic defaults applied v42');
   },500);
 
@@ -6890,9 +6907,12 @@ const _wait=ms=>new Promise(r=>setTimeout(r,ms||25));
 function _canonicalVoxType(srcType,spectralRole){
   const t=(srcType||'').toLowerCase();
   const r=(spectralRole||'').toLowerCase();
-  // Voice / narrative content
-  if(t.includes('ritual_voice')||t.includes('command'))return 'command';
+  // Voice / narrative content -- these are the SPOKEN voices
+  if(t.includes('narrative_voice')||t.includes('narrative'))return 'command';
+  if(t.includes('ritual_voice'))return 'command';
+  if(t.includes('command'))return 'command';
   if(t.includes('ritual'))return 'ritual';
+  if(t.includes('voice')||t.includes('speech')||t.includes('word')||t.includes('phrase'))return 'command';
   // Ghosts / memory
   if(t.includes('semantic_ghost')||t.includes('ghost'))return 'ghost';
   if(t.includes('memory')||t.includes('collapse'))return 'ghost';
