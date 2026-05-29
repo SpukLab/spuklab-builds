@@ -1464,6 +1464,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
 </footer>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════
    SOUND FORGE — Phase 3: Sonic Sculpting Engine
@@ -4138,43 +4139,24 @@ function buildSpukBeatsBridge(forgeState, satDNA, procState, carveState, generat
 // MINIMAL ZIP BUILDER — Store mode, no dependencies
 // Produces valid .zip / .spukpack from in-memory files
 // ═══════════════════════════════════════════════════════
+// MinimalZip API wrapper backed by JSZip — fixes corrupt central directory
+// Keeps same .add(path,data) / .build() interface so forgeSpukPack needs no changes.
 class MinimalZip{
-  constructor(){this._files=[];}
+  constructor(){this._jz=new JSZip();this._files=[];}
   add(path,data){
-    const b=data instanceof ArrayBuffer?new Uint8Array(data):data;
-    this._files.push({path,bytes:b,crc:this._crc32(b)});
+    const b=data instanceof ArrayBuffer?data:
+      (data instanceof Uint8Array?data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength):data);
+    this._jz.file(path,b,{binary:true,compression:'STORE'});
+    this._files.push({path});
   }
-  _crc32(buf){
-    if(!MinimalZip._t){
-      MinimalZip._t=new Uint32Array(256);
-      for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);MinimalZip._t[i]=c;}
-    }
-    let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=MinimalZip._t[(c^buf[i])&0xff]^(c>>>8);return(c^0xFFFFFFFF)>>>0;
-  }
-  _u16(v){return[v&0xff,(v>>8)&0xff];}
-  _u32(v){return[v&0xff,(v>>8)&0xff,(v>>16)&0xff,(v>>24)&0xff];}
-  build(){
-    const parts=[],cd=[];let off=0;
-    for(const f of this._files){
-      const name=new TextEncoder().encode(f.path);
-      const lh=new Uint8Array([0x50,0x4B,0x03,0x04,0x14,0x00,0x00,0x00,0x00,0x00,
-        0x00,0x00,0x00,0x00,...this._u32(f.crc),...this._u32(f.bytes.length),
-        ...this._u32(f.bytes.length),...this._u16(name.length),0x00,0x00,...name]);
-      cd.push(new Uint8Array([0x50,0x4B,0x01,0x02,0x14,0x00,0x14,0x00,
-        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,...this._u32(f.crc),
-        ...this._u32(f.bytes.length),...this._u32(f.bytes.length),
-        ...this._u16(name.length),0x00,0x00,0x00,0x00,0x00,0x00,
-        0x00,0x00,0x00,0x00,...this._u32(off),...name]));
-      parts.push(lh,f.bytes);off+=lh.length+f.bytes.length;
-    }
-    const cdBuf=this._cat(cd),cdSize=cdBuf.length,n=this._files.length;
-    const eocd=new Uint8Array([0x50,0x4B,0x05,0x06,0x00,0x00,0x00,0x00,
-      ...this._u16(n),...this._u16(n),...this._u32(cdSize),...this._u32(off),0x00,0x00]);
-    parts.push(cdBuf,eocd);return this._cat(parts);
-  }
-  _cat(arrays){
-    const tot=arrays.reduce((s,a)=>s+a.length,0),out=new Uint8Array(tot);
-    let p=0;for(const a of arrays){out.set(a,p);p+=a.length;}return out;
+  // Returns a Promise<Uint8Array> — forgeSpukPack now awaits build()
+  async build(){
+    const ab=await this._jz.generateAsync({
+      type:'arraybuffer',
+      compression:'STORE',
+      compressionOptions:{level:0}
+    });
+    return new Uint8Array(ab);
   }
 }
 
@@ -4699,7 +4681,7 @@ async function forgeSpukPack(opts){
 
   progress(94,'compressing pack…');
   await new Promise(r=>setTimeout(r,16));
-  const packBytes=zip.build();
+  const packBytes=await zip.build();  // JSZip — returns valid Uint8Array
 
   progress(98,'downloading…');
   const uiName=(document.getElementById('pid-name')?.value||currentSatProfile).replace(/\s+/g,'_').toLowerCase();
