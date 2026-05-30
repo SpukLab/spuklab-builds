@@ -143,6 +143,20 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   color:var(--violet);text-transform:uppercase;margin-bottom:7px;
   padding-bottom:4px;border-bottom:1px solid var(--vdim);}
 .st.accent{color:var(--org-accent);border-color:var(--org-dim);transition:color .3s;}
+.st-sub{font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.1em;
+  color:rgba(153,68,255,.5);text-transform:uppercase;}
+/* Collapsible — only LAB panes get the toggle affordance */
+#pane-forge .st,#pane-sculpt .st,#pane-resample .st,#pane-dna .st,#pane-temporal .st{
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  display:flex;align-items:center;justify-content:space-between;user-select:none;}
+#pane-forge .st::after,#pane-sculpt .st::after,#pane-resample .st::after,
+#pane-dna .st::after,#pane-temporal .st::after{
+  content:'▾';font-style:normal;font-size:9px;color:rgba(153,68,255,.4);
+  transition:transform .18s;}
+#pane-forge .st.collapsed::after,#pane-sculpt .st.collapsed::after,
+#pane-resample .st.collapsed::after,#pane-dna .st.collapsed::after,
+#pane-temporal .st.collapsed::after{transform:rotate(-90deg);}
+.sec-body.hidden{display:none!important;}
 
 /* ORGANISM SELECTOR */
 .orgsel{display:flex;gap:4px;}
@@ -670,7 +684,6 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <button class="lbtn" id="lb-resample">RESAMPLE</button>
     <button class="lbtn" id="lb-dna">DNA RAW</button>
     <button class="lbtn" id="lb-temporal">TEMPORAL</button>
-    <button class="lbtn" id="lb-macro">MACRO</button>
   </div>
   <div class="qfs">
     <div class="qf-item">
@@ -1344,7 +1357,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
         <div class="curve-chip" data-curve="fragmented"><span>FRAGMENT</span></div>
       </div>
       <div style="margin-top:7px;">
-        <div class="st" style="margin-bottom:5px;">SPECTRAL DENSITY</div>
+        <div class="st-sub" style="margin-bottom:5px;">SPECTRAL DENSITY</div>
         <div class="sden-row">
           <div class="sden-chip" data-sden="minimal"><span>MINIMAL</span></div>
           <div class="sden-chip active" data-sden="focused"><span>FOCUSED</span></div>
@@ -1352,12 +1365,6 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
           <div class="sden-chip" data-sden="wall"><span>WALL</span></div>
         </div>
       </div>
-    </div>
-
-    <div class="sec">
-      <div class="st">DYNAMICS</div>
-      <div class="tone-ctrl"><span class="tlbl">CONTRAST</span><div class="ttrack" data-td="contrastLevel"><div class="tfill" style="width:60%;background:rgba(255,100,180,.7);"></div></div><span class="tval" id="tdv-contrastLevel">0.60</span></div>
-      <div class="tone-ctrl"><span class="tlbl">SILENCE TOL.</span><div class="ttrack" data-td="silenceTolerance"><div class="tfill" style="width:50%;background:rgba(100,180,255,.6);"></div></div><span class="tval" id="tdv-silenceTolerance">0.50</span></div>
     </div>
 
     <div class="sec">
@@ -1376,80 +1383,6 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
 
   </div>
 
-  <!-- ═══ MACRO CONTROLS PANE ═══ -->
-  <div class="pane" id="pane-macro">
-
-    <div class="sec">
-      <div class="st">MACRO CONTROLS</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--gray);margin-bottom:8px;line-height:1.5;font-style:italic;">
-        Perceptual controls. Each macro shapes multiple parameters simultaneously.
-      </div>
-      <div class="macro-grid">
-        <!-- Each row: left-label, bipolar-track, right-label -->
-        <div class="macro-row" id="mr-tone">
-          <span class="macro-lbl-l">DARK</span>
-          <div class="macro-track" data-macro="tone">
-            <div class="macro-fill-l" id="mfl-tone"></div>
-            <div class="macro-fill-r" id="mfr-tone"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-tone" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">OPEN</span>
-        </div>
-        <div class="macro-row" id="mr-space">
-          <span class="macro-lbl-l">DRY</span>
-          <div class="macro-track" data-macro="space">
-            <div class="macro-fill-l" id="mfl-space"></div>
-            <div class="macro-fill-r" id="mfr-space"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-space" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">ATMOSPHERIC</span>
-        </div>
-        <div class="macro-row" id="mr-damage">
-          <span class="macro-lbl-l">CLEAN</span>
-          <div class="macro-track" data-macro="damage">
-            <div class="macro-fill-l" id="mfl-damage"></div>
-            <div class="macro-fill-r" id="mfr-damage"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-damage" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">BROKEN</span>
-        </div>
-        <div class="macro-row" id="mr-time">
-          <span class="macro-lbl-l">TIGHT</span>
-          <div class="macro-track" data-macro="time">
-            <div class="macro-fill-l" id="mfl-time"></div>
-            <div class="macro-fill-r" id="mfr-time"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-time" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">DIFFUSED</span>
-        </div>
-        <div class="macro-row" id="mr-motion">
-          <span class="macro-lbl-l">STATIC</span>
-          <div class="macro-track" data-macro="motion">
-            <div class="macro-fill-l" id="mfl-motion"></div>
-            <div class="macro-fill-r" id="mfr-motion"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-motion" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">EVOLVING</span>
-        </div>
-        <div class="macro-row" id="mr-scale">
-          <span class="macro-lbl-l">INTIMATE</span>
-          <div class="macro-track" data-macro="scale">
-            <div class="macro-fill-l" id="mfl-scale"></div>
-            <div class="macro-fill-r" id="mfr-scale"></div>
-            <div class="macro-center"></div>
-            <div class="macro-thumb" id="mt-scale" style="left:50%;"></div>
-          </div>
-          <span class="macro-lbl-r">MASSIVE</span>
-        </div>
-      </div>
-    </div>
-
-  </div>
 
 </div><!-- .cpanel -->
 </main>
@@ -2198,7 +2131,7 @@ function fireLowMass(t){
 
 // ─── MACRO STATE — bipolar -1…+1 ────────────────────────
 // Each macro maps to multiple micro-parameters simultaneously
-const MacroState={tone:0,space:0,damage:0,time:0,motion:0,scale:0};
+const MacroState={tone:0,space:0,damage:0,time:0,motion:0,scale:0,precision:0};
 
 function applyMacro(key,v){
   // v is -1…+1 (left side negative, right side positive)
@@ -3604,7 +3537,7 @@ function updateFilenamePreview(){
 }
 
 // ── LAB sub-mode ──────────────────────────────────────────
-const LAB_PANES=['forge','sculpt','resample','dna','temporal','macro'];
+const LAB_PANES=['forge','sculpt','resample','dna','temporal'];
 let currentLabMode='forge';
 
 function setLabMode(key){
@@ -3670,7 +3603,7 @@ function setMode(mode){
 });
 
 // Bind LAB sub-tabs
-['forge','sculpt','resample','dna','temporal','macro'].forEach(k=>{
+['forge','sculpt','resample','dna','temporal'].forEach(k=>{
   const btn=document.getElementById('lb-'+k);
   if(!btn)return;
   btn.addEventListener('click',()=>setLabMode(k));
@@ -3809,15 +3742,11 @@ document.querySelectorAll('.stchip[data-st]').forEach(chip=>{
   if(el)el.addEventListener('input',updateFilenamePreview);
 });
 
-// Slot buttons in sculpt mini-panel
-document.querySelectorAll('[data-org2]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    currentSlot=parseInt(btn.dataset.org2);currentOrg=currentSlot;
-    document.querySelectorAll('[data-org2]').forEach(b=>b.classList.toggle('active',b===btn));
-    document.querySelectorAll('[data-org]').forEach(b=>b.classList.toggle('active',
-      parseInt(b.dataset.org)===currentSlot));
-    updateMaterialUI();updateSculptMiniWave();
-  });
+// Slot buttons in sculpt mini-panel — route through canonical selectSlot
+document.querySelectorAll('.obtn[data-org2]').forEach(btn=>{
+  const idx=parseInt(btn.dataset.org2);
+  btn.addEventListener('click',()=>selectSlot(idx));
+  btn.addEventListener('touchstart',e=>{e.preventDefault();selectSlot(idx);},{passive:false});
 });
 
 // Preview btn in sculpt panel
@@ -3924,13 +3853,17 @@ function selectOrg(idx){
   document.documentElement.style.setProperty('--org-bg',cv.bg);
   setT('sf-org',SYNTH_ORGS[idx].name);
   setT('cl-pk',['rust_ritual','rust_ritual','rust_ritual'][idx]);
-  document.querySelectorAll('.obtn').forEach((b,i)=>b.classList.toggle('active',i===idx));
-  document.querySelectorAll('[data-org2]').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.org2)===idx));
+  // Mark active by data attribute — never by forEach index (6 buttons, 3 slots)
+  document.querySelectorAll('.obtn[data-org]').forEach(b=>
+    b.classList.toggle('active',parseInt(b.dataset.org)===idx));
+  document.querySelectorAll('.obtn[data-org2]').forEach(b=>
+    b.classList.toggle('active',parseInt(b.dataset.org2)===idx));
   updateMaterialUI();updateForgeStats();updateResampleUI();
   updateSlotInputVisibility();
-  // Update all .ffill colors with org-accent
   document.querySelectorAll('.ffill').forEach(el=>{el.style.background=cv.accent;});
 }
+// Canonical alias — every slot button calls this
+const selectSlot=selectOrg;
 
 // ─── INTERACTIVE FORGE CONTROLS ─────────────────────────
 // Touch/mouse drag on ftrack elements
@@ -5220,15 +5153,42 @@ function initForgeDisplay(){
 // ─── EVENTS ─────────────────────────────────────────────
 document.getElementById('tbtn').addEventListener('touchstart',e=>{e.preventDefault();trigger();},{passive:false});
 document.getElementById('tbtn').addEventListener('mousedown',e=>{e.preventDefault();trigger();});
-document.querySelectorAll('.obtn').forEach((btn,i)=>{
-  btn.addEventListener('touchstart',e=>{e.preventDefault();selectOrg(i);},{passive:false});
-  btn.addEventListener('click',()=>selectOrg(i));
+document.getElementById('tbtn').addEventListener('click',e=>{e.preventDefault();trigger();});
+// Material-pane slot buttons — canonical selectSlot, by data attribute
+document.querySelectorAll('.obtn[data-org]').forEach(btn=>{
+  const idx=parseInt(btn.dataset.org);
+  btn.addEventListener('touchstart',e=>{e.preventDefault();selectSlot(idx);},{passive:false});
+  btn.addEventListener('click',()=>selectSlot(idx));
 });
 document.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();trigger();}
   if(e.code==='Digit1')selectOrg(0);if(e.code==='Digit2')selectOrg(1);if(e.code==='Digit3')selectOrg(2);
   if(e.code==='KeyM')setMode('mat');if(e.code==='KeyS')setMode('sculpt2');
   if(e.code==='KeyE')setMode('export');if(e.code==='KeyL')setMode('lab');
+});
+
+// ─── COLLAPSIBLE SECTIONS (LAB panes only) ───────────────
+// Primary panes (sculpt2/mat/temporal2/export) stay always open.
+// Only LAB internal panes get collapsible sections to reduce clutter.
+['pane-forge','pane-sculpt','pane-resample','pane-dna','pane-temporal'].forEach(pid=>{
+  const pane=document.getElementById(pid);if(!pane)return;
+  pane.querySelectorAll(':scope > .sec > .st').forEach(st=>{
+    const sec=st.parentElement;
+    let body=sec.querySelector('.sec-body');
+    if(!body){
+      body=document.createElement('div');body.className='sec-body';
+      const kids=Array.from(sec.children);
+      const idx=kids.indexOf(st);
+      kids.slice(idx+1).forEach(c=>body.appendChild(c));
+      sec.appendChild(body);
+    }
+    const toggle=()=>{
+      const collapsed=st.classList.toggle('collapsed');
+      body.classList.toggle('hidden',collapsed);
+    };
+    st.addEventListener('click',toggle);
+    st.addEventListener('touchstart',e=>{e.preventDefault();toggle();},{passive:false});
+  });
 });
 
 // ─── INIT ────────────────────────────────────────────────
