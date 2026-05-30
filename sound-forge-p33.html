@@ -1708,6 +1708,7 @@ function updateMaterialUI(){
 
 function drawMiniWaveform(slotIdx){
   const canvas=document.getElementById('mat-wave-mini');
+  if(!canvas)return; // legacy canvas removed in MATERIAL pane rebuild
   const ctx=canvas.getContext('2d');
   const dpr=window.devicePixelRatio||1;
   const w=canvas.offsetWidth;const h=canvas.offsetHeight||40;
@@ -4746,10 +4747,13 @@ document.getElementById('rsb-reload').addEventListener('click',()=>{
 });
 
 // ─── PREVIEW CLEAN ──────────────────────────────────────
-document.getElementById('preview-btn').addEventListener('touchstart',e=>{
-  e.preventDefault();previewMaterial();
-},{passive:false});
-document.getElementById('preview-btn').addEventListener('click',()=>previewMaterial());
+(function(){
+  const pb=document.getElementById('preview-btn'); // legacy id — may not exist
+  if(pb){
+    pb.addEventListener('touchstart',e=>{e.preventDefault();previewMaterial();},{passive:false});
+    pb.addEventListener('click',()=>previewMaterial());
+  }
+})();
 
 // ─── CHAIN BYPASS ───────────────────────────────────────
 (function(){
