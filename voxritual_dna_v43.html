@@ -3404,7 +3404,7 @@ const MONTAGE={
     });
 
     this.playing=true;this.playingSlotIdx=0;this.slotSchedule=[];this.fragGains=[];
-    document.getElementById('montPlayBtn').classList.add('on');
+    var _mpb=document.getElementById('montPlayBtn');if(_mpb)_mpb.classList.add('on');
     var startBase=A.AC.currentTime+0.08;
     this.playStartAC=startBase;
      var stateProf=MONTAGE_STATE.profile;
@@ -3462,13 +3462,13 @@ const MONTAGE={
          if(li===0&&i===sortedSlots.length-1){
            src.onended=function(){
              if(MONTAGE.playing){MONTAGE.playing=false;MONTAGE.playingSlotIdx=-1;
-               document.getElementById('montPlayBtn').classList.remove('on');
+               var _mpb=document.getElementById('montPlayBtn');if(_mpb)_mpb.classList.remove('on');
                MONTAGE_STATE.autoDetect();updateMontageStatus();}
            };
          }
        });
      });
-     if(totalSrcs===0){this.playing=false;document.getElementById('montPlayBtn').classList.remove('on');}
+     if(totalSrcs===0){this.playing=false;var _mpb=document.getElementById('montPlayBtn');if(_mpb)_mpb.classList.remove('on');}
   },
   stop(){
     this.playing=false;this.playingSlotIdx=-1;this.playheadSec=0;
@@ -4173,8 +4173,6 @@ document.querySelectorAll('.loopModeBtn').forEach(btn=>{btn.addEventListener('cl
 
 // ─── SURGERY AUDITION MODES ───────────────────────────────────────────────
 document.getElementById('audPreviewRegion').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();TP.looping=true;document.getElementById('tLoop').classList.add('on');LME.play(toAB(s),LME.mutType,REGION.startSec(s.duration));});
-document.getElementById('audEdgeL').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();const t0=Math.max(0,REGION.startSec(s.duration)-0.15);LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);src.start(0,t0,Math.min(0.3,s.duration-t0));LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime-t0;TP.duration=s.duration;src.onended=()=>{TP.state='stopped';updateTUI();};updateTUI();});
-document.getElementById('audEdgeR').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();const t0=Math.max(0,REGION.endSec(s.duration)-0.15);LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);src.start(0,t0,Math.min(0.3,s.duration-t0));LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime-t0;TP.duration=s.duration;src.onended=()=>{TP.state='stopped';updateTUI();};updateTUI();});
 document.getElementById('audPreviewOut').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();const rs=REGION.startSec(s.duration);if(rs<0.02)return;LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);src.start(0,0,rs);LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime;TP.duration=s.duration;src.onended=()=>{TP.state='stopped';updateTUI();};updateTUI();});
 
 // ─── PEAK CACHE ───────────────────────────────────────────────────────────
@@ -4324,11 +4322,8 @@ function drawHistTree(s){const row=document.getElementById('histRow');row.innerH
 function ancestorChain(s){const chain=[s];let cur=s;for(let i=0;i<8;i++){if(!cur.parentId)break;const p=A.samples.find(x=>x.id===cur.parentId);if(!p)break;chain.unshift(p);cur=p;}return chain;}
 document.getElementById('rcToggle').addEventListener('click',()=>{const p=document.getElementById('rcPanel');p.style.display=p.style.display==='none'?'flex':'none';});
 function renderRecomp(s){const blocks=document.getElementById('rcBlocks');blocks.innerHTML=(s.analysis.phrases||[]).slice(0,20).map((p,i)=>`<button class="rcb" data-i="${i}" data-t0="${p.t0}" data-t1="${p.t1}">P${i+1} ${(p.t1-p.t0).toFixed(1)}s</button>`).join('');blocks.querySelectorAll('.rcb').forEach(b=>b.addEventListener('click',async()=>{b.classList.toggle('off');if(!b.classList.contains('off')){const s=sample();if(!s)return;await ensureAC();LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);const t0=parseFloat(b.dataset.t0),t1=parseFloat(b.dataset.t1);src.start(0,t0,t1-t0);LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime-t0;TP.duration=s.duration;updateTUI();};}));}
-document.getElementById('rcRenderBtn').addEventListener('click',async()=>{const s=sample();if(!s)return;const active=Array.from(document.querySelectorAll('.rcb:not(.off)'));if(!active.length)return;document.getElementById('rcRenderBtn').textContent='…';const srcBuf=toAB(s);const segs=active.map(b=>({t0:parseFloat(b.dataset.t0),t1:parseFloat(b.dataset.t1),frames:Math.floor((parseFloat(b.dataset.t1)-parseFloat(b.dataset.t0))*srcBuf.sampleRate)}));const total=segs.reduce((a,g)=>a+g.frames,0);const newBuf=A.AC.createBuffer(srcBuf.numberOfChannels,total,srcBuf.sampleRate);let off=0;for(const seg of segs){const sf=Math.floor(seg.t0*srcBuf.sampleRate);for(let c=0;c<srcBuf.numberOfChannels;c++){const s=srcBuf.getChannelData(c),d=newBuf.getChannelData(c);for(let i=0;i<seg.frames;i++)d[off+i]=s[sf+i]||0;}off+=seg.frames;}const child=await buildRecord(newBuf,{name:`${s.name}_rc`,cat:'fragments',parentId:s.id,mutationOf:'recompose'});await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);document.getElementById('rcRenderBtn').textContent='RENDER';});
 
 // ─── MONTAGE PANEL ────────────────────────────────────────────────────────
-document.getElementById('montPlayBtn').addEventListener('click',async()=>{await ensureAC();await MONTAGE.play();updateSurgMontageStrip();});
-document.getElementById('montStopBtn').addEventListener('click',()=>{MONTAGE.stop();updateSurgMontageStrip();});
 document.getElementById('montClearBtn').addEventListener('click',()=>{MONTAGE.clear();renderLibrary();});
 document.getElementById('montRenderBtn').addEventListener('click',async()=>{await ensureAC();document.getElementById('montRenderBtn').textContent='…';const outBuf=await MONTAGE.render();if(!outBuf){document.getElementById('montRenderBtn').textContent='RENDER';return;}const child=await buildRecord(outBuf,{name:`montage_${stamp()}`,cat:'fragments',parentId:null,mutationOf:'montage'});child.fragmentIdentity.type='spoken';child.fragmentIdentity.origin='montage';await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);document.getElementById('montRenderBtn').textContent='RENDER';});
 document.getElementById('montSnapAdd').addEventListener('click',()=>MONTAGE.saveSnapshot());
