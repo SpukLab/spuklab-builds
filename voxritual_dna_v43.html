@@ -801,7 +801,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
       <button class="modeTab capture"    data-mode="capture">CAPTURE</button>
     </div>
     <div id="semBadge"><div id="semOrb"></div><div id="semName">fragile</div></div>
-    <div id="buildMark">v43</div>
+    <div id="buildMark">v43.2</div>
   </div>
 
   <!-- MASTER TRANSPORT BAR — contextual per tab -->
@@ -3880,7 +3880,19 @@ async function _appInit(){
   try{MONTAGE.snapshots=JSON.parse(localStorage.getItem('vr43_msnaps')||'[]');}catch(e){MONTAGE.snapshots=[];}
   renderLibrary();startViz();renderMontageSnaps();VIE.updateStatus();
   TEMPERATURE.startTick();updateTemperatureUI();updateMontageStateUI();SPATIAL.initAll();
-  setTimeout(function(){updateActiveLane();updateLaneGainUI();PACK.updateChecklist();},100);
+  setTimeout(function(){updateActiveLane();updateLaneGainUI();PACK.updateChecklist();
+    // Startup DOM self-test
+    try {
+      var audit = APP.auditDOM();
+      window._VOXAUDIT = audit;
+      if(audit.missing.length) {
+        console.warn('[DOM AUDIT] MISSING:', audit.missing);
+        window._VOXLASTERR = 'DOM audit: '+audit.missing.length+' missing';
+      } else {
+        console.log('[DOM AUDIT] OK '+audit.ok+'/'+audit.total);
+      }
+    } catch(e) { console.error('DOM audit failed:', e); }
+  },100);
   // Init contextual transport (wires master bar buttons for current mode)
   setMode(A.activeMode||'surgery');
   // REC timer display
@@ -4172,7 +4184,7 @@ document.querySelectorAll('.loopModeBtn').forEach(btn=>{btn.addEventListener('cl
   REGION.loopMode=btn.dataset.lm;document.querySelectorAll('.loopModeBtn').forEach(b=>b.classList.toggle('on',b.dataset.lm===REGION.loopMode));if(TP.looping&&LME.src)REGION.startLoopBehavior();});});
 
 // ─── SURGERY AUDITION MODES ───────────────────────────────────────────────
-document.getElementById('audPreviewRegion').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();TP.looping=true;document.getElementById('tLoop').classList.add('on');LME.play(toAB(s),LME.mutType,REGION.startSec(s.duration));});
+document.getElementById('audPreviewRegion').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();TP.looping=true;var _tl=document.getElementById('tLoop');if(_tl)_tl.classList.add('on');LME.play(toAB(s),LME.mutType,REGION.startSec(s.duration));});
 document.getElementById('audPreviewOut').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();const rs=REGION.startSec(s.duration);if(rs<0.02)return;LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);src.start(0,0,rs);LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime;TP.duration=s.duration;src.onended=()=>{TP.state='stopped';updateTUI();};updateTUI();});
 
 // ─── PEAK CACHE ───────────────────────────────────────────────────────────
@@ -4320,8 +4332,8 @@ document.getElementById('snapAddBtn').addEventListener('click',()=>{if(!A.select
 function renderSnaps(){const row=document.getElementById('snapRow'),noMsg=document.getElementById('noSnapMsg');const rel=A.snapshots.filter(s=>s.sourceId===A.selectedId);noMsg.style.display=rel.length?'none':'inline';row.querySelectorAll('.sch:not(.add)').forEach(c=>c.remove());rel.slice(-6).forEach(snap=>{const c=document.createElement('button');c.className='sch';c.textContent=snap.name;c.addEventListener('click',async()=>{const s=A.samples.find(x=>x.id===snap.sourceId);if(!s)return;setSemState(snap.semState);if(snap.normMode)setNormMode(snap.normMode);if(snap.vieState){VIE.state=snap.vieState;document.querySelectorAll('.vieState').forEach(b=>b.classList.toggle('on',b.dataset.vi===VIE.state));}document.querySelectorAll('.mBtn[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===snap.mutType));await ensureAC();LME.play(toAB(s),snap.mutType,REGION.startSec(s.duration));});row.appendChild(c);});}
 function drawHistTree(s){const row=document.getElementById('histRow');row.innerHTML='';const chain=ancestorChain(s),desc=A.samples.filter(x=>x.parentId===s.id);chain.forEach((x,i)=>{if(i>0)row.appendChild(el('div','hArr','→'));const n=el('button',`hNode${x.id===s.id?' on':i===0?' root':''}`,x.mutationOf||x.name.slice(0,8));n.addEventListener('click',()=>selectSample(x.id,true));row.appendChild(n);});if(desc.length){row.appendChild(el('div','hArr','('));desc.forEach((d,i)=>{if(i>0)row.appendChild(el('div','hArr','|'));const n=el('button','hNode',d.mutationOf||d.name.slice(0,7));n.addEventListener('click',()=>selectSample(d.id,true));row.appendChild(n);});row.appendChild(el('div','hArr',')'));}}
 function ancestorChain(s){const chain=[s];let cur=s;for(let i=0;i<8;i++){if(!cur.parentId)break;const p=A.samples.find(x=>x.id===cur.parentId);if(!p)break;chain.unshift(p);cur=p;}return chain;}
-document.getElementById('rcToggle').addEventListener('click',()=>{const p=document.getElementById('rcPanel');p.style.display=p.style.display==='none'?'flex':'none';});
-function renderRecomp(s){const blocks=document.getElementById('rcBlocks');blocks.innerHTML=(s.analysis.phrases||[]).slice(0,20).map((p,i)=>`<button class="rcb" data-i="${i}" data-t0="${p.t0}" data-t1="${p.t1}">P${i+1} ${(p.t1-p.t0).toFixed(1)}s</button>`).join('');blocks.querySelectorAll('.rcb').forEach(b=>b.addEventListener('click',async()=>{b.classList.toggle('off');if(!b.classList.contains('off')){const s=sample();if(!s)return;await ensureAC();LME.stop();const src=A.AC.createBufferSource();src.buffer=toAB(s);src.connect(A.analyser);A.analyser.connect(A.AC.destination);const t0=parseFloat(b.dataset.t0),t1=parseFloat(b.dataset.t1);src.start(0,t0,t1-t0);LME.src=src;TP.state='playing';TP.startedAt=A.AC.currentTime-t0;TP.duration=s.duration;updateTUI();};}));}
+// rcToggle / rcPanel / rcBlocks removed in v43 — recompose UI deleted
+function renderRecomp(s){ /* recompose UI removed in v43 */ }
 
 // ─── MONTAGE PANEL ────────────────────────────────────────────────────────
 document.getElementById('montClearBtn').addEventListener('click',()=>{MONTAGE.clear();renderLibrary();});
@@ -5644,7 +5656,7 @@ function drawTL(){
     ctx.fillStyle=`rgba(${r},${g},${b},0.2)`;for(let x=0;x<W;x++){const v=peaks[Math.floor(x/W*N)]||0;const h=v*mid*.7;ctx.fillRect(x,mid-h,1,h*2||1);}
     const tLx=REGION.normStart*W,tRx=REGION.normEnd*W;ctx.fillStyle='rgba(9,7,20,.45)';if(tLx>0)ctx.fillRect(0,0,tLx,H);if(tRx<W)ctx.fillRect(tRx,0,W-tRx,H);
     if(TP.state==='playing'&&LME.src&&LME.src.buffer){const pn=LME.currentPos()/s.duration;ctx.fillStyle='rgba(0,255,255,.6)';ctx.fillRect(clamp(pn*W,0,W-1),0,1.5,H);}
-    document.getElementById('tlPos').textContent=fmt(LME.currentPos?LME.currentPos():0);
+    var _tlp=document.getElementById('tlPos');if(_tlp)_tlp.textContent=fmt(LME.currentPos?LME.currentPos():0);
   }
   // Draw on surgery local transport timeline
   const sc=document.getElementById('stlCanvas');
@@ -5657,7 +5669,7 @@ function drawTL(){
     ctx2.fillStyle='rgba(9,7,20,.5)';if(tLx2>0)ctx2.fillRect(0,0,tLx2,H2);if(tRx2<W2)ctx2.fillRect(tRx2,0,W2-tRx2,H2);
     ctx2.fillStyle=`rgba(0,255,255,0.08)`;ctx2.fillRect(tLx2,0,tRx2-tLx2,H2);
     if(TP.state==='playing'&&LME.src&&LME.src.buffer){const pn2=LME.currentPos()/s.duration;ctx2.fillStyle='rgba(0,255,255,.75)';ctx2.fillRect(clamp(pn2*W2,0,W2-1),0,1.5,H2);}
-    document.getElementById('stlPos').textContent=fmt(LME.currentPos?LME.currentPos():0);
+    var _stlp=document.getElementById('stlPos');if(_stlp)_stlp.textContent=fmt(LME.currentPos?LME.currentPos():0);
   }
 }
 
@@ -5689,6 +5701,49 @@ if(_dbgEl) {
   window._VOXERRS.push('debugBtn not found in DOM');
 }
 
+// ─── DOM AUDIT — startup self-test ────────────────────────────────────────
+var APP = {
+  // Critical elements that MUST exist for the app to function
+  criticalIds: [
+    // Panels
+    'surgeryPanel','montagePanel','capturePanel',
+    // Transport
+    'mbPlay','mbStop','mbLoop','mbRec','mbUndo','mbRedo',
+    // Surgery core
+    'surgCanvas','injectBtn','bounceBtn','fragText',
+    // Montage core
+    'generateBtn','newOrganismBtn','montRenderBtn',
+    'laneCanvas0','laneCanvas1','laneCanvas2',
+    // Capture / Pack
+    'cap5','cap10','capBtn','warmBtn','library',
+    'packExportADN','packExportEcology','packNameInput',
+    // Export
+    'adnBtn','wavBtn','loadBtn','debugBtn',
+    // Send to lane
+    'fieldDurInfo'
+  ],
+  // Critical JS objects
+  criticalObjects: ['PACK','MONTAGE','ORGANISM','SPATIAL','TEMPERATURE','RADIAL','ADN','SPUKPACK','HISTORY','TOUCH_ARB'],
+
+  auditDOM: function() {
+    var missing = [];
+    var ok = 0;
+    // Check DOM elements
+    for(var i=0; i<this.criticalIds.length; i++) {
+      var el = document.getElementById(this.criticalIds[i]);
+      if(el) ok++; else missing.push('#'+this.criticalIds[i]);
+    }
+    // Check JS objects
+    for(var j=0; j<this.criticalObjects.length; j++) {
+      var name = this.criticalObjects[j];
+      var exists = false;
+      try { exists = typeof window[name] !== 'undefined' || eval('typeof '+name+' !== "undefined"'); } catch(e) {}
+      if(exists) ok++; else missing.push('obj:'+name);
+    }
+    return { ok: ok, missing: missing, total: this.criticalIds.length + this.criticalObjects.length };
+  }
+};
+
 function updateDebug(){
   if(!A.debugOn)return;
   var db=document.getElementById('debugOverlay');if(!db)return;
@@ -5698,12 +5753,18 @@ function updateDebug(){
   var laneInfo='';try{laneInfo=MONTAGE.lanes.map(function(l,i){return'L'+(i+1)+':'+l.slots.length;}).join(' ');}catch(e){}
   var tempStr='';try{tempStr=TEMPERATURE.current+'->'+TEMPERATURE.target;}catch(e){}
   var lines=[
-    'v37 '+new Date().toLocaleTimeString(),
+    'v43.2 '+new Date().toLocaleTimeString(),
     'samples:'+(A.samples?A.samples.length:0)+' sel:'+(s?s.name.slice(0,10):'—'),
     'LME:'+TP.state+' VIE:'+VIE.state,
     'MSTATE:'+MONTAGE_STATE.current+' '+laneInfo,
     'TEMP:'+tempStr
   ];
+  // DOM AUDIT
+  try {
+    var audit = APP.auditDOM();
+    lines.push('DOM AUDIT: OK '+audit.ok+'  MISSING '+audit.missing.length);
+    if(audit.missing.length) lines.push('  '+audit.missing.join(' '));
+  } catch(e) { lines.push('DOM AUDIT: error'); }
   if(window._VOXLASTERR)lines.push('LAST ERR:'+window._VOXLASTERR.slice(0,50));
   if(window._VOXERRS&&window._VOXERRS.length){lines.push('JS ERRS:');window._VOXERRS.forEach(function(e){lines.push(' '+e.slice(0,55));});}
   db.textContent=lines.join('\n');
