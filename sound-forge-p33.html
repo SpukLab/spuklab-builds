@@ -114,9 +114,10 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .pid-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);
   letter-spacing:.07em;width:66px;flex-shrink:0;}
 .pid-val{flex:1;background:rgba(153,68,255,.06);border:1px solid var(--vdim);
-  border-radius:3px;padding:5px 8px;font-family:var(--mono);font-size:11px;
+  border-radius:3px;padding:8px;font-family:var(--mono);font-size:13px;
   color:var(--white);letter-spacing:.06em;outline:none;
-  -webkit-appearance:none;}
+  -webkit-appearance:none;
+  -webkit-user-select:text!important;user-select:text!important;touch-action:auto!important;}
 .pid-val:focus{border-color:var(--violet);}
 .filename-preview{font-family:var(--mono);font-style:italic;font-size:11px;
   color:rgba(0,255,200,.45);padding:5px 8px;border:1px dashed rgba(0,255,200,.15);
@@ -971,7 +972,8 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <button class="obtn"        data-org="2">SLOT C</button>
     </div>
 
-    <!-- SLOT TYPE -->
+    <!-- SLOT TYPE — export classification tag (feeds manifest for SpukBeatsOne) -->
+    <div class="st-sub" style="margin-bottom:4px;">SLOT TYPE · export tag</div>
     <div class="slottype-row" id="slottype-row">
       <div class="stchip active" data-st="kick_a">KICK A</div>
       <div class="stchip" data-st="kick_b">KICK B</div>
@@ -1907,7 +1909,8 @@ const SURFACE_PROFILES={
 // Performative module state
 const PerformState={
   glitchDensity:0,lowMassDepth:0,voidPressure:0,
-  glitchMode:'binary',massCharacter:'dense',precision:0
+  glitchMode:'binary',massCharacter:'dense',precision:0,
+  precisionAir:1,precisionWidth:1,precisionSat:1
 };
 
 // ─── FINISH STATE ────────────────────────────────────────
@@ -2131,17 +2134,15 @@ function applyMacro(key,v){
       }
       break;
     case 'precision':
-      // CHAOTIC(-1): more events, more saturation, wider | SURGICAL(+1): fewer events, drier, more mono
-      PerformState.precision=v;
-      // Surgical: reduce density + widening, less saturation
-      if(vp>0.05){
-        ForgeState.satDrive=clamp(ForgeState.satDrive*(1-vp*.30),0.5,8);
-        GlueState.airAbsorption=clamp(GlueState.airAbsorption+vp*.12,0,1);
-        // Tighten all phase stereoWidths
-        Object.keys(TemporalDNA.states).forEach(ph=>{
-          TemporalDNA.states[ph].stereoWidth=clamp(TemporalDNA.states[ph].stereoWidth*(1-vp*.25),0,1);
-        });
-      }
+      // CHAOTIC(-1) ↔ SURGICAL(+1) — PERCEPTUAL ONLY.
+      // Must NOT mutate base state cumulatively, drop RMS, mute layers, or cross zero.
+      // Stores a factor read live by the engine; never writes into satDrive/gain directly.
+      PerformState.precision=v; // -1…+1, engine reads this each trigger
+      // Air content + spectral dispersion shift only — bounded, reversible, level-safe
+      PerformState.precisionAir=clamp(1-vp*0.45,0.55,1);   // surgical trims air a bit (never to 0)
+      PerformState.precisionWidth=clamp(1-vp*0.35,0.65,1); // surgical narrows stereo (never mono-collapse)
+      PerformState.precisionSat=clamp(1-vp*0.22,0.78,1);   // surgical softens sat slightly (gentle, bounded)
+      // NOTE: no cumulative writes — these factors are recomputed from v every drag.
       break;
     case 'scale':
       // INTIMATE(-1): low mass, narrow stereo, short decay | MASSIVE(+1): mass, wide stereo, long decay
@@ -2965,7 +2966,7 @@ function _triggerInner(){
 
   // AIR LAYER — highpass noise breath (precision scales it down)
   if(LayerState.air.enabled&&noiseBuffer){
-    const precisionScale=clamp(1-Math.max(0,PerformState.precision)*.6,.4,1); // precision reduces air
+    const precisionScale=PerformState.precisionAir; // bounded 0.55–1, never mutes
     const airSrc=AC.createBufferSource();airSrc.buffer=noiseBuffer;
     const airFilt=AC.createBiquadFilter();airFilt.type='highpass';
     safeFreq(airFilt.frequency,fa.airFreq);safeQ(airFilt.Q,.65);
@@ -3308,6 +3309,12 @@ async function exportWAV(mode){
 }
 
 async function exportStemsWAV(){
+  const setStatus=msg=>{
+    const s1=document.getElementById('wav-status');
+    const s2=document.getElementById('export-status');
+    if(s1)s1.textContent=msg;
+    if(s2)s2.textContent=msg;
+  };
   setStatus('rendering stems...');
   const mat=SLOTS[currentSlot];
   const results=[];
