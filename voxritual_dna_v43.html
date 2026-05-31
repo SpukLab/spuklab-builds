@@ -801,7 +801,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
       <button class="modeTab capture"    data-mode="capture">CAPTURE</button>
     </div>
     <div id="semBadge"><div id="semOrb"></div><div id="semName">fragile</div></div>
-    <div id="buildMark">v43.2</div>
+    <div id="buildMark">v43.3</div>
   </div>
 
   <!-- MASTER TRANSPORT BAR — contextual per tab -->
@@ -1394,9 +1394,24 @@ var HISTORY = {
     } else if(type === 'loopMode') {
       REGION.loopMode = state.loopMode;
       document.querySelectorAll('.loopModeBtn').forEach(function(b){ b.classList.toggle('on', b.dataset.lm === REGION.loopMode); });
-    } else if(type === 'montageSlots') {
-      MONTAGE.slots = JSON.parse(JSON.stringify(state.slots));
-      renderTray(); drawMontageCanvas(); updateMontageStatus();
+    } else if(type === 'montageSlots' || type === 'montageLanes') {
+      // Canonical format: state.lanes = array of slot-arrays (one per lane)
+      // Backward compat: state.slots could be flat (legacy) or per-lane
+      var snap = state.lanes || state.slots;
+      if(snap && Array.isArray(snap) && MONTAGE.lanes) {
+        // Detect format: array-of-arrays (per-lane) vs flat array (legacy)
+        var isPerLane = snap.length > 0 && Array.isArray(snap[0]);
+        if(isPerLane) {
+          // Restore each lane's slots
+          for(var li=0; li<MONTAGE.lanes.length; li++) {
+            MONTAGE.lanes[li].slots = snap[li] ? JSON.parse(JSON.stringify(snap[li])) : [];
+          }
+        } else {
+          // Legacy flat array → put it all in lane 0
+          if(MONTAGE.lanes[0]) MONTAGE.lanes[0].slots = JSON.parse(JSON.stringify(snap));
+        }
+        renderTray(); drawMontageCanvas(); updateMontageStatus();
+      }
     }
   },
 
@@ -2050,9 +2065,9 @@ var ORGANISM = {
     this.activeProfile = profileName || this.activeProfile;
 
     // HISTORY snapshot before destroying
-    HISTORY.pushOp('montageSlots', null,
-      {slots:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},
-      null, 'new organism');
+    HISTORY.pushOp('montageLanes', null,
+      {lanes:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},
+      {lanes:[[],[],[]]}, 'new organism');
 
     // Clear all lanes — intentional destructive action
     MONTAGE.lanes.forEach(function(lane){ lane.slots=[]; });
@@ -3759,12 +3774,12 @@ document.addEventListener('DOMContentLoaded',function(){
       var t0=REGION.startSec(s.duration),t1=REGION.endSec(s.duration);
       var regionIsPartial=(t1-t0)<s.duration*0.95;
       // HISTORY: capture before state
-      HISTORY.push({type:'montageSlots',sampleId:s.id,before:{slots:JSON.parse(JSON.stringify(MONTAGE.slots))},after:null,desc:'inject fragment'});
+      HISTORY.push({type:'montageLanes',sampleId:s.id,before:{lanes:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},after:null,desc:'inject fragment'});
       if(regionIsPartial){execSurgery('extract');}
       else{MONTAGE.addFrag(s);renderLibrary();}
       // Update after state
       var last=HISTORY.undoStack[HISTORY.undoStack.length-1];
-      if(last)last.after={slots:JSON.parse(JSON.stringify(MONTAGE.slots))};
+      if(last)last.after={lanes:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))};
       // Feedback
       injBtn.textContent='⊕ INJECTED';injBtn.classList.add('sent');
       setTimeout(function(){injBtn.textContent='⊕ INJECT';injBtn.classList.remove('sent');},1000);
@@ -3902,7 +3917,44 @@ async function _appInit(){
     if(sbRec)sbRec.style.display=isRec?'':'none';
     if(sbRT&&isRec&&A.cap&&A.cap.startMs){var s=Math.floor((Date.now()-A.cap.startMs)/1000);sbRT.textContent=Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0');}
   },500);
-  try{var sess=JSON.parse(localStorage.getItem('vr43_sess')||'{}');if(sess.cat)setCat(sess.cat);if(sess.semState)setSemState(sess.semState);if(sess.normMode)setNormMode(sess.normMode);if(sess.gap){MONTAGE.gap=sess.gap;document.getElementById('gapVal').textContent=MONTAGE.gap.toFixed(1)+'s';}if(sess.gapType){MONTAGE.gapType=sess.gapType;document.querySelectorAll('.gapTypeBtn').forEach(function(b){b.classList.toggle('on',b.dataset.gt===sess.gapType);});}if(sess.drift!==undefined){MONTAGE.drift=sess.drift;document.getElementById('driftToggle').classList.toggle('on',MONTAGE.drift);}if(sess.looping){TP.looping=true;}if(sess.mode)setMode(sess.mode);else setMode('surgery');if(sess.selectedId&&A.samples.find(function(s){return s.id===sess.selectedId;}))selectSample(sess.selectedId,false);if(sess.trayFragIds&&sess.trayFragIds.length){sess.trayFragIds.forEach(function(fid){var s=A.samples.find(function(x){return x.id===fid;});if(s&&!MONTAGE.slots.find(function(sl){return sl.fragId===fid;}))MONTAGE.addFrag(s);});renderTray();drawMontageCanvas();}}catch(e){setMode('surgery');}
+  try{
+    var sess=JSON.parse(localStorage.getItem('vr43_sess')||'{}');
+    if(sess.cat)setCat(sess.cat);
+    if(sess.semState)setSemState(sess.semState);
+    if(sess.normMode)setNormMode(sess.normMode);
+    if(sess.gap){MONTAGE.gap=sess.gap;var gv=document.getElementById('gapVal');if(gv)gv.textContent=MONTAGE.gap.toFixed(1)+'s';}
+    if(sess.gapType){MONTAGE.gapType=sess.gapType;document.querySelectorAll('.gapTypeBtn').forEach(function(b){b.classList.toggle('on',b.dataset.gt===sess.gapType);});}
+    if(sess.drift!==undefined){MONTAGE.drift=sess.drift;var dt=document.getElementById('driftToggle');if(dt)dt.classList.toggle('on',MONTAGE.drift);}
+    if(sess.looping){TP.looping=true;}
+    if(sess.fieldDurationSec){MONTAGE.fieldDurationSec=sess.fieldDurationSec;}
+    if(sess.fieldZoom){MONTAGE.fieldZoom=sess.fieldZoom;}
+
+    // ── RESTORE MONTAGE LANES — prefer autosave (most recent) ──────────
+    var restored=false;
+    try{
+      var auto=JSON.parse(localStorage.getItem('vr43_montage_autosave')||'null');
+      var src=(auto&&auto.lanes)?auto:(sess.lanes?{lanes:sess.lanes}:null);
+      if(src&&src.lanes&&Array.isArray(src.lanes)){
+        for(var li=0;li<MONTAGE.lanes.length&&li<src.lanes.length;li++){
+          var ld=src.lanes[li];
+          if(ld&&ld.slots){
+            // Only restore slots whose fragId still exists in samples
+            MONTAGE.lanes[li].slots=ld.slots.filter(function(sl){
+              return A.samples.find(function(x){return x.id===sl.fragId;});
+            });
+            if(ld.gain!==undefined)MONTAGE.lanes[li].gain=ld.gain;
+            if(ld.mute!==undefined)MONTAGE.lanes[li].mute=ld.mute;
+            if(ld.solo!==undefined)MONTAGE.lanes[li].solo=ld.solo;
+            restored=true;
+          }
+        }
+      }
+    }catch(re){}
+
+    if(sess.mode)setMode(sess.mode);else setMode('surgery');
+    if(sess.selectedId&&A.samples.find(function(s){return s.id===sess.selectedId;}))selectSample(sess.selectedId,false);
+    if(restored){renderTray();drawMontageCanvas();updateMontageStatus();}
+  }catch(e){setMode('surgery');}
 }
 window.addEventListener('DOMContentLoaded', function(){ _appInit().catch(function(e){ console.error('init error:', e); }); });
 
@@ -4375,9 +4427,13 @@ function renderTray(){
 }
 
 // ─── MULTI-LANE CANVAS RENDERER ──────────────────────────────────────────
+var _autosaveTimer=null;
 function drawMontageCanvas(){
   // Draw each lane on its own canvas
   for(var li=0;li<3;li++) drawLaneCanvas(li);
+  // Throttled autosave — montage changed
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer=setTimeout(function(){ if(typeof autosaveMontage==='function') autosaveMontage(); }, 800);
 }
 
 function drawLaneCanvas(laneIdx){
@@ -5583,9 +5639,12 @@ _on('rmLock','click', function() {
 });
 _on('rmDelete','click', function() {
   if(!RADIAL.slotId) return;
-  HISTORY.pushOp('montageSlots',null,{slots:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},null,'delete fragment');
+  HISTORY.pushOp('montageLanes',null,{lanes:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))},null,'delete fragment');
   var lane_dl=MONTAGE.lanes[RADIAL.laneIdx]||MONTAGE.lanes[0];
   if(lane_dl&&lane_dl.slots) lane_dl.slots=lane_dl.slots.filter(function(s){return s.id!==RADIAL.slotId;});
+  // Capture after-state for redo
+  var lastDel=HISTORY.undoStack[HISTORY.undoStack.length-1];
+  if(lastDel)lastDel.after={lanes:JSON.parse(JSON.stringify(MONTAGE.lanes.map(function(l){return l.slots;})))};
   renderTray();drawMontageCanvas();updateMontageStatus();
   RADIAL.hide();
 });
@@ -5753,7 +5812,7 @@ function updateDebug(){
   var laneInfo='';try{laneInfo=MONTAGE.lanes.map(function(l,i){return'L'+(i+1)+':'+l.slots.length;}).join(' ');}catch(e){}
   var tempStr='';try{tempStr=TEMPERATURE.current+'->'+TEMPERATURE.target;}catch(e){}
   var lines=[
-    'v43.2 '+new Date().toLocaleTimeString(),
+    'v43.3 '+new Date().toLocaleTimeString(),
     'samples:'+(A.samples?A.samples.length:0)+' sel:'+(s?s.name.slice(0,10):'—'),
     'LME:'+TP.state+' VIE:'+VIE.state,
     'MSTATE:'+MONTAGE_STATE.current+' '+laneInfo,
@@ -6157,7 +6216,30 @@ function dl(data, mime, name){ dlSafe(data, mime, name); }
 
 
 // ─── SESSION ──────────────────────────────────────────────────────────────
-function saveSession(){localStorage.setItem('vr43_sess',JSON.stringify({selectedId:A.selectedId,semState:A.semState,cat:A.cat,normMode:A.normMode,looping:TP.looping,gap:MONTAGE.gap,gapType:MONTAGE.gapType,drift:MONTAGE.drift,mode:A.activeMode,trayFragIds:MONTAGE.slots.map(function(s){return s.fragId;})}));}
+function saveSession(){
+  try {
+    localStorage.setItem('vr43_sess',JSON.stringify({
+      selectedId:A.selectedId,semState:A.semState,cat:A.cat,normMode:A.normMode,
+      looping:TP.looping,gap:MONTAGE.gap,gapType:MONTAGE.gapType,drift:MONTAGE.drift,
+      mode:A.activeMode,
+      // Full per-lane state, not just active lane
+      lanes:MONTAGE.lanes.map(function(l){return {slots:l.slots,gain:l.gain,mute:l.mute,solo:l.solo};}),
+      fieldDurationSec:MONTAGE.fieldDurationSec,
+      fieldZoom:MONTAGE.fieldZoom
+    }));
+  } catch(e) { /* quota or serialize error — non-fatal */ }
+}
+// Autosave montage state — called after every montage mutation
+function autosaveMontage(){
+  try {
+    localStorage.setItem('vr43_montage_autosave', JSON.stringify({
+      lanes: MONTAGE.lanes.map(function(l){return {slots:l.slots,gain:l.gain,mute:l.mute,solo:l.solo};}),
+      fieldDurationSec: MONTAGE.fieldDurationSec,
+      fieldZoom: MONTAGE.fieldZoom,
+      savedAt: Date.now()
+    }));
+  } catch(e) {}
+}
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────
 function toAB(s){const buf=A.AC.createBuffer(s.numberOfChannels,s.length,s.sampleRate);for(let c=0;c<s.numberOfChannels;c++)buf.copyToChannel(new Float32Array(s.channelData[c]),c);return buf;}
