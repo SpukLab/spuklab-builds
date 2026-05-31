@@ -869,18 +869,28 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div class="st">FEEL CONTROLS</div>
       <div class="tone-ctrl">
         <span class="tlbl">SILENCE</span>
-        <div class="ttrack" data-td="silenceTolerance"><div class="tfill" style="width:50%;background:rgba(100,180,255,.65);"></div></div>
-        <span class="tval" id="tdv-silenceTolerance">0.50</span>
+        <div class="ttrack" data-feel="silence"><div class="tfill" id="feelf-silence" style="width:30%;background:rgba(100,180,255,.65);"></div></div>
+        <span class="tval" id="feelv-silence">0.30</span>
       </div>
       <div class="tone-ctrl">
-        <span class="tlbl">EVOLUTION</span>
-        <div class="ttrack" data-td="contrastLevel"><div class="tfill" style="width:60%;background:rgba(255,100,180,.65);"></div></div>
-        <span class="tval" id="tdv-contrastLevel">0.60</span>
+        <span class="tlbl">DENSITY</span>
+        <div class="ttrack" data-feel="density"><div class="tfill" id="feelf-density" style="width:50%;background:rgba(0,255,180,.6);"></div></div>
+        <span class="tval" id="feelv-density">0.50</span>
       </div>
       <div class="tone-ctrl">
         <span class="tlbl">WIDTH</span>
-        <div class="ttrack" data-feel="width"><div class="tfill" style="width:60%;background:rgba(153,68,255,.70);"></div></div>
-        <span class="tval" id="feelv-width">0.60</span>
+        <div class="ttrack" data-feel="width"><div class="tfill" id="feelf-width" style="width:50%;background:rgba(153,68,255,.70);"></div></div>
+        <span class="tval" id="feelv-width">0.50</span>
+      </div>
+      <div class="tone-ctrl">
+        <span class="tlbl">EVOLUTION</span>
+        <div class="ttrack" data-feel="evolution"><div class="tfill" id="feelf-evolution" style="width:30%;background:rgba(255,100,180,.65);"></div></div>
+        <span class="tval" id="feelv-evolution">0.30</span>
+      </div>
+      <div class="tone-ctrl">
+        <span class="tlbl">ENERGY</span>
+        <div class="ttrack" data-feel="energy"><div class="tfill" id="feelf-energy" style="width:40%;background:rgba(255,180,0,.7);"></div></div>
+        <span class="tval" id="feelv-energy">0.40</span>
       </div>
     </div>
 
@@ -1913,6 +1923,20 @@ const PerformState={
   precisionAir:1,precisionWidth:1,precisionSat:1
 };
 
+// ─── FEEL STATE — perceptual interpretation surface ──────
+// Read directly by the trigger each hit. Each control passes the
+// "describe-the-change-in-one-sentence" test:
+//  SILENCE   → continuous flow ↔ evident gaps/breaths
+//  DENSITY   → few events ↔ overpopulation (extra layers/glitches/echoes)
+//  WIDTH     → centered ↔ panoramic (air/glitch/texture spread, NOT sub)
+//  EVOLUTION → stable identity ↔ accumulating drift over time
+//  ENERGY    → contained ↔ expansive (layers+width+impact+air together)
+const FeelState={
+  silence:0.30, density:0.50, width:0.50, evolution:0.30, energy:0.40,
+  _evDrift:0,        // accumulating drift offset for EVOLUTION
+  _evLastTrig:0      // timestamp of last trigger for drift accumulation
+};
+
 // ─── FINISH STATE ────────────────────────────────────────
 const FinishState={soften:0,focus:0,depth:0,dryWet:.80,metalSoft:0};
 
@@ -2686,13 +2710,12 @@ function trigger(){
   try{
     if(!AC)initAC();
     AC.resume();keepDACAlive();
-    // VOID PRESSURE — probabilistic trigger omission (Bretschneider rhythmic space)
-    // At voidPressure=0: always fires. At 1: 62% chance of omission.
-    // Result: asymmetrical timing gaps and micro-pauses, not musical swing.
-    if(PerformState.voidPressure>0.04){
-      const omitProb=PerformState.voidPressure*0.62;
-      if(Math.random()<omitProb)return; // silent — void
-    }
+    // FEEL SILENCE — evident gaps. At 0: continuous. At 1: ~55% omission → breaths/voids.
+    // Combined with void pressure (which is a LAB-level performative control).
+    let omit=0;
+    if(FeelState.silence>0.02)omit+=FeelState.silence*0.55;
+    if(PerformState.voidPressure>0.04)omit+=PerformState.voidPressure*0.62;
+    if(omit>0&&Math.random()<Math.min(omit,0.85))return; // silent — gap
     _triggerInner();
   }catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}
 }
@@ -2710,7 +2733,30 @@ function _triggerInner(){
   const v=getVoice();
   let maxDur=.05;
 
-  // === MATERIAL PATH ===
+  // ═══ FEEL — per-trigger perceptual modifiers ═══════════
+  // EVOLUTION: accumulate drift over time. At 0: identity stable.
+  // At 1: filter/pitch/pan slowly derive so after ~30s it's recognizable but clearly changed.
+  if(FeelState.evolution>0.02){
+    const dt=Math.min(2,now-(FeelState._evLastTrig||now));
+    FeelState._evDrift+=FeelState.evolution*dt*0.012; // slow accumulation
+    FeelState._evDrift=FeelState._evDrift%1; // wrap 0..1 to avoid runaway
+  }
+  FeelState._evLastTrig=now;
+  const evPhase=FeelState._evDrift*Math.PI*2;
+  const evMod=FeelState.evolution; // 0..1 strength
+
+  // WIDTH: panoramic spread. At 0: centered. At 1: wide.
+  const feelWidth=FeelState.width; // 0..1, applied to pan magnitude of air/glitch/texture
+
+  // ENERGY: contained → expansive. Scales layer activity, width, air, impact together.
+  const feelEnergy=FeelState.energy; // 0..1
+
+  // DENSITY: few events → overpopulation. Probability of extra secondary events.
+  const feelDensity=FeelState.density; // 0..1
+
+  // Composite pan width for spatial layers (width + energy both open the field)
+  const feelPanWidth=clamp(feelWidth*0.85+feelEnergy*0.35,0,1)*PerformState.precisionWidth;
+
   const mat=SLOTS[currentSlot];
   if(mat&&mat.buffer){
     const src=AC.createBufferSource();
@@ -2720,7 +2766,9 @@ function _triggerInner(){
     const regionDur=Math.max(.005,endSec-startSec);
     // Pitch via playbackRate: semitones from center (.50 = 0st)
     const semitones=(MatEditState.pitch-.50)*24; // ±12 semitones
-    src.playbackRate.value=Math.pow(2,semitones/12);
+    // EVOLUTION drift: slow ±0.4 semitone wander, only when evolution>0
+    const evPitchDrift=evMod*Math.sin(evPhase)*0.4;
+    src.playbackRate.value=Math.pow(2,(semitones+evPitchDrift)/12);
     // Gain trim: 0→-12dB, .75→0dB, 1→+6dB
     const gainTrimDB=MatEditState.gainTrim<.75
       ?(MatEditState.gainTrim-.75)*48 // -12…0 dB
@@ -3015,10 +3063,12 @@ function _triggerInner(){
 
   // Apply saturation DNA to voice permanent chain
   v.sat.curve=buildSatCurve(currentSatProfile,ForgeState.satDrive);
-  // Pan: state-based narrative width (cancels old schedules)
+  // Pan: narrative width × FEEL width, plus slow EVOLUTION pan drift
   v.panner.pan.cancelScheduledValues(t);
   v.panner.pan.setValueAtTime(v.panner.pan.value,t);
-  v.panner.pan.linearRampToValueAtTime(clampAudio(narrativePan(currentOrg),AP.PAN_MIN,AP.PAN_MAX),t+.005);
+  let feelPan=narrativePan(currentOrg)*clamp(0.35+feelPanWidth*0.9,0,1.3);
+  feelPan+=evMod*Math.sin(evPhase*1.3)*0.35; // evolution wander
+  v.panner.pan.linearRampToValueAtTime(clampAudio(feelPan,AP.PAN_MIN,AP.PAN_MAX),t+.005);
   // Bus gain: cancel old schedules, ramp to 1 over 7ms
   v.bus.gain.cancelScheduledValues(t);
   v.bus.gain.setValueAtTime(v.bus.gain.value,t);
@@ -3045,6 +3095,36 @@ function _triggerInner(){
 
   // LOW MASS ENGINE — physical sub presence (Amon Tobin)
   if(PerformState.lowMassDepth>0.02)fireLowMass(t);
+
+  // ═══ FEEL DENSITY + ENERGY — secondary event population ═══
+  // DENSITY: probability of extra micro-events (glitch clicks + texture grains).
+  // ENERGY: opens the field — more secondary activity + wider scatter + air.
+  const feelActivity=clamp(feelDensity*0.7+feelEnergy*0.5,0,1.1);
+  if(feelActivity>0.05&&noiseBuffer){
+    // number of secondary micro-events scales with activity
+    const nEvents=Math.floor(feelActivity*4); // 0..4 extra events
+    for(let i=0;i<nEvents;i++){
+      if(Math.random()>feelActivity)continue; // probabilistic thinning
+      const dt=0.012+Math.random()*0.14; // spread 12–150ms after main hit
+      const et=t+dt;
+      try{
+        const es=AC.createBufferSource();es.buffer=noiseBuffer;
+        const ehp=AC.createBiquadFilter();ehp.type='bandpass';
+        // ENERGY pushes events brighter/higher; density keeps them mid
+        ehp.frequency.value=600+Math.random()*(2000+feelEnergy*5000);
+        ehp.Q.value=2+Math.random()*4;
+        const eg=AC.createGain();
+        const epk=clamp((0.04+feelDensity*0.05)*(0.6+feelEnergy*0.6),0,0.12); // bounded, never loud
+        eg.gain.setValueAtTime(0,et);
+        eg.gain.linearRampToValueAtTime(epk,et+.002);
+        eg.gain.exponentialRampToValueAtTime(.00001,et+.03+Math.random()*.05);
+        const ep=AC.createStereoPanner();
+        ep.pan.value=clampAudio((Math.random()-.5)*2*feelPanWidth,-1,1);
+        es.connect(ehp);ehp.connect(eg);eg.connect(ep);ep.connect(masterGain);
+        es.start(et);es.stop(et+.12);
+      }catch(e){/*fail soft*/}
+    }
+  }
 
   if(Math.abs(drift)>.006){
     const b=document.getElementById('driftbadge');
@@ -3712,32 +3792,37 @@ document.querySelectorAll('.obtn[data-org2]').forEach(btn=>{
   btn.addEventListener('touchstart',e=>{e.preventDefault();previewMaterial();},{passive:false});
 })();
 
-// ── WIDTH feel control ────────────────────────────────────
+// ── FEEL CONTROLS — 5 perceptual sliders → FeelState ─────
 (function(){
-  const track=document.querySelector('.ttrack[data-feel="width"]');
-  if(!track)return;
-  const fill=track.querySelector('.tfill');
-  const valEl=document.getElementById('feelv-width');
-  let dragging=false;
-  function update(e){
-    const rect=track.getBoundingClientRect();
-    const cx=e.touches?e.touches[0].clientX:e.clientX;
-    const v=clamp((cx-rect.left)/rect.width,0,1);
-    if(fill)fill.style.width=(v*100).toFixed(0)+'%';
-    if(valEl)valEl.textContent=v.toFixed(2);
-    // Apply width globally to all narrative state stereoWidths
-    Object.keys(TemporalDNA.states).forEach(ph=>{
-      const base=TemporalDNA.states[ph].stereoWidth;
-      // Interpolate toward v, keeping relative spread
-      TemporalDNA.states[ph].stereoWidth=clamp(base*.4+v*.6,0,1);
-    });
-  }
-  track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
-  track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
-  track.addEventListener('touchend',()=>{dragging=false;});
-  track.addEventListener('mousedown',e=>{dragging=true;update(e);});
-  window.addEventListener('mousemove',e=>{if(dragging)update(e);});
-  window.addEventListener('mouseup',()=>{dragging=false;});
+  document.querySelectorAll('.ttrack[data-feel]').forEach(track=>{
+    const key=track.dataset.feel; // silence|density|width|evolution|energy
+    if(!(key in FeelState))return;
+    const fill=document.getElementById('feelf-'+key);
+    const valEl=document.getElementById('feelv-'+key);
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      FeelState[key]=v;
+      if(fill)fill.style.width=(v*100).toFixed(0)+'%';
+      if(valEl)valEl.textContent=v.toFixed(2);
+      // Keep TemporalDNA in sync for export coherence (non-audio-critical)
+      if(key==='silence')TemporalDNA.silenceTolerance=v;
+      if(key==='evolution')TemporalDNA.contrastLevel=v;
+      if(key==='width'){
+        Object.keys(TemporalDNA.states).forEach(ph=>{
+          TemporalDNA.states[ph].stereoWidth=clamp(0.3+v*0.7,0,1);
+        });
+      }
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
 })();
 
 // ── FEEL preset chips in temporal2 pane ──────────────────
