@@ -1934,7 +1934,8 @@ const PerformState={
 const FeelState={
   silence:0.30, density:0.50, width:0.50, evolution:0.30, energy:0.40,
   _evDrift:0,        // accumulating drift offset for EVOLUTION
-  _evLastTrig:0      // timestamp of last trigger for drift accumulation
+  _evLastTrig:0,     // timestamp of last trigger for drift accumulation
+  _panFlip:false     // alternating L/R for WIDTH panorama
 };
 
 // ─── FINISH STATE ────────────────────────────────────────
@@ -2733,29 +2734,28 @@ function _triggerInner(){
   const v=getVoice();
   let maxDur=.05;
 
-  // ═══ FEEL — per-trigger perceptual modifiers ═══════════
-  // EVOLUTION: accumulate drift over time. At 0: identity stable.
-  // At 1: filter/pitch/pan slowly derive so after ~30s it's recognizable but clearly changed.
+  // ═══ FEEL v2 — BRUTAL AUDIBILITY — all controls hit the MAIN event ═══
+  // EVOLUTION: accumulate drift FAST. At 1: clearly mutant within ~15s.
   if(FeelState.evolution>0.02){
     const dt=Math.min(2,now-(FeelState._evLastTrig||now));
-    FeelState._evDrift+=FeelState.evolution*dt*0.012; // slow accumulation
-    FeelState._evDrift=FeelState._evDrift%1; // wrap 0..1 to avoid runaway
+    FeelState._evDrift+=FeelState.evolution*dt*0.045; // ~4x faster than v1
+    FeelState._evDrift=FeelState._evDrift%1;
   }
   FeelState._evLastTrig=now;
   const evPhase=FeelState._evDrift*Math.PI*2;
-  const evMod=FeelState.evolution; // 0..1 strength
+  const evMod=FeelState.evolution;
 
-  // WIDTH: panoramic spread. At 0: centered. At 1: wide.
-  const feelWidth=FeelState.width; // 0..1, applied to pan magnitude of air/glitch/texture
+  // WIDTH: panoramic. At 0 truly mono, at 1 hard panned.
+  const feelWidth=FeelState.width;
 
-  // ENERGY: contained → expansive. Scales layer activity, width, air, impact together.
-  const feelEnergy=FeelState.energy; // 0..1
+  // ENERGY: contained → expansive (brightness + width + drive on MAIN event).
+  const feelEnergy=FeelState.energy;
 
-  // DENSITY: few events → overpopulation. Probability of extra secondary events.
-  const feelDensity=FeelState.density; // 0..1
+  // DENSITY: few events → swarm (retriggers of MAIN sample + secondary events).
+  const feelDensity=FeelState.density;
 
-  // Composite pan width for spatial layers (width + energy both open the field)
-  const feelPanWidth=clamp(feelWidth*0.85+feelEnergy*0.35,0,1)*PerformState.precisionWidth;
+  // Composite pan width — WIDTH dominant, ENERGY assists. At width=1 → full ±1.
+  const feelPanWidth=clamp(feelWidth*1.0+feelEnergy*0.3,0,1.3)*PerformState.precisionWidth;
 
   const mat=SLOTS[currentSlot];
   if(mat&&mat.buffer){
@@ -2766,8 +2766,8 @@ function _triggerInner(){
     const regionDur=Math.max(.005,endSec-startSec);
     // Pitch via playbackRate: semitones from center (.50 = 0st)
     const semitones=(MatEditState.pitch-.50)*24; // ±12 semitones
-    // EVOLUTION drift: slow ±0.4 semitone wander, only when evolution>0
-    const evPitchDrift=evMod*Math.sin(evPhase)*0.4;
+    // EVOLUTION drift: BRUTAL ±3 semitone wander on the MAIN sample
+    const evPitchDrift=evMod*Math.sin(evPhase)*3.0;
     src.playbackRate.value=Math.pow(2,(semitones+evPitchDrift)/12);
     // Gain trim: 0→-12dB, .75→0dB, 1→+6dB
     const gainTrimDB=MatEditState.gainTrim<.75
@@ -2910,7 +2910,23 @@ function _triggerInner(){
     safeFreq(finHP.frequency,FinishState.focus>.01?20+FinishState.focus*200:20);finHP.Q.value=.5;
     const finAP=AC.createBiquadFilter();finAP.type='allpass';
     safeFreq(finAP.frequency,clamp(800-FinishState.depth*500,200,800));finAP.Q.value=.5;
-    metalOut.connect(finLP);finLP.connect(finHP);finHP.connect(finAP);finAP.connect(matGain);matGain.connect(v.bus);
+    // ── FEEL ENERGY: brightness on MAIN event. 0=dark (LP @ 1.8k), 1=bright (high shelf +9dB) ──
+    const feelLP=AC.createBiquadFilter();feelLP.type='lowpass';
+    safeFreq(feelLP.frequency,clamp(1800+feelEnergy*16000,1800,18000));feelLP.Q.value=.5;
+    const feelShelf=AC.createBiquadFilter();feelShelf.type='highshelf';
+    safeFreq(feelShelf.frequency,3500);feelShelf.gain.value=clamp(feelEnergy*9,0,9);
+    // ── FEEL EVOLUTION: bandpass sweep on MAIN event, center wanders with drift ──
+    const feelEvBP=AC.createBiquadFilter();
+    if(evMod>0.02){
+      feelEvBP.type='peaking';
+      safeFreq(feelEvBP.frequency,clamp(500+Math.abs(Math.sin(evPhase))*4000,200,7000));
+      feelEvBP.Q.value=1.5+evMod*4;feelEvBP.gain.value=clamp(evMod*10,0,10);
+    }else{
+      feelEvBP.type='allpass';safeFreq(feelEvBP.frequency,1000);
+    }
+    metalOut.connect(finLP);finLP.connect(finHP);finHP.connect(finAP);
+    finAP.connect(feelLP);feelLP.connect(feelShelf);feelShelf.connect(feelEvBP);
+    feelEvBP.connect(matGain);matGain.connect(v.bus);
 
     const dur=Math.min(regionDur,3.0);
     const matStop=t+dur+.01;
@@ -3063,11 +3079,14 @@ function _triggerInner(){
 
   // Apply saturation DNA to voice permanent chain
   v.sat.curve=buildSatCurve(currentSatProfile,ForgeState.satDrive);
-  // Pan: narrative width × FEEL width, plus slow EVOLUTION pan drift
+  // Pan: WIDTH brutal. At width=0 → forced center (mono). At width=1 → hard alternating pan.
   v.panner.pan.cancelScheduledValues(t);
   v.panner.pan.setValueAtTime(v.panner.pan.value,t);
-  let feelPan=narrativePan(currentOrg)*clamp(0.35+feelPanWidth*0.9,0,1.3);
-  feelPan+=evMod*Math.sin(evPhase*1.3)*0.35; // evolution wander
+  // Alternate L/R each trigger at high width for obvious panorama
+  FeelState._panFlip=!FeelState._panFlip;
+  const widthSign=FeelState._panFlip?1:-1;
+  let feelPan=narrativePan(currentOrg)*0.3 + widthSign*feelWidth*0.95;
+  feelPan+=evMod*Math.sin(evPhase*1.3)*0.4; // evolution wander
   v.panner.pan.linearRampToValueAtTime(clampAudio(feelPan,AP.PAN_MIN,AP.PAN_MAX),t+.005);
   // Bus gain: cancel old schedules, ramp to 1 over 7ms
   v.bus.gain.cancelScheduledValues(t);
@@ -3096,25 +3115,45 @@ function _triggerInner(){
   // LOW MASS ENGINE — physical sub presence (Amon Tobin)
   if(PerformState.lowMassDepth>0.02)fireLowMass(t);
 
-  // ═══ FEEL DENSITY + ENERGY — secondary event population ═══
-  // DENSITY: probability of extra micro-events (glitch clicks + texture grains).
-  // ENERGY: opens the field — more secondary activity + wider scatter + air.
-  const feelActivity=clamp(feelDensity*0.7+feelEnergy*0.5,0,1.1);
+  // ═══ FEEL DENSITY + ENERGY — BRUTAL event population ═══
+  // DENSITY retriggers the MAIN sample as a stutter swarm (not just noise).
+  const mainMat=SLOTS[currentSlot];
+  const feelActivity=clamp(feelDensity*1.0+feelEnergy*0.4,0,1.2);
+  if(feelDensity>0.08&&mainMat&&mainMat.buffer){
+    const nRetrig=Math.floor(feelDensity*6); // up to 6 stutters of the actual sample
+    for(let i=1;i<=nRetrig;i++){
+      const rt=t+i*(0.025+ (1-feelEnergy)*0.05); // tighter spacing at high energy
+      try{
+        const rs=AC.createBufferSource();rs.buffer=mainMat.buffer;
+        const {startSec,endSec}=getPlaybackRegion(mainMat);
+        const rdur=Math.min(0.12,endSec-startSec); // short slices
+        rs.playbackRate.value=1+(Math.random()-.5)*feelEnergy*0.6;
+        const rg=AC.createGain();
+        const rpk=clamp(0.5-i*0.06,0.12,0.5); // decaying stutter tail
+        rg.gain.setValueAtTime(0,rt);
+        rg.gain.linearRampToValueAtTime(rpk,rt+.002);
+        rg.gain.linearRampToValueAtTime(.00001,rt+rdur);
+        const rp=AC.createStereoPanner();
+        rp.pan.value=clampAudio((Math.random()-.5)*2*feelPanWidth,-1,1);
+        rs.connect(rg);rg.connect(rp);rp.connect(masterGain);
+        rs.start(rt,startSec,rdur);rs.stop(rt+rdur+.02);
+      }catch(e){/*fail soft*/}
+    }
+  }
+  // ENERGY/DENSITY secondary micro-events — now louder + brighter
   if(feelActivity>0.05&&noiseBuffer){
-    // number of secondary micro-events scales with activity
-    const nEvents=Math.floor(feelActivity*4); // 0..4 extra events
+    const nEvents=Math.floor(feelActivity*5);
     for(let i=0;i<nEvents;i++){
-      if(Math.random()>feelActivity)continue; // probabilistic thinning
-      const dt=0.012+Math.random()*0.14; // spread 12–150ms after main hit
+      if(Math.random()>feelActivity)continue;
+      const dt=0.012+Math.random()*0.14;
       const et=t+dt;
       try{
         const es=AC.createBufferSource();es.buffer=noiseBuffer;
         const ehp=AC.createBiquadFilter();ehp.type='bandpass';
-        // ENERGY pushes events brighter/higher; density keeps them mid
-        ehp.frequency.value=600+Math.random()*(2000+feelEnergy*5000);
+        ehp.frequency.value=600+Math.random()*(2000+feelEnergy*6000);
         ehp.Q.value=2+Math.random()*4;
         const eg=AC.createGain();
-        const epk=clamp((0.04+feelDensity*0.05)*(0.6+feelEnergy*0.6),0,0.12); // bounded, never loud
+        const epk=clamp((0.08+feelDensity*0.10)*(0.6+feelEnergy*0.7),0,0.22); // louder, audible
         eg.gain.setValueAtTime(0,et);
         eg.gain.linearRampToValueAtTime(epk,et+.002);
         eg.gain.exponentialRampToValueAtTime(.00001,et+.03+Math.random()*.05);
