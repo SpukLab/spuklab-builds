@@ -378,10 +378,10 @@ header#hdr{grid-area:hdr;display:flex;align-items:center;gap:6px;padding:0 10px;
     <div style="font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.08em;flex-shrink:0">DURATION</div>
     <div id="dur-grid_h" style="display:flex;gap:2px;flex:1">
       <div class="dur-btn" data-dur="1">1m</div>
-      <div class="dur-btn" data-dur="2">2m</div>
+      <div class="dur-btn on" data-dur="2">2m</div>
       <div class="dur-btn" data-dur="3">3m</div>
       <div class="dur-btn" data-dur="5">5m</div>
-      <div class="dur-btn on" data-dur="8">8m</div>
+      <div class="dur-btn" data-dur="8">8m</div>
       <div class="dur-btn" data-dur="20">20m</div>
       <div class="dur-btn" data-dur="45">45m</div>
       <div class="dur-btn" data-dur="90">90m</div>
@@ -593,8 +593,8 @@ header#hdr{grid-area:hdr;display:flex;align-items:center;gap:6px;padding:0 10px;
     <!-- Voice ecology density -->
     <div style="display:flex;gap:3px;margin-top:5px">
       <button class="vox-eco-btn" data-eco="SPARSE" style="flex:1;font-size:7px;font-family:'JetBrains Mono',monospace;padding:3px 1px;border:1px solid rgba(153,68,255,.12);background:transparent;color:rgba(255,255,255,.3);border-radius:3px;cursor:pointer">SPARSE</button>
-      <button class="vox-eco-btn on" data-eco="BALANCED" style="flex:1;font-size:7px;font-family:'JetBrains Mono',monospace;padding:3px 1px;border:1px solid rgba(0,200,255,.45);background:rgba(0,200,255,.08);color:rgba(0,200,255,.85);border-radius:3px;cursor:pointer">BALANCED</button>
-      <button class="vox-eco-btn" data-eco="NARRATIVE" style="flex:1;font-size:7px;font-family:'JetBrains Mono',monospace;padding:3px 1px;border:1px solid rgba(153,68,255,.12);background:transparent;color:rgba(255,255,255,.3);border-radius:3px;cursor:pointer">NARRATIVE</button>
+      <button class="vox-eco-btn" data-eco="BALANCED" style="flex:1;font-size:7px;font-family:'JetBrains Mono',monospace;padding:3px 1px;border:1px solid rgba(153,68,255,.12);background:transparent;color:rgba(255,255,255,.3);border-radius:3px;cursor:pointer">BALANCED</button>
+      <button class="vox-eco-btn on" data-eco="NARRATIVE" style="flex:1;font-size:7px;font-family:'JetBrains Mono',monospace;padding:3px 1px;border:1px solid rgba(180,90,255,.5);background:rgba(180,90,255,.1);color:rgba(180,90,255,.9);border-radius:3px;cursor:pointer">NARRATIVE</button>
     </div>
     <div id="voxslots_h"></div>
   </div>
@@ -788,7 +788,7 @@ var VOXDNA=(function(){
     // Does the loaded pack actually HAVE narrative-capable voices?
     var hasNarrativeVoices=_s.fragments.some(function(f){
       var ft=f.fragType||f.type||'';
-      return (ft==='command'||ft==='ritual')&&_fragReady(f.id);
+      return (ft==='command'||ft==='ritual'||ft==='collapse_residue'||ft==='semantic_ghost'||ft==='narrative_voice'||ft==='ritual_speech'||ft==='frag_poetry'||ft==='false_memory'||ft==='pressure_language')&&_fragReady(f.id);
     });
     const presScale=window.VOX_PRESENCE?.value||.72;
 
@@ -4415,12 +4415,12 @@ const VOX_ENTITY={
     // 1. Ghost Vox -- subconscious, distant, spectral, low priority
     ghost:{
       label:'GHOST',
-      minIntervalSec:12,
-      gainMult:.55,      // quiet
+      minIntervalSec:7,
+      gainMult:.82,      // raised: vox packs need more presence
       pan:()=>(Math.random()>.5?1:-1)*(.4+Math.random()*.5), // lateral
       playbackRate:()=>1+(Math.random()-.5)*.18,
       maxDur:2.5,
-      fragTypes:['subconscious','collapse_residue'],
+      fragTypes:['subconscious','collapse_residue','semantic_ghost','narrative_voice','ritual_speech','frag_poetry'],
       attention:.5,
       mixRequest:'ghost',
       focusEntity:'ghost',
@@ -4429,12 +4429,12 @@ const VOX_ENTITY={
     // 2. Command Vox -- dominant, foreground, full perceptual priority
     command:{
       label:'CMD',
-      minIntervalSec:45,  // rare -- carries structural weight
-      gainMult:1.15,
+      minIntervalSec:20,  // was 45 -- more frequent structural voice
+      gainMult:1.25,
       pan:()=>0,           // center always
       playbackRate:()=>1,
       maxDur:null,         // full duration
-      fragTypes:['collapse_residue','breath'],
+      fragTypes:['collapse_residue','breath','semantic_ghost','narrative_voice','ritual_speech'],
       attention:.95,
       mixRequest:'command',
       focusEntity:'narrative',
@@ -4466,12 +4466,12 @@ const VOX_ENTITY={
     // 4. Ritual Vox -- recurring identity, symbolic presence, memory
     ritual:{
       label:'RITUAL',
-      minIntervalSec:60,   // patient -- comes back periodically
+      minIntervalSec:25,   // was 60 -- more accessible for short sessions
       gainMult:.9,
       pan:()=>0,
       playbackRate:()=>1+(Math.random()-.5)*.04, // tiny drift
       maxDur:null,
-      fragTypes:['collapse_residue','subconscious'],
+      fragTypes:['collapse_residue','subconscious','semantic_ghost','frag_poetry','false_memory'],
       attention:.85,
       mixRequest:'ritual',
       focusEntity:'narrative',
@@ -4687,7 +4687,7 @@ function _legacyGhostFire(dec,frag,slot){
 }
 
 const VOXECO={
-  mode:'BALANCED', // SPARSE | BALANCED | NARRATIVE
+  mode:'NARRATIVE', // test default: max voice presence
   // speechFocus: when VOICE is protagonist, reduce masking
   speechFocus:false,
 
@@ -6092,7 +6092,7 @@ function initProfiles(){
   });
 }
 function initDuration(){
-  TEMPORAL.set(20); // default
+  TEMPORAL.set(2); // test default: 2min
   document.querySelectorAll('.dur-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const d=parseInt(btn.dataset.dur);
@@ -7323,9 +7323,9 @@ async function _ingestSpukpackZip(zip,filename){
           <div id="tempo-curve-phase" style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(153,68,255,.35);margin-top:4px">—</div>
           <div class="ws-label" style="margin-top:10px">DURATION</div>
           <div id="dur-grid" style="display:flex;flex-wrap:wrap;gap:2px">
-            <div class="dur-btn" data-dur="1">1m</div><div class="dur-btn" data-dur="2">2m</div>
+            <div class="dur-btn" data-dur="1">1m</div><div class="dur-btn on" data-dur="2">2m</div>
             <div class="dur-btn" data-dur="3">3m</div><div class="dur-btn" data-dur="5">5m</div>
-            <div class="dur-btn on" data-dur="8">8m</div><div class="dur-btn" data-dur="20">20m</div>
+            <div class="dur-btn" data-dur="8">8m</div><div class="dur-btn" data-dur="20">20m</div>
           </div>
         </div>
       </div>
