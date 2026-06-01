@@ -3099,7 +3099,18 @@ const SAL={
     }
     const ids=Object.keys(this._pendingDecodes);
     if(ids.length===0)return;
-    showToast(`DECODING ${ids.length} VOX...`);
+    // FIX v46: startPlay() calls ac.resume() without await, so AC can still be
+    // 'suspended' when retryPending runs — _decodeDataURL would re-park everything.
+    // Explicitly await resume here so decodes actually proceed.
+    if(ac&&ac.state!=='running'){
+      try{await ac.resume();}catch(e){}
+    }
+    if(ac&&ac.state!=='running'){
+      // Still not running (e.g. no gesture yet) — defer 300ms and retry
+      setTimeout(function(){try{SAL.retryPending();}catch(e){}},300);
+      return;
+    }
+    showToast('DECODING '+ids.length+' VOX...');
     for(const id of ids){
       const url=this._pendingDecodes[id];
       const slot=this.voxSlots[id];
@@ -5358,6 +5369,10 @@ async function _ingestPack(data,filename){
   const _checkReady=()=>{
     _polls++;
     SAL.enforceMemoryLimit();
+    // FIX v46: if AC became available and we still have pending decodes, trigger retry
+    if(ac&&ac.state==='running'&&SAL.pendingCount&&SAL.pendingCount()>0){
+      try{SAL.retryPending();}catch(e){}
+    }
     if(SAL.voxReady>0){SYS.onVoxReady();SYS._check();SAL._updateVoxUI();_updatePackBankUI();}
     if(SAL.pendingCount&&SAL.pendingCount()>0&&_polls<20){setTimeout(_checkReady,400);}
   };
