@@ -1070,6 +1070,9 @@ var VOXDNA=(function(){
             fatigueCost:s.fatigueCost,
             spatialRole:s.spatialRole,
             spatialWidth:s.spatialWidth,
+            // Lineage (Foundation) — carried for visualization only, no scheduling logic
+            parentId:s.parentId||(s.fragmentIdentity&&s.fragmentIdentity.origin)||null,
+            mutationOf:s.mutationOf||null,
           });
         } else if(s.beatsOnePayload){
           // Legacy payload format
@@ -3025,7 +3028,8 @@ const SAL={
       const name=s.name||(s.audio&&s.audio.replace(/_clean\.[^.]+$/,'').replace(/\.[^.]+$/,''))||id.slice(0,12);
       const ftype=s.fragmentIdentity?.type||s.entityType||s.type||'fragment';
       if(!this.voxSlots[id])
-        this.voxSlots[id]={state:'EMPTY',buffer:null,ready:false,failed:false,name,fragType:ftype,audio:s.audio,duration:s.duration||0};
+        this.voxSlots[id]={state:'EMPTY',buffer:null,ready:false,failed:false,name,fragType:ftype,audio:s.audio,duration:s.duration||0,
+          parentId:s.parentId||(s.fragmentIdentity&&s.fragmentIdentity.origin)||null,mutationOf:s.mutationOf||null};
       // Auto-decode if audioData (base64) is embedded -- no BIND required
       if(s.audioData&&this.voxSlots[id].state==='EMPTY'){
         this.voxSlots[id].state='QUEUED';
@@ -3294,12 +3298,16 @@ const SAL={
     }
     Object.entries(this.voxSlots).forEach(([id,slot])=>{
       const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid rgba(153,68,255,.06)';
+      // Lineage depth: walk parentId chain (visualization only)
+      let depth=0,pid=slot.parentId,guard=0;
+      while(pid&&this.voxSlots[pid]&&guard<12){depth++;pid=this.voxSlots[pid].parentId;guard++;}
+      row.style.cssText='display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid rgba(153,68,255,.06);margin-left:'+(depth*10)+'px';
       const col=slot.state==='ACTIVE'?'rgba(0,255,200,.75)':slot.failed?'rgba(255,80,80,.6)':slot.state==='QUEUED'?'rgba(255,180,0,.7)':'rgba(255,255,255,.18)';
       const shortName=(slot.name||id).slice(0,18);
       const dur=slot.duration?` ${slot.duration.toFixed(1)}s`:'';
+      const lineage=slot.mutationOf?`<span style="color:rgba(120,200,255,.7)"> ↳${slot.mutationOf}</span>`:(depth===0&&slot.parentId?'':'');
       row.innerHTML=`<div style="width:5px;height:5px;border-radius:50%;background:${col};flex-shrink:0"></div>`+
-        `<div style="font-size:7px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.26);flex:1;overflow:hidden;white-space:nowrap">${shortName}${dur}</div>`;
+        `<div style="font-size:7px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.26);flex:1;overflow:hidden;white-space:nowrap">${shortName}${dur}${lineage}</div>`;
       if(slot.state==='ACTIVE'){
         const ok=document.createElement('div');ok.style.cssText='font-size:7px;font-family:JetBrains Mono,monospace;color:rgba(0,255,200,.6)';ok.textContent='OK';row.appendChild(ok);
       } else if(slot.state==='QUEUED'){
