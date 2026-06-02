@@ -848,11 +848,41 @@ var VOXDNA=(function(){
     lastEntity:null,
     attentionFatigue:0, // 0..1 -- rises with frequent voice, reduces emergence prob
     _MAX:32,
+    _played:{}, // fragId -> true; latched once a fragment plays this session (memoryChain gate)
+
+    // memoryChain: mark a fragment as having played at least once
+    markPlayed(id){ if(id) this._played[id]=true; },
+
+    // memoryChain gate: locked if this fragment is a chain link (pos>0)
+    // whose immediate predecessor has not yet played this session.
+    chainLocked(fragId){
+      var rels=_s.relations||[];
+      for(var i=0;i<rels.length;i++){
+        var r=rels[i];
+        if(r.type!=='memoryChain'||!Array.isArray(r.chain))continue;
+        var idx=r.chain.indexOf(fragId);
+        if(idx>0&&!this._played[r.chain[idx-1]])return true;
+      }
+      return false;
+    },
 
     record(frag,entityType,protagonist,weather){
       var now=Date.now();
       this.recent.push({id:frag.id,fragType:frag.fragType||entityType,ts:now,weather:weather||'CLEAR',protagonist:protagonist||'none',weight:frag.spawnProbability||.5});
       if(this.recent.length>this._MAX)this.recent.shift();
+      // memoryChain: latch this fragment as played; surface chain progress on first play
+      var _wasPlayed=this._played[frag.id];
+      this.markPlayed(frag.id);
+      if(!_wasPlayed&&typeof EVENT_STREAM!=='undefined'){
+        var _rels=_s.relations||[];
+        for(var _ci=0;_ci<_rels.length;_ci++){
+          var _rc=_rels[_ci];
+          if(_rc.type==='memoryChain'&&Array.isArray(_rc.chain)){
+            var _pos=_rc.chain.indexOf(frag.id);
+            if(_pos>=0){EVENT_STREAM.push('mem_chain',(_pos+1)+'/'+_rc.chain.length);break;}
+          }
+        }
+      }
       this.lastEntity=entityType;
       // Accumulate residue -- subconscious slowly charges narrative; narrative leaves ghost echo
       if(entityType==='subconscious')this.residue.narrative=Math.min(1,this.residue.narrative+.08);
@@ -938,7 +968,7 @@ var VOXDNA=(function(){
     // SINGLE SOURCE OF TRUTH: only pick fragments whose buffer is READY in SAL
     var ready=_s.fragments.filter(function(f){
       var sl=typeof SAL!=='undefined'&&SAL.voxSlots[f.id];
-      return sl&&sl.ready&&sl.buffer;
+      return sl&&sl.ready&&sl.buffer&&!VOXMEM.chainLocked(f.id);
     });
     // If SAL has ready slots that aren't in _s.fragments, sync them in
     if(typeof SAL!=='undefined'){
@@ -951,7 +981,7 @@ var VOXDNA=(function(){
       });
       // recompute ready after sync
       ready=_s.fragments.filter(function(f){
-        var sl=SAL.voxSlots[f.id];return sl&&sl.ready&&sl.buffer;
+        var sl=SAL.voxSlots[f.id];return sl&&sl.ready&&sl.buffer&&!VOXMEM.chainLocked(f.id);
       });
     }
     if(ready.length===0)return null; // nothing decoded yet -- stay silent, no fake refs
@@ -1092,7 +1122,7 @@ var VOXDNA=(function(){
     onSilenceWindow:function(depth){_s.silenceDepth=Math.max(0,Math.min(1,depth||0));},
     getMetabolism:function(){return{vocFatigue:+_s.vocFatigue.toFixed(3),clarityDebt:+_s.clarityDebt.toFixed(3),coherenceDesire:+_s.coherenceDesire.toFixed(3),phase:_s.currentPhase,forcedSilence:_s.tickTimeSec<_s.forcedSilenceUntil};},
     forceEmergence:function(ent){if(ent==='narrative'){_s.lastNarrativeTime=-99999;_s.vocFatigue=0;}if(ent==='ghost')_s.lastGhostTime=-99999;_s.forcedSilenceUntil=0;},
-    reset:function(){Object.assign(_s,{vocFatigue:0,clarityDebt:0,coherenceDesire:0,voiceMemory:[],lastNarrativeTime:-99999,lastGhostTime:-99999,forcedSilenceUntil:0,forcedFragUntil:0,bioCollapsing:false,orchRecovering:false});VOXMEM.recent=[];VOXMEM.residue={narrative:0,ghost:0,subconscious:0};VOXMEM.attentionFatigue=0;},
+    reset:function(){Object.assign(_s,{vocFatigue:0,clarityDebt:0,coherenceDesire:0,voiceMemory:[],lastNarrativeTime:-99999,lastGhostTime:-99999,forcedSilenceUntil:0,forcedFragUntil:0,bioCollapsing:false,orchRecovering:false});VOXMEM.recent=[];VOXMEM.residue={narrative:0,ghost:0,subconscious:0};VOXMEM.attentionFatigue=0;VOXMEM._played={};},
     // Record a real playback for memory/sequencing
     recordPlayback:function(frag,entityType,protagonist,weather){if(frag)VOXMEM.record(frag,entityType,protagonist,weather);},
     memStatus:function(){return{size:VOXMEM.recent.length,fatigue:VOXMEM.attentionFatigue.toFixed(2),residue:{n:VOXMEM.residue.narrative.toFixed(2),g:VOXMEM.residue.ghost.toFixed(2),s:VOXMEM.residue.subconscious.toFixed(2)}};},
@@ -6266,6 +6296,7 @@ window.addEventListener('load',()=>{
       ghost_fragment:  ['GHOST EMERGED','rgba(130,90,255,.7)'],
       subconscious_buffer:['SUBCONSCIOUS','rgba(80,130,255,.5)'],
       ritual_vox:      ['RITUAL CALLBACK','rgba(180,90,255,.75)'],
+      mem_chain:       ['MEMORY CHAIN','rgba(120,200,255,.85)'],
       fragment_vox:    ['FRAGMENT PULSE','rgba(0,200,255,.6)'],
       noise_vox:       ['NOISE LAYER','rgba(255,150,50,.55)'],
       pulse_vox:       ['VOX PULSE','rgba(0,255,180,.55)'],

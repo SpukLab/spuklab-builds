@@ -900,6 +900,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
           </div>
           <div id="relsList"></div>
         </div>
+        <div id="chainSection" style="margin-top:.25rem;border-top:1px solid rgba(153,68,255,.15);padding-top:.3rem">
+          <div class="relLabel">MEMORY CHAIN</div>
+          <div class="relRow">
+            <select id="chain0Sel" class="relSel"><option value="">-- 0 --</option></select>
+            <select id="chain1Sel" class="relSel"><option value="">-- 1 --</option></select>
+            <select id="chain2Sel" class="relSel"><option value="">-- 2 --</option></select>
+          </div>
+          <div class="relRow">
+            <button id="chainAddBtn" style="padding:.26rem .5rem;background:rgba(120,200,255,.1);border:1.5px solid rgba(120,200,255,.3);color:rgba(160,210,255,.9);font-size:.66rem;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:.04em">+ CHAIN</button>
+          </div>
+          <div id="chainsList"></div>
+        </div>
      </div>
 
      <!-- LIBRARY -->
@@ -1846,7 +1858,9 @@ var SPUKPACK = {
         exportMode:    ecologyMode ? 'beatsone_ecology' : 'standard'
       },
 
-      relationships: _VOXRELATIONS.slice(),
+      relationships: _VOXRELATIONS.slice().concat(
+        _VOXMEMCHAINS.map(function(c){ return { type:'memoryChain', chain:c.chain.slice() }; })
+      ),
 
       fragments: []
     };
@@ -4828,6 +4842,54 @@ function _populateRelSelects() {
   });
 }
 
+// ─── MEMORY CHAIN RELATIONS ─────────────────────────────────────────────────
+// Authored degradation lineage: ordered fragment ids where each link is locked
+// in SBO until its predecessor has played. Degradation lives in the audio itself.
+// Schema: {type:'memoryChain', chain:[id0,id1,id2]}
+var _VOXMEMCHAINS = []; // array of {chain:[ids]}
+
+function _renderChains() {
+  var list = document.getElementById('chainsList');
+  if(!list) return;
+  if(!_VOXMEMCHAINS.length) {
+    list.innerHTML = '<div style="font-size:.54rem;color:rgba(153,68,255,.28);font-family:\'JetBrains Mono\',monospace;padding:.08rem 0">no chains</div>';
+    return;
+  }
+  list.innerHTML = '';
+  _VOXMEMCHAINS.forEach(function(c, idx) {
+    var names = c.chain.map(function(id) {
+      var s = A && A.samples.find(function(x){ return x.id === id; });
+      return (s && s.name || id).slice(0, 10);
+    });
+    var div = document.createElement('div');
+    div.className = 'relItem';
+    div.innerHTML = names.join(' → ') + '<button class="relDelBtn" data-cidx="' + idx + '">X</button>';
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.relDelBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _VOXMEMCHAINS.splice(parseInt(this.dataset.cidx, 10), 1);
+      _renderChains();
+    });
+  });
+}
+
+function _populateChainSelects() {
+  ['chain0Sel','chain1Sel','chain2Sel'].forEach(function(sid, i) {
+    var sel = document.getElementById(sid);
+    if(!sel) return;
+    var prev = sel.value;
+    sel.innerHTML = '<option value="">-- ' + i + ' --</option>';
+    (A && A.samples || []).forEach(function(s) {
+      var o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = (s.name || s.id).slice(0, 26);
+      if(s.id === prev) o.selected = true;
+      sel.appendChild(o);
+    });
+  });
+}
+
 var PACK = {
   name: '',
   author: '',
@@ -5062,6 +5124,32 @@ _on('packExportEcology', 'click', async function(){ await _doSpukpackExport(true
     document.addEventListener('DOMContentLoaded', _wireRelUI);
   } else {
     _wireRelUI();
+  }
+})();
+
+// ─── MEMORY CHAIN UI HANDLERS ───────────────────────────────────────────────
+(function() {
+  function _wireChainUI() {
+    var s0 = document.getElementById('chain0Sel');
+    var s1 = document.getElementById('chain1Sel');
+    var s2 = document.getElementById('chain2Sel');
+    var addBtn = document.getElementById('chainAddBtn');
+    if(!s0 || !s1 || !s2 || !addBtn) return;
+    [s0, s1, s2].forEach(function(sel) { sel.addEventListener('focus', _populateChainSelects); });
+    addBtn.addEventListener('click', function() {
+      var chain = [s0.value, s1.value, s2.value].filter(function(v) { return v; });
+      if(chain.length < 2) { return; } // need at least 2 links
+      // reject duplicate ids in the same chain
+      if(new Set(chain).size !== chain.length) { return; }
+      _VOXMEMCHAINS.push({ chain: chain });
+      _renderChains();
+    });
+    _renderChains();
+  }
+  if(document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _wireChainUI);
+  } else {
+    _wireChainUI();
   }
 })();
 
