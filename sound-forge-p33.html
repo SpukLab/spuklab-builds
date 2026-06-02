@@ -376,6 +376,31 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   transform:translate(-50%,-50%);width:11px;height:22px;
   background:rgba(0,255,255,.18);border-radius:2px;}
 
+/* MATERIAL editing toolbar */
+.wave-toolbar{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;}
+.wtool{flex:1;min-width:44px;min-height:34px;padding:7px 6px;border-radius:4px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  background:rgba(0,255,255,.04);border:1px solid rgba(0,255,255,.16);
+  color:rgba(0,255,255,.6);cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:all .1s;}
+.wtool:active{background:rgba(0,255,255,.14);}
+.wtool.save{background:rgba(153,68,255,.08);border-color:rgba(153,68,255,.3);color:#b580ff;}
+.wtool[data-slice]{flex:none;width:44px;}
+.slice-row{display:flex;gap:2px;margin-bottom:6px;flex-wrap:wrap;}
+.slice-chip{padding:4px 7px;border-radius:3px;font-family:var(--mono);font-size:11px;
+  background:rgba(153,68,255,.08);border:1px solid rgba(153,68,255,.2);
+  color:rgba(181,128,255,.85);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.slice-chip:active{background:rgba(153,68,255,.2);}
+.fragment-list{display:flex;flex-direction:column;gap:3px;margin-bottom:6px;max-height:160px;overflow-y:auto;}
+.fragment-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:3px;
+  background:rgba(153,68,255,.05);border:1px solid var(--vdim);font-family:var(--mono);font-size:11px;}
+.fragment-item .fr-name{flex:1;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fragment-item .fr-dur{color:var(--gray);font-size:11px;}
+.fragment-item .fr-load{padding:3px 7px;border-radius:3px;background:rgba(0,255,255,.08);
+  border:1px solid rgba(0,255,255,.2);color:rgba(0,255,255,.7);cursor:pointer;font-size:11px;}
+.fragment-item .fr-del{padding:3px 6px;border-radius:3px;background:rgba(255,68,68,.08);
+  border:1px solid rgba(255,68,68,.2);color:rgba(255,120,120,.8);cursor:pointer;font-size:11px;}
+
 /* Playback mode chips */
 .pbmode-row{display:flex;gap:3px;margin-bottom:7px;}
 .pbchip{flex:1;padding:6px 3px;border-radius:3px;text-align:center;cursor:pointer;
@@ -1026,6 +1051,30 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     </div>
     <div class="loop-indicator" id="loop-indicator">MICRO LOOP ACTIVE</div>
 
+    <!-- ZOOM + REGION TOOLBAR -->
+    <div class="wave-toolbar">
+      <button class="wtool" id="wt-zoom-region">ZOOM REGION</button>
+      <button class="wtool" id="wt-zoom-out">ZOOM OUT</button>
+      <button class="wtool" id="wt-preview-region">▶ REGION</button>
+    </div>
+
+    <!-- SLICE -->
+    <div class="wave-toolbar">
+      <span class="medit-lbl" style="align-self:center;">SLICE</span>
+      <button class="wtool" data-slice="4">4</button>
+      <button class="wtool" data-slice="8">8</button>
+      <button class="wtool" data-slice="16">16</button>
+      <button class="wtool" id="wt-transient">TRANSIENT</button>
+    </div>
+    <div class="slice-row" id="slice-row"></div>
+
+    <!-- SAVE FRAGMENT -->
+    <div class="wave-toolbar">
+      <button class="wtool save" id="wt-save-fragment">SAVE FRAGMENT</button>
+      <span class="medit-val" id="fragment-count">0 saved</span>
+    </div>
+    <div class="fragment-list" id="fragment-list"></div>
+
     <!-- PLAYBACK MODES -->
     <div class="pbmode-row">
       <div class="pbchip active" data-pb="full"><span>FULL</span></div>
@@ -1571,7 +1620,7 @@ function onMaterialLoaded(buffer,name,targetSlot){
   SLOTS[slot]=mat;
   precomputedWaveforms[slot]=null;
   // Reset edit state for this slot
-  MatEditState.startPct=0;MatEditState.endPct=1;
+  MatEditState.startPct=0;MatEditState.endPct=1;MatEditState.zoomStart=0;MatEditState.zoomEnd=1;
   updateMaterialUI();
   setT('mat-status','loaded: '+mat.name.slice(0,22));
   dbg('material','Loaded into slot',slot,mat.name,'dur',mat.duration.toFixed(2),'s');
@@ -1732,18 +1781,24 @@ function drawWaveEditor(){
     ctx.fillText('no material',w/2,34);return;
   }
   const data=mat.buffer.getChannelData(0);
-  const step=Math.max(1,Math.floor(data.length/w));
+  const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
+  const zStart=Math.floor(zs*data.length),zEnd=Math.floor(ze*data.length);
+  const zLen=Math.max(1,zEnd-zStart);
+  const step=Math.max(1,Math.floor(zLen/w));
+  // Region positions mapped into the zoom window
   const s0=MatEditState.startPct,s1=MatEditState.endPct;
-  const x0=Math.round(s0*w),x1=Math.round(s1*w);
+  const pctToX=p=>Math.round(((p-zs)/(ze-zs))*w);
+  const x0=clamp(pctToX(s0),0,w),x1=clamp(pctToX(s1),0,w);
 
   // Background — outside region darker
   ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,w,60);
   ctx.fillStyle='rgba(0,255,255,.04)';ctx.fillRect(x0,0,x1-x0,60);
 
-  // Waveform
+  // Waveform (zoomed window)
   for(let x=0;x<w;x++){
     let mx=0,mn=0;
-    for(let j=0;j<step;j++){const v=data[x*step+j]||0;if(v>mx)mx=v;if(v<mn)mn=v;}
+    const base=zStart+x*step;
+    for(let j=0;j<step;j++){const v=data[base+j]||0;if(v>mx)mx=v;if(v<mn)mn=v;}
     const inRegion=x>=x0&&x<=x1;
     ctx.strokeStyle=inRegion?'rgba(0,255,255,.75)':'rgba(0,255,255,.20)';
     ctx.lineWidth=1;ctx.beginPath();
@@ -1757,11 +1812,11 @@ function drawWaveEditor(){
   ctx.strokeStyle='rgba(153,68,255,.80)';
   ctx.beginPath();ctx.moveTo(x1-.5,0);ctx.lineTo(x1-.5,60);ctx.stroke();
 
-  // Sync handle positions
+  // Sync handle positions (within zoom window)
   const startH=document.getElementById('wh-start');
   const endH=document.getElementById('wh-end');
-  if(startH)startH.style.left=(s0*100).toFixed(1)+'%';
-  if(endH)endH.style.left=(s1*100)-.2+'%';
+  if(startH)startH.style.left=clamp((s0-zs)/(ze-zs)*100,0,100).toFixed(1)+'%';
+  if(endH)endH.style.left=clamp((s1-zs)/(ze-zs)*100,0,100).toFixed(1)+'%';
 }
 
 function initWaveEditor(){
@@ -1775,10 +1830,13 @@ function initWaveEditor(){
       e.preventDefault();
       const rect=wrap.getBoundingClientRect();
       const cx=e.touches?e.touches[0].clientX:e.clientX;
-      let p=clamp((cx-rect.left)/rect.width,0,1);
-      if(key==='startPct')p=Math.min(p,MatEditState.endPct-.01);
-      else p=Math.max(p,MatEditState.startPct+.01);
-      MatEditState[key]=p;drawWaveEditor();
+      const screenP=clamp((cx-rect.left)/rect.width,0,1);
+      // Map screen position into full-buffer pct via zoom window
+      const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
+      let p=zs+screenP*(ze-zs);
+      if(key==='startPct')p=Math.min(p,MatEditState.endPct-.005);
+      else p=Math.max(p,MatEditState.startPct+.005);
+      MatEditState[key]=clamp(p,0,1);drawWaveEditor();
     };
     el.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;},{passive:false});
     el.addEventListener('touchmove',e=>{if(dragging)onMove(e);},{passive:false});
@@ -1789,6 +1847,158 @@ function initWaveEditor(){
   }
   if(startH)setupHandle(startH,'startPct');
   if(endH)setupHandle(endH,'endPct');
+}
+
+// ─── MATERIAL EDITING PASS — zoom / slice / preview / fragments ──
+const FragmentLibrary=[]; // {name, buffer, duration, slotType}
+
+function initMaterialEditing(){
+  // ZOOM REGION — set visible window to current selection
+  const bind=(id,fn)=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.addEventListener('click',fn);
+    el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  };
+  bind('wt-zoom-region',()=>{
+    const s=MatEditState.startPct,e=MatEditState.endPct;
+    if(e-s<0.005)return;
+    MatEditState.zoomStart=s;MatEditState.zoomEnd=e;
+    drawWaveEditor();
+  });
+  bind('wt-zoom-out',()=>{
+    MatEditState.zoomStart=0;MatEditState.zoomEnd=1;drawWaveEditor();
+  });
+  bind('wt-preview-region',()=>previewRegion());
+
+  // SLICE — divide buffer into N equal regions, show as chips
+  document.querySelectorAll('.wtool[data-slice]').forEach(btn=>{
+    const n=parseInt(btn.dataset.slice);
+    const fn=()=>sliceBuffer(n);
+    btn.addEventListener('click',fn);
+    btn.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  });
+  bind('wt-transient',()=>sliceByTransient());
+  bind('wt-save-fragment',()=>saveFragment());
+}
+
+// Preview just the selected region (start→end), with fades
+function previewRegion(){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){setT('mat-status','no material');return;}
+  if(!AC)initAC();AC.resume();keepDACAlive();
+  const dur=mat.buffer.duration;
+  const s=MatEditState.startPct*dur,e=MatEditState.endPct*dur;
+  const len=Math.max(.02,e-s);
+  const src=AC.createBufferSource();src.buffer=mat.buffer;
+  const g=AC.createGain();
+  const t=AC.currentTime+0.01;
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(0.9,t+0.008);
+  g.gain.setValueAtTime(0.9,t+len-0.02);
+  g.gain.linearRampToValueAtTime(0,t+len);
+  src.connect(g);g.connect(masterGain);
+  src.start(t,s,len);src.stop(t+len+0.05);
+  setT('mat-status',`▶ region ${len.toFixed(2)}s`);
+}
+
+// Slice into N equal regions → clickable chips that set start/end
+function sliceBuffer(n){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){setT('mat-status','no material');return;}
+  const row=document.getElementById('slice-row');if(!row)return;
+  row.innerHTML='';
+  // Slice within the current zoom window
+  const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
+  const span=ze-zs;
+  for(let i=0;i<n;i++){
+    const a=zs+(i/n)*span, b=zs+((i+1)/n)*span;
+    const chip=document.createElement('div');
+    chip.className='slice-chip';chip.textContent=(i+1);
+    const sel=()=>{MatEditState.startPct=a;MatEditState.endPct=b;drawWaveEditor();previewRegion();};
+    chip.addEventListener('click',sel);
+    chip.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
+    row.appendChild(chip);
+  }
+  setT('mat-status',`sliced ×${n}`);
+}
+
+// Slice by transient detection → chips at detected onsets
+function sliceByTransient(){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){setT('mat-status','no material');return;}
+  const data=mat.buffer.getChannelData(0);
+  const N=data.length;
+  const win=Math.floor(mat.buffer.sampleRate*0.01); // 10ms energy window
+  const onsets=[0];
+  let prevE=0;
+  for(let i=0;i<N;i+=win){
+    let e=0;for(let j=0;j<win&&i+j<N;j++){const v=data[i+j];e+=v*v;}
+    e=Math.sqrt(e/win);
+    // onset if energy jumps sharply vs previous window
+    if(e>0.04&&e>prevE*2.2){
+      const pct=i/N;
+      if(pct-onsets[onsets.length-1]>0.01)onsets.push(pct);
+    }
+    prevE=e;
+  }
+  const row=document.getElementById('slice-row');if(!row)return;
+  row.innerHTML='';
+  if(onsets.length<2){setT('mat-status','no transients found');return;}
+  onsets.forEach((on,i)=>{
+    const a=on, b=(i+1<onsets.length)?onsets[i+1]:1;
+    const chip=document.createElement('div');
+    chip.className='slice-chip';chip.textContent='T'+(i+1);
+    const sel=()=>{MatEditState.startPct=a;MatEditState.endPct=b;
+      MatEditState.zoomStart=0;MatEditState.zoomEnd=1;drawWaveEditor();previewRegion();};
+    chip.addEventListener('click',sel);
+    chip.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
+    row.appendChild(chip);
+  });
+  setT('mat-status',`${onsets.length} transients`);
+}
+
+// Save current region as a reusable fragment (in-memory library)
+function saveFragment(){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){setT('mat-status','no material');return;}
+  const dur=mat.buffer.duration;
+  const s=MatEditState.startPct*dur,e=MatEditState.endPct*dur;
+  const len=Math.max(.01,e-s);
+  const sr=mat.buffer.sampleRate;
+  const nCh=mat.buffer.numberOfChannels;
+  const startSamp=Math.floor(s*sr),lenSamp=Math.floor(len*sr);
+  const frag=AC.createBuffer(nCh,lenSamp,sr);
+  for(let ch=0;ch<nCh;ch++){
+    const src=mat.buffer.getChannelData(ch);
+    const dst=frag.getChannelData(ch);
+    for(let i=0;i<lenSamp;i++)dst[i]=src[startSamp+i]||0;
+  }
+  const name=`${MatEditState.slotType}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
+  FragmentLibrary.push({name,buffer:frag,duration:len,slotType:MatEditState.slotType});
+  renderFragmentList();
+  setT('mat-status',`saved: ${name} (${len.toFixed(2)}s)`);
+}
+
+function renderFragmentList(){
+  const list=document.getElementById('fragment-list');
+  const count=document.getElementById('fragment-count');
+  if(count)count.textContent=`${FragmentLibrary.length} saved`;
+  if(!list)return;
+  list.innerHTML='';
+  FragmentLibrary.forEach((fr,idx)=>{
+    const item=document.createElement('div');item.className='fragment-item';
+    item.innerHTML=`<span class="fr-name">${fr.name}</span><span class="fr-dur">${fr.duration.toFixed(2)}s</span>`;
+    const load=document.createElement('div');load.className='fr-load';load.textContent='LOAD';
+    const loadFn=()=>{onMaterialLoaded(fr.buffer,fr.name,currentSlot);setT('mat-status',`loaded ${fr.name}`);};
+    load.addEventListener('click',loadFn);
+    load.addEventListener('touchstart',e=>{e.preventDefault();loadFn();},{passive:false});
+    const del=document.createElement('div');del.className='fr-del';del.textContent='×';
+    const delFn=()=>{FragmentLibrary.splice(idx,1);renderFragmentList();};
+    del.addEventListener('click',delFn);
+    del.addEventListener('touchstart',e=>{e.preventDefault();delFn();},{passive:false});
+    item.appendChild(load);item.appendChild(del);
+    list.appendChild(item);
+  });
 }
 
 // ─── PLAYBACK REGION HELPERS ─────────────────────────────
@@ -1961,7 +2171,9 @@ const MatEditState={
   loopEnabled:false,
   loopSize:.30,   // 0→1 → 12…400ms
   loopDrift:.20,
-  slotType:'kick_a'
+  slotType:'kick_a',
+  zoomStart:0,    // visible window start (0..1 of full buffer)
+  zoomEnd:1       // visible window end
 };
 
 // ─── DIGITAL FRAGMENT ENGINE (Ikeda / Bretschneider) ────
@@ -2723,10 +2935,10 @@ function trigger(){
     // FEEL SILENCE — evident gaps. At 0: continuous. At 1: ~55% omission → breaths/voids.
     // Combined with void pressure (which is a LAB-level performative control).
     let omit=0;
-    // SILENCE — aggressive in second half: linear to .5, then exponential ramp.
+    // SILENCE — gentle to 60%, then steep. At max ~0.82 omission.
     if(FeelState.silence>0.02){
       const s=FeelState.silence;
-      const curved=s<0.5?s*0.5:0.25+Math.pow((s-0.5)*2,1.6)*0.55; // up to ~0.80 at max
+      const curved=s<0.6?s*0.4:0.24+Math.pow((s-0.6)/0.4,1.8)*0.58;
       omit+=curved;
     }
     if(PerformState.voidPressure>0.04)omit+=PerformState.voidPressure*0.62;
@@ -2752,23 +2964,18 @@ function _triggerInner(){
   // EVOLUTION: accumulate drift FAST. At 1: clearly mutant within ~15s.
   if(FeelState.evolution>0.02){
     const dt=Math.min(2,now-(FeelState._evLastTrig||now));
-    FeelState._evDrift+=FeelState.evolution*dt*0.054; // +20% over v2
+    FeelState._evDrift+=FeelState.evolution*dt*0.060; // +30% over v2
     FeelState._evDrift=FeelState._evDrift%1;
   }
   FeelState._evLastTrig=now;
   const evPhase=FeelState._evDrift*Math.PI*2;
   const evMod=FeelState.evolution;
 
-  // SILENCE — more aggressive in the second half (exponential curve)
-  // computed in trigger() gate; see silence handling there.
-  // WIDTH: panoramic. +35% authority.
+  // WIDTH +50% authority, ENERGY +50%
   const feelWidth=FeelState.width;
-  // ENERGY: contained → expansive. +35% authority.
   const feelEnergy=FeelState.energy;
-  // DENSITY: unchanged.
   const feelDensity=FeelState.density;
-  // Composite pan width — WIDTH dominant (+35%), ENERGY assists.
-  const feelPanWidth=clamp(feelWidth*1.35+feelEnergy*0.4,0,1.5)*PerformState.precisionWidth;
+  const feelPanWidth=clamp(feelWidth*1.5+feelEnergy*0.5,0,1.6)*PerformState.precisionWidth;
 
   const mat=SLOTS[currentSlot];
   if(mat&&mat.buffer){
@@ -2927,7 +3134,7 @@ function _triggerInner(){
     const feelLP=AC.createBiquadFilter();feelLP.type='lowpass';
     safeFreq(feelLP.frequency,clamp(1800+feelEnergy*16000,1800,18000));feelLP.Q.value=.5;
     const feelShelf=AC.createBiquadFilter();feelShelf.type='highshelf';
-    safeFreq(feelShelf.frequency,3500);feelShelf.gain.value=clamp(feelEnergy*12,0,12); // +35% (was 9)
+    safeFreq(feelShelf.frequency,3500);feelShelf.gain.value=clamp(feelEnergy*14,0,14); // +50%
     // ── FEEL EVOLUTION: bandpass sweep on MAIN event, center wanders with drift ──
     const feelEvBP=AC.createBiquadFilter();
     if(evMod>0.02){
@@ -3757,6 +3964,7 @@ function updateSculptMiniWave(){
 
 // ─── WAVEFORM EDITOR INIT ───────────────────────────────
 initWaveEditor();
+initMaterialEditing();
 
 // ─── PLAYBACK MODE CHIPS ────────────────────────────────
 document.querySelectorAll('.pbchip[data-pb]').forEach(chip=>{
