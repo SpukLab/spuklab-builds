@@ -3134,6 +3134,15 @@ const SAL={
         }catch(e){}
       },50);
     }
+    // Auto-activate VOX Solo: opens ghost bus to 0.9 and mutes synth drums
+    // so the voice is foregrounded without competing with un-loaded rhythm DNA.
+    if(!this.voxSolo){
+      this.voxSolo=true;
+      if(window.BUS&&window.BUS.ghost&&window.ac)
+        window.BUS.ghost.gain.gain.setTargetAtTime(.9,window.ac.currentTime,1.2);
+      setTimeout(()=>{try{if(typeof setPriorityMode==='function')setPriorityMode('sample');}catch(e){}},60);
+      BOOT.trace('AUTO ARM: VOX SOLO activated');
+    }
     // Notify SYS that VOX is armed
     if(typeof SYS!=='undefined')SYS.onVoxReady();
     BOOT.trace('AUTO ARM: '+this.voxReady+'/'+this.voxTotal+' VOX ready, mode='+this.priorityMode);
@@ -3454,6 +3463,9 @@ const VOX_ARC={
 
   // Can this entity type emerge in the current narrative phase?
   allows(entityType){
+    // When a VoxEntity pack is loaded, voice types are always allowed —
+    // don't gate on narrative arc phase (designed for long generative sessions).
+    if(typeof SAL!=='undefined'&&SAL.voxReady>0) return true;
     const allowed=[
       ['ghost','noise'],                             // OPENING
       ['ghost','noise','fragment','pulse'],           // DEVELOPMENT
@@ -6476,10 +6488,11 @@ window.addEventListener('load',()=>{
     else ac.resume();
     const ready=Object.values(SAL.voxSlots).filter(s=>s.ready&&s.buffer);
     if(ready.length===0){showToast('NO READY VOX BUFFERS');return;}
-    showToast('VOICE PIPELINE TEST');
+    showToast('VOICE PIPELINE TEST — '+ready.length+' FRAGS');
     window._voxTestLabel='VOICE PIPELINE TEST';
     setTimeout(()=>{window._voxTestLabel='';},4000);
-    // Play up to 3 buffers in sequence, elevated gain, bypassing ecology
+    // Play up to 3 buffers in sequence, elevated gain.
+    // Connects directly to masterGain (bypasses bus chain) so bus gain state doesn't affect test.
     let delay=0;
     const types=['narrative','subconscious','ghost'];
     ready.slice(0,3).forEach((slot,i)=>{
@@ -6487,15 +6500,17 @@ window.addEventListener('load',()=>{
         if(!ac||!slot.buffer)return;
         const src=ac.createBufferSource();src.buffer=slot.buffer;
         const g=ac.createGain();
-        g.gain.setValueAtTime(0.9*(slot.compGain||1),ac.currentTime);
-        const dur=Math.min(slot.buffer.duration,2.5);
+        g.gain.setValueAtTime(0.85*(slot.compGain||1),ac.currentTime);
+        const dur=Math.min(slot.buffer.duration,3.0);
         g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+dur+.05);
-        src.connect(g);g.connect(BUS.get('ghost'));
+        // Connect directly to masterGain — bypasses ghost bus attenuation
+        src.connect(g);g.connect(masterGain||BUS.get('ghost'));
         src.start(ac.currentTime,0,dur);
         src.onended=()=>BUDGET.releaseNode();BUDGET.addEvent(2);
         SAL.markEvent('test_'+(types[i]||'vox'));
+        if(typeof EVENT_STREAM!=='undefined')EVENT_STREAM.push('narrative_buffer',slot.name||'test');
       },delay);
-      delay+=1400;
+      delay+=Math.min(slot.buffer.duration*1000+300,3400);
     });
   });
   // DBG toggle -- targets the canvas-embedded debug-hud
