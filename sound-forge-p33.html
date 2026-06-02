@@ -113,6 +113,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .pack-id-row{display:flex;align-items:center;gap:7px;}
 .pid-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);
   letter-spacing:.07em;width:66px;flex-shrink:0;}
+.adv-toggle{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  color:rgba(153,68,255,.5);cursor:pointer;margin-top:8px;padding:6px 0;
+  -webkit-tap-highlight-color:transparent;user-select:none;}
+.adv-exports{margin-top:6px;}
+.adv-exports.hidden{display:none;}
 .pid-val{flex:1;background:rgba(153,68,255,.06);border:1px solid var(--vdim);
   border-radius:3px;padding:8px;font-family:var(--mono);font-size:13px;
   color:var(--white);letter-spacing:.06em;outline:none;
@@ -955,16 +960,19 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <div class="sec">
       <div class="st">EXPORT</div>
       <div class="export-btns-grid">
-        <button class="export-btn-main wav" id="exp-wav-dry">DRY WAV</button>
         <button class="export-btn-main wav" id="exp-wav-proc">PROCESSED WAV</button>
-        <button class="export-btn-main dna" id="exp-dna">FORGE DNA</button>
-        <button class="export-btn-main wav" id="exp-stems">PRINT STEMS</button>
         <button class="export-btn-main pack" id="exp-pack">FORGE PACK</button>
       </div>
       <div class="export-status" id="export-status"></div>
       <div class="pack-progress-wrap" id="pack-progress-wrap2">
         <div class="pack-progress-bar" id="pack-progress-bar2"></div>
         <div class="pack-progress-label" id="pack-progress-label2">initializing...</div>
+      </div>
+      <div class="adv-toggle" id="exp-adv-toggle">▸ ADVANCED EXPORTS</div>
+      <div class="export-btns-grid adv-exports hidden" id="exp-adv-grid">
+        <button class="export-btn-main wav" id="exp-wav-dry">DRY WAV</button>
+        <button class="export-btn-main dna" id="exp-dna">FORGE DNA</button>
+        <button class="export-btn-main wav" id="exp-stems">PRINT STEMS</button>
       </div>
     </div>
 
@@ -1402,7 +1410,7 @@ function safeLinearRamp(p,v,t,mn,mx,fb=0){try{p.linearRampToValueAtTime(clampAud
 function safeExpRamp(p,v,t,mn,mx,fb=.001){try{p.exponentialRampToValueAtTime(Math.max(.00001,clampAudio(v,mn,mx,fb)),clampAudio(t,0,3600));}catch(e){dbg('audio','SER FAIL',e.message);}}
 
 // ─── AUDIO CONTEXT ──────────────────────────────────────
-let AC=null,masterGain,compressor,masterSat,masterAnalyser;
+let AC=null,masterGain,compressor,masterSat,masterAnalyser,masterDCBlocker;
 let noiseBuffer=null,FFT_SIZE=2048;
 
 function initAC(){
@@ -1419,6 +1427,7 @@ function initAC(){
   // DC blocker at 28Hz prevents sub accumulation post-saturation
   const dcBlocker=AC.createBiquadFilter();dcBlocker.type='highpass';
   dcBlocker.frequency.value=28;dcBlocker.Q.value=.5;
+  masterDCBlocker=dcBlocker; // exposed for live FEEL capture tap
   masterGain.connect(compressor);compressor.connect(masterSat);
   masterSat.connect(dcBlocker);dcBlocker.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
   noiseBuffer=genNoise(2);
@@ -2714,7 +2723,12 @@ function trigger(){
     // FEEL SILENCE — evident gaps. At 0: continuous. At 1: ~55% omission → breaths/voids.
     // Combined with void pressure (which is a LAB-level performative control).
     let omit=0;
-    if(FeelState.silence>0.02)omit+=FeelState.silence*0.55;
+    // SILENCE — aggressive in second half: linear to .5, then exponential ramp.
+    if(FeelState.silence>0.02){
+      const s=FeelState.silence;
+      const curved=s<0.5?s*0.5:0.25+Math.pow((s-0.5)*2,1.6)*0.55; // up to ~0.80 at max
+      omit+=curved;
+    }
     if(PerformState.voidPressure>0.04)omit+=PerformState.voidPressure*0.62;
     if(omit>0&&Math.random()<Math.min(omit,0.85))return; // silent — gap
     _triggerInner();
@@ -2738,24 +2752,23 @@ function _triggerInner(){
   // EVOLUTION: accumulate drift FAST. At 1: clearly mutant within ~15s.
   if(FeelState.evolution>0.02){
     const dt=Math.min(2,now-(FeelState._evLastTrig||now));
-    FeelState._evDrift+=FeelState.evolution*dt*0.045; // ~4x faster than v1
+    FeelState._evDrift+=FeelState.evolution*dt*0.054; // +20% over v2
     FeelState._evDrift=FeelState._evDrift%1;
   }
   FeelState._evLastTrig=now;
   const evPhase=FeelState._evDrift*Math.PI*2;
   const evMod=FeelState.evolution;
 
-  // WIDTH: panoramic. At 0 truly mono, at 1 hard panned.
+  // SILENCE — more aggressive in the second half (exponential curve)
+  // computed in trigger() gate; see silence handling there.
+  // WIDTH: panoramic. +35% authority.
   const feelWidth=FeelState.width;
-
-  // ENERGY: contained → expansive (brightness + width + drive on MAIN event).
+  // ENERGY: contained → expansive. +35% authority.
   const feelEnergy=FeelState.energy;
-
-  // DENSITY: few events → swarm (retriggers of MAIN sample + secondary events).
+  // DENSITY: unchanged.
   const feelDensity=FeelState.density;
-
-  // Composite pan width — WIDTH dominant, ENERGY assists. At width=1 → full ±1.
-  const feelPanWidth=clamp(feelWidth*1.0+feelEnergy*0.3,0,1.3)*PerformState.precisionWidth;
+  // Composite pan width — WIDTH dominant (+35%), ENERGY assists.
+  const feelPanWidth=clamp(feelWidth*1.35+feelEnergy*0.4,0,1.5)*PerformState.precisionWidth;
 
   const mat=SLOTS[currentSlot];
   if(mat&&mat.buffer){
@@ -2914,7 +2927,7 @@ function _triggerInner(){
     const feelLP=AC.createBiquadFilter();feelLP.type='lowpass';
     safeFreq(feelLP.frequency,clamp(1800+feelEnergy*16000,1800,18000));feelLP.Q.value=.5;
     const feelShelf=AC.createBiquadFilter();feelShelf.type='highshelf';
-    safeFreq(feelShelf.frequency,3500);feelShelf.gain.value=clamp(feelEnergy*9,0,9);
+    safeFreq(feelShelf.frequency,3500);feelShelf.gain.value=clamp(feelEnergy*12,0,12); // +35% (was 9)
     // ── FEEL EVOLUTION: bandpass sweep on MAIN event, center wanders with drift ──
     const feelEvBP=AC.createBiquadFilter();
     if(evMod>0.02){
@@ -3365,6 +3378,39 @@ function encodeWAV(buffer){
   return ab;
 }
 
+// ─── LIVE FEEL CAPTURE — records master output while auto-triggering ─────
+// Processed WAV = exactly what you hear, including FEEL (silence/density/width/evolution/energy).
+async function captureLiveWithFeel(seconds,intervalMs){
+  if(!AC)initAC();
+  await AC.resume();keepDACAlive();
+  const sr=AC.sampleRate;
+  const chunks=[[],[]]; // L, R
+  const proc=AC.createScriptProcessor(4096,2,2);
+  let capturing=true;
+  proc.onaudioprocess=e=>{
+    if(!capturing)return;
+    chunks[0].push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    chunks[1].push(new Float32Array(e.inputBuffer.getChannelData(1)));
+  };
+  // Tap post-master chain; proc must reach destination to pump, at gain 0 (silent monitor)
+  masterDCBlocker.connect(proc);
+  const sink=AC.createGain();sink.gain.value=0;proc.connect(sink);sink.connect(AC.destination);
+  // Auto-trigger loop with FEEL applied (uses the real trigger path)
+  const iv=setInterval(()=>{try{trigger();}catch(e){}},intervalMs||320);
+  await new Promise(r=>setTimeout(r,seconds*1000));
+  clearInterval(iv);capturing=false;
+  try{masterDCBlocker.disconnect(proc);}catch(e){}
+  try{proc.disconnect();sink.disconnect();}catch(e){}
+  // Concatenate chunks into AudioBuffer
+  const total=chunks[0].reduce((s,a)=>s+a.length,0);
+  const out=AC.createBuffer(2,total,sr);
+  for(let ch=0;ch<2;ch++){
+    const data=out.getChannelData(ch);let off=0;
+    for(const c of chunks[ch]){data.set(c,off);off+=c.length;}
+  }
+  return out;
+}
+
 async function exportWAV(mode){
   const mat=SLOTS[currentSlot];
   const setStatus=msg=>{
@@ -3381,8 +3427,14 @@ async function exportWAV(mode){
   } else if(mode==='resampled'){
     if(!resampledBuffer){setStatus('no resampled buffer — run RENDER PASS first');return;}
     exportBuf=resampledBuffer;
+  } else if(mode==='processed'){
+    // PROCESSED = exactly what you hear, INCLUDING FEEL. Live capture of master.
+    if(!mat||!mat.buffer){setStatus('no material loaded');return;}
+    setStatus('capturing live (with FEEL)… ~6s');
+    try{exportBuf=await captureLiveWithFeel(6,320);}
+    catch(e){setStatus('capture error: '+e.message);return;}
   } else {
-    // processed or current: render offline with full chain + safety limiter
+    // 'raw_processed' or 'current': offline static render (debug — no FEEL)
     const srcBuf=(mode==='current'&&resampledBuffer)?resampledBuffer:(mat?mat.buffer:null);
     if(!srcBuf){setStatus('no material loaded');return;}
     setStatus('rendering...');
@@ -3911,11 +3963,22 @@ function getPackName(){
     const pb=document.getElementById('pack-progress-bar2');
     const pl=document.getElementById('pack-progress-label2');
     if(pw)pw.classList.add('visible');
-    // Redirect progress to export pane progress elements
     forgeSpukPack({progressBar:pb,progressLabel:pl}).catch(e=>{
       if(pl)pl.textContent='error: '+e.message;
     });
   });
+  // Advanced exports toggle
+  (function(){
+    const tog=document.getElementById('exp-adv-toggle');
+    const grid=document.getElementById('exp-adv-grid');
+    if(!tog||!grid)return;
+    const flip=()=>{
+      const hidden=grid.classList.toggle('hidden');
+      tog.textContent=(hidden?'▸':'▾')+' ADVANCED EXPORTS';
+    };
+    tog.addEventListener('click',flip);
+    tog.addEventListener('touchstart',e=>{e.preventDefault();flip();},{passive:false});
+  })();
 })();
 
 // ─── ORGANISM SELECTOR ──────────────────────────────────
