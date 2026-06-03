@@ -2197,6 +2197,26 @@ function renderFragmentList(){
 }
 
 // ─── BANK EXPORT — package fragment library → .spukpack for BeatsOne ──
+// BeatsOne triggers from samples{id:path} + entities{id:{behavior}} maps.
+// Each fragment becomes a triggerable entity with phase/weather affinity
+// derived from its LUMINOUS slot type.
+const FRAG_ENTITY_BEHAVIOR={
+  // slotType : {type, weatherAffinity, preferredPhase, densityWeight, emergenceProbability, spectralRole, fatigueCost, maxRepeats}
+  luminous_riser:   {type:'luminous_riser',   weatherAffinity:['RADIANT','TENSION','STORM'], preferredPhase:'BUILD',     densityWeight:0.30, emergenceProbability:0.12, spectralRole:'lead',      fatigueCost:0.10, maxRepeats:2},
+  luminous_spectral:{type:'luminous_spectral',weatherAffinity:['RADIANT','FOG','CLEAR'],     preferredPhase:'PEAK',      densityWeight:0.28, emergenceProbability:0.10, spectralRole:'air',       fatigueCost:0.06, maxRepeats:3},
+  luminous_drone:   {type:'luminous_drone',   weatherAffinity:['RADIANT','CLEAR','FOG'],     preferredPhase:'PEAK',      densityWeight:0.34, emergenceProbability:0.09, spectralRole:'pad',       fatigueCost:0.05, maxRepeats:2},
+  luminous_tail:    {type:'luminous_tail',    weatherAffinity:['RADIANT','VOID','CLEAR'],    preferredPhase:'AFTERSHOCK',densityWeight:0.22, emergenceProbability:0.10, spectralRole:'tail',      fatigueCost:0.04, maxRepeats:2},
+  dark_core:        {type:'dark_core',        weatherAffinity:['VOID','STORM','SUB_PRESSURE'],preferredPhase:'RUPTURE',  densityWeight:0.40, emergenceProbability:0.08, spectralRole:'body',      fatigueCost:0.12, maxRepeats:2},
+  // non-luminous fallbacks
+  texture:          {type:'erosion_texture',  weatherAffinity:['FOG','STATIC'],              preferredPhase:'TENSION',   densityWeight:0.18, emergenceProbability:0.08, spectralRole:'background',fatigueCost:0.06, maxRepeats:2},
+  void:             {type:'fog_layer',        weatherAffinity:['VOID','FOG'],                preferredPhase:'VOID',      densityWeight:0.15, emergenceProbability:0.06, spectralRole:'background',fatigueCost:0.04, maxRepeats:2},
+  bass:             {type:'sub_fragment',     weatherAffinity:['SUB_PRESSURE','STORM'],      preferredPhase:'BUILD',     densityWeight:0.30, emergenceProbability:0.10, spectralRole:'body',      fatigueCost:0.10, maxRepeats:2}
+};
+function fragBehavior(slotType){
+  return FRAG_ENTITY_BEHAVIOR[slotType]
+    ||{type:'erosion_texture',weatherAffinity:['FOG'],preferredPhase:'TENSION',densityWeight:0.18,emergenceProbability:0.08,spectralRole:'background',fatigueCost:0.06,maxRepeats:2};
+}
+
 async function exportFragmentBank(){
   const setB=msg=>{const el=document.getElementById('bank-status');if(el)el.textContent=msg;};
   if(FragmentLibrary.length===0){setB('no fragments to export');return;}
@@ -2204,7 +2224,6 @@ async function exportFragmentBank(){
   await new Promise(r=>setTimeout(r,16));
   try{
     const zip=new MinimalZip();
-    // Folder routing by family
     const folderFor=st=>{
       if(st==='dark_core')return'dark';
       if(st&&st.startsWith('luminous_'))return'luminous';
@@ -2213,40 +2232,62 @@ async function exportFragmentBank(){
       if(st==='bass')return'bass';
       return'texture';
     };
-    const entries=[];
+    const samples={};   // id -> path  (what BeatsOne loads)
+    const entities={};  // id -> behavior (what BeatsOne triggers)
     let li=0,di=0;
-    for(const fr of FragmentLibrary){
+    FragmentLibrary.forEach((fr,i)=>{
       const wav=encodeWAV(fr.buffer);
       const folder=folderFor(fr.slotType);
       const safe=fr.name.replace(/[^a-z0-9_]/gi,'_');
-      const path=`audio/${folder}/${safe}.wav`;
+      const file=`${safe}.wav`;
+      const path=`audio/${folder}/${file}`;
       zip.add(path,wav);
+      // Unique id per fragment
+      const id=`${fr.slotType||'frag'}_${(i+1).toString().padStart(2,'0')}`;
+      samples[id]=path;
+      const b=fragBehavior(fr.slotType);
       const lum=deriveLuminous(fr.slotType);
-      entries.push({
-        name:fr.name, file:path, slotType:fr.slotType,
+      entities[id]={
+        id, type:b.type, folder, audio:file,
+        weatherAffinity:b.weatherAffinity,
+        preferredPhase:b.preferredPhase,
+        densityWeight:b.densityWeight,
+        emergenceProbability:b.emergenceProbability,
+        spectralRole:b.spectralRole,
+        fatigueCost:b.fatigueCost,
+        maxRepeats:b.maxRepeats,
+        clarity:0.6,
         duration:parseFloat(fr.duration.toFixed(3)),
-        sampleRate:fr.buffer.sampleRate,
-        luminous:lum
-      });
+        luminous:lum||undefined,
+        verticalBias:lum?lum.verticalBias:0
+      };
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
-    }
+    });
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
     const manifest={
       schema:'spukpack_v2',
       type:'fragment_bank',
       meta:{
-        name:bankName, author:'SpukLab',
+        packId:bankName, packName:bankName, name:bankName, author:'SpukLab',
         created:new Date().toISOString(),
-        fragmentCount:FragmentLibrary.length,
+        generation:0,
+        entityCount:FragmentLibrary.length,
         luminousCount:li, darkCoreCount:di
       },
-      // Vertical-axis summary so BeatsOne can balance body vs halo
-      verticalProfile:{
-        hasLuminous:li>0, hasDarkCore:di>0,
-        note:'verticalBias per fragment in entries[].luminous.verticalBias'
+      ecology:{
+        weatherBias:{target:li>di?'RADIANT':'VOID'},
+        bpmAffinity:{min:90,max:140,sweet:120},
+        silenceTolerance:0.4,
+        verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di}
       },
-      fragments:entries
+      routing:{
+        maxSimultaneousEntities:6, maxPolyphony:12,
+        preferredSampleRate:48000, bitDepth:24,
+        rareEntityCooldownMs:18000, eventEntityCooldownMs:8000
+      },
+      samples,    // ← BeatsOne loads these
+      entities    // ← BeatsOne triggers these
     };
     zip.add('manifest.json',new TextEncoder().encode(JSON.stringify(manifest,null,2)));
     setB('compressing…');
@@ -2257,7 +2298,7 @@ async function exportFragmentBank(){
     const a=document.createElement('a');a.href=url;
     a.download=`${bankName}_bank_${FragmentLibrary.length}frag.spukpack`;
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-    setB(`exported ${FragmentLibrary.length} fragments (${li} luminous, ${di} dark core)`);
+    setB(`exported ${FragmentLibrary.length} entities (${li} luminous, ${di} dark core)`);
   }catch(e){setB('export error: '+e.message);console.warn('[SF3] bank export fail:',e);}
 }
 
