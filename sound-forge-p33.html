@@ -2228,6 +2228,19 @@ function fragBehavior(slotType){
     ||{type:'erosion_texture',weatherAffinity:['FOG','CLEAR'],phases:['TENSION','BUILD'],densityWeight:0.18,emergenceProbability:0.38,spectralRole:'background',fatigueCost:0.04,maxRepeats:3};
 }
 
+// triggerMode tells BeatsOne WHICH ENGINE fires this entity:
+//  'rhythmic' → grid/sequencer engine, on-beat
+//  'textural' → emergent engine, sustained/overlapping, off-grid
+//  'vocal'    → voxritual engine
+//  'sub'      → bass/sub engine, anchored to rhythmic but own routing
+function fragTriggerMode(slotType){
+  if(['kick_a','kick_b','snare','hat'].includes(slotType))return'rhythmic';
+  if(slotType==='bass'||slotType==='dark_core')return'sub';
+  if(['texture','void','luminous_drone','luminous_spectral','luminous_tail','luminous_riser','entity'].includes(slotType))return'textural';
+  if(slotType==='vocal'||slotType==='voxritual')return'vocal';
+  return'textural'; // default: emergent
+}
+
 // ─── LUMINOUS HALO — shared spatial signature for cohesion ───
 // Renders a fragment through a common reverb tail so all fragments share
 // the same space. This is what makes them cohere instead of sounding dry+loose.
@@ -2294,6 +2307,7 @@ async function exportFragmentBank(){
     const entities={};  // id -> behavior (what BeatsOne triggers)
     let li=0,di=0;
     const phaseCounter={}; // round-robin phase assignment per slotType
+    const modeCounts={rhythmic:0,textural:0,vocal:0,sub:0};
     const haloOn=document.getElementById('bank-halo-toggle')?.classList.contains('on');
     const haloAmt=0.5; // shared halo amount
     for(let i=0;i<FragmentLibrary.length;i++){
@@ -2323,6 +2337,8 @@ async function exportFragmentBank(){
       const emJitter=b.emergenceProbability*(0.85+Math.random()*0.3);
       entities[id]={
         id, type:b.type, folder, audio:file,
+        triggerMode:fragTriggerMode(fr.slotType),
+        slotType:fr.slotType,
         weatherAffinity:b.weatherAffinity,
         preferredPhase:assignedPhase,
         densityWeight:b.densityWeight,
@@ -2337,6 +2353,7 @@ async function exportFragmentBank(){
       };
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
+      const tm=fragTriggerMode(fr.slotType);if(tm in modeCounts)modeCounts[tm]++;
     }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
     const manifest={
@@ -2353,7 +2370,8 @@ async function exportFragmentBank(){
         weatherBias:{target:li>di?'RADIANT':'VOID'},
         bpmAffinity:{min:90,max:140,sweet:120},
         silenceTolerance:0.4,
-        verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di}
+        verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di},
+        triggerModes:modeCounts
       },
       routing:{
         maxSimultaneousEntities:6, maxPolyphony:12,
