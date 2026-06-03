@@ -36,6 +36,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
   overflow-x:auto;flex-shrink:0;background:rgba(9,7,20,.65);
   border-bottom:1px solid rgba(153,68,255,.07);scrollbar-width:none}
 #catBar::-webkit-scrollbar{display:none}
+/* ═══ LIBRARY TOOLBAR + TREE VIEW (v44) ═════════════════════════════ */
+#libSearch:focus{border-color:rgba(153,68,255,.45);color:#fff;outline:none}
+.libViewBtn.on{background:rgba(153,68,255,.16)!important;border-color:rgba(153,68,255,.45)!important;color:#fff!important}
+.treeRoot{display:flex;align-items:center;gap:.3rem;padding:.26rem .5rem;border-bottom:1px solid rgba(153,68,255,.05);font-family:'JetBrains Mono',monospace}
+.treeChild{display:flex;align-items:center;gap:.3rem;padding:.18rem .5rem;border-bottom:1px solid rgba(153,68,255,.03);font-family:'JetBrains Mono',monospace}
+.treeToggle{width:1rem;flex-shrink:0;color:rgba(153,68,255,.6);cursor:pointer;font-size:.7rem;text-align:center;user-select:none}
+.treeName{font-size:.68rem;color:rgba(220,200,255,.85);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+.treeChild .treeName{color:rgba(160,210,255,.7);font-size:.62rem}
+.treeName.on{color:#fff;font-weight:700}
+.treeMeta{font-size:.55rem;color:rgba(255,255,255,.28);white-space:nowrap;margin-left:auto;flex-shrink:0}
+.treeAddFam{flex-shrink:0;margin-left:.4rem;padding:.14rem .4rem;font-size:.56rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,220,160,.25);background:rgba(0,220,160,.05);color:rgba(0,220,160,.6);border-radius:2px;cursor:pointer}
+.treeAddFam.on{background:rgba(0,220,160,.2);color:rgba(0,255,180,.9);border-color:rgba(0,220,160,.5)}
 .cat{padding:.22rem .56rem;background:rgba(153,68,255,.05);border:1px solid rgba(153,68,255,.1);
   color:rgba(255,255,255,.35);font-size:.67rem;font-weight:700;letter-spacing:.05em;
   cursor:pointer;border-radius:2px;white-space:nowrap;flex-shrink:0;transition:all .1s}
@@ -928,6 +940,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
       <button class="cat" data-c="textures">TEXTURES</button>
       <button class="cat" data-c="ritual">RITUAL</button>
     </div>
+    <div id="libToolbar" style="display:flex;align-items:center;gap:.3rem;padding:.3rem .65rem;border-bottom:1px solid rgba(153,68,255,.08)">
+      <input id="libSearch" type="text" placeholder="search…" spellcheck="false" autocomplete="off"
+        style="flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid rgba(153,68,255,.18);color:rgba(200,160,255,.9);font-size:.66rem;font-family:'JetBrains Mono',monospace;padding:.26rem .4rem;border-radius:3px"/>
+      <button id="libViewList" class="libViewBtn on" style="padding:.24rem .5rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(153,68,255,.3);background:rgba(153,68,255,.16);color:#fff;border-radius:3px;cursor:pointer">LISTA</button>
+      <button id="libViewTree" class="libViewBtn" style="padding:.24rem .5rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(153,68,255,.1);background:transparent;color:rgba(255,255,255,.35);border-radius:3px;cursor:pointer">ÁRBOL</button>
+      <div id="packSelInfo" style="font-size:.6rem;font-family:'JetBrains Mono',monospace;color:rgba(0,220,160,.55);white-space:nowrap"></div>
+    </div>
     <div id="library"><div class="libEmpty">VOXRITUAL DNA v43.5<br>EMPTY ORGANISM</div></div>
     <div id="auditionBar">
       <button class="audBtn" id="audPrev">PREV</button>
@@ -1740,27 +1759,6 @@ function computeAudioProfile(buf) {
 
 var SPUKPACK = {
 
-  // Build manifest.json for the .spukpack
-  buildManifest: function(packName, packAuthor, entities) {
-    return {
-      format:  'spukpack_v1',
-      name:    packName || 'unnamed',
-      author:  packAuthor || 'unknown',
-      created: new Date().toISOString(),
-      target:  'SpukBeatsOne_SAL',
-      scheduler: 'voxdna_scheduler_v1',
-      entityCount: entities.length,
-      entityTypes: Object.keys(ENTITY_TYPES),
-      voiceStates: Object.keys(VOICE_STATES),
-      organism: {
-        generationProfile: (typeof ORGANISM !== 'undefined' && ORGANISM.activeProfile) || 'documentary',
-        montageState:      (typeof MONTAGE_STATE !== 'undefined' && MONTAGE_STATE.current) || 'resting',
-        temperature:       (typeof TEMPERATURE !== 'undefined' && TEMPERATURE.target) || 'neutral'
-      },
-      entities: entities
-    };
-  },
-
   // Render one voice state for a sample offline → returns AudioBuffer
   renderVoiceState: async function(sample, stateKey) {
     var vs = VOICE_STATES[stateKey];
@@ -1889,7 +1887,10 @@ var SPUKPACK = {
       pressure_language: 'CLIMAX'
     };
 
-    var samples = (A && Array.isArray(A.samples)) ? A.samples : [];
+    // Pack selection (v44): if the user curated a selection via "Add Family To Pack",
+    // export only those; otherwise export the whole library (preserves prior behavior).
+    var allSamples = (A && Array.isArray(A.samples)) ? A.samples : [];
+    var samples = (A.packSel && A.packSel.size) ? allSamples.filter(function(s){ return A.packSel.has(s.id); }) : allSamples;
     window._VOXPACKPROGRESS = 0;
 
     for(var si = 0; si < samples.length; si++) {
@@ -3359,6 +3360,8 @@ const A = {
   selectedId:null, semState:'fragile', snapshots:[], normMode:'off',
   activeMode:'capture', cycleActive:false, cycleTimer:null,
   cap:{stream:null,recorder:null,chunks:[],timer:null,startMs:0,msrc:null},
+  // ── CONSOLIDATION (v44) — search, tree view, pack selection ──
+  search:'', libView:'list', treeExpanded:{}, packSel:new Set(),
   debugOn:false
 };
 const STATES=['fragile','collapse','ritual','ghost','fever'];
@@ -4139,14 +4142,55 @@ document.getElementById('audToTray').addEventListener('click',()=>{const s=sampl
 document.getElementById('audCycle').addEventListener('click',function(){A.cycleActive=!A.cycleActive;this.classList.toggle('on',A.cycleActive);if(A.cycleActive)runCycle();else clearTimeout(A.cycleTimer);});
 async function runCycle(){if(!A.cycleActive)return;const s=sample();if(!s){A.cycleActive=false;document.getElementById('audCycle').classList.remove('on');return;}await ensureAC();LME.play(toAB(s),LME.mutType);document.getElementById('audStatus').textContent=s.name.slice(0,18);A.cycleTimer=setTimeout(()=>{navigateLib(1,false);runCycle();},Math.max(500,s.duration*1000+200));}
 function navigateLib(dir,autoPlay){const list=filteredList();if(!list.length)return;const idx=list.findIndex(s=>s.id===A.selectedId);selectSample(list[(idx+dir+list.length)%list.length].id,autoPlay);}
-function filteredList(){return A.cat==='all'?A.samples:A.cat==='favorites'?A.samples.filter(s=>s.favorite):A.samples.filter(s=>s.cat===A.cat);}
+function filteredList(){
+  var base = A.cat==='all'?A.samples:A.cat==='favorites'?A.samples.filter(s=>s.favorite):A.samples.filter(s=>s.cat===A.cat);
+  var q = (A.search||'').trim().toLowerCase();
+  if(!q) return base;
+  return base.filter(s=>(s.name||'').toLowerCase().includes(q));
+}
 
 // ─── SAMPLE RECORD BUILDER ────────────────────────────────────────────────
 async function buildRecord(buf,meta){
   const analysis=analyze(buf),scores=score(buf,analysis);const fragType=detectFragType(analysis,scores,buf.duration);
   const channelData=[];for(let c=0;c<buf.numberOfChannels;c++)channelData.push(buf.getChannelData(c).slice());
   const prot=[];if(ED.locks.breaths)prot.push('breaths');if(ED.locks.consonants)prot.push('consonants');
-  return{id:uid(),name:meta.name||'fragment',cat:meta.cat||'fragments',parentId:meta.parentId||null,mutationOf:meta.mutationOf||null,sampleRate:buf.sampleRate,numberOfChannels:buf.numberOfChannels,length:buf.length,duration:buf.duration,channelData,analysis,scores,semState:A.semState,favorite:false,createdAt:Date.now(),fragmentIdentity:{fragmentId:`frag_${uid()}`,origin:meta.parentId||null,type:fragType,semantic:A.semState,protected:prot,normalized:null,relationships:[],text:'',identityProfile:VIE.identityProfile}};
+  // P4 (v44): auto-infer entity type for derivatives from lineage + mutationOf.
+  // Roots keep detectFragType result. Manual fragTagger still overrides afterwards.
+  var inferredType = fragType;
+  if(meta.parentId){
+    var pInfer = inferEntityTypeFromLineage(meta.parentId, meta.mutationOf);
+    if(pInfer) inferredType = pInfer;
+  }
+  return{id:uid(),name:meta.name||'fragment',cat:meta.cat||'fragments',parentId:meta.parentId||null,mutationOf:meta.mutationOf||null,sampleRate:buf.sampleRate,numberOfChannels:buf.numberOfChannels,length:buf.length,duration:buf.duration,channelData,analysis,scores,semState:A.semState,favorite:false,createdAt:Date.now(),fragmentIdentity:{fragmentId:`frag_${uid()}`,origin:meta.parentId||null,type:inferredType,semantic:A.semState,protected:prot,normalized:null,text:'',identityProfile:VIE.identityProfile}};
+}
+// Resolve a sample's effective entity type (maps detect-types → entity-types)
+function _effectiveEntityType(s){
+  if(!s) return 'narrative_voice';
+  var t=(s.fragmentIdentity&&s.fragmentIdentity.type)||'spoken';
+  var map={spoken:'narrative_voice',whisper:'semantic_ghost',breath:'subconscious',texture:'collapse_residue',fragment:'semantic_ghost',consonant:'pressure_language',collapse:'collapse_residue'};
+  return map[t]||t; // already an entity type → passthrough
+}
+// P4: infer a derivative's entity type from its parent + the mutation that made it.
+// Degradation ladder: narrative_voice→semantic_ghost→collapse_residue→subconscious
+function inferEntityTypeFromLineage(parentId, mutationOf){
+  var parent=A.samples.find(function(x){return x.id===parentId;});
+  if(!parent) return null;
+  var ladder=['narrative_voice','semantic_ghost','collapse_residue','subconscious'];
+  var base=_effectiveEntityType(parent);
+  var idx=ladder.indexOf(base);
+  var m=(mutationOf||'').toLowerCase();
+  // Lateral mappings (override ladder)
+  if(m.indexOf('rev')>=0) return 'false_memory';
+  if(m.indexOf('ritual')>=0) return 'ritual_speech';
+  if(m.indexOf('fever')>=0||m.indexOf('fast')>=0) return 'pressure_language';
+  if(m.indexOf('collapse')>=0) return 'collapse_residue';
+  // Ladder shifts: downward = more degraded
+  if(idx>=0){
+    if(m.indexOf('pitchdn')>=0||m.indexOf('slow')>=0||m.indexOf('dissolve')>=0) return ladder[Math.min(ladder.length-1, idx+1)];
+    if(m.indexOf('pitchup')>=0) return ladder[Math.min(ladder.length-1, idx+1)];
+  }
+  // Structural ops (trim, split, fade, extract, norm): preserve parent's type
+  return base;
 }
 function detectFragType(a,s,d){const bd=a.breaths.length/Math.max(d,0.1),sr=a.silences.reduce((x,v)=>x+v.t1-v.t0,0)/Math.max(d,0.1),cd=a.transients.filter(t=>t.type==='consonant').length/Math.max(d,0.1);if(s.fragility>72&&bd>0.5)return'breath';if(s.ghost>78)return'texture';if(sr>0.65)return'whisper';if(cd>3.2)return'consonant';if(s.fragility>50)return'fragment';return'spoken';}
 function analyze(buf){const data=buf.getChannelData(0),rate=buf.sampleRate,win=Math.floor(rate*0.01);let transients=[],breaths=[],silences=[],phrases=[];let prevE=0,silStart=-1,phraseStart=-1;for(let i=0;i<data.length;i+=win){let e=0;const end=Math.min(i+win,data.length);for(let j=i;j<end;j++)e+=data[j]*data[j];e=Math.sqrt(e/(end-i));const t=i/rate;if(e>prevE*1.72&&e>0.016)transients.push({t,e,type:e>0.055?'consonant':'onset'});if(e<0.004){if(silStart<0)silStart=t;if(phraseStart>=0&&t-phraseStart>0.12){phrases.push({t0:phraseStart,t1:t});phraseStart=-1;}}else{if(silStart>=0&&t-silStart>0.04){silences.push({t0:silStart,t1:t});if(e<0.022)breaths.push({t,dur:t-silStart});}silStart=-1;if(phraseStart<0)phraseStart=t;}prevE=e;}if(phraseStart>=0)phrases.push({t0:phraseStart,t1:buf.duration});return{transients,breaths,silences,phrases};}
@@ -4155,7 +4199,26 @@ function score(buf,a){const sd=a.silences.reduce((s,x)=>s+x.t1-x.t0,0);return{fr
 // ─── LIBRARY ──────────────────────────────────────────────────────────────
 document.querySelectorAll('.cat').forEach(b=>b.addEventListener('click',()=>setCat(b.dataset.c)));
 function setCat(c){A.cat=c;document.querySelectorAll('.cat').forEach(b=>b.classList.toggle('on',b.dataset.c===c));renderLibrary();saveSession();}
+// ── CONSOLIDATION wiring: search + list/tree toggle ──
+(function _wireLibToolbar(){
+  function wire(){
+    var search=document.getElementById('libSearch');
+    var bList=document.getElementById('libViewList');
+    var bTree=document.getElementById('libViewTree');
+    if(search) search.addEventListener('input',function(){ A.search=this.value; renderLibrary(); });
+    if(bList) bList.addEventListener('click',function(){ A.libView='list'; bList.classList.add('on'); if(bTree)bTree.classList.remove('on'); renderLibrary(); });
+    if(bTree) bTree.addEventListener('click',function(){ A.libView='tree'; bTree.classList.add('on'); if(bList)bList.classList.remove('on'); renderLibrary(); });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+})();
 function renderLibrary(){
+  // Update toolbar state (search value + pack selection count)
+  var psi=document.getElementById('packSelInfo');
+  if(psi)psi.textContent=A.packSel&&A.packSel.size?('pack: '+A.packSel.size):'';
+  if(A.libView==='tree'){ renderLibraryTree(); return; }
+  renderLibraryList();
+}
+function renderLibraryList(){
   const lib=document.getElementById('library'),list=filteredList();const inTray=new Set(MONTAGE.slots.map(s=>s.fragId));
   if(!list.length){const m={captures:'EMPTY — RECORD SOMETHING',favorites:'NO FAVORITES',all:'EMPTY ORGANISM'};lib.innerHTML=`<div class="libEmpty">${m[A.cat]||'EMPTY'}</div>`;return;}
   lib.innerHTML=list.map(s=>{const fi=s.fragmentIdentity||{};const dN=A.samples.filter(x=>x.parentId===s.id).length;const idState=fi.identityProfile&&fi.identityProfile.identityState;
@@ -4169,6 +4232,78 @@ function renderLibrary(){
   }).join('');
   lib.querySelectorAll('.sRow').forEach(el=>{let hold=null;el.addEventListener('click',()=>selectSample(el.dataset.id,true));el.addEventListener('touchstart',()=>{hold=setTimeout(()=>showCtx(el.dataset.id,el),600);},{passive:true});el.addEventListener('touchend',()=>clearTimeout(hold),{passive:true});el.addEventListener('touchmove',()=>clearTimeout(hold),{passive:true});el.addEventListener('contextmenu',e=>{e.preventDefault();showCtx(el.dataset.id,el);});});
   lib.querySelectorAll('.sWave').forEach(c=>{const s=A.samples.find(x=>x.id===c.dataset.id);if(s)miniWave(c,s);});
+}
+
+// ── TREE VIEW (v44 consolidation) ──────────────────────────────────────────
+// Builds the entity tree from parentId. No data-model changes — pure projection.
+function _childrenOf(id){ return A.samples.filter(function(x){ return x.parentId===id; }); }
+function _isRoot(s){ return !s.parentId || !A.samples.find(function(x){ return x.id===s.parentId; }); }
+function _familyIds(rootId){
+  // Walk descendants breadth-first, dedup via Set
+  var ids=new Set([rootId]); var queue=[rootId];
+  while(queue.length){
+    var cur=queue.shift();
+    _childrenOf(cur).forEach(function(c){ if(!ids.has(c.id)){ ids.add(c.id); queue.push(c.id); } });
+  }
+  return ids;
+}
+function addFamilyToPack(rootId){
+  var fam=_familyIds(rootId);
+  fam.forEach(function(id){ A.packSel.add(id); });
+  HISTORY.showToast('family added to pack · '+fam.size+' fragments');
+  renderLibrary();
+}
+function renderLibraryTree(){
+  const lib=document.getElementById('library');
+  var q=(A.search||'').trim().toLowerCase();
+  // Roots, filtered: a root shows if it OR any descendant matches search
+  var roots=A.samples.filter(_isRoot);
+  if(A.cat==='favorites') roots=roots.filter(function(r){ return Array.from(_familyIds(r.id)).some(function(id){var s=A.samples.find(x=>x.id===id);return s&&s.favorite;}); });
+  function familyMatches(rootId){
+    if(!q) return true;
+    return Array.from(_familyIds(rootId)).some(function(id){ var s=A.samples.find(x=>x.id===id); return s&&(s.name||'').toLowerCase().includes(q); });
+  }
+  roots=roots.filter(function(r){ return familyMatches(r.id); });
+  if(!roots.length){ lib.innerHTML='<div class="libEmpty">NO ENTITIES'+(q?' MATCH "'+q+'"':'')+'</div>'; return; }
+  var html='';
+  roots.forEach(function(root){
+    var fam=_familyIds(root.id);
+    var famCount=fam.size-1; // descendants
+    var expanded=A.treeExpanded[root.id]!==false; // default expanded
+    var inPack=A.packSel.has(root.id);
+    var fi=root.fragmentIdentity||{};
+    html+='<div class="treeRoot" data-id="'+root.id+'">'+
+      '<span class="treeToggle" data-toggle="'+root.id+'">'+(famCount?(expanded?'▾':'▸'):'·')+'</span>'+
+      '<span class="treeName'+(A.selectedId===root.id?' on':'')+'" data-id="'+root.id+'">'+root.name+'</span>'+
+      '<span class="treeMeta">'+fmt(root.duration)+(fi.type?' · '+fi.type:'')+(famCount?' · ['+famCount+' states]':'')+'</span>'+
+      '<button class="treeAddFam'+(inPack?' on':'')+'" data-fam="'+root.id+'">+ pack</button>'+
+      '</div>';
+    if(expanded && famCount){
+      // render descendants depth-ordered
+      function walk(pid,depth){
+        _childrenOf(pid).forEach(function(c){
+          var cfi=c.fragmentIdentity||{};
+          html+='<div class="treeChild" data-id="'+c.id+'" style="padding-left:'+(depth*14+18)+'px">'+
+            '<span class="treeName'+(A.selectedId===c.id?' on':'')+'" data-id="'+c.id+'">↳'+(c.mutationOf||'derived')+'</span>'+
+            '<span class="treeMeta">'+fmt(c.duration)+(cfi.type?' · '+cfi.type:'')+'</span>'+
+            '</div>';
+          walk(c.id,depth+1);
+        });
+      }
+      walk(root.id,0);
+    }
+  });
+  lib.innerHTML=html;
+  // Wire interactions
+  lib.querySelectorAll('.treeToggle[data-toggle]').forEach(function(el){
+    el.addEventListener('click',function(e){ e.stopPropagation(); var id=el.dataset.toggle; A.treeExpanded[id]=A.treeExpanded[id]===false; renderLibrary(); });
+  });
+  lib.querySelectorAll('.treeName[data-id]').forEach(function(el){
+    el.addEventListener('click',function(){ selectSample(el.dataset.id,true); });
+  });
+  lib.querySelectorAll('.treeAddFam[data-fam]').forEach(function(el){
+    el.addEventListener('click',function(e){ e.stopPropagation(); addFamilyToPack(el.dataset.fam); });
+  });
 }
 
 // CONTEXT MENU
