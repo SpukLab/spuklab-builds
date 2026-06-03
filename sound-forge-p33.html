@@ -2202,19 +2202,19 @@ function renderFragmentList(){
 // derived from its LUMINOUS slot type.
 const FRAG_ENTITY_BEHAVIOR={
   // slotType : {type, weatherAffinity, preferredPhase, densityWeight, emergenceProbability, spectralRole, fatigueCost, maxRepeats}
-  luminous_riser:   {type:'luminous_riser',   weatherAffinity:['RADIANT','TENSION','STORM'], preferredPhase:'BUILD',     densityWeight:0.30, emergenceProbability:0.12, spectralRole:'lead',      fatigueCost:0.10, maxRepeats:2},
-  luminous_spectral:{type:'luminous_spectral',weatherAffinity:['RADIANT','FOG','CLEAR'],     preferredPhase:'PEAK',      densityWeight:0.28, emergenceProbability:0.10, spectralRole:'air',       fatigueCost:0.06, maxRepeats:3},
-  luminous_drone:   {type:'luminous_drone',   weatherAffinity:['RADIANT','CLEAR','FOG'],     preferredPhase:'PEAK',      densityWeight:0.34, emergenceProbability:0.09, spectralRole:'pad',       fatigueCost:0.05, maxRepeats:2},
-  luminous_tail:    {type:'luminous_tail',    weatherAffinity:['RADIANT','VOID','CLEAR'],    preferredPhase:'AFTERSHOCK',densityWeight:0.22, emergenceProbability:0.10, spectralRole:'tail',      fatigueCost:0.04, maxRepeats:2},
-  dark_core:        {type:'dark_core',        weatherAffinity:['VOID','STORM','SUB_PRESSURE'],preferredPhase:'RUPTURE',  densityWeight:0.40, emergenceProbability:0.08, spectralRole:'body',      fatigueCost:0.12, maxRepeats:2},
-  // non-luminous fallbacks
-  texture:          {type:'erosion_texture',  weatherAffinity:['FOG','STATIC'],              preferredPhase:'TENSION',   densityWeight:0.18, emergenceProbability:0.08, spectralRole:'background',fatigueCost:0.06, maxRepeats:2},
-  void:             {type:'fog_layer',        weatherAffinity:['VOID','FOG'],                preferredPhase:'VOID',      densityWeight:0.15, emergenceProbability:0.06, spectralRole:'background',fatigueCost:0.04, maxRepeats:2},
-  bass:             {type:'sub_fragment',     weatherAffinity:['SUB_PRESSURE','STORM'],      preferredPhase:'BUILD',     densityWeight:0.30, emergenceProbability:0.10, spectralRole:'body',      fatigueCost:0.10, maxRepeats:2}
+  // Higher emergence + multi-phase affinity so a large bank stays diverse (every fragment gets airtime).
+  luminous_riser:   {type:'luminous_riser',   weatherAffinity:['RADIANT','TENSION','STORM','CLEAR'], phases:['BUILD','TENSION','RUPTURE'],          densityWeight:0.30, emergenceProbability:0.42, spectralRole:'lead',      fatigueCost:0.06, maxRepeats:3},
+  luminous_spectral:{type:'luminous_spectral',weatherAffinity:['RADIANT','FOG','CLEAR','VOID'],      phases:['PEAK','BUILD','RECOVERY','TENSION'], densityWeight:0.28, emergenceProbability:0.45, spectralRole:'air',       fatigueCost:0.04, maxRepeats:4},
+  luminous_drone:   {type:'luminous_drone',   weatherAffinity:['RADIANT','CLEAR','FOG','VOID'],      phases:['PEAK','RECOVERY','BUILD','INTRO'],   densityWeight:0.34, emergenceProbability:0.40, spectralRole:'pad',       fatigueCost:0.04, maxRepeats:3},
+  luminous_tail:    {type:'luminous_tail',    weatherAffinity:['RADIANT','VOID','CLEAR','FOG'],      phases:['AFTERSHOCK','RECOVERY','VOID','PEAK'],densityWeight:0.22,emergenceProbability:0.45, spectralRole:'tail',      fatigueCost:0.03, maxRepeats:4},
+  dark_core:        {type:'dark_core',        weatherAffinity:['VOID','STORM','SUB_PRESSURE','TENSION'],phases:['RUPTURE','BUILD','TENSION','PEAK'],densityWeight:0.40,emergenceProbability:0.38,spectralRole:'body',      fatigueCost:0.07, maxRepeats:3},
+  texture:          {type:'erosion_texture',  weatherAffinity:['FOG','STATIC','CLEAR'],              phases:['TENSION','BUILD','FRAGMENTATION'],   densityWeight:0.18, emergenceProbability:0.38, spectralRole:'background',fatigueCost:0.04, maxRepeats:3},
+  void:             {type:'fog_layer',        weatherAffinity:['VOID','FOG','CLEAR'],                phases:['VOID','RECOVERY','AFTERSHOCK'],      densityWeight:0.15, emergenceProbability:0.40, spectralRole:'background',fatigueCost:0.03, maxRepeats:3},
+  bass:             {type:'sub_fragment',     weatherAffinity:['SUB_PRESSURE','STORM','TENSION'],    phases:['BUILD','RUPTURE','PEAK'],            densityWeight:0.30, emergenceProbability:0.38, spectralRole:'body',      fatigueCost:0.06, maxRepeats:3}
 };
 function fragBehavior(slotType){
   return FRAG_ENTITY_BEHAVIOR[slotType]
-    ||{type:'erosion_texture',weatherAffinity:['FOG'],preferredPhase:'TENSION',densityWeight:0.18,emergenceProbability:0.08,spectralRole:'background',fatigueCost:0.06,maxRepeats:2};
+    ||{type:'erosion_texture',weatherAffinity:['FOG','CLEAR'],phases:['TENSION','BUILD'],densityWeight:0.18,emergenceProbability:0.38,spectralRole:'background',fatigueCost:0.04,maxRepeats:3};
 }
 
 async function exportFragmentBank(){
@@ -2235,6 +2235,7 @@ async function exportFragmentBank(){
     const samples={};   // id -> path  (what BeatsOne loads)
     const entities={};  // id -> behavior (what BeatsOne triggers)
     let li=0,di=0;
+    const phaseCounter={}; // round-robin phase assignment per slotType
     FragmentLibrary.forEach((fr,i)=>{
       const wav=encodeWAV(fr.buffer);
       const folder=folderFor(fr.slotType);
@@ -2242,17 +2243,22 @@ async function exportFragmentBank(){
       const file=`${safe}.wav`;
       const path=`audio/${folder}/${file}`;
       zip.add(path,wav);
-      // Unique id per fragment
       const id=`${fr.slotType||'frag'}_${(i+1).toString().padStart(2,'0')}`;
       samples[id]=path;
       const b=fragBehavior(fr.slotType);
       const lum=deriveLuminous(fr.slotType);
+      // Round-robin: spread fragments of the same tag across its compatible phases
+      const pc=(phaseCounter[fr.slotType]||0);phaseCounter[fr.slotType]=pc+1;
+      const phaseList=b.phases||['TENSION'];
+      const assignedPhase=phaseList[pc%phaseList.length];
+      // Slight emergence jitter so no two are identical
+      const emJitter=b.emergenceProbability*(0.85+Math.random()*0.3);
       entities[id]={
         id, type:b.type, folder, audio:file,
         weatherAffinity:b.weatherAffinity,
-        preferredPhase:b.preferredPhase,
+        preferredPhase:assignedPhase,
         densityWeight:b.densityWeight,
-        emergenceProbability:b.emergenceProbability,
+        emergenceProbability:parseFloat(emJitter.toFixed(3)),
         spectralRole:b.spectralRole,
         fatigueCost:b.fatigueCost,
         maxRepeats:b.maxRepeats,
@@ -5847,6 +5853,9 @@ document.querySelectorAll('.obtn[data-org]').forEach(btn=>{
   btn.addEventListener('click',()=>selectSlot(idx));
 });
 document.addEventListener('keydown',e=>{
+  // Ignore shortcuts while typing in a text field (was kicking user out of pack name)
+  const t=e.target;
+  if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
   if(e.code==='Space'){e.preventDefault();trigger();}
   if(e.code==='Digit1')selectOrg(0);if(e.code==='Digit2')selectOrg(1);if(e.code==='Digit3')selectOrg(2);
   if(e.code==='KeyM')setMode('mat');if(e.code==='KeyS')setMode('sculpt2');
