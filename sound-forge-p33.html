@@ -365,16 +365,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 /* ═══ PHASE 3.4 — MATERIAL EDIT + FINISH ═══ */
 
 /* Waveform editor canvas */
-.wave-edit-wrap{position:relative;width:100%;height:60px;background:rgba(0,0,0,.35);
-  border:1px solid var(--vdim);border-radius:3px;overflow:hidden;cursor:crosshair;
-  touch-action:none;}
-.wave-edit-canvas{position:absolute;inset:0;width:100%;height:100%;}
-.wave-region-overlay{position:absolute;top:0;height:100%;pointer-events:none;}
-.wave-handle{position:absolute;top:0;width:3px;height:100%;cursor:ew-resize;
-  background:rgba(0,255,255,.7);border-radius:2px;touch-action:none;z-index:10;pointer-events:all;}
-.wave-handle::before{content:'';position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);width:11px;height:22px;
-  background:rgba(0,255,255,.18);border-radius:2px;}
+.wave-edit-wrap{position:relative;width:100%;height:220px;
+  border:1px solid rgba(0,255,255,.18);border-radius:4px;overflow:hidden;
+  touch-action:none;background:#040210;}
+.wave-edit-canvas{display:block;width:100%;height:100%;cursor:ew-resize;}
+/* Handles drawn on canvas — DOM overlays removed */
 
 /* MATERIAL editing toolbar */
 .wave-toolbar{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;}
@@ -1043,11 +1038,9 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div class="mat-status" id="mat-status"></div>
     </div>
 
-    <!-- WAVEFORM EDITOR -->
+    <!-- WAVEFORM EDITOR — handles drawn on canvas, no DOM overlays -->
     <div class="wave-edit-wrap" id="wave-edit-wrap">
       <canvas class="wave-edit-canvas" id="wave-edit-canvas"></canvas>
-      <div class="wave-handle" id="wh-start" style="left:0%;"></div>
-      <div class="wave-handle" id="wh-end" style="left:100%;background:rgba(153,68,255,.80);"></div>
     </div>
     <div class="loop-indicator" id="loop-indicator">MICRO LOOP ACTIVE</div>
 
@@ -1620,7 +1613,7 @@ function onMaterialLoaded(buffer,name,targetSlot){
   SLOTS[slot]=mat;
   precomputedWaveforms[slot]=null;
   // Reset edit state for this slot
-  MatEditState.startPct=0;MatEditState.endPct=1;MatEditState.zoomStart=0;MatEditState.zoomEnd=1;
+  MatEditState.startPct=0;MatEditState.endPct=1;MatEditState.zoomStart=0;MatEditState.zoomEnd=1;MatEditState._sliceN=0;
   updateMaterialUI();
   setT('mat-status','loaded: '+mat.name.slice(0,22));
   dbg('material','Loaded into slot',slot,mat.name,'dur',mat.duration.toFixed(2),'s');
@@ -1769,84 +1762,180 @@ function previewMaterial(){
 function drawWaveEditor(){
   const canvas=document.getElementById('wave-edit-canvas');
   if(!canvas)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
   const w=canvas.offsetWidth||canvas.parentElement?.offsetWidth||300;
-  canvas.width=w;canvas.height=60;
+  const H=220;
+  canvas.width=w*dpr;canvas.height=H*dpr;
+  canvas.style.width=w+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,w,60);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
   const mat=SLOTS[currentSlot];
+
+  // ── Empty state ──────────────────────────────────────────
   if(!mat||!mat.buffer){
-    ctx.fillStyle='rgba(0,255,255,.06)';ctx.fillRect(0,0,w,60);
-    ctx.fillStyle='rgba(153,68,255,.25)';
-    ctx.font='11px monospace';ctx.textAlign='center';
-    ctx.fillText('no material',w/2,34);return;
+    ctx.fillStyle='rgba(0,255,255,.03)';ctx.fillRect(0,0,w,H);
+    ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillStyle='rgba(153,68,255,.35)';
+    ctx.fillText('LOAD MATERIAL',w/2,H/2-8);
+    ctx.font='11px monospace';ctx.fillStyle='rgba(153,68,255,.2)';
+    ctx.fillText('WAV · AIFF · MP3',w/2,H/2+12);
+    return;
   }
+
+  const dur=mat.buffer.duration;
   const data=mat.buffer.getChannelData(0);
-  const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
-  const zStart=Math.floor(zs*data.length),zEnd=Math.floor(ze*data.length);
+  const zs=MatEditState.zoomStart, ze=MatEditState.zoomEnd;
+  const zStart=Math.floor(zs*data.length), zEnd=Math.floor(ze*data.length);
   const zLen=Math.max(1,zEnd-zStart);
   const step=Math.max(1,Math.floor(zLen/w));
-  // Region positions mapped into the zoom window
-  const s0=MatEditState.startPct,s1=MatEditState.endPct;
-  const pctToX=p=>Math.round(((p-zs)/(ze-zs))*w);
-  const x0=clamp(pctToX(s0),0,w),x1=clamp(pctToX(s1),0,w);
+  const s0=MatEditState.startPct, s1=MatEditState.endPct;
+  const pctToX=p=>clamp(Math.round(((p-zs)/(ze-zs))*w),0,w);
+  const x0=pctToX(s0), x1=pctToX(s1);
+  const mid=H/2;
 
-  // Background — outside region darker
-  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,w,60);
-  ctx.fillStyle='rgba(0,255,255,.04)';ctx.fillRect(x0,0,x1-x0,60);
+  // ── Background: full dark, region lit ────────────────────
+  ctx.fillStyle='#040210';ctx.fillRect(0,0,w,H);
+  // Outside-region overlay
+  ctx.fillStyle='rgba(0,0,0,.45)';
+  ctx.fillRect(0,0,x0,H);
+  ctx.fillRect(x1,0,w-x1,H);
+  // Selected region tint
+  ctx.fillStyle='rgba(0,255,255,.06)';ctx.fillRect(x0,0,x1-x0,H);
 
-  // Waveform (zoomed window)
+  // ── Waveform ──────────────────────────────────────────────
   for(let x=0;x<w;x++){
     let mx=0,mn=0;
     const base=zStart+x*step;
-    for(let j=0;j<step;j++){const v=data[base+j]||0;if(v>mx)mx=v;if(v<mn)mn=v;}
+    for(let j=0;j<step&&base+j<data.length;j++){
+      const v=data[base+j]; if(v>mx)mx=v; if(v<mn)mn=v;
+    }
     const inRegion=x>=x0&&x<=x1;
-    ctx.strokeStyle=inRegion?'rgba(0,255,255,.75)':'rgba(0,255,255,.20)';
-    ctx.lineWidth=1;ctx.beginPath();
-    const yTop=30-mx*26;const yBot=30-mn*26;
-    ctx.moveTo(x+.5,yTop);ctx.lineTo(x+.5,yBot);ctx.stroke();
+    const amp=inRegion?0.80:0.22;
+    const col=inRegion?`rgba(0,255,255,${amp})`:`rgba(0,220,255,${amp})`;
+    ctx.strokeStyle=col;ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(x+.5,mid-mx*(H*.46));
+    ctx.lineTo(x+.5,mid-mn*(H*.46));
+    ctx.stroke();
   }
 
-  // Region boundary lines
-  ctx.strokeStyle='rgba(0,255,255,.70)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(x0+.5,0);ctx.lineTo(x0+.5,60);ctx.stroke();
-  ctx.strokeStyle='rgba(153,68,255,.80)';
-  ctx.beginPath();ctx.moveTo(x1-.5,0);ctx.lineTo(x1-.5,60);ctx.stroke();
+  // ── Centre line ───────────────────────────────────────────
+  ctx.strokeStyle='rgba(0,255,255,.08)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();
 
-  // Sync handle positions (within zoom window)
-  const startH=document.getElementById('wh-start');
-  const endH=document.getElementById('wh-end');
-  if(startH)startH.style.left=clamp((s0-zs)/(ze-zs)*100,0,100).toFixed(1)+'%';
-  if(endH)endH.style.left=clamp((s1-zs)/(ze-zs)*100,0,100).toFixed(1)+'%';
+  // ── Slice markers (drawn on canvas) ──────────────────────
+  if(MatEditState._sliceN>1){
+    const n=MatEditState._sliceN;
+    const span=ze-zs;
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle='rgba(181,128,255,.50)';ctx.lineWidth=1;
+    for(let i=1;i<n;i++){
+      const slicePct=zs+(i/n)*span;
+      const sx=pctToX(slicePct);
+      ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();
+      // Slice number label
+      ctx.font='bold 10px monospace';ctx.fillStyle='rgba(181,128,255,.65)';
+      ctx.textAlign='center';ctx.fillText(i,sx,14);
+    }
+    ctx.setLineDash([]);
+    // Label n+1 at right edge
+    ctx.font='bold 10px monospace';ctx.fillStyle='rgba(181,128,255,.65)';
+    ctx.textAlign='center';ctx.fillText(n,w-8,14);
+  }
+
+  // ── Handle: START (cyan) ──────────────────────────────────
+  const hW=3, hTW=10;
+  // Line
+  ctx.strokeStyle='rgba(0,255,255,.90)';ctx.lineWidth=hW;
+  ctx.beginPath();ctx.moveTo(x0,0);ctx.lineTo(x0,H);ctx.stroke();
+  // Top tab
+  ctx.fillStyle='rgba(0,255,255,.90)';
+  ctx.fillRect(x0,0,hTW,24);
+  // Label
+  ctx.font='bold 9px monospace';ctx.fillStyle='#040210';ctx.textAlign='left';
+  ctx.fillText('START',x0+2,16);
+  // Drag grip (middle)
+  ctx.fillStyle='rgba(0,255,255,.25)';
+  ctx.fillRect(x0-6,mid-18,12,36);
+
+  // ── Handle: END (violet) ─────────────────────────────────
+  ctx.strokeStyle='rgba(181,128,255,.90)';ctx.lineWidth=hW;
+  ctx.beginPath();ctx.moveTo(x1,0);ctx.lineTo(x1,H);ctx.stroke();
+  // Top tab (right-anchored)
+  ctx.fillStyle='rgba(181,128,255,.90)';
+  const endTabX=Math.max(0,x1-hTW);
+  ctx.fillRect(endTabX,0,hTW,24);
+  ctx.font='bold 9px monospace';ctx.fillStyle='#040210';ctx.textAlign='right';
+  ctx.fillText('END',x1-2,16);
+  // Drag grip
+  ctx.fillStyle='rgba(181,128,255,.25)';
+  ctx.fillRect(x1-6,mid-18,12,36);
+
+  // ── Region info bar (bottom) ──────────────────────────────
+  ctx.fillStyle='rgba(0,0,0,.60)';ctx.fillRect(0,H-22,w,22);
+  const regDur=((s1-s0)*dur).toFixed(3);
+  const regStart=(s0*dur).toFixed(3);
+  ctx.font='11px monospace';ctx.fillStyle='rgba(0,255,255,.65)';ctx.textAlign='left';
+  ctx.fillText(`${regStart}s → ${(parseFloat(regStart)+parseFloat(regDur)).toFixed(3)}s  (${regDur}s)`,6,H-7);
+  // Zoom indicator
+  if(ze-zs<0.99){
+    ctx.textAlign='right';ctx.fillStyle='rgba(181,128,255,.55)';
+    const zPct=Math.round((ze-zs)*100);
+    ctx.fillText(`ZOOM ${zPct}%`,w-6,H-7);
+  }
+  // Duration total right
+  ctx.textAlign='right';ctx.fillStyle='rgba(0,255,255,.30)';
+  if(ze-zs>=0.99)ctx.fillText(`${dur.toFixed(2)}s total`,w-6,H-7);
 }
 
 function initWaveEditor(){
-  const wrap=document.getElementById('wave-edit-wrap');if(!wrap)return;
-  const startH=document.getElementById('wh-start');
-  const endH=document.getElementById('wh-end');
-  function setupHandle(el,key){
-    let dragging=false;
-    const onMove=e=>{
-      if(!dragging)return;
-      e.preventDefault();
-      const rect=wrap.getBoundingClientRect();
-      const cx=e.touches?e.touches[0].clientX:e.clientX;
-      const screenP=clamp((cx-rect.left)/rect.width,0,1);
-      // Map screen position into full-buffer pct via zoom window
-      const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
-      let p=zs+screenP*(ze-zs);
-      if(key==='startPct')p=Math.min(p,MatEditState.endPct-.005);
-      else p=Math.max(p,MatEditState.startPct+.005);
-      MatEditState[key]=clamp(p,0,1);drawWaveEditor();
-    };
-    el.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;},{passive:false});
-    el.addEventListener('touchmove',e=>{if(dragging)onMove(e);},{passive:false});
-    el.addEventListener('touchend',()=>{dragging=false;});
-    el.addEventListener('mousedown',e=>{e.stopPropagation();dragging=true;});
-    window.addEventListener('mousemove',e=>{if(dragging)onMove(e);});
-    window.addEventListener('mouseup',()=>{dragging=false;});
+  const canvas=document.getElementById('wave-edit-canvas');
+  if(!canvas)return;
+  const H=220;
+  let dragging=null; // 'start'|'end'|null
+  const GRIP=22; // px hit zone around handle line
+
+  function screenToFull(e){
+    const rect=canvas.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const screenP=clamp((cx-rect.left)/rect.width,0,1);
+    const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
+    return zs+screenP*(ze-zs);
   }
-  if(startH)setupHandle(startH,'startPct');
-  if(endH)setupHandle(endH,'endPct');
+  function handleX(pct){
+    const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
+    return clamp(((pct-zs)/(ze-zs))*canvas.offsetWidth,0,canvas.offsetWidth);
+  }
+  function hitTest(e){
+    const rect=canvas.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const px=cx-rect.left;
+    const x0=handleX(MatEditState.startPct);
+    const x1=handleX(MatEditState.endPct);
+    // Prefer whichever handle is closer
+    if(Math.abs(px-x0)<GRIP&&Math.abs(px-x1)<GRIP)
+      return px<(x0+x1)/2?'start':'end';
+    if(Math.abs(px-x0)<GRIP)return'start';
+    if(Math.abs(px-x1)<GRIP)return'end';
+    return null;
+  }
+  function move(e){
+    if(!dragging)return;
+    e.preventDefault();
+    let p=screenToFull(e);
+    if(dragging==='start'){p=clamp(Math.min(p,MatEditState.endPct-.005),0,1);MatEditState.startPct=p;}
+    else{p=clamp(Math.max(p,MatEditState.startPct+.005),0,1);MatEditState.endPct=p;}
+    drawWaveEditor();
+  }
+  canvas.addEventListener('touchstart',e=>{
+    const h=hitTest(e);
+    if(h){e.preventDefault();dragging=h;}
+  },{passive:false});
+  canvas.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();move(e);}},{passive:false});
+  canvas.addEventListener('touchend',()=>{dragging=null;});
+  canvas.addEventListener('mousedown',e=>{dragging=hitTest(e);});
+  window.addEventListener('mousemove',e=>{if(dragging)move(e);});
+  window.addEventListener('mouseup',()=>{dragging=null;});
 }
 
 // ─── MATERIAL EDITING PASS — zoom / slice / preview / fragments ──
@@ -1866,7 +1955,7 @@ function initMaterialEditing(){
     drawWaveEditor();
   });
   bind('wt-zoom-out',()=>{
-    MatEditState.zoomStart=0;MatEditState.zoomEnd=1;drawWaveEditor();
+    MatEditState.zoomStart=0;MatEditState.zoomEnd=1;MatEditState._sliceN=0;drawWaveEditor();
   });
   bind('wt-preview-region',()=>previewRegion());
 
@@ -1907,7 +1996,7 @@ function sliceBuffer(n){
   if(!mat||!mat.buffer){setT('mat-status','no material');return;}
   const row=document.getElementById('slice-row');if(!row)return;
   row.innerHTML='';
-  // Slice within the current zoom window
+  MatEditState._sliceN=n;drawWaveEditor();
   const zs=MatEditState.zoomStart,ze=MatEditState.zoomEnd;
   const span=ze-zs;
   for(let i=0;i<n;i++){
@@ -1949,7 +2038,7 @@ function sliceByTransient(){
     const chip=document.createElement('div');
     chip.className='slice-chip';chip.textContent='T'+(i+1);
     const sel=()=>{MatEditState.startPct=a;MatEditState.endPct=b;
-      MatEditState.zoomStart=0;MatEditState.zoomEnd=1;drawWaveEditor();previewRegion();};
+      MatEditState.zoomStart=0;MatEditState.zoomEnd=1;MatEditState._sliceN=0;drawWaveEditor();previewRegion();};
     chip.addEventListener('click',sel);
     chip.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
     row.appendChild(chip);
@@ -2072,7 +2161,7 @@ function matOpTrimRegion(){
     newBuf.getChannelData(ch).set(src);
   }
   mat.buffer=newBuf;mat.duration=dur;
-  MatEditState.startPct=0;MatEditState.endPct=1;
+  MatEditState.startPct=0;MatEditState.endPct=1;MatEditState.zoomStart=0;MatEditState.zoomEnd=1;MatEditState._sliceN=0;
   precomputedWaveforms[currentSlot]=null;
   drawWaveEditor();updateMaterialUI();setT('mat-status','trimmed');
 }
@@ -2173,7 +2262,8 @@ const MatEditState={
   loopDrift:.20,
   slotType:'kick_a',
   zoomStart:0,    // visible window start (0..1 of full buffer)
-  zoomEnd:1       // visible window end
+  zoomEnd:1,      // visible window end
+  _sliceN:0       // active slice count (drawn on canvas; 0=none)
 };
 
 // ─── DIGITAL FRAGMENT ENGINE (Ikeda / Bretschneider) ────
