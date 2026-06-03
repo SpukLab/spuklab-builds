@@ -1939,7 +1939,79 @@ function initWaveEditor(){
 }
 
 // ─── MATERIAL EDITING PASS — zoom / slice / preview / fragments ──
-const FragmentLibrary=[]; // {name, buffer, duration, slotType}
+const FragmentLibrary=[]; // {id, name, buffer, duration, slotType}
+
+// ─── FRAGMENT PERSISTENCE — IndexedDB (audio survives reload) ────
+const FragDB={
+  _db:null,
+  open(){
+    return new Promise((res,rej)=>{
+      if(this._db)return res(this._db);
+      const req=indexedDB.open('SoundForgeFragments',1);
+      req.onupgradeneeded=e=>{
+        const db=e.target.result;
+        if(!db.objectStoreNames.contains('fragments'))
+          db.createObjectStore('fragments',{keyPath:'id'});
+      };
+      req.onsuccess=e=>{this._db=e.target.result;res(this._db);};
+      req.onerror=e=>rej(e.target.error);
+    });
+  },
+  async put(rec){
+    const db=await this.open();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction('fragments','readwrite');
+      tx.objectStore('fragments').put(rec);
+      tx.oncomplete=()=>res();tx.onerror=e=>rej(e.target.error);
+    });
+  },
+  async remove(id){
+    const db=await this.open();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction('fragments','readwrite');
+      tx.objectStore('fragments').delete(id);
+      tx.oncomplete=()=>res();tx.onerror=e=>rej(e.target.error);
+    });
+  },
+  async all(){
+    const db=await this.open();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction('fragments','readonly');
+      const req=tx.objectStore('fragments').getAll();
+      req.onsuccess=()=>res(req.result||[]);req.onerror=e=>rej(e.target.error);
+    });
+  }
+};
+
+// Serialize AudioBuffer → storable record (raw Float32 per channel)
+function bufferToRecord(id,name,buffer,duration,slotType){
+  const nCh=buffer.numberOfChannels;
+  const channels=[];
+  for(let ch=0;ch<nCh;ch++)channels.push(buffer.getChannelData(ch).slice(0));
+  return{id,name,duration,slotType,sampleRate:buffer.sampleRate,length:buffer.length,nCh,channels};
+}
+// Rehydrate record → AudioBuffer
+function recordToBuffer(rec){
+  const buf=AC.createBuffer(rec.nCh,rec.length,rec.sampleRate);
+  for(let ch=0;ch<rec.nCh;ch++)buf.getChannelData(ch).set(rec.channels[ch]);
+  return buf;
+}
+
+async function loadFragmentsFromDB(){
+  try{
+    if(!AC)initAC();
+    const recs=await FragDB.all();
+    recs.sort((a,b)=>(a.id||0)-(b.id||0));
+    FragmentLibrary.length=0;
+    for(const rec of recs){
+      FragmentLibrary.push({
+        id:rec.id,name:rec.name,buffer:recordToBuffer(rec),
+        duration:rec.duration,slotType:rec.slotType
+      });
+    }
+    renderFragmentList();
+  }catch(e){console.warn('[SF3] fragment load fail:',e.message);}
+}
 
 function initMaterialEditing(){
   // ZOOM REGION — set visible window to current selection
@@ -2062,10 +2134,14 @@ function saveFragment(){
     const dst=frag.getChannelData(ch);
     for(let i=0;i<lenSamp;i++)dst[i]=src[startSamp+i]||0;
   }
+  const id=Date.now();
   const name=`${MatEditState.slotType}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
-  FragmentLibrary.push({name,buffer:frag,duration:len,slotType:MatEditState.slotType});
+  FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType});
   renderFragmentList();
   setT('mat-status',`saved: ${name} (${len.toFixed(2)}s)`);
+  // Persist to IndexedDB
+  FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType))
+    .catch(e=>console.warn('[SF3] fragment save fail:',e.message));
 }
 
 function renderFragmentList(){
@@ -2082,7 +2158,11 @@ function renderFragmentList(){
     load.addEventListener('click',loadFn);
     load.addEventListener('touchstart',e=>{e.preventDefault();loadFn();},{passive:false});
     const del=document.createElement('div');del.className='fr-del';del.textContent='×';
-    const delFn=()=>{FragmentLibrary.splice(idx,1);renderFragmentList();};
+    const delFn=()=>{
+      const removed=FragmentLibrary.splice(idx,1)[0];
+      renderFragmentList();
+      if(removed&&removed.id)FragDB.remove(removed.id).catch(()=>{});
+    };
     del.addEventListener('click',delFn);
     del.addEventListener('touchstart',e=>{e.preventDefault();delFn();},{passive:false});
     item.appendChild(load);item.appendChild(del);
@@ -4055,6 +4135,7 @@ function updateSculptMiniWave(){
 // ─── WAVEFORM EDITOR INIT ───────────────────────────────
 initWaveEditor();
 initMaterialEditing();
+loadFragmentsFromDB();
 
 // ─── PLAYBACK MODE CHIPS ────────────────────────────────
 document.querySelectorAll('.pbchip[data-pb]').forEach(chip=>{
