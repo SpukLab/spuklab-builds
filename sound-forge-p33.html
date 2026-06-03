@@ -1078,6 +1078,10 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <span class="medit-val" id="fragment-count">0 saved</span>
     </div>
     <div class="fragment-list" id="fragment-list"></div>
+    <div class="wave-toolbar">
+      <button class="wtool save" id="wt-export-bank" style="flex:1;">EXPORT BANK → .spukpack</button>
+    </div>
+    <div class="export-status" id="bank-status"></div>
 
     <!-- PLAYBACK MODES -->
     <div class="pbmode-row">
@@ -2061,6 +2065,7 @@ function initMaterialEditing(){
   });
   bind('wt-transient',()=>sliceByTransient());
   bind('wt-save-fragment',()=>saveFragment());
+  bind('wt-export-bank',()=>exportFragmentBank());
 }
 
 // Preview just the selected region (start→end), with fades
@@ -2189,6 +2194,71 @@ function renderFragmentList(){
     item.appendChild(load);item.appendChild(del);
     list.appendChild(item);
   });
+}
+
+// ─── BANK EXPORT — package fragment library → .spukpack for BeatsOne ──
+async function exportFragmentBank(){
+  const setB=msg=>{const el=document.getElementById('bank-status');if(el)el.textContent=msg;};
+  if(FragmentLibrary.length===0){setB('no fragments to export');return;}
+  setB(`packaging ${FragmentLibrary.length} fragments…`);
+  await new Promise(r=>setTimeout(r,16));
+  try{
+    const zip=new MinimalZip();
+    // Folder routing by family
+    const folderFor=st=>{
+      if(st==='dark_core')return'dark';
+      if(st&&st.startsWith('luminous_'))return'luminous';
+      if(st==='void')return'void';
+      if(['kick_a','kick_b','snare','hat'].includes(st))return'percussion';
+      if(st==='bass')return'bass';
+      return'texture';
+    };
+    const entries=[];
+    let li=0,di=0;
+    for(const fr of FragmentLibrary){
+      const wav=encodeWAV(fr.buffer);
+      const folder=folderFor(fr.slotType);
+      const safe=fr.name.replace(/[^a-z0-9_]/gi,'_');
+      const path=`audio/${folder}/${safe}.wav`;
+      zip.add(path,wav);
+      const lum=deriveLuminous(fr.slotType);
+      entries.push({
+        name:fr.name, file:path, slotType:fr.slotType,
+        duration:parseFloat(fr.duration.toFixed(3)),
+        sampleRate:fr.buffer.sampleRate,
+        luminous:lum
+      });
+      if(lum&&lum.family==='luminous_energy')li++;
+      if(fr.slotType==='dark_core')di++;
+    }
+    const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
+    const manifest={
+      schema:'spukpack_v2',
+      type:'fragment_bank',
+      meta:{
+        name:bankName, author:'SpukLab',
+        created:new Date().toISOString(),
+        fragmentCount:FragmentLibrary.length,
+        luminousCount:li, darkCoreCount:di
+      },
+      // Vertical-axis summary so BeatsOne can balance body vs halo
+      verticalProfile:{
+        hasLuminous:li>0, hasDarkCore:di>0,
+        note:'verticalBias per fragment in entries[].luminous.verticalBias'
+      },
+      fragments:entries
+    };
+    zip.add('manifest.json',new TextEncoder().encode(JSON.stringify(manifest,null,2)));
+    setB('compressing…');
+    await new Promise(r=>setTimeout(r,16));
+    const bytes=await zip.build();
+    const blob=new Blob([bytes],{type:'application/zip'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=`${bankName}_bank_${FragmentLibrary.length}frag.spukpack`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    setB(`exported ${FragmentLibrary.length} fragments (${li} luminous, ${di} dark core)`);
+  }catch(e){setB('export error: '+e.message);console.warn('[SF3] bank export fail:',e);}
 }
 
 // ─── PLAYBACK REGION HELPERS ─────────────────────────────
