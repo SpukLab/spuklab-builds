@@ -1079,6 +1079,9 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     </div>
     <div class="fragment-list" id="fragment-list"></div>
     <div class="wave-toolbar">
+      <button class="wtool" id="bank-halo-toggle">SHARED HALO: OFF</button>
+    </div>
+    <div class="wave-toolbar">
       <button class="wtool save" id="wt-export-bank" style="flex:1;">EXPORT BANK → .spukpack</button>
     </div>
     <div class="export-status" id="bank-status"></div>
@@ -2066,6 +2069,14 @@ function initMaterialEditing(){
   bind('wt-transient',()=>sliceByTransient());
   bind('wt-save-fragment',()=>saveFragment());
   bind('wt-export-bank',()=>exportFragmentBank());
+  bind('bank-halo-toggle',()=>{
+    const el=document.getElementById('bank-halo-toggle');
+    if(!el)return;
+    const on=el.classList.toggle('on');
+    el.textContent='SHARED HALO: '+(on?'ON':'OFF');
+    el.style.color=on?'#ffe6a8':'';
+    el.style.borderColor=on?'rgba(255,210,120,.6)':'';
+  });
 }
 
 // Preview just the selected region (start→end), with fades
@@ -2217,6 +2228,53 @@ function fragBehavior(slotType){
     ||{type:'erosion_texture',weatherAffinity:['FOG','CLEAR'],phases:['TENSION','BUILD'],densityWeight:0.18,emergenceProbability:0.38,spectralRole:'background',fatigueCost:0.04,maxRepeats:3};
 }
 
+// ─── LUMINOUS HALO — shared spatial signature for cohesion ───
+// Renders a fragment through a common reverb tail so all fragments share
+// the same space. This is what makes them cohere instead of sounding dry+loose.
+// (Temporal overlap/weaving is BeatsOne's job — this gives them a shared room.)
+let _sharedImpulse=null;
+function getSharedImpulse(ctx,seconds,decay){
+  // One deterministic impulse reused for ALL fragments → same room signature.
+  const sr=ctx.sampleRate;
+  const len=Math.floor(sr*seconds);
+  const imp=ctx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){
+    const d=imp.getChannelData(ch);
+    let seed=12345+ch*777; // deterministic pseudo-random for consistent room
+    const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return(seed/0x7fffffff)*2-1;};
+    for(let i=0;i<len;i++){
+      const t=i/len;
+      // Smooth exponential decay — luminous tail, bright and long
+      d[i]=rnd()*Math.pow(1-t,decay);
+    }
+  }
+  return imp;
+}
+// Render one buffer through the shared halo. amount 0..1 = dry..wet bloom.
+async function renderLuminousHalo(buffer,slotType,amount){
+  const sr=buffer.sampleRate;
+  const tailSec=slotType==='dark_core'?1.4:2.6; // luminous gets longer halo
+  const totalLen=buffer.length+Math.floor(sr*tailSec);
+  const off=new OfflineAudioContext(2,totalLen,sr);
+  const src=off.createBufferSource();src.buffer=buffer;
+  // Dry path
+  const dry=off.createGain();dry.gain.value=1-amount*0.35; // keep most dry, add halo
+  // Wet path — shared convolution reverb
+  const conv=off.createConvolver();
+  conv.buffer=getSharedImpulse(off,tailSec,slotType==='dark_core'?3.5:2.2);
+  const wet=off.createGain();wet.gain.value=amount*0.6;
+  // Pre-delay so the halo blooms after the onset (BLOOM behavior)
+  const preDelay=off.createDelay(0.5);preDelay.delayTime.value=slotType==='dark_core'?0.02:0.06;
+  // Gentle high-shelf on wet for the "luminous" brightness, not on dark_core
+  const hs=off.createBiquadFilter();hs.type='highshelf';
+  hs.frequency.value=3000;hs.gain.value=slotType==='dark_core'?-3:4;
+  src.connect(dry);dry.connect(off.destination);
+  src.connect(preDelay);preDelay.connect(conv);conv.connect(hs);hs.connect(wet);wet.connect(off.destination);
+  src.start(0);
+  const rendered=await off.startRendering();
+  return rendered;
+}
+
 async function exportFragmentBank(){
   const setB=msg=>{const el=document.getElementById('bank-status');if(el)el.textContent=msg;};
   if(FragmentLibrary.length===0){setB('no fragments to export');return;}
@@ -2236,8 +2294,18 @@ async function exportFragmentBank(){
     const entities={};  // id -> behavior (what BeatsOne triggers)
     let li=0,di=0;
     const phaseCounter={}; // round-robin phase assignment per slotType
-    FragmentLibrary.forEach((fr,i)=>{
-      const wav=encodeWAV(fr.buffer);
+    const haloOn=document.getElementById('bank-halo-toggle')?.classList.contains('on');
+    const haloAmt=0.5; // shared halo amount
+    for(let i=0;i<FragmentLibrary.length;i++){
+      const fr=FragmentLibrary[i];
+      let outBuf=fr.buffer;
+      // Apply shared LUMINOUS halo so fragments cohere in the same space
+      if(haloOn){
+        setB(`rendering halo ${i+1}/${FragmentLibrary.length}…`);
+        await new Promise(r=>setTimeout(r,0));
+        try{outBuf=await renderLuminousHalo(fr.buffer,fr.slotType,haloAmt);}catch(e){outBuf=fr.buffer;}
+      }
+      const wav=encodeWAV(outBuf);
       const folder=folderFor(fr.slotType);
       const safe=fr.name.replace(/[^a-z0-9_]/gi,'_');
       const file=`${safe}.wav`;
@@ -2263,13 +2331,13 @@ async function exportFragmentBank(){
         fatigueCost:b.fatigueCost,
         maxRepeats:b.maxRepeats,
         clarity:0.6,
-        duration:parseFloat(fr.duration.toFixed(3)),
+        duration:parseFloat((outBuf.duration||fr.duration).toFixed(3)),
         luminous:lum||undefined,
         verticalBias:lum?lum.verticalBias:0
       };
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
-    });
+    }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
     const manifest={
       schema:'spukpack_v2',
