@@ -1763,7 +1763,9 @@ function drawWaveEditor(){
   const canvas=document.getElementById('wave-edit-canvas');
   if(!canvas)return;
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  const w=canvas.offsetWidth||canvas.parentElement?.offsetWidth||300;
+  let w=canvas.offsetWidth||canvas.parentElement?.offsetWidth||0;
+  // If pane is hidden (display:none), width is 0 — skip; will redraw when shown
+  if(w<2)return;
   const H=220;
   canvas.width=w*dpr;canvas.height=H*dpr;
   canvas.style.width=w+'px';canvas.style.height=H+'px';
@@ -1772,13 +1774,21 @@ function drawWaveEditor(){
 
   const mat=SLOTS[currentSlot];
 
-  // ── Empty state ──────────────────────────────────────────
+  // ── Empty state — clearly visible ────────────────────────
   if(!mat||!mat.buffer){
-    ctx.fillStyle='rgba(0,255,255,.03)';ctx.fillRect(0,0,w,H);
-    ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillStyle='rgba(153,68,255,.35)';
-    ctx.fillText('LOAD MATERIAL',w/2,H/2-8);
-    ctx.font='11px monospace';ctx.fillStyle='rgba(153,68,255,.2)';
-    ctx.fillText('WAV · AIFF · MP3',w/2,H/2+12);
+    // Filled panel so it's obviously a waveform area, not background
+    ctx.fillStyle='rgba(0,255,255,.04)';ctx.fillRect(0,0,w,H);
+    // Centre baseline
+    ctx.strokeStyle='rgba(0,255,255,.14)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(w,H/2);ctx.stroke();
+    // Dashed inner frame
+    ctx.setLineDash([6,5]);ctx.strokeStyle='rgba(0,255,255,.25)';ctx.lineWidth=1.5;
+    ctx.strokeRect(8,8,w-16,H-16);ctx.setLineDash([]);
+    // Text
+    ctx.font='bold 14px monospace';ctx.textAlign='center';ctx.fillStyle='rgba(0,255,255,.55)';
+    ctx.fillText('WAVEFORM',w/2,H/2-6);
+    ctx.font='11px monospace';ctx.fillStyle='rgba(153,68,255,.45)';
+    ctx.fillText('load material to edit · trim · slice',w/2,H/2+14);
     return;
   }
 
@@ -4094,7 +4104,7 @@ function setMode(mode){
   if(mode==='temporal2'){TemporalDNA.renderPhaseCards('phase-grid2');TemporalDNA.renderRoleBadges();}
   if(mode==='export')updateFilenamePreview();
   if(mode==='sculpt2')updateSculptMiniWave();
-  if(mode==='mat')drawWaveEditor();
+  if(mode==='mat'){drawWaveEditor();requestAnimationFrame(()=>drawWaveEditor());}
 }
 
 // Bind main tabs
