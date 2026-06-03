@@ -433,6 +433,12 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   background:rgba(153,68,255,.03);color:var(--gray);
   transition:all .1s;-webkit-tap-highlight-color:transparent;}
 .stchip.active{background:rgba(153,68,255,.15);border-color:var(--violet);color:var(--white);}
+/* LUMINOUS family chips — warm gold/cyan glow */
+.stchip.lum{border-color:rgba(255,210,120,.22);background:rgba(255,210,120,.04);color:rgba(255,210,140,.6);}
+.stchip.lum.active{background:rgba(255,210,120,.18);border-color:rgba(255,210,120,.6);color:#ffe6a8;}
+/* DARK CORE chip — deep, grounding */
+.stchip.dark{border-color:rgba(90,120,200,.25);background:rgba(40,50,90,.18);color:rgba(150,170,220,.65);}
+.stchip.dark.active{background:rgba(60,80,160,.3);border-color:rgba(120,150,230,.6);color:#cdd9ff;}
 
 /* Finish layer — reuse tone-ctrl but accent */
 .finish-section .tfill{background:rgba(0,255,180,.65)!important;}
@@ -1021,6 +1027,11 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <div class="stchip" data-st="texture">TEXTURE</div>
       <div class="stchip" data-st="entity">ENTITY</div>
       <div class="stchip" data-st="void">VOID</div>
+      <div class="stchip lum" data-st="luminous_tail">LUM TAIL</div>
+      <div class="stchip lum" data-st="luminous_riser">LUM RISER</div>
+      <div class="stchip lum" data-st="luminous_drone">LUM DRONE</div>
+      <div class="stchip lum" data-st="luminous_spectral">LUM SPECTRAL</div>
+      <div class="stchip dark" data-st="dark_core">DARK CORE</div>
     </div>
 
     <!-- LOAD — one input per slot, only active slot's input is functional -->
@@ -4524,6 +4535,34 @@ document.querySelectorAll('.proc-node').forEach(node=>{
 // SPUKBEATS BRIDGE — Translates Sound Forge DNA to
 // SpukBeatsOne v17 DNA.importPack() schema
 // ═══════════════════════════════════════════════════════
+// ─── LUMINOUS ENERGY — manifest derivation ───────────────
+// Maps the current slot type + FEEL state into the luminous{} manifest section.
+// verticalBias is the vertical axis the system lacked: +up (luminous) / -down (mass).
+const LUMINOUS_PRESET_MAP={
+  luminous_tail:    {preset:'luminous_afterglow', lift:0.2, altitude:0.8, radiance:0.6, horizon:0.95, bloom:0.4, momentum:-0.3, aura:0.7, darkCoreRatio:0.35, verticalBias:0.6},
+  luminous_riser:   {preset:'luminous_rise',      lift:0.9, altitude:0.6, radiance:0.65,horizon:0.5,  bloom:0.85,momentum:0.9,  aura:0.6, darkCoreRatio:0.3,  verticalBias:0.8},
+  luminous_drone:   {preset:'luminous_peak',      lift:0.4, altitude:0.9, radiance:0.9, horizon:0.7,  bloom:0.5, momentum:0.3,  aura:0.85,darkCoreRatio:0.4,  verticalBias:0.7},
+  luminous_spectral:{preset:'luminous_halo',      lift:0.2, altitude:0.85,radiance:0.8, horizon:1.0,  bloom:0.8, momentum:0.1,  aura:0.95,darkCoreRatio:0.45, verticalBias:0.65},
+  dark_core:        {preset:'dark_core',          lift:0.0, altitude:0.15,radiance:0.1, horizon:0.4,  bloom:0.3, momentum:0.0,  aura:0.6, darkCoreRatio:1.0,  verticalBias:-0.7}
+};
+function deriveLuminous(slotType){
+  const base=LUMINOUS_PRESET_MAP[slotType];
+  if(!base)return null; // non-luminous slot type → no luminous section
+  // FEEL nudges the luminous params live (energy lifts radiance, evolution adds momentum)
+  const f=FeelState;
+  return{
+    family:slotType==='dark_core'?'dark_core':'luminous_energy',
+    preset:base.preset,
+    lift:base.lift, altitude:base.altitude,
+    radiance:clamp(base.radiance+f.energy*0.15,0,1),
+    horizon:base.horizon, bloom:base.bloom,
+    momentum:clamp(base.momentum+f.evolution*0.2,-1,1),
+    aura:base.aura,
+    darkCoreRatio:base.darkCoreRatio,
+    verticalBias:base.verticalBias
+  };
+}
+
 function buildSpukBeatsBridge(forgeState, satDNA, procState, carveState, generation, damage){
   const fs=forgeState;
   const cv=carveState;
@@ -5067,7 +5106,8 @@ function buildPackManifest(entities,bridge){
       ritualGravity:parseFloat(clamp(TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3)),
       memoryPersistence:bridge.behaviorHints.ghostPersistence,
       spatialSpread:bridge.behaviorHints.spatialSpread,
-      narrativeStates:TemporalDNA.states
+      narrativeStates:TemporalDNA.states,
+      luminous:deriveLuminous(MatEditState.slotType)
     },
 
     routing:{
@@ -5236,7 +5276,8 @@ document.getElementById('forge-dna-btn').addEventListener('click',()=>{
       spectralDensity:TemporalDNA.spectralDensity,
       collapseResistance:bridge.behaviorHints.fatigueResist,
       ritualGravity:parseFloat(clamp(
-        TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3))
+        TemporalDNA.contrastLevel*.6+ForgeState.pressure*.4,0,1).toFixed(3)),
+      luminous:deriveLuminous(MatEditState.slotType)
     }
   };
 
