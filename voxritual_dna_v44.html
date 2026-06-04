@@ -814,6 +814,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 #debugBtn{display:none!important}            /* debug hidden from main view */
 .ctxTypeBtn{flex:1 1 30%;padding:.34rem .2rem;font-size:.6rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(153,68,255,.2);background:rgba(153,68,255,.06);color:rgba(200,160,255,.75);border-radius:3px;cursor:pointer;white-space:nowrap}
 .ctxTypeBtn:active{background:rgba(153,68,255,.2);color:#fff}
+.ctxCatBtn{flex:1 1 30%;padding:.34rem .2rem;font-size:.6rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.18);background:rgba(0,200,255,.05);color:rgba(150,210,255,.75);border-radius:3px;cursor:pointer;white-space:nowrap}
+.ctxCatBtn:active{background:rgba(0,200,255,.2);color:#fff}
 .ctxBtn.tray{color:rgba(0,220,160,.65)}
 #ctxOverlay{position:fixed;inset:0;z-index:299;display:none}
 #fInput{display:none}
@@ -843,7 +845,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
     <button class="ctxBtn"      data-a="surgery">OPEN IN SURGERY</button>
     <button class="ctxBtn"      data-a="rename">RENAME</button>
     <button class="ctxBtn"      data-a="dupe">DUPLICATE</button>
-    <button class="ctxBtn"      data-a="moveCat">MOVE CATEGORY</button>
+    <button class="ctxBtn"      data-a="moveCat">MOVE CATEGORY ▸</button>
+    <div id="ctxCatGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;border-bottom:1px solid rgba(153,68,255,.1)">
+      <button class="ctxCatBtn" data-c="captures">CAPTURES</button>
+      <button class="ctxCatBtn" data-c="spoken">SPOKEN</button>
+      <button class="ctxCatBtn" data-c="whispers">WHISPERS</button>
+      <button class="ctxCatBtn" data-c="breaths">BREATHS</button>
+      <button class="ctxCatBtn" data-c="hooks">HOOKS</button>
+      <button class="ctxCatBtn" data-c="fragments">FRAGMENTS</button>
+      <button class="ctxCatBtn" data-c="corrupted">CORRUPTED</button>
+      <button class="ctxCatBtn" data-c="textures">TEXTURES</button>
+      <button class="ctxCatBtn" data-c="ritual">RITUAL</button>
+    </div>
     <button class="ctxBtn"      data-a="normNow">NORMALIZE</button>
     <button class="ctxBtn del"  data-a="del">DELETE</button>
   </div>
@@ -4476,21 +4489,23 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
   // SET TYPE reveals the inline type grid without closing the menu
-  if(btn.dataset.a==='setType'){ var g=document.getElementById('ctxTypeGrid'); if(g)g.style.display=(g.style.display==='none'?'flex':'none'); return; }
+  if(btn.dataset.a==='setType'){ var g=document.getElementById('ctxTypeGrid'); var gc=document.getElementById('ctxCatGrid'); if(gc)gc.style.display='none'; if(g)g.style.display=(g.style.display==='none'?'flex':'none'); return; }
+  // MOVE CATEGORY reveals the inline category grid (no prompt, closed vocabulary)
+  if(btn.dataset.a==='moveCat'){ var cg=document.getElementById('ctxCatGrid'); var tg=document.getElementById('ctxTypeGrid'); if(tg)tg.style.display='none'; if(cg)cg.style.display=(cg.style.display==='none'?'flex':'none'); return; }
   const id=ctxId;hideCtx();const s=A.samples.find(x=>x.id===id);if(!s)return;
   switch(btn.dataset.a){
     case 'setType':{ break; }
+    case 'moveCat':{ break; }
     case 'fav':s.favorite=!s.favorite;await dbPut(s);renderLibrary();break;
     case 'tray':MONTAGE.addFrag(s);renderLibrary();break;
     case 'surgery':selectSample(id,false);setMode('surgery');break;
     case 'rename':{ if(A.libView==='tree'){ A.renamingId=id; renderLibrary(); break; } const n=prompt('Rename:',s.name);if(n&&n.trim()){s.name=n.trim();await dbPut(s);renderLibrary();}break;}
     case 'dupe':{const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+'_copy';c.createdAt=Date.now();await dbPut(c);A.samples.push(c);renderLibrary();break;}
-    case 'moveCat':{const cat=prompt('Category:',s.cat);if(cat&&CATS.includes(cat)){s.cat=cat;await dbPut(s);renderLibrary();}break;}
     case 'normNow':{await ensureAC();const mode=A.normMode==='off'?'soft':A.normMode;const{gain,meta}=NORM.compute(toAB(s),mode);const nb=NORM.applyToBuffer(toAB(s),gain);const child=await buildRecord(nb,{name:`${s.name}_N${mode}`,cat:s.cat,parentId:s.id,mutationOf:`norm_${mode}`});child.fragmentIdentity.normalized=meta;await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);break;}
     case 'del':{
       // Double-tap to confirm delete — iOS safe, no confirm()
@@ -4516,6 +4531,19 @@ document.querySelectorAll('.ctxTypeBtn').forEach(function(btn){
     var id=ctxId; var s=A.samples.find(function(x){return x.id===id;});
     hideCtx();
     if(s) setFragType(s, btn.dataset.type);
+  });
+});
+// Context-menu category buttons → move category from closed vocabulary (no prompt)
+document.querySelectorAll('.ctxCatBtn').forEach(function(btn){
+  btn.addEventListener('click',async function(){
+    var id=ctxId; var s=A.samples.find(function(x){return x.id===id;});
+    hideCtx();
+    if(!s) return;
+    var c=btn.dataset.c;
+    if(CATS.indexOf(c)<0) return;
+    s.cat=c; await dbPut(s); renderLibrary();
+    if(typeof PACK!=='undefined' && PACK.updateChecklist) PACK.updateChecklist();
+    HISTORY.showToast('moved to '+c.toUpperCase()+' · '+(s.name||'').slice(0,12));
   });
 });
 
