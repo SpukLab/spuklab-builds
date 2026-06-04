@@ -808,6 +808,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .ctxBtn:active{background:rgba(153,68,255,.14)}
 .ctxBtn.del{color:rgba(255,68,68,.6)}
 .ctxBtn.fav{color:rgba(255,200,0,.65)}
+/* ── Mobile-first space pass (v44): hide low-frequency permanent panels ── */
+#packChecklist{display:none!important}      /* readiness lives in the header badge */
+#fragTagger{display:none!important}          /* ENTITY TYPE moved to node context menu */
+#debugBtn{display:none!important}            /* debug hidden from main view */
+.ctxTypeBtn{flex:1 1 30%;padding:.34rem .2rem;font-size:.6rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(153,68,255,.2);background:rgba(153,68,255,.06);color:rgba(200,160,255,.75);border-radius:3px;cursor:pointer;white-space:nowrap}
+.ctxTypeBtn:active{background:rgba(153,68,255,.2);color:#fff}
 .ctxBtn.tray{color:rgba(0,220,160,.65)}
 #ctxOverlay{position:fixed;inset:0;z-index:299;display:none}
 #fInput{display:none}
@@ -823,6 +829,17 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
   <div id="ctxMenu">
     <button class="ctxBtn fav"  data-a="fav">FAVORITE</button>
     <button class="ctxBtn tray" data-a="tray">ADD TO TRAY</button>
+    <button class="ctxBtn"      data-a="setType">SET TYPE ▸</button>
+    <div id="ctxTypeGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;border-bottom:1px solid rgba(153,68,255,.1)">
+      <button class="ctxTypeBtn" data-type="narrative_voice">NARRATIVE</button>
+      <button class="ctxTypeBtn" data-type="semantic_ghost">GHOST</button>
+      <button class="ctxTypeBtn" data-type="ritual_speech">RITUAL</button>
+      <button class="ctxTypeBtn" data-type="frag_poetry">POETRY</button>
+      <button class="ctxTypeBtn" data-type="subconscious">SUBCONSCS</button>
+      <button class="ctxTypeBtn" data-type="collapse_residue">COLLAPSE</button>
+      <button class="ctxTypeBtn" data-type="false_memory">FALSE MEM</button>
+      <button class="ctxTypeBtn" data-type="pressure_language">PRESSURE</button>
+    </div>
     <button class="ctxBtn"      data-a="surgery">OPEN IN SURGERY</button>
     <button class="ctxBtn"      data-a="rename">RENAME</button>
     <button class="ctxBtn"      data-a="dupe">DUPLICATE</button>
@@ -4250,7 +4267,7 @@ function setCat(c){A.cat=c;document.querySelectorAll('.cat').forEach(b=>b.classL
   function wire(){
     var pb=document.getElementById('packBuilder');
     var pbh=document.getElementById('packBuilderHdr');
-    if(pbh&&pb) pbh.addEventListener('click',function(){ pb.classList.toggle('collapsed'); });
+    if(pbh&&pb){ pbh.addEventListener('click',function(){ pb.classList.toggle('collapsed'); }); pb.classList.add('collapsed'); }
     [['relationsSection'],['chainSection']].forEach(function(p){
       var sec=document.getElementById(p[0]); if(!sec)return;
       var lbl=sec.querySelector('.relLabel');
@@ -4352,7 +4369,6 @@ function renderLibraryTree(){
     var selIsRoot=_isRoot(sel);
     var rootOfSel=_rootOf(sel.id); var rootObj=rootOfSel?A.samples.find(x=>x.id===rootOfSel):sel;
     strip='<div id="treeNodeBar">'+
-      '<span class="tnbSel">sel: '+_entityLabel(rootObj)+(selIsRoot?'':' '+_childLabel(sel))+'</span>'+
       '<button class="tnbBtn" data-op="pitchDn">PITCH-</button>'+
       '<button class="tnbBtn" data-op="pitchUp">PITCH+</button>'+
       '<button class="tnbBtn" data-op="slow">SLOW</button>'+
@@ -4460,12 +4476,15 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-250)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-160)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
+  // SET TYPE reveals the inline type grid without closing the menu
+  if(btn.dataset.a==='setType'){ var g=document.getElementById('ctxTypeGrid'); if(g)g.style.display=(g.style.display==='none'?'flex':'none'); return; }
   const id=ctxId;hideCtx();const s=A.samples.find(x=>x.id===id);if(!s)return;
   switch(btn.dataset.a){
+    case 'setType':{ break; }
     case 'fav':s.favorite=!s.favorite;await dbPut(s);renderLibrary();break;
     case 'tray':MONTAGE.addFrag(s);renderLibrary();break;
     case 'surgery':selectSample(id,false);setMode('surgery');break;
@@ -4491,6 +4510,14 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     }
   }
 }));
+// Context-menu entity-type buttons → apply to ctxId (reuses setFragType)
+document.querySelectorAll('.ctxTypeBtn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var id=ctxId; var s=A.samples.find(function(x){return x.id===id;});
+    hideCtx();
+    if(s) setFragType(s, btn.dataset.type);
+  });
+});
 
 // ─── SELECT SAMPLE ────────────────────────────────────────────────────────
 async function selectSample(id,autoPlay){
@@ -5324,27 +5351,31 @@ if(_packAuthorEl) {
 }
 
 // Fragment type tag buttons
+// Shared: set entity type on a sample (reused by hidden fragTagger + context menu)
+function setFragType(s, type){
+  if(!s) return;
+  if(!s.fragmentIdentity) s.fragmentIdentity = {};
+  s.fragmentIdentity.type = type;
+  var catMap = {
+    narrative_voice:'spoken', semantic_ghost:'fragments', ritual_speech:'ritual',
+    frag_poetry:'fragments', subconscious:'whispers', collapse_residue:'corrupted',
+    false_memory:'fragments', pressure_language:'captures',
+    spoken:'captures', whisper:'whispers', breath:'breaths', texture:'textures', fragment:'fragments', collapse:'corrupted'
+  };
+  s.cat = catMap[type] || s.cat;
+  dbPut(s);
+  renderLibrary();
+  if(typeof PACK!=='undefined' && PACK.updateChecklist) PACK.updateChecklist();
+  HISTORY.showToast('tagged: '+(s.name||'').slice(0,12)+' → '+type);
+}
 document.querySelectorAll('.fragTypeTag').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var s = sample();
     if(!s) { HISTORY.showToast('select a fragment first'); return; }
-    if(!s.fragmentIdentity) s.fragmentIdentity = {};
-    s.fragmentIdentity.type = btn.dataset.type;
-    var catMap = {
-      narrative_voice:'spoken', semantic_ghost:'fragments', ritual_speech:'ritual',
-      frag_poetry:'fragments', subconscious:'whispers', collapse_residue:'corrupted',
-      false_memory:'fragments', pressure_language:'captures',
-      // legacy
-      spoken:'captures', whisper:'whispers', breath:'breaths', texture:'textures', fragment:'fragments', collapse:'corrupted'
-    };
-    s.cat = catMap[btn.dataset.type] || s.cat;
-    dbPut(s);
+    setFragType(s, btn.dataset.type);
     document.querySelectorAll('.fragTypeTag').forEach(function(b){
       b.classList.toggle('on', b.dataset.type === btn.dataset.type);
     });
-    renderLibrary();
-    PACK.updateChecklist();
-    HISTORY.showToast('tagged: '+s.name.slice(0,12)+' → '+btn.dataset.type);
   });
 });
 
