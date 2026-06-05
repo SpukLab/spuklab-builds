@@ -4205,7 +4205,7 @@ document.getElementById('warmBtn').addEventListener('click',toggleWarm);
 async function toggleWarm(){if(WARM.active){stopWarm();return;}await ensureAC();try{const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});WARM.stream=stream;WARM.chunks=[];const msrc=A.AC.createMediaStreamSource(stream);msrc.connect(A.analyser);WARM.msrc=msrc;const mr=new MediaRecorder(stream,{mimeType:bestMime()});mr.ondataavailable=e=>{if(e.data.size>0){WARM.chunks.push(e.data);if(WARM.chunks.length>WARM.max)WARM.chunks.shift();}};mr.start(100);WARM.recorder=mr;WARM.active=true;document.getElementById('warmBtn').classList.add('on');document.getElementById('warmBtn').textContent='WARM ●';}catch(e){}}
 function stopWarm(){if(!WARM.active)return;if(WARM.recorder&&WARM.recorder.state!=='inactive')WARM.recorder.stop();WARM.stream&&WARM.stream.getTracks().forEach(t=>t.stop());if(WARM.msrc){try{WARM.msrc.disconnect();}catch(e){}}WARM.stream=null;WARM.recorder=null;WARM.msrc=null;WARM.active=false;document.getElementById('warmBtn').classList.remove('on');document.getElementById('warmBtn').textContent='WARM';}
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fInput').click());
-document.getElementById('fInput').addEventListener('change',async function(e){const file=e.target.files[0];if(!file)return;await ensureAC();setCT('…');try{const buf=await A.AC.decodeAudioData((await file.arrayBuffer()).slice(0));const s=await buildRecord(buf,{name:file.name.replace(/\.[^.]+$/,''),cat:'spoken',parentId:null});await dbPut(s);A.samples.push(s);renderLibrary();selectSample(s.id,true);setCT('');}catch(e){setCT('err');}});
+document.getElementById('fInput').addEventListener('change',async function(e){const inp=e.target;const file=inp.files[0];if(!file){inp.value='';return;}console.log('LOAD start',file.name);await ensureAC();setCT('…');try{const buf=await A.AC.decodeAudioData((await file.arrayBuffer()).slice(0));console.log('decode ok',buf.duration);const s=await buildRecord(buf,{name:file.name.replace(/\.[^.]+$/,''),cat:'spoken',parentId:null});console.log('sample created',s.id);await dbPut(s);A.samples.push(s);renderLibrary();selectSample(s.id,true);console.log('render complete');setCT('');}catch(err){console.log('LOAD error',err&&err.message);setCT('err');}finally{inp.value='';}});
 
 // ─── RAPID AUDITION ───────────────────────────────────────────────────────
 document.getElementById('audPlay').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();LME.play(toAB(s),LME.mutType);document.getElementById('audStatus').textContent=s.name.slice(0,18);});
@@ -4527,7 +4527,7 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var mgBtn=menu.querySelector('[data-a="moveGroup"]');if(mgBtn)mgBtn.style.display=_isRoot(s)?'':'none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var mgBtn=menu.querySelector('[data-a="moveGroup"]');if(mgBtn)mgBtn.style.display=_isRoot(s)?'':'none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -4550,6 +4550,28 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     }
     return;
   }
+  // DELETE — two-tap confirm with the menu kept OPEN; second tap cascades the subtree
+  if(btn.dataset.a==='del'){
+    var delBtn=document.querySelector('.ctxBtn.del');
+    var did=ctxId;
+    if(delBtn && delBtn.dataset.pendingDel===did){
+      var ds=A.samples.find(function(x){return x.id===did;});
+      // delete this node + everything derived from it (root → whole family; leaf → just itself)
+      var fam=ds?Array.from(_familyIds(did)):[did];
+      hideCtx();
+      for(var di=0; di<fam.length; di++){ await dbDel(fam[di]); }
+      A.samples=A.samples.filter(function(x){return fam.indexOf(x.id)<0;});
+      if(fam.indexOf(A.selectedId)>=0) A.selectedId=null;
+      if(delBtn){ delBtn.dataset.pendingDel=''; delBtn.textContent='DELETE'; }
+      renderLibrary();
+      HISTORY.showToast('deleted · '+fam.length+' fragment'+(fam.length>1?'s':''));
+    } else {
+      if(delBtn){ delBtn.dataset.pendingDel=did; delBtn.textContent='TAP AGAIN TO DELETE'; }
+      HISTORY.showToast('tap again to confirm delete');
+      setTimeout(function(){ if(delBtn && delBtn.dataset.pendingDel===did){ delBtn.dataset.pendingDel=''; delBtn.textContent='DELETE'; } }, 3000);
+    }
+    return;
+  }
   const id=ctxId;hideCtx();const s=A.samples.find(x=>x.id===id);if(!s)return;
   switch(btn.dataset.a){
     case 'setType':{ break; }
@@ -4561,22 +4583,6 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     case 'rename':{ if(A.libView==='tree'){ A.renamingId=id; renderLibrary(); break; } const n=prompt('Rename:',s.name);if(n&&n.trim()){s.name=n.trim();await dbPut(s);renderLibrary();}break;}
     case 'dupe':{const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+'_copy';c.createdAt=Date.now();await dbPut(c);A.samples.push(c);renderLibrary();break;}
     case 'normNow':{await ensureAC();const mode=A.normMode==='off'?'soft':A.normMode;const{gain,meta}=NORM.compute(toAB(s),mode);const nb=NORM.applyToBuffer(toAB(s),gain);const child=await buildRecord(nb,{name:`${s.name}_N${mode}`,cat:s.cat,parentId:s.id,mutationOf:`norm_${mode}`});child.fragmentIdentity.normalized=meta;await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);break;}
-    case 'del':{
-      // Double-tap to confirm delete — iOS safe, no confirm()
-      var delBtn = document.querySelector('.ctxBtn.del');
-      if(delBtn && delBtn.dataset.pendingDel === id) {
-        await dbDel(id);A.samples=A.samples.filter(function(x){return x.id!==id;});
-        if(A.selectedId===id)A.selectedId=null;renderLibrary();
-        HISTORY.showToast('deleted · '+s.name.slice(0,14));
-      } else {
-        if(delBtn){ delBtn.dataset.pendingDel=id; delBtn.textContent='TAP AGAIN TO DELETE'; }
-        HISTORY.showToast('tap again to confirm delete');
-        setTimeout(function(){
-          if(delBtn){delBtn.dataset.pendingDel='';delBtn.textContent='DELETE';}
-        }, 2500);
-      }
-      break;
-    }
   }
 }));
 // Context-menu entity-type buttons → apply to ctxId (reuses setFragType)
