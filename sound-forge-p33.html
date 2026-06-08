@@ -433,6 +433,40 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   background:rgba(153,68,255,.03);color:var(--gray);
   transition:all .1s;-webkit-tap-highlight-color:transparent;}
 .stchip.active{background:rgba(153,68,255,.15);border-color:var(--violet);color:var(--white);}
+/* ─── DNA FORGE MODE ─── */
+.df-hint{font-family:var(--mono);font-size:11px;color:var(--gray);line-height:1.5;}
+.df-profile-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;}
+.df-profile{flex:1;min-width:64px;min-height:44px;padding:10px 6px;border-radius:5px;
+  font-family:var(--mono);font-style:italic;font-size:12px;letter-spacing:.08em;
+  border:1px solid var(--vdim);background:rgba(153,68,255,.05);color:var(--gray);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .12s;}
+.df-profile.active{background:rgba(153,68,255,.2);border-color:var(--violet);color:#fff;}
+.df-profile[data-profile="dark"].active{background:rgba(60,80,160,.28);border-color:rgba(120,150,230,.6);color:#cdd9ff;}
+.df-profile[data-profile="luminous"].active{background:rgba(255,210,120,.18);border-color:rgba(255,210,120,.6);color:#ffe6a8;}
+.df-profile[data-profile="fracture"].active{background:rgba(0,255,255,.16);border-color:rgba(0,255,255,.55);color:#aef;}
+.df-profile-desc{font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.6);font-style:italic;}
+.df-generate{width:100%;padding:16px;border-radius:6px;cursor:pointer;
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:14px;letter-spacing:.16em;
+  background:rgba(0,255,180,.08);border:1px solid rgba(0,255,180,.35);color:rgba(0,255,200,.85);
+  -webkit-tap-highlight-color:transparent;transition:all .1s;min-height:52px;margin-bottom:8px;}
+.df-generate:active{background:rgba(0,255,180,.2);}
+.df-variant-list{display:flex;flex-direction:column;gap:4px;}
+.df-variant{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:5px;
+  background:rgba(153,68,255,.05);border:1px solid var(--vdim);font-family:var(--mono);font-size:12px;}
+.df-variant.playing{border-color:rgba(0,255,200,.6);background:rgba(0,255,200,.07);}
+.df-variant .dv-name{flex:1;color:var(--white);font-style:italic;}
+.df-variant .dv-tag{font-size:11px;color:rgba(153,68,255,.6);}
+.df-variant .dv-play{padding:6px 11px;border-radius:4px;background:rgba(0,255,255,.08);
+  border:1px solid rgba(0,255,255,.25);color:rgba(0,255,255,.75);cursor:pointer;font-size:11px;
+  -webkit-tap-highlight-color:transparent;min-height:32px;}
+.df-variant .dv-save{padding:6px 11px;border-radius:4px;background:rgba(153,68,255,.1);
+  border:1px solid rgba(153,68,255,.35);color:#b580ff;cursor:pointer;font-size:11px;
+  -webkit-tap-highlight-color:transparent;min-height:32px;}
+.df-variant .dv-save.saved{background:rgba(0,255,180,.12);border-color:rgba(0,255,180,.4);color:rgba(0,255,200,.85);}
+.df-pack-row{display:flex;align-items:center;gap:10px;}
+.df-pack-count{flex:1;font-family:var(--mono);font-size:13px;color:rgba(0,255,200,.7);font-style:italic;}
+.df-set-hdr{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:rgba(0,255,200,.55);
+  padding:4px 0 6px;border-bottom:1px solid var(--vdim);margin-bottom:4px;}
 /* LUMINOUS family chips — warm gold/cyan glow */
 .stchip.lum{border-color:rgba(255,210,120,.22);background:rgba(255,210,120,.04);color:rgba(255,210,140,.6);}
 .stchip.lum.active{background:rgba(255,210,120,.18);border-color:rgba(255,210,120,.6);color:#ffe6a8;}
@@ -702,7 +736,8 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
 
   <!-- MODE BAR — 5 focused tabs -->
   <div class="modebar">
-    <button class="mbtn active" id="mb-sculpt2">SCULPT</button>
+    <button class="mbtn active" id="mb-dnaforge">DNA FORGE</button>
+    <button class="mbtn" id="mb-sculpt2">SCULPT</button>
     <button class="mbtn" id="mb-mat">MATERIAL</button>
     <button class="mbtn" id="mb-temporal2">FEEL</button>
     <button class="mbtn" id="mb-export">EXPORT</button>
@@ -740,7 +775,51 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
   </div>
 
   <!-- ═══ SCULPT PANE (PRIMARY) — macro controls ═══ -->
-  <div class="pane visible" id="pane-sculpt2">
+  <!-- ═══ DNA FORGE PANE — production layer ═══ -->
+  <div class="pane visible" id="pane-dnaforge">
+    <div class="sec">
+      <div class="st">DNA FORGE · production</div>
+      <div class="df-hint">Load material · pick a profile · GENERATE variants · audition · SAVE TO PACK</div>
+    </div>
+
+    <div class="sec">
+      <div class="st">1 · MATERIAL</div>
+      <div class="mat-drop-zone" id="df-drop" style="min-height:56px;">
+        <input type="file" id="df-file-input" accept=".wav,.aif,.aiff,.mp3,.m4a,.caf,audio/*">
+        <div class="mat-drop-label" id="df-mat-label">LOAD MATERIAL</div>
+        <div class="mat-drop-sub" id="df-mat-sub">drop a crash, drone, voice, texture…</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">2 · PROFILE · intention</div>
+      <div class="df-profile-row">
+        <button class="df-profile active" data-profile="dark">DARK</button>
+        <button class="df-profile" data-profile="fracture">FRACTURE</button>
+        <button class="df-profile" data-profile="textural">TEXTURAL</button>
+        <button class="df-profile" data-profile="luminous">LUMINOUS</button>
+        <button class="df-profile" data-profile="hybrid">HYBRID</button>
+      </div>
+      <div class="df-profile-desc" id="df-profile-desc">Heavy, eroded, low. Mass + saturation.</div>
+    </div>
+
+    <div class="sec">
+      <div class="st">3 · GENERATE</div>
+      <button class="df-generate" id="df-generate">GENERATE VARIANT</button>
+      <div class="df-variant-list" id="df-variant-list"></div>
+    </div>
+
+    <div class="sec">
+      <div class="st">4 · PACK</div>
+      <div class="df-pack-row">
+        <span class="df-pack-count" id="df-pack-count">0 in pack</span>
+        <button class="wtool" id="df-goto-export">EXPORT BANK ›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCULPT PANE ═══ -->
+  <div class="pane" id="pane-sculpt2">
 
     <div class="sec">
       <div class="st">SOUND SCULPT</div>
@@ -1059,7 +1138,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <div class="wave-toolbar">
       <button class="wtool" id="wt-zoom-region">ZOOM REGION</button>
       <button class="wtool" id="wt-zoom-out">ZOOM OUT</button>
-      <button class="wtool" id="wt-preview-region">▶ REGION</button>
+      <button class="wtool" id="wt-preview-region">PLAY REGION</button>
     </div>
 
     <!-- SLICE -->
@@ -2012,11 +2091,11 @@ const FragDB={
 };
 
 // Serialize AudioBuffer → storable record (raw Float32 per channel)
-function bufferToRecord(id,name,buffer,duration,slotType){
+function bufferToRecord(id,name,buffer,duration,slotType,provenance){
   const nCh=buffer.numberOfChannels;
   const channels=[];
   for(let ch=0;ch<nCh;ch++)channels.push(buffer.getChannelData(ch).slice(0));
-  return{id,name,duration,slotType,sampleRate:buffer.sampleRate,length:buffer.length,nCh,channels};
+  return{id,name,duration,slotType,provenance:provenance||null,sampleRate:buffer.sampleRate,length:buffer.length,nCh,channels};
 }
 // Rehydrate record → AudioBuffer
 function recordToBuffer(rec){
@@ -2034,7 +2113,7 @@ async function loadFragmentsFromDB(){
     for(const rec of recs){
       FragmentLibrary.push({
         id:rec.id,name:rec.name,buffer:recordToBuffer(rec),
-        duration:rec.duration,slotType:rec.slotType
+        duration:rec.duration,slotType:rec.slotType,provenance:rec.provenance||null
       });
     }
     renderFragmentList();
@@ -2096,7 +2175,7 @@ function previewRegion(){
   g.gain.linearRampToValueAtTime(0,t+len);
   src.connect(g);g.connect(masterGain);
   src.start(t,s,len);src.stop(t+len+0.05);
-  setT('mat-status',`▶ region ${len.toFixed(2)}s`);
+  setT('mat-status',`region ${len.toFixed(2)}s`);
 }
 
 // Slice into N equal regions → clickable chips that set start/end
@@ -2156,7 +2235,7 @@ function sliceByTransient(){
 }
 
 // Save current region as a reusable fragment (in-memory library)
-function saveFragment(){
+function saveFragment(provenance){
   const mat=SLOTS[currentSlot];
   if(!mat||!mat.buffer){setT('mat-status','no material');return;}
   const dur=mat.buffer.duration;
@@ -2172,12 +2251,14 @@ function saveFragment(){
     for(let i=0;i<lenSamp;i++)dst[i]=src[startSamp+i]||0;
   }
   const id=Date.now();
-  const name=`${MatEditState.slotType}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
-  FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType});
+  // Name reflects provenance role if present (e.g. luminous_halo_03)
+  const roleTag=(provenance&&provenance.role)?`_${provenance.role}`:'';
+  const name=`${MatEditState.slotType}${roleTag}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
+  FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType,provenance:provenance||null});
   renderFragmentList();
   setT('mat-status',`saved: ${name} (${len.toFixed(2)}s)`);
-  // Persist to IndexedDB
-  FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType))
+  // Persist to IndexedDB (provenance included)
+  FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType,provenance||null))
     .catch(e=>console.warn('[SF3] fragment save fail:',e.message));
 }
 
@@ -2349,7 +2430,8 @@ async function exportFragmentBank(){
         clarity:0.6,
         duration:parseFloat((outBuf.duration||fr.duration).toFixed(3)),
         luminous:lum||undefined,
-        verticalBias:lum?lum.verticalBias:0
+        verticalBias:lum?lum.verticalBias:0,
+        provenance:fr.provenance||undefined
       };
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
@@ -2392,6 +2474,329 @@ async function exportFragmentBank(){
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
     setB(`exported ${FragmentLibrary.length} entities (${li} luminous, ${di} dark core)`);
   }catch(e){setB('export error: '+e.message);console.warn('[SF3] bank export fail:',e);}
+}
+
+// ═══════════════════════════════════════════════════════════
+// DNA FORGE MODE — production layer (curation, not programming)
+// Profile = coherent ranges across ForgeState/PerformState/FeelState + slotType.
+// GENERATE samples within the active profile's ranges → applies to real state.
+// Audition = live trigger. SAVE = capture region into FragmentLibrary.
+// ═══════════════════════════════════════════════════════════
+// ── PROFILE CONSTITUTION ──────────────────────────────────
+// Each profile declares: CENTER (canonical identity), INVARIANTS (hard
+// constraints that define the family), and EXPLORATION_MODES (named
+// directions the profile may evolve — these become MODE A / MODE B).
+// A flat param is written as a single value (the center) with a `spread`
+// governing how far candidates may wander. Invariants clamp after sampling.
+//
+// param domains: forge.* 0..1 except satDrive (1..5); perform.* 0..1; feel.* 0..1
+const DF_PROFILES={
+  dark:{
+    desc:'Heavy, eroded, low. Mass + saturation, sub-anchored.',
+    slotType:'dark_core',
+    center:{
+      forge:{impactHardness:.68,bodyWeight:.85,coneStress:.55,transientErosion:.45,pressure:.75,speakerDamage:.4,airPush:.12,punchLength:.6,satDrive:3.2},
+      perform:{lowMassDepth:.7,voidPressure:.25,glitchDensity:.1},
+      feel:{silence:.35,density:.45,width:.35,evolution:.25,energy:.28}
+    },
+    invariants:{ // [min,max] each param must stay within → identity guards
+      'forge.airPush':[0,.3], 'forge.bodyWeight':[.65,1], 'perform.lowMassDepth':[.45,1]
+    },
+    modes:{
+      ERODED:    {forge:{transientErosion:+.3,speakerDamage:+.3,coneStress:+.2}},
+      COMPRESSED:{forge:{pressure:+.2,satDrive:+1.2,punchLength:-.2}}
+    }
+  },
+  fracture:{
+    desc:'Glitched, broken, digital. Microevent + interruption.',
+    slotType:'texture',
+    center:{
+      forge:{impactHardness:.78,bodyWeight:.35,coneStress:.7,transientErosion:.25,pressure:.45,speakerDamage:.5,airPush:.35,punchLength:.25,satDrive:2.6},
+      perform:{glitchDensity:.72,voidPressure:.5,lowMassDepth:.15},
+      feel:{silence:.6,density:.7,width:.6,evolution:.6,energy:.45}
+    },
+    invariants:{
+      'perform.glitchDensity':[.45,1], 'forge.bodyWeight':[0,.55]
+    },
+    modes:{
+      SHATTER:{perform:{glitchDensity:+.2},feel:{density:+.2,silence:+.15}},
+      STUTTER:{feel:{evolution:+.25},perform:{voidPressure:+.2}}
+    }
+  },
+  textural:{
+    desc:'Granular surface, evolving. Sustained, covers.',
+    slotType:'luminous_drone',
+    center:{
+      forge:{impactHardness:.25,bodyWeight:.45,coneStress:.35,transientErosion:.45,pressure:.45,speakerDamage:.25,airPush:.6,punchLength:.75,satDrive:2},
+      perform:{glitchDensity:.15,voidPressure:.25,lowMassDepth:.25},
+      feel:{silence:.25,density:.55,width:.7,evolution:.7,energy:.45}
+    },
+    invariants:{
+      'forge.impactHardness':[0,.45], 'forge.punchLength':[.45,1], 'feel.evolution':[.4,1]
+    },
+    modes:{
+      GRAIN: {feel:{density:+.2},perform:{glitchDensity:+.15}},
+      DRIFT: {feel:{evolution:+.25,width:+.2}}
+    }
+  },
+  luminous:{
+    desc:'Bright, ascending, open. Halo + bloom, dark core beneath.',
+    slotType:'luminous_spectral',
+    center:{
+      forge:{impactHardness:.25,bodyWeight:.35,coneStress:.25,transientErosion:.25,pressure:.35,speakerDamage:.1,airPush:.8,punchLength:.75,satDrive:1.8},
+      perform:{glitchDensity:.1,voidPressure:.15,lowMassDepth:.28},
+      feel:{silence:.25,density:.45,width:.8,evolution:.6,energy:.7}
+    },
+    invariants:{ // the dark-core rule: lowMassDepth must stay present, air high, energy never collapses
+      'forge.airPush':[.55,1], 'perform.lowMassDepth':[.15,.5], 'feel.energy':[.4,1]
+    },
+    modes:{
+      HALO:  {feel:{width:+.15,evolution:-.15},forge:{punchLength:+.2,airPush:+.1}}, // suspended, sustained
+      ASCENT:{feel:{evolution:+.25,energy:+.2},forge:{airPush:+.15}}                 // rising, momentum
+    }
+  },
+  hybrid:{
+    desc:'Wide-range blend. Maximum perceptual territory.',
+    slotType:'luminous_riser',
+    center:{
+      forge:{impactHardness:.5,bodyWeight:.5,coneStress:.45,transientErosion:.4,pressure:.5,speakerDamage:.3,airPush:.5,punchLength:.55,satDrive:2.8},
+      perform:{glitchDensity:.35,voidPressure:.3,lowMassDepth:.4},
+      feel:{silence:.4,density:.55,width:.6,evolution:.55,energy:.55}
+    },
+    invariants:{}, // hybrid has no hard constraints — full exploration
+    modes:{
+      DENSE: {feel:{density:+.25,energy:+.2}},
+      SPARSE:{feel:{silence:+.25,density:-.2}}
+    }
+  }
+};
+let DF_activeProfile='dark';
+let DF_variants=[]; // {id, label, role, cfg, slotType, saved, provenance}
+let DF_genCounter=0;
+
+// Perceptual weights — distance is dominated by sound-defining dimensions.
+const DF_PERCEPT_WEIGHTS={
+  'forge.satDrive':1.4,'feel.energy':1.3,'perform.glitchDensity':1.3,
+  'feel.width':1.1,'perform.lowMassDepth':1.1,'forge.bodyWeight':1.0,
+  'forge.airPush':1.0,'feel.density':0.9,'feel.evolution':0.9,
+  'forge.pressure':0.8,'forge.impactHardness':0.7,'forge.transientErosion':0.7,
+  'perform.voidPressure':0.7,'forge.coneStress':0.5,'forge.speakerDamage':0.5,
+  'forge.punchLength':0.4,'feel.silence':0.6
+};
+function dfGet(cfg,path){const[g,k]=path.split('.');return cfg[g]?cfg[g][k]:undefined;}
+function dfNorm(path,v){return path==='forge.satDrive'?(v-1)/4:v;} // satDrive→0..1 for distance
+// Weighted perceptual distance between two configs
+function dfDistance(a,b){
+  let sum=0,wsum=0;
+  for(const path in DF_PERCEPT_WEIGHTS){
+    const va=dfGet(a,path),vb=dfGet(b,path);
+    if(va===undefined||vb===undefined)continue;
+    const w=DF_PERCEPT_WEIGHTS[path];
+    const d=dfNorm(path,va)-dfNorm(path,vb);
+    sum+=w*d*d;wsum+=w;
+  }
+  return wsum?Math.sqrt(sum/wsum):0;
+}
+function dfClampDomain(path,v){
+  if(path==='forge.satDrive')return clamp(v,1,5);
+  return clamp(v,0,1);
+}
+// Enforce invariants on a config (hard identity guards)
+function dfEnforceInvariants(cfg,prof){
+  for(const path in prof.invariants){
+    const[g,k]=path.split('.');const[lo,hi]=prof.invariants[path];
+    if(cfg[g]&&cfg[g][k]!==undefined)cfg[g][k]=clamp(cfg[g][k],lo,hi);
+  }
+}
+// Build a candidate from center + jitter, optionally biased by an exploration mode
+function dfCandidate(prof,spread,modeDelta){
+  const cfg={forge:{},perform:{},feel:{},slotType:prof.slotType};
+  ['forge','perform','feel'].forEach(grp=>{
+    const c=prof.center[grp];
+    for(const k in c){
+      const path=grp+'.'+k;
+      let v=c[k];
+      const scale=path==='forge.satDrive'?4:1; // satDrive lives on 1..5
+      v+=(Math.random()*2-1)*spread*scale;
+      if(modeDelta&&modeDelta[grp]&&modeDelta[grp][k]!==undefined)
+        v+=modeDelta[grp][k]*scale;
+      cfg[grp][k]=parseFloat(dfClampDomain(path,v).toFixed(3));
+    }
+  });
+  dfEnforceInvariants(cfg,prof);
+  return cfg;
+}
+function dfApplyConfig(cfg){
+  Object.keys(cfg.forge).forEach(k=>{ForgeState[k]=cfg.forge[k];});
+  Object.keys(cfg.perform).forEach(k=>{PerformState[k]=cfg.perform[k];});
+  Object.keys(cfg.feel).forEach(k=>{FeelState[k]=cfg.feel[k];});
+  MatEditState.slotType=cfg.slotType;
+}
+
+// ── CURATED SET GENERATION ────────────────────────────────
+// 40 internal candidates → role assignment by perceptual position →
+// 5 final interpretations with guaranteed minimum separation.
+function dfGenerateCuratedSet(profileKey){
+  const prof=DF_PROFILES[profileKey];
+  const modeNames=Object.keys(prof.modes);
+  const POOL=40, MIN_SEP=0.14;
+  // 1. Generate hidden candidate pool
+  const pool=[];
+  for(let i=0;i<POOL;i++){
+    // mix of tight (near center) and wide (toward edges) candidates
+    const spread=0.06+Math.random()*0.34;
+    pool.push({cfg:dfCandidate(prof,spread,null),spread});
+  }
+  const center=prof.center;
+  // distance of each candidate from the canonical center
+  pool.forEach(c=>{c.distCenter=dfDistance(c.cfg,center);});
+  pool.sort((a,b)=>a.distCenter-b.distCenter);
+
+  const chosen=[]; // {role, cfg}
+  const tooClose=cfg=>chosen.some(c=>dfDistance(c.cfg,cfg)<MIN_SEP);
+
+  // ANCHOR = closest to center
+  chosen.push({role:'ANCHOR',cfg:pool[0].cfg});
+  // CONSERVATIVE = near-anchor but separated (search low-distance band)
+  for(let i=1;i<pool.length;i++){
+    if(pool[i].distCenter>0.05&&!tooClose(pool[i].cfg)){chosen.push({role:'CONSERVATIVE',cfg:pool[i].cfg});break;}
+  }
+  // MODE A & MODE B = profile-specific exploration modes, generated explicitly
+  if(modeNames[0]){
+    let best=null;
+    for(let t=0;t<12;t++){const cfg=dfCandidate(prof,0.12,prof.modes[modeNames[0]]);if(!tooClose(cfg)){best=cfg;break;}best=cfg;}
+    chosen.push({role:modeNames[0],cfg:best});
+  }
+  if(modeNames[1]){
+    let best=null;
+    for(let t=0;t<12;t++){const cfg=dfCandidate(prof,0.12,prof.modes[modeNames[1]]);if(!tooClose(cfg)){best=cfg;break;}best=cfg;}
+    chosen.push({role:modeNames[1],cfg:best});
+  }
+  // WILDCARD = farthest candidate from center that still respects invariants & separation
+  for(let i=pool.length-1;i>=0;i--){
+    if(!tooClose(pool[i].cfg)){chosen.push({role:'WILDCARD',cfg:pool[i].cfg});break;}
+  }
+  if(chosen.length<5)chosen.push({role:'WILDCARD',cfg:pool[pool.length-1].cfg});
+  return chosen;
+}
+function dfGenerate(){
+  if(!SLOTS[currentSlot]||!SLOTS[currentSlot].buffer){
+    const lbl=document.getElementById('df-mat-sub');if(lbl)lbl.textContent='load material first';
+    return;
+  }
+  DF_genCounter++;
+  const profileKey=DF_activeProfile;
+  const set=dfGenerateCuratedSet(profileKey);
+  const mat=SLOTS[currentSlot];
+  const reg=getPlaybackRegion(mat);
+  // Build variants with provenance (intent is first-class)
+  DF_variants=set.map((s,i)=>({
+    id:'dfv_'+Date.now()+'_'+i,
+    role:s.role,
+    label:s.role,
+    cfg:s.cfg,
+    slotType:s.cfg.slotType,
+    saved:false,
+    provenance:{
+      profile:profileKey,
+      role:s.role.toLowerCase(),
+      generation:DF_genCounter,
+      sourceTrack:mat.name||'material',
+      sourceRegion:{start:parseFloat(reg.startSec.toFixed(3)),end:parseFloat(reg.endSec.toFixed(3))}
+    }
+  }));
+  dfRenderVariants();
+  // Apply + audition the ANCHOR first
+  const anchor=DF_variants.find(v=>v.role==='ANCHOR')||DF_variants[0];
+  dfAudition(anchor.id);
+}
+function dfAudition(vid){
+  const v=DF_variants.find(x=>x.id===vid);if(!v)return;
+  dfApplyConfig(v.cfg);
+  document.querySelectorAll('.df-variant').forEach(el=>el.classList.toggle('playing',el.dataset.vid===vid));
+  trigger();
+  setTimeout(()=>{try{trigger();}catch(e){}},260);
+  setTimeout(()=>{try{trigger();}catch(e){}},520);
+}
+function dfSaveVariant(vid){
+  const v=DF_variants.find(x=>x.id===vid);if(!v||v.saved)return;
+  dfApplyConfig(v.cfg);
+  // Capture region as fragment, carrying provenance (intent, not just params)
+  saveFragment(v.provenance);
+  v.saved=true;
+  dfRenderVariants();
+  dfUpdatePackCount();
+}
+function dfUpdatePackCount(){
+  const el=document.getElementById('df-pack-count');
+  if(el)el.textContent=`${FragmentLibrary.length} in pack`;
+}
+function dfRenderVariants(){
+  const list=document.getElementById('df-variant-list');if(!list)return;
+  list.innerHTML='';
+  if(DF_variants.length){
+    const hdr=document.createElement('div');hdr.className='df-set-hdr';
+    hdr.textContent=`SET ${DF_genCounter} · ${DF_activeProfile.toUpperCase()} · 5 interpretations`;
+    list.appendChild(hdr);
+  }
+  DF_variants.forEach(v=>{
+    const item=document.createElement('div');item.className='df-variant';item.dataset.vid=v.id;
+    item.innerHTML=`<span class="dv-name">${v.label}</span><span class="dv-tag">${v.slotType}</span>`;
+    const play=document.createElement('div');play.className='dv-play';play.textContent='PLAY';
+    const playFn=()=>dfAudition(v.id);
+    play.addEventListener('click',playFn);
+    play.addEventListener('touchstart',e=>{e.preventDefault();playFn();},{passive:false});
+    const save=document.createElement('div');save.className='dv-save'+(v.saved?' saved':'');
+    save.textContent=v.saved?'SAVED':'SAVE';
+    const saveFn=()=>dfSaveVariant(v.id);
+    save.addEventListener('click',saveFn);
+    save.addEventListener('touchstart',e=>{e.preventDefault();saveFn();},{passive:false});
+    item.appendChild(play);item.appendChild(save);
+    list.appendChild(item);
+  });
+}
+function initDNAForge(){
+  // Profile selection
+  document.querySelectorAll('.df-profile[data-profile]').forEach(btn=>{
+    const key=btn.dataset.profile;
+    const sel=()=>{
+      DF_activeProfile=key;
+      document.querySelectorAll('.df-profile').forEach(b=>b.classList.toggle('active',b===btn));
+      const d=document.getElementById('df-profile-desc');
+      if(d)d.textContent=DF_PROFILES[key].desc;
+    };
+    btn.addEventListener('click',sel);
+    btn.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
+  });
+  // File input → reuse onMaterialLoaded into current slot
+  const fi=document.getElementById('df-file-input');
+  if(fi){
+    fi.addEventListener('change',e=>{
+      const f=e.target.files&&e.target.files[0];if(!f)return;
+      if(!AC)initAC();AC.resume();keepDACAlive();
+      const rd=new FileReader();
+      rd.onload=ev=>{
+        AC.decodeAudioData(ev.target.result.slice(0),buf=>{
+          onMaterialLoaded(buf,f.name,currentSlot);
+          const lbl=document.getElementById('df-mat-label');if(lbl)lbl.textContent=f.name.slice(0,28);
+          const sub=document.getElementById('df-mat-sub');if(sub)sub.textContent='loaded · pick profile · GENERATE';
+        },err=>{const sub=document.getElementById('df-mat-sub');if(sub)sub.textContent='decode failed';});
+      };
+      rd.readAsArrayBuffer(f);
+    });
+  }
+  const gen=document.getElementById('df-generate');
+  if(gen){
+    gen.addEventListener('click',dfGenerate);
+    gen.addEventListener('touchstart',e=>{e.preventDefault();dfGenerate();},{passive:false});
+  }
+  const goExp=document.getElementById('df-goto-export');
+  if(goExp){
+    const go=()=>setMode('export');
+    goExp.addEventListener('click',go);
+    goExp.addEventListener('touchstart',e=>{e.preventDefault();go();},{passive:false});
+  }
+  dfUpdatePackCount();
 }
 
 // ─── PLAYBACK REGION HELPERS ─────────────────────────────
@@ -4286,7 +4691,7 @@ function setLabMode(key){
 }
 
 // ── Main mode system ─────────────────────────────────────
-const MAIN_MODES=['sculpt2','mat','temporal2','export','lab'];
+const MAIN_MODES=['dnaforge','sculpt2','mat','temporal2','export','lab'];
 let currentMode='sculpt2';
 
 function setMode(mode){
@@ -4322,7 +4727,7 @@ function setMode(mode){
 }
 
 // Bind main tabs
-['sculpt2','mat','temporal2','export','lab'].forEach(m=>{
+['dnaforge','sculpt2','mat','temporal2','export','lab'].forEach(m=>{
   const btn=document.getElementById('mb-'+m);
   if(!btn)return;
   btn.addEventListener('click',()=>setMode(m));
@@ -4359,6 +4764,7 @@ function updateSculptMiniWave(){
 // ─── WAVEFORM EDITOR INIT ───────────────────────────────
 initWaveEditor();
 initMaterialEditing();
+initDNAForge();
 loadFragmentsFromDB();
 
 // ─── PLAYBACK MODE CHIPS ────────────────────────────────
