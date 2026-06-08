@@ -2505,6 +2505,14 @@ const DF_PROFILES={
     modes:{
       ERODED:    {forge:{transientErosion:+.3,speakerDamage:+.3,coneStress:+.2}},
       COMPRESSED:{forge:{pressure:+.2,satDrive:+1.2,punchLength:-.2}}
+    },
+    // PLAYBACK SKELETON — deterministic per role. region: full|transient|tail|micro_event|body
+    playback:{
+      ANCHOR:      {mode:'EVENT',region:'body',     pitch:-2, rate:1.0,  reverse:false},
+      CONSERVATIVE:{mode:'EVENT',region:'body',     pitch:-3, rate:0.92, reverse:false},
+      ERODED:      {mode:'LOOP', region:'micro_event',pitch:-4,rate:0.85, reverse:false, loopLen:0.09, scanSpeed:0.05},
+      COMPRESSED:  {mode:'EVENT',region:'transient',pitch:-1, rate:1.0,  reverse:false},
+      WILDCARD:    {mode:'DRIFT',region:'full',     pitch:-5, rate:0.78, reverse:true,  scanSpeed:0.08}
     }
   },
   fracture:{
@@ -2521,6 +2529,13 @@ const DF_PROFILES={
     modes:{
       SHATTER:{perform:{glitchDensity:+.2},feel:{density:+.2,silence:+.15}},
       STUTTER:{feel:{evolution:+.25},perform:{voidPressure:+.2}}
+    },
+    playback:{
+      ANCHOR:      {mode:'EVENT',region:'transient',pitch:0, rate:1.0,  reverse:false},
+      CONSERVATIVE:{mode:'EVENT',region:'transient',pitch:+2,rate:1.05, reverse:false},
+      SHATTER:     {mode:'LOOP', region:'micro_event',pitch:+4,rate:1.2, reverse:false, loopLen:0.04, scanSpeed:0.4},
+      STUTTER:     {mode:'LOOP', region:'micro_event',pitch:0, rate:0.9, reverse:false, loopLen:0.07, scanSpeed:0.25},
+      WILDCARD:    {mode:'SCAN', region:'full',     pitch:+7,rate:1.3,  reverse:true,  scanSpeed:0.5}
     }
   },
   textural:{
@@ -2537,6 +2552,13 @@ const DF_PROFILES={
     modes:{
       GRAIN: {feel:{density:+.2},perform:{glitchDensity:+.15}},
       DRIFT: {feel:{evolution:+.25,width:+.2}}
+    },
+    playback:{
+      ANCHOR:      {mode:'SCAN', region:'full',     pitch:0, rate:0.6,  reverse:false, scanSpeed:0.15},
+      CONSERVATIVE:{mode:'SCAN', region:'body',     pitch:0, rate:0.7,  reverse:false, scanSpeed:0.2},
+      GRAIN:       {mode:'LOOP', region:'micro_event',pitch:+2,rate:0.5,reverse:false, loopLen:0.12, scanSpeed:0.1},
+      DRIFT:       {mode:'DRIFT',region:'full',     pitch:0, rate:0.55, reverse:false, scanSpeed:0.06},
+      WILDCARD:    {mode:'DRIFT',region:'full',     pitch:-3,rate:0.45, reverse:true,  scanSpeed:0.04}
     }
   },
   luminous:{
@@ -2553,6 +2575,13 @@ const DF_PROFILES={
     modes:{
       HALO:  {feel:{width:+.15,evolution:-.15},forge:{punchLength:+.2,airPush:+.1}}, // suspended, sustained
       ASCENT:{feel:{evolution:+.25,energy:+.2},forge:{airPush:+.15}}                 // rising, momentum
+    },
+    playback:{
+      ANCHOR:      {mode:'SCAN', region:'tail',     pitch:+3, rate:0.7,  reverse:false, scanSpeed:0.12},
+      CONSERVATIVE:{mode:'SCAN', region:'tail',     pitch:+2, rate:0.8,  reverse:false, scanSpeed:0.15},
+      HALO:        {mode:'SCAN', region:'tail',     pitch:+3, rate:0.6,  reverse:false, scanSpeed:0.08, window:'large'},
+      ASCENT:      {mode:'DRIFT',region:'full',     pitch:+7, rate:0.9,  reverse:false, scanSpeed:0.3,  accel:'positive'},
+      WILDCARD:    {mode:'SCAN', region:'full',     pitch:+10,rate:1.1,  reverse:false, scanSpeed:0.45}
     }
   },
   hybrid:{
@@ -2567,6 +2596,13 @@ const DF_PROFILES={
     modes:{
       DENSE: {feel:{density:+.25,energy:+.2}},
       SPARSE:{feel:{silence:+.25,density:-.2}}
+    },
+    playback:{
+      ANCHOR:      {mode:'EVENT',region:'body',     pitch:0, rate:1.0,  reverse:false},
+      CONSERVATIVE:{mode:'LOOP', region:'micro_event',pitch:0,rate:0.95,reverse:false, loopLen:0.10, scanSpeed:0.15},
+      DENSE:       {mode:'SWARM',region:'full',     pitch:+2,rate:1.0,  reverse:false, scanSpeed:0.3},
+      SPARSE:      {mode:'DRIFT',region:'full',     pitch:-2,rate:0.7,  reverse:false, scanSpeed:0.05},
+      WILDCARD:    {mode:'SCAN', region:'full',     pitch:+5,rate:1.2,  reverse:true,  scanSpeed:0.5}
     }
   }
 };
@@ -2677,6 +2713,9 @@ function dfGenerateCuratedSet(profileKey){
     if(!tooClose(pool[i].cfg)){chosen.push({role:'WILDCARD',cfg:pool[i].cfg});break;}
   }
   if(chosen.length<5)chosen.push({role:'WILDCARD',cfg:pool[pool.length-1].cfg});
+  // Attach the deterministic playback block for each role (constitutional: never random)
+  const pb=prof.playback||{};
+  chosen.forEach(c=>{c.playback=pb[c.role]||{mode:'EVENT',region:'body',pitch:0,rate:1.0,reverse:false};});
   return chosen;
 }
 function dfGenerate(){
@@ -2695,12 +2734,14 @@ function dfGenerate(){
     role:s.role,
     label:s.role,
     cfg:s.cfg,
+    playback:s.playback,
     slotType:s.cfg.slotType,
     saved:false,
     provenance:{
       profile:profileKey,
       role:s.role.toLowerCase(),
       generation:DF_genCounter,
+      playback:{mode:s.playback.mode,region:s.playback.region,pitch:s.playback.pitch,rate:s.playback.rate,reverse:!!s.playback.reverse},
       sourceTrack:mat.name||'material',
       sourceRegion:{start:parseFloat(reg.startSec.toFixed(3)),end:parseFloat(reg.endSec.toFixed(3))}
     }
@@ -2710,13 +2751,101 @@ function dfGenerate(){
   const anchor=DF_variants.find(v=>v.role==='ANCHOR')||DF_variants[0];
   dfAudition(anchor.id);
 }
+let _dfAuditionStops=[];
+function dfStopAudition(){
+  _dfAuditionStops.forEach(fn=>{try{fn();}catch(e){}});
+  _dfAuditionStops=[];
+}
 function dfAudition(vid){
   const v=DF_variants.find(x=>x.id===vid);if(!v)return;
   dfApplyConfig(v.cfg);
   document.querySelectorAll('.df-variant').forEach(el=>el.classList.toggle('playing',el.dataset.vid===vid));
-  trigger();
-  setTimeout(()=>{try{trigger();}catch(e){}},260);
-  setTimeout(()=>{try{trigger();}catch(e){}},520);
+  dfStopAudition();
+  dfPlaybackAudition(v.playback);
+}
+
+// ── PLAYBACK SKELETON — reads source material per organism ──
+// EVENT (one-shot) / LOOP (micro repeat) / SCAN (moving window) / DRIFT (slow migration)
+// All values come from the role's playback block — nothing random.
+function dfPlaybackAudition(pb){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){return;}
+  if(!AC)initAC();AC.resume();keepDACAlive();
+  const buf=mat.buffer, dur=buf.duration;
+  // SOURCE REGION STRATEGY — where in the file we read
+  let rs=0,re=dur;
+  switch(pb.region){
+    case'transient': rs=0; re=Math.min(0.20,dur); break;
+    case'tail':      rs=dur*0.65; re=dur; break;
+    case'body':      rs=dur*0.20; re=dur*0.80; break;
+    case'micro_event':rs=dur*0.30; re=Math.min(dur*0.30+0.12,dur); break;
+    case'full': default: rs=0; re=dur;
+  }
+  const rate=pb.rate||1.0;
+  const detune=(pb.pitch||0)*100; // semitones → cents
+  const out=AC.createGain();out.gain.value=0.9;out.connect(masterGain);
+  const now=AC.currentTime+0.02;
+  const stops=[];
+
+  function oneShot(at,offset,length,gain,rev){
+    const src=AC.createBufferSource();
+    src.buffer=buf;src.playbackRate.value=rate*(rev?-1:1);
+    if(src.detune)src.detune.value=detune;
+    const g=AC.createGain();g.gain.value=gain;
+    // soft fades to avoid clicks
+    g.gain.setValueAtTime(0.0001,at);g.gain.linearRampToValueAtTime(gain,at+0.01);
+    g.gain.setValueAtTime(gain,at+Math.max(0.02,length-0.04));
+    g.gain.linearRampToValueAtTime(0.0001,at+length);
+    src.connect(g);g.connect(out);
+    try{src.start(at,clamp(offset,0,dur),length);}catch(e){try{src.start(at);}catch(_){}}
+    stops.push(()=>{try{src.stop();}catch(e){}});
+  }
+
+  if(pb.mode==='EVENT'){
+    oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse);
+  }else if(pb.mode==='LOOP'){
+    const loopLen=pb.loopLen||0.09;
+    const total=5.0; let t=now,pos=rs;
+    while(t<now+total){
+      oneShot(t,pos,loopLen*1.4,0.8,pb.reverse);
+      t+=loopLen; pos+=loopLen*(pb.scanSpeed||0); if(pos>re-loopLen)pos=rs;
+    }
+  }else if(pb.mode==='SCAN'){
+    // moving window across the region over ~7s
+    const total=7.0, win=0.5, step=0.18;
+    const span=re-rs; let t=now,frac=0;
+    const speed=pb.scanSpeed||0.15;
+    while(t<now+total){
+      const pos=rs+span*clamp(frac,0,1);
+      oneShot(t,pos,win,0.55,pb.reverse);
+      t+=step; frac+=speed*step;
+      if(frac>1)frac=0;
+    }
+  }else if(pb.mode==='DRIFT'){
+    // slow position migration over ~8s, overlapping grains
+    const total=8.0, win=0.7, step=0.32;
+    const span=re-rs; let t=now;
+    const speed=pb.scanSpeed||0.06;
+    let frac=0;
+    while(t<now+total){
+      const pos=rs+span*clamp(frac,0,1);
+      oneShot(t,pos,win,0.5,pb.reverse);
+      t+=step; frac+=speed*step;
+      if(frac>1)frac=1; // drift settles at end, doesn't loop
+    }
+  }else if(pb.mode==='SWARM'){
+    // multiple simultaneous readers (skeleton: 3 offset layers)
+    const total=6.0,win=0.6,step=0.25,span=re-rs;
+    for(let layer=0;layer<3;layer++){
+      let t=now+layer*0.08,frac=layer*0.2;
+      while(t<now+total){
+        oneShot(t,rs+span*clamp(frac,0,1),win,0.4,pb.reverse);
+        t+=step;frac+=(pb.scanSpeed||0.3)*step;if(frac>1)frac=0;
+      }
+    }
+  }
+  _dfAuditionStops=stops;
+  setTimeout(()=>{try{out.disconnect();}catch(e){}},11000);
 }
 function dfSaveVariant(vid){
   const v=DF_variants.find(x=>x.id===vid);if(!v||v.saved)return;
@@ -2741,7 +2870,8 @@ function dfRenderVariants(){
   }
   DF_variants.forEach(v=>{
     const item=document.createElement('div');item.className='df-variant';item.dataset.vid=v.id;
-    item.innerHTML=`<span class="dv-name">${v.label}</span><span class="dv-tag">${v.slotType}</span>`;
+    const pbInfo=v.playback?`${v.playback.mode}·${v.playback.region}`:'';
+    item.innerHTML=`<span class="dv-name">${v.label}</span><span class="dv-tag">${pbInfo}</span>`;
     const play=document.createElement('div');play.className='dv-play';play.textContent='PLAY';
     const playFn=()=>dfAudition(v.id);
     play.addEventListener('click',playFn);
