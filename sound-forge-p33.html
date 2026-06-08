@@ -467,6 +467,9 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .df-pack-count{flex:1;font-family:var(--mono);font-size:13px;color:rgba(0,255,200,.7);font-style:italic;}
 .df-set-hdr{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:rgba(0,255,200,.55);
   padding:4px 0 6px;border-bottom:1px solid var(--vdim);margin-bottom:4px;}
+.df-log{font-family:var(--mono);font-size:11px;color:rgba(0,255,255,.55);
+  padding:5px 7px;margin-bottom:6px;background:rgba(0,0,0,.3);border-radius:4px;
+  border:1px solid rgba(0,255,255,.12);min-height:16px;word-break:break-all;}
 /* LUMINOUS family chips — warm gold/cyan glow */
 .stchip.lum{border-color:rgba(255,210,120,.22);background:rgba(255,210,120,.04);color:rgba(255,210,140,.6);}
 .stchip.lum.active{background:rgba(255,210,120,.18);border-color:rgba(255,210,120,.6);color:#ffe6a8;}
@@ -806,6 +809,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <div class="sec">
       <div class="st">3 · GENERATE</div>
       <button class="df-generate" id="df-generate">GENERATE VARIANT</button>
+      <div class="df-log" id="df-log"></div>
       <div class="df-variant-list" id="df-variant-list"></div>
     </div>
 
@@ -1536,7 +1540,7 @@ function setW(id,pct){const el=document.getElementById(id);if(el)el.style.width=
 function setT(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 
 // ─── DEBUG ──────────────────────────────────────────────
-const DEBUG={audio:false,material:false,resample:false,territory:false};
+const DEBUG={audio:false,material:false,resample:false,territory:false,dnaforge:true};
 function dbg(s,...a){if(DEBUG[s])console.log(`[SF3:${s}]`,...a);}
 
 // ─── AUDIO PARAM SAFETY ─────────────────────────────────
@@ -2782,91 +2786,125 @@ function dfAudition(vid){
   dfApplyConfig(v.cfg);
   document.querySelectorAll('.df-variant').forEach(el=>el.classList.toggle('playing',el.dataset.vid===vid));
   dfStopAudition();
-  dfPlaybackAudition(v.playback);
+  dfPlaybackAudition(v.playback,v.role);
 }
 
 // ── PLAYBACK SKELETON — reads source material per organism ──
 // EVENT (one-shot) / LOOP (micro repeat) / SCAN (moving window) / DRIFT (slow migration)
 // All values come from the role's playback block — nothing random.
-function dfPlaybackAudition(pb){
+function dfPlaybackAudition(pb,roleLabel){
   const mat=SLOTS[currentSlot];
   if(!mat||!mat.buffer){return;}
   if(!AC)initAC();AC.resume();keepDACAlive();
   const buf=mat.buffer, dur=buf.duration;
-  // SOURCE REGION STRATEGY — where in the file we read
+  // SOURCE REGION STRATEGY — where in the file we read.
+  // NOTE: 'transient' = first energy onset, not literally t=0 (material may start silent).
   let rs=0,re=dur;
   switch(pb.region){
-    case'transient': rs=0; re=Math.min(0.20,dur); break;
+    case'transient': {const on=dfFindOnset(buf);rs=on; re=Math.min(on+0.22,dur);} break;
     case'tail':      rs=dur*0.65; re=dur; break;
     case'body':      rs=dur*0.20; re=dur*0.80; break;
-    case'micro_event':rs=dur*0.30; re=Math.min(dur*0.30+0.12,dur); break;
+    case'micro_event':{const on=dfFindOnset(buf);rs=Math.min(on+dur*0.1,dur*0.5); re=Math.min(rs+0.14,dur);} break;
     case'full': default: rs=0; re=dur;
   }
+  if(re-rs<0.04){re=Math.min(rs+0.12,dur);} // guard against empty/too-short region
   const rate=pb.rate||1.0;
   const detune=(pb.pitch||0)*100; // semitones → cents
+  // Reverse handled by a pre-reversed buffer (negative playbackRate is unreliable + clicks)
+  const playBuf=pb.reverse?dfReversedBuffer(buf):buf;
   const out=AC.createGain();out.gain.value=0.9;out.connect(masterGain);
   const now=AC.currentTime+0.02;
   const stops=[];
 
+  // TEMPORAL LOG — role / mode / region / start / end / duration / rate / pitch
+  const logLine=`[${roleLabel||'?'}] ${pb.mode}·${pb.region} `
+    +`s=${rs.toFixed(2)} e=${re.toFixed(2)} d=${(re-rs).toFixed(2)} `
+    +`rate=${rate} pitch=${pb.pitch||0} rev=${pb.reverse?'Y':'N'}`;
+  dbg('dnaforge',logLine);
+  const logEl=document.getElementById('df-log');if(logEl)logEl.textContent=logLine;
+
   function oneShot(at,offset,length,gain,rev){
+    // For reversed playback, read from the mirrored offset in the reversed buffer
+    const readOff=rev?clamp(dur-offset-length,0,dur):clamp(offset,0,dur);
+    const L=Math.max(0.03,Math.min(length,dur-readOff)); // never below 30ms
     const src=AC.createBufferSource();
-    src.buffer=buf;src.playbackRate.value=rate*(rev?-1:1);
+    src.buffer=playBuf;src.playbackRate.value=rate; // always positive now
     if(src.detune)src.detune.value=detune;
-    const g=AC.createGain();g.gain.value=gain;
-    // soft fades to avoid clicks
-    g.gain.setValueAtTime(0.0001,at);g.gain.linearRampToValueAtTime(gain,at+0.01);
-    g.gain.setValueAtTime(gain,at+Math.max(0.02,length-0.04));
-    g.gain.linearRampToValueAtTime(0.0001,at+length);
+    const g=AC.createGain();
+    // Click-safe envelope: fades scale to length, always leave room
+    const fade=Math.min(0.012,L*0.3);
+    g.gain.setValueAtTime(0.0001,at);
+    g.gain.linearRampToValueAtTime(gain,at+fade);
+    g.gain.setValueAtTime(gain,at+Math.max(fade,L-fade));
+    g.gain.linearRampToValueAtTime(0.0001,at+L);
     src.connect(g);g.connect(out);
-    try{src.start(at,clamp(offset,0,dur),length);}catch(e){try{src.start(at);}catch(_){}}
+    try{src.start(at,readOff,L);}catch(e){try{src.start(at);}catch(_){}}
     stops.push(()=>{try{src.stop();}catch(e){}});
   }
 
   if(pb.mode==='EVENT'){
     oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse);
   }else if(pb.mode==='LOOP'){
-    const loopLen=pb.loopLen||0.09;
+    const loopLen=Math.max(0.05,pb.loopLen||0.09); // floor 50ms to avoid click-trains
     const total=5.0; let t=now,pos=rs;
     while(t<now+total){
-      oneShot(t,pos,loopLen*1.4,0.8,pb.reverse);
-      t+=loopLen; pos+=loopLen*(pb.scanSpeed||0); if(pos>re-loopLen)pos=rs;
+      oneShot(t,pos,loopLen,0.8,pb.reverse);
+      t+=loopLen*0.92; // slight overlap between repeats (crossfade-ish)
+      pos+=loopLen*(pb.scanSpeed||0); if(pos>re-loopLen)pos=rs;
     }
   }else if(pb.mode==='SCAN'){
-    // moving window across the region over ~7s
-    const total=7.0, win=0.5, step=0.18;
+    const total=7.0, win=0.5, step=0.16; // step<win → windows overlap (no gaps/clicks)
     const span=re-rs; let t=now,frac=0;
     const speed=pb.scanSpeed||0.15;
     while(t<now+total){
-      const pos=rs+span*clamp(frac,0,1);
-      oneShot(t,pos,win,0.55,pb.reverse);
+      const pos=rs+span*clamp(frac,0,0.999);
+      oneShot(t,pos,win,0.5,pb.reverse);
       t+=step; frac+=speed*step;
       if(frac>1)frac=0;
     }
   }else if(pb.mode==='DRIFT'){
-    // slow position migration over ~8s, overlapping grains
-    const total=8.0, win=0.7, step=0.32;
-    const span=re-rs; let t=now;
+    const total=8.0, win=0.7, step=0.30, span=re-rs; let t=now,frac=0;
     const speed=pb.scanSpeed||0.06;
-    let frac=0;
     while(t<now+total){
-      const pos=rs+span*clamp(frac,0,1);
+      const pos=rs+span*clamp(frac,0,0.999);
       oneShot(t,pos,win,0.5,pb.reverse);
       t+=step; frac+=speed*step;
-      if(frac>1)frac=1; // drift settles at end, doesn't loop
+      if(frac>1)frac=1;
     }
   }else if(pb.mode==='SWARM'){
-    // multiple simultaneous readers (skeleton: 3 offset layers)
     const total=6.0,win=0.6,step=0.25,span=re-rs;
     for(let layer=0;layer<3;layer++){
       let t=now+layer*0.08,frac=layer*0.2;
       while(t<now+total){
-        oneShot(t,rs+span*clamp(frac,0,1),win,0.4,pb.reverse);
+        oneShot(t,rs+span*clamp(frac,0,0.999),win,0.4,pb.reverse);
         t+=step;frac+=(pb.scanSpeed||0.3)*step;if(frac>1)frac=0;
       }
     }
   }
   _dfAuditionStops=stops;
   setTimeout(()=>{try{out.disconnect();}catch(e){}},11000);
+}
+// Find first energy onset (so 'transient' region isn't just leading silence)
+function dfFindOnset(buf){
+  const d=buf.getChannelData(0), sr=buf.sampleRate;
+  const win=Math.floor(sr*0.01), thresh=0.02;
+  for(let i=0;i<d.length;i+=win){
+    let e=0;for(let j=0;j<win&&i+j<d.length;j++){const v=d[i+j];e+=v*v;}
+    if(Math.sqrt(e/win)>thresh)return i/sr;
+  }
+  return 0;
+}
+// Cache one reversed copy of the buffer (reverse = pre-reversed sample, not negative rate)
+let _dfRevCache={src:null,buf:null};
+function dfReversedBuffer(buf){
+  if(_dfRevCache.src===buf)return _dfRevCache.buf;
+  const rev=AC.createBuffer(buf.numberOfChannels,buf.length,buf.sampleRate);
+  for(let ch=0;ch<buf.numberOfChannels;ch++){
+    const s=buf.getChannelData(ch),d=rev.getChannelData(ch),n=buf.length;
+    for(let i=0;i<n;i++)d[i]=s[n-1-i];
+  }
+  _dfRevCache={src:buf,buf:rev};
+  return rev;
 }
 function dfSaveVariant(vid){
   const v=DF_variants.find(x=>x.id===vid);if(!v||v.saved)return;
