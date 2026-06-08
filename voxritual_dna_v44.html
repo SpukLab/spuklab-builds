@@ -43,6 +43,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .treeGroupToggle{min-width:1.2rem;color:rgba(0,220,160,.7);font-size:.82rem;text-align:center;user-select:none}
 .treeGroupName{font-size:.8rem;font-weight:700;color:rgba(120,235,195,.92);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
 .treeGroupMeta{font-size:.62rem;color:rgba(0,220,160,.45);margin-left:auto;flex-shrink:0}
+.treeGroupFocus{flex-shrink:0;margin-left:.4rem;padding:.2rem .45rem;font-size:.58rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.25);background:rgba(0,200,255,.06);color:rgba(140,210,255,.8);border-radius:3px;cursor:pointer}
+.treeSelCheck{min-width:1.3rem;height:1.3rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,180,0,.4);border-radius:3px;background:rgba(255,180,0,.05);color:rgba(255,210,100,.95);font-size:.7rem;cursor:pointer;flex-shrink:0;user-select:none}
+.treeSelCheck.on{background:rgba(255,180,0,.28);border-color:rgba(255,200,0,.7)}
+.treeRoot.selrow,.treeChild.selrow{background:rgba(255,180,0,.08)}
+#treeBatchBar,#treeGroupFocusBar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.42rem .5rem;background:rgba(255,180,0,.07);border-bottom:1px solid rgba(255,180,0,.18);position:sticky;top:0;z-index:2}
+#treeGroupFocusBar{background:rgba(0,200,255,.07);border-bottom-color:rgba(0,200,255,.18)}
 .treeRoot{display:flex;align-items:center;gap:.34rem;padding:.5rem .55rem;border-bottom:1px solid rgba(153,68,255,.06);font-family:'JetBrains Mono',monospace}
 .treeChild{display:flex;align-items:center;gap:.34rem;padding:.42rem .55rem;border-bottom:1px solid rgba(153,68,255,.03);font-family:'JetBrains Mono',monospace}
 .treeToggle{min-width:1.6rem;flex-shrink:0;color:rgba(153,68,255,.6);cursor:pointer;font-size:.85rem;text-align:center;user-select:none;padding:.2rem 0}
@@ -1017,6 +1023,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
       <button id="treeCollapseAll" class="libViewBtn" title="collapse all" style="padding:.24rem .42rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(153,68,255,.1);background:transparent;color:rgba(255,255,255,.35);border-radius:3px;cursor:pointer">- ALL</button>
       <button id="treeGrouped" class="libViewBtn on" title="grouped" style="padding:.24rem .42rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.3);background:rgba(0,200,255,.12);color:#fff;border-radius:3px;cursor:pointer">GROUPED</button>
       <button id="treeFlat" class="libViewBtn" title="flat" style="padding:.24rem .42rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.1);background:transparent;color:rgba(255,255,255,.35);border-radius:3px;cursor:pointer">FLAT</button>
+      <button id="treeSelect" class="libViewBtn" title="multi-select" style="padding:.24rem .42rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(255,180,0,.25);background:transparent;color:rgba(255,200,90,.6);border-radius:3px;cursor:pointer">SELECT</button>
       <div id="packSelInfo" style="font-size:.6rem;font-family:'JetBrains Mono',monospace;color:rgba(0,220,160,.55);white-space:nowrap"></div>
     </div>
     <div id="library"><div class="libEmpty">VOXRITUAL DNA v43.5<br>EMPTY ORGANISM</div></div>
@@ -1117,7 +1124,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
              <button class="sBtn" data-op="fadeIn">FADE-IN</button>
              <button class="sBtn" data-op="fadeOut">FADE-OUT</button>
              <button class="sBtn bounce" id="bounceBtn">BOUNCE</button>
+             <button class="sBtn" id="surgSendGroupBtn">→ GROUP ▸</button>
            </div>
+           <div id="surgGroupGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px"></div>
          </div><!-- /surgBasic -->
 
          <!-- ═══ VOICE — collapsible ════════════════════════════════ -->
@@ -3433,7 +3442,7 @@ const A = {
   activeMode:'capture', cycleActive:false, cycleTimer:null,
   cap:{stream:null,recorder:null,chunks:[],timer:null,startMs:0,msrc:null},
   // ── CONSOLIDATION (v44) — search, tree view, pack selection ──
-  search:'', libView:'list', treeExpanded:{}, packSel:new Set(), focusRoot:null, renamingId:null, groupView:'grouped', groupExpanded:{},
+  search:'', libView:'list', treeExpanded:{}, packSel:new Set(), focusRoot:null, renamingId:null, groupView:'grouped', groupExpanded:{}, selectMode:false, selSet:new Set(), focusGroup:null,
   debugOn:false
 };
 const STATES=['fragile','collapse','ritual','ghost','fever'];
@@ -4288,6 +4297,8 @@ function setCat(c){A.cat=c;document.querySelectorAll('.cat').forEach(b=>b.classL
     var bFlat=document.getElementById('treeFlat');
     if(bGrp) bGrp.addEventListener('click',function(){ A.groupView='grouped'; bGrp.classList.add('on'); if(bFlat)bFlat.classList.remove('on'); renderLibrary(); });
     if(bFlat) bFlat.addEventListener('click',function(){ A.groupView='flat'; bFlat.classList.add('on'); if(bGrp)bGrp.classList.remove('on'); renderLibrary(); });
+    var bSel=document.getElementById('treeSelect');
+    if(bSel) bSel.addEventListener('click',function(){ A.selectMode=!A.selectMode; if(!A.selectMode)A.selSet.clear(); bSel.classList.toggle('on',A.selectMode); if(A.libView!=='tree'){A.libView='tree';if(bTree)bTree.classList.add('on');if(bList)bList.classList.remove('on');} renderLibrary(); });
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
 })();
@@ -4343,6 +4354,9 @@ function renderLibraryList(){
 // Builds the entity tree from parentId. No data-model changes — pure projection.
 function _childrenOf(id){ return A.samples.filter(function(x){ return x.parentId===id; }); }
 function _isRoot(s){ return !s.parentId || !A.samples.find(function(x){ return x.id===s.parentId; }); }
+// ── GROUPS (v44): root.group is the only new field. Derivatives inherit via root. ──
+function existingGroups(){ return Array.from(new Set(A.samples.filter(_isRoot).map(function(r){return r.group;}).filter(Boolean))).sort(); }
+function assignGroupToRootOf(id, group){ var rid=_rootOf(id); var r=A.samples.find(function(x){return x.id===rid;}); if(!r) return; r.group=group||null; if(typeof dbPut==='function')dbPut(r); }
 function _rootOf(id){
   var cur=A.samples.find(function(x){return x.id===id;}); var guard=0;
   while(cur && cur.parentId && A.samples.find(function(x){return x.id===cur.parentId;}) && guard<12){
@@ -4366,6 +4380,57 @@ function addFamilyToPack(rootId){
   renderLibrary();
 }
 function _entityLabel(root){ return (root.alias||root.name||root.id); }
+// ── BATCH (multi-select) actions — runtime only, reuse existing ops ──
+var _batchDelArm=false;
+function _batchAction(kind){
+  var ids=Array.from(A.selSet);
+  if(kind==='clear'){ A.selSet.clear(); _batchDelArm=false; renderLibrary(); return; }
+  if(!ids.length) return;
+  if(kind==='fav'){ ids.forEach(function(id){ var s=A.samples.find(x=>x.id===id); if(s){s.favorite=true;dbPut(s);} }); HISTORY.showToast(ids.length+' favorited'); renderLibrary(); return; }
+  if(kind==='pack'){ ids.forEach(function(id){ A.packSel.add(id); }); HISTORY.showToast(ids.length+' added to pack'); renderLibrary(); return; }
+  if(kind==='group'){ _batchShowGrid('group'); return; }
+  if(kind==='type'){ _batchShowGrid('type'); return; }
+  if(kind==='del'){
+    if(!_batchDelArm){ _batchDelArm=true; HISTORY.showToast('tap DELETE again to remove '+ids.length+' (+derivatives)'); setTimeout(function(){_batchDelArm=false;},3000); return; }
+    _batchDelArm=false;
+    var kill=new Set(); ids.forEach(function(id){ _familyIds(id).forEach(function(x){kill.add(x);}); });
+    (async function(){ var arr=Array.from(kill); for(var i=0;i<arr.length;i++){ await dbDel(arr[i]); } A.samples=A.samples.filter(function(x){return !kill.has(x.id);}); if(kill.has(A.selectedId))A.selectedId=null; A.selSet.clear(); renderLibrary(); HISTORY.showToast('deleted '+arr.length+' fragments'); })();
+    return;
+  }
+}
+function _batchApplyGroup(g){
+  var ids=Array.from(A.selSet); if(!ids.length) return;
+  var target;
+  if(g==='__new__'){ var nm=prompt('New group name:',''); if(nm===null)return; nm=nm.trim(); if(!nm)return; target=nm; }
+  else if(g==='__none__'){ target=null; }
+  else target=g;
+  var roots=new Set(); ids.forEach(function(id){ var r=_rootOf(id); if(r)roots.add(r); });
+  roots.forEach(function(rid){ assignGroupToRootOf(rid,target); });
+  A.selSet.clear(); A.groupView='grouped'; renderLibrary();
+  HISTORY.showToast((target?('moved → '+target):'ungrouped')+' · '+roots.size+' roots');
+}
+function _batchApplyType(t){
+  var ids=Array.from(A.selSet); if(!ids.length) return;
+  ids.forEach(function(id){ var s=A.samples.find(x=>x.id===id); if(s) setFragType(s,t,true); });
+  A.selSet.clear(); renderLibrary();
+  HISTORY.showToast(ids.length+' tagged → '+t);
+}
+function _batchShowGrid(which){
+  var grid=document.getElementById('treeBatchGrid'); if(!grid) return;
+  if(grid.style.display!=='none' && grid.dataset.kind===which){ grid.style.display='none'; return; }
+  grid.dataset.kind=which;
+  var h='';
+  if(which==='group'){
+    h+='<button class="ctxGroupBtn new" data-bg="__new__">+ NEW GROUP</button>';
+    h+='<button class="ctxGroupBtn none" data-bg="__none__">UNGROUP</button>';
+    existingGroups().forEach(function(g){ h+='<button class="ctxGroupBtn" data-bg="'+String(g).replace(/"/g,'&quot;')+'">'+g+'</button>'; });
+  } else {
+    [['narrative_voice','NARRATIVE'],['semantic_ghost','GHOST'],['ritual_speech','RITUAL'],['frag_poetry','POETRY'],['subconscious','SUBCONSCS'],['collapse_residue','COLLAPSE'],['false_memory','FALSE MEM'],['pressure_language','PRESSURE']].forEach(function(t){ h+='<button class="ctxTypeBtn" data-bt="'+t[0]+'">'+t[1]+'</button>'; });
+  }
+  grid.innerHTML=h; grid.style.display='flex';
+  grid.querySelectorAll('[data-bg]').forEach(function(b){ b.addEventListener('click',function(){ _batchApplyGroup(b.dataset.bg); }); });
+  grid.querySelectorAll('[data-bt]').forEach(function(b){ b.addEventListener('click',function(){ _batchApplyType(b.dataset.bt); }); });
+}
 function _childLabel(c){ return c.alias || ('↳'+(c.mutationOf||'derived')); }
 // Row indicators — reuse existing state, no new data
 function _treeIndicators(s){
@@ -4385,31 +4450,52 @@ function renderLibraryTree(){
   var q=(A.search||'').trim().toLowerCase();
   var roots=A.samples.filter(_isRoot);
   if(A.focusRoot){ roots=roots.filter(function(r){ return r.id===A.focusRoot; }); }
+  if(A.focusGroup){ roots=roots.filter(function(r){ return (r.group||'UNGROUPED')===A.focusGroup; }); }
   if(A.cat==='favorites') roots=roots.filter(function(r){ return Array.from(_familyIds(r.id)).some(function(id){var s=A.samples.find(x=>x.id===id);return s&&s.favorite;}); });
   function familyMatches(rootId){
     if(!q) return true;
+    var rt=A.samples.find(function(x){return x.id===rootId;});
+    if(rt && (rt.group||'').toLowerCase().includes(q)) return true; // P3: search matches group name
     return Array.from(_familyIds(rootId)).some(function(id){ var s=A.samples.find(x=>x.id===id); return s&&((s.name||'').toLowerCase().includes(q)||(s.alias||'').toLowerCase().includes(q)); });
   }
   roots=roots.filter(function(r){ return familyMatches(r.id); });
-  // ── Node action strip (acts on the selected node) ──
+  // ── Top strip: focus-group bar + (select-mode batch bar | node action strip) ──
   var strip='';
-  var sel=A.samples.find(function(x){return x.id===A.selectedId;});
-  if(sel){
-    var selIsRoot=_isRoot(sel);
-    var rootOfSel=_rootOf(sel.id); var rootObj=rootOfSel?A.samples.find(x=>x.id===rootOfSel):sel;
-    strip='<div id="treeNodeBar">'+
-      '<button class="tnbBtn" data-op="pitchDn">PITCH-</button>'+
-      '<button class="tnbBtn" data-op="pitchUp">PITCH+</button>'+
-      '<button class="tnbBtn" data-op="slow">SLOW</button>'+
-      '<button class="tnbBtn" data-op="fast">FAST</button>'+
-      '<button class="tnbBtn" data-op="rev">REV</button>'+
-      '<button class="tnbBtn" data-op="fadeOut">FADE</button>'+
-      '<button class="tnbBtn" data-op="dupe">DUPE</button>'+
-      '<button class="tnbBtn ren" data-ren="'+sel.id+'">RENAME</button>'+
-      '<button class="tnbBtn focus" data-focus="'+(rootOfSel||sel.id)+'">'+(A.focusRoot?'SHOW ALL':'FOCUS')+'</button>'+
-      '</div>';
-  } else if(A.focusRoot){
-    strip='<div id="treeNodeBar"><button class="tnbBtn focus" data-focus="clear">SHOW ALL</button></div>';
+  if(A.focusGroup){
+    strip+='<div id="treeGroupFocusBar"><button class="tnbBtn focus" data-groupfocus="clear">SHOW ALL GROUPS</button><span class="tnbSel">group: '+A.focusGroup+'</span></div>';
+  }
+  if(A.selectMode){
+    var nSel=A.selSet.size;
+    strip+='<div id="treeBatchBar"><span class="tnbSel">'+nSel+' selected</span>';
+    if(nSel>0){
+      strip+='<button class="tnbBtn" data-batch="group">MOVE TO GROUP ▸</button>'+
+             '<button class="tnbBtn" data-batch="type">SET TYPE ▸</button>'+
+             '<button class="tnbBtn" data-batch="fav">FAVORITE</button>'+
+             '<button class="tnbBtn" data-batch="pack">ADD TO PACK</button>'+
+             '<button class="tnbBtn del" data-batch="del">DELETE</button>'+
+             '<button class="tnbBtn" data-batch="clear">CLEAR</button>';
+    }
+    strip+='<div id="treeBatchGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;flex-basis:100%"></div>';
+    strip+='</div>';
+  } else {
+    var sel=A.samples.find(function(x){return x.id===A.selectedId;});
+    if(sel){
+      var selIsRoot=_isRoot(sel);
+      var rootOfSel=_rootOf(sel.id); var rootObj=rootOfSel?A.samples.find(x=>x.id===rootOfSel):sel;
+      strip+='<div id="treeNodeBar">'+
+        '<button class="tnbBtn" data-op="pitchDn">PITCH-</button>'+
+        '<button class="tnbBtn" data-op="pitchUp">PITCH+</button>'+
+        '<button class="tnbBtn" data-op="slow">SLOW</button>'+
+        '<button class="tnbBtn" data-op="fast">FAST</button>'+
+        '<button class="tnbBtn" data-op="rev">REV</button>'+
+        '<button class="tnbBtn" data-op="fadeOut">FADE</button>'+
+        '<button class="tnbBtn" data-op="dupe">DUPE</button>'+
+        '<button class="tnbBtn ren" data-ren="'+sel.id+'">RENAME</button>'+
+        '<button class="tnbBtn focus" data-focus="'+(rootOfSel||sel.id)+'">'+(A.focusRoot?'SHOW ALL':'FOCUS')+'</button>'+
+        '</div>';
+    } else if(A.focusRoot){
+      strip+='<div id="treeNodeBar"><button class="tnbBtn focus" data-focus="clear">SHOW ALL</button></div>';
+    }
   }
   if(!roots.length){ lib.innerHTML=strip+'<div class="libEmpty">NO ENTITIES'+(q?' MATCH "'+q+'"':'')+'</div>'; _wireTreeStrip(); return; }
   // name-or-input helper for inline rename
@@ -4421,13 +4507,15 @@ function renderLibraryTree(){
     return '<span class="treeName'+(A.selectedId===s.id?' on':'')+'" data-id="'+s.id+'">'+lbl+'</span>';
   }
   var html=strip;
+  function selCheck(id){ return A.selectMode?('<span class="treeSelCheck'+(A.selSet.has(id)?' on':'')+'" data-sel="'+id+'">'+(A.selSet.has(id)?'✓':'')+'</span>'):''; }
   function rootHtml(root){
     var fam=_familyIds(root.id);
     var famCount=fam.size-1;
     var expanded=A.treeExpanded[root.id]!==false;
     var inPack=A.packSel.has(root.id);
     var fi=root.fragmentIdentity||{};
-    var h='<div class="treeRoot" data-id="'+root.id+'">'+
+    var h='<div class="treeRoot'+(A.selSet.has(root.id)?' selrow':'')+'" data-id="'+root.id+'">'+
+      selCheck(root.id)+
       '<span class="treeToggle" data-toggle="'+root.id+'">'+(famCount?(expanded?'▾':'▸'):'·')+'</span>'+
       _treeIndicators(root)+
       nameCell(root,false)+
@@ -4439,7 +4527,8 @@ function renderLibraryTree(){
       var walk=function(pid,depth){
         _childrenOf(pid).forEach(function(c){
           var cfi=c.fragmentIdentity||{};
-          h+='<div class="treeChild" data-id="'+c.id+'" style="padding-left:'+(depth*14+16)+'px">'+
+          h+='<div class="treeChild'+(A.selSet.has(c.id)?' selrow':'')+'" data-id="'+c.id+'" style="padding-left:'+(depth*14+16)+'px">'+
+            selCheck(c.id)+
             _treeIndicators(c)+
             nameCell(c,true)+
             '<span class="treeMeta">'+fmt(c.duration)+(cfi.type?' · '+cfi.type:'')+'</span>'+
@@ -4459,17 +4548,30 @@ function renderLibraryTree(){
     order.sort(function(a,b){ if(a==='UNGROUPED')return 1; if(b==='UNGROUPED')return -1; return a.localeCompare(b); });
     order.forEach(function(g){
       var gExp=A.groupExpanded[g]!==false; // default expanded
+      // P6: roots · total derivatives · total duration (computed from existing structures)
+      var gRoots=groups[g], nRoots=gRoots.length, nDer=0, totDur=0;
+      gRoots.forEach(function(r){ var fids=_familyIds(r.id); nDer+=(fids.size-1); fids.forEach(function(id){ var sm=A.samples.find(x=>x.id===id); if(sm)totDur+=(sm.duration||0); }); });
+      var mm=Math.floor(totDur/60), ss=Math.round(totDur%60); var durStr=mm+':'+(ss<10?'0':'')+ss;
       html+='<div class="treeGroup" data-group="'+String(g).replace(/"/g,'&quot;')+'">'+
         '<span class="treeGroupToggle">'+(gExp?'▾':'▸')+'</span>'+
         '<span class="treeGroupName">'+g+'</span>'+
-        '<span class="treeGroupMeta">['+groups[g].length+']</span>'+
+        '<span class="treeGroupMeta">'+nRoots+' roots · '+nDer+' der · '+durStr+'</span>'+
+        (g!=='UNGROUPED'?'<button class="treeGroupFocus" data-gfocus="'+String(g).replace(/"/g,'&quot;')+'">focus</button>':'')+
         '</div>';
-      if(gExp) groups[g].forEach(function(r){ html+=rootHtml(r); });
+      if(gExp) gRoots.forEach(function(r){ html+=rootHtml(r); });
     });
   } else {
     roots.forEach(function(r){ html+=rootHtml(r); });
   }
   lib.innerHTML=html;
+  // Group focus button (isolate one group) — stop propagation so it doesn't toggle collapse
+  lib.querySelectorAll('.treeGroupFocus[data-gfocus]').forEach(function(el){
+    el.addEventListener('click',function(e){ e.stopPropagation(); A.focusGroup=el.dataset.gfocus; renderLibrary(); });
+  });
+  // SHOW ALL GROUPS bar
+  lib.querySelectorAll('[data-groupfocus]').forEach(function(el){
+    el.addEventListener('click',function(){ A.focusGroup=null; renderLibrary(); });
+  });
   // Group header collapse/expand
   lib.querySelectorAll('.treeGroup[data-group]').forEach(function(el){
     el.addEventListener('click',function(){ var g=el.dataset.group; A.groupExpanded[g]=A.groupExpanded[g]===false; renderLibrary(); });
@@ -4478,15 +4580,21 @@ function renderLibraryTree(){
   lib.querySelectorAll('.treeToggle[data-toggle]').forEach(function(el){
     el.addEventListener('click',function(e){ e.stopPropagation(); var id=el.dataset.toggle; A.treeExpanded[id]=A.treeExpanded[id]===false; renderLibrary(); });
   });
-  // Select on name tap + long-press → context menu
+  // Select on name tap (or toggle selection in select mode) + long-press → context menu
   lib.querySelectorAll('.treeName[data-id]').forEach(function(el){
     var hold=null;
-    el.addEventListener('click',function(){ selectSample(el.dataset.id,true); });
-    el.addEventListener('touchstart',function(){ hold=setTimeout(function(){showCtx(el.dataset.id,el);},550); },{passive:true});
+    el.addEventListener('click',function(){ if(A.selectMode){ var id=el.dataset.id; if(A.selSet.has(id))A.selSet.delete(id); else A.selSet.add(id); renderLibrary(); } else { selectSample(el.dataset.id,true); } });
+    el.addEventListener('touchstart',function(){ if(A.selectMode)return; hold=setTimeout(function(){showCtx(el.dataset.id,el);},550); },{passive:true});
     el.addEventListener('touchend',function(){ clearTimeout(hold); },{passive:true});
     el.addEventListener('touchmove',function(){ clearTimeout(hold); },{passive:true});
-    el.addEventListener('contextmenu',function(e){ e.preventDefault(); showCtx(el.dataset.id,el); });
+    el.addEventListener('contextmenu',function(e){ e.preventDefault(); if(!A.selectMode)showCtx(el.dataset.id,el); });
   });
+  // Select-check tap toggles membership
+  lib.querySelectorAll('.treeSelCheck[data-sel]').forEach(function(el){
+    el.addEventListener('click',function(e){ e.stopPropagation(); var id=el.dataset.sel; if(A.selSet.has(id))A.selSet.delete(id); else A.selSet.add(id); renderLibrary(); });
+  });
+  // Batch actions (select mode)
+  lib.querySelectorAll('.tnbBtn[data-batch]').forEach(function(el){ el.addEventListener('click',function(){ _batchAction(el.dataset.batch); }); });
   // Explicit context button (mobile-reliable)
   lib.querySelectorAll('.treeCtx[data-ctx]').forEach(function(el){
     el.addEventListener('click',function(e){ e.stopPropagation(); showCtx(el.dataset.ctx,el); });
@@ -4769,6 +4877,27 @@ function applyExtractPreset(preset){
 // ─── SURGERY OPERATIONS ──────────────────────────────────────────────────
 document.querySelectorAll('.sBtn[data-op]').forEach(btn=>btn.addEventListener('click',()=>execSurgery(btn.dataset.op)));
 document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
+// P5: Surgery → SEND TO GROUP (assigns the current sample's root to a group; reuses group helpers)
+(function(){
+  var b=document.getElementById('surgSendGroupBtn'); var grid=document.getElementById('surgGroupGrid');
+  if(!b||!grid) return;
+  b.addEventListener('click',function(){
+    if(grid.style.display!=='none'){ grid.style.display='none'; return; }
+    var s=sample(); if(!s){ HISTORY.showToast('select a fragment first'); return; }
+    var h='<button class="ctxGroupBtn new" data-sg="__new__">+ NEW GROUP</button><button class="ctxGroupBtn none" data-sg="__none__">UNGROUP</button>';
+    existingGroups().forEach(function(g){ h+='<button class="ctxGroupBtn" data-sg="'+String(g).replace(/"/g,'&quot;')+'">'+g+'</button>'; });
+    grid.innerHTML=h; grid.style.display='flex';
+    grid.querySelectorAll('[data-sg]').forEach(function(btn){ btn.addEventListener('click',function(){
+      var cur=sample(); if(!cur)return;
+      var g=btn.dataset.sg, target;
+      if(g==='__new__'){ var nm=prompt('New group name:',''); if(nm===null)return; nm=nm.trim(); if(!nm)return; target=nm; }
+      else if(g==='__none__'){ target=null; } else target=g;
+      assignGroupToRootOf(cur.id, target);
+      grid.style.display='none'; A.groupView='grouped'; renderLibrary();
+      HISTORY.showToast(target?('sent → '+target):'ungrouped');
+    }); });
+  });
+})();
 
 async function execSurgery(op){
   const s=sample();if(!s)return;await ensureAC();
@@ -5466,7 +5595,7 @@ if(_packAuthorEl) {
 
 // Fragment type tag buttons
 // Shared: set entity type on a sample (reused by hidden fragTagger + context menu)
-function setFragType(s, type){
+function setFragType(s, type, quiet){
   if(!s) return;
   if(!s.fragmentIdentity) s.fragmentIdentity = {};
   s.fragmentIdentity.type = type;
@@ -5478,6 +5607,7 @@ function setFragType(s, type){
   };
   s.cat = catMap[type] || s.cat;
   dbPut(s);
+  if(quiet) return;
   renderLibrary();
   if(typeof PACK!=='undefined' && PACK.updateChecklist) PACK.updateChecklist();
   HISTORY.showToast('tagged: '+(s.name||'').slice(0,12)+' → '+type);
