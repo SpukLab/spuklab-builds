@@ -1550,6 +1550,23 @@ function safeExpRamp(p,v,t,mn,mx,fb=.001){try{p.exponentialRampToValueAtTime(Mat
 
 // ─── AUDIO CONTEXT ──────────────────────────────────────
 let AC=null,masterGain,compressor,masterSat,masterAnalyser,masterDCBlocker;
+// MASTER_COLOR module — output coloration, configurable. OFF by default in dev.
+// Levels: 'off' (transparent), 'rust_soft' (~1.5), 'rust_medium' (~2.5), 'rust_hard' (~4)
+let MASTER_COLOR='off';
+const MASTER_COLOR_DRIVE={off:0,rust_soft:1.5,rust_medium:2.5,rust_hard:4};
+function setMasterColor(level){
+  MASTER_COLOR=level;
+  if(!masterSat)return;
+  if(level==='off'){
+    // Identity curve — perfectly transparent (y=x)
+    const n=512,c=new Float32Array(n);
+    for(let i=0;i<n;i++)c[i]=(i*2)/n-1;
+    masterSat.curve=c;
+  }else{
+    const drive=MASTER_COLOR_DRIVE[level]||1.5;
+    masterSat.curve=buildSatCurveRaw('rust',drive);
+  }
+}
 let noiseBuffer=null,FFT_SIZE=2048;
 
 function initAC(){
@@ -1560,7 +1577,11 @@ function initAC(){
   compressor.threshold.value=-14;compressor.knee.value=8;
   compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
   masterSat=AC.createWaveShaper();
-  masterSat.curve=buildSatCurveRaw('rust',28);masterSat.oversample='4x';
+  // MASTER_COLOR — master output coloration. OFF during development for transparency.
+  // The rust drive-28 curve was effectively a hard clipper saturating everything.
+  // setMasterColor('off') installs an identity (linear) curve → fully transparent.
+  masterSat.oversample='4x';
+  setMasterColor(MASTER_COLOR);
   masterAnalyser=AC.createAnalyser();
   masterAnalyser.fftSize=FFT_SIZE;masterAnalyser.smoothingTimeConstant=.88;
   // DC blocker at 28Hz prevents sub accumulation post-saturation
