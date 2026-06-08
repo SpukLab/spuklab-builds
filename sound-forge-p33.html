@@ -2812,7 +2812,11 @@ function dfPlaybackAudition(pb,roleLabel){
   const detune=(pb.pitch||0)*100; // semitones → cents
   // Reverse handled by a pre-reversed buffer (negative playbackRate is unreliable + clicks)
   const playBuf=pb.reverse?dfReversedBuffer(buf):buf;
-  const out=AC.createGain();out.gain.value=0.9;out.connect(masterGain);
+  const out=AC.createGain();out.gain.value=0.9;
+  // Soft limiter on the audition bus — catches residual summed-overlap peaks (clean, not coloring)
+  const lim=AC.createDynamicsCompressor();
+  lim.threshold.value=-6;lim.knee.value=6;lim.ratio.value=8;lim.attack.value=.003;lim.release.value=.12;
+  out.connect(lim);lim.connect(masterGain);
   const now=AC.currentTime+0.02;
   const stops=[];
 
@@ -2823,66 +2827,78 @@ function dfPlaybackAudition(pb,roleLabel){
   dbg('dnaforge',logLine);
   const logEl=document.getElementById('df-log');if(logEl)logEl.textContent=logLine;
 
-  function oneShot(at,offset,length,gain,rev){
+  // overlapGain: when N windows overlap, scale each so the sum stays bounded (prevents
+  // summed-amplitude clipping that reads as clicks/crackle now that master sat is bypassed).
+  function oneShot(at,offset,length,gain,rev,fadeFrac){
     // For reversed playback, read from the mirrored offset in the reversed buffer
     const readOff=rev?clamp(dur-offset-length,0,dur):clamp(offset,0,dur);
     const L=Math.max(0.03,Math.min(length,dur-readOff)); // never below 30ms
     const src=AC.createBufferSource();
-    src.buffer=playBuf;src.playbackRate.value=rate; // always positive now
+    src.buffer=playBuf;src.playbackRate.value=rate; // always positive
     if(src.detune)src.detune.value=detune;
     const g=AC.createGain();
-    // Click-safe envelope: fades scale to length, always leave room
-    const fade=Math.min(0.012,L*0.3);
+    // Fade scales to grain length; longer fades (up to 40% of grain) for smooth overlap.
+    const ff=fadeFrac||0.3;
+    const fade=Math.max(0.006,Math.min(L*ff,0.08));
+    const peak=at+fade, relStart=at+Math.max(fade,L-fade);
     g.gain.setValueAtTime(0.0001,at);
-    g.gain.linearRampToValueAtTime(gain,at+fade);
-    g.gain.setValueAtTime(gain,at+Math.max(fade,L-fade));
-    g.gain.linearRampToValueAtTime(0.0001,at+L);
+    // Equal-power-ish: ramp via exponential for smoother edges than linear
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,gain),peak);
+    g.gain.setValueAtTime(gain,relStart);
+    g.gain.exponentialRampToValueAtTime(0.0001,at+L);
     src.connect(g);g.connect(out);
     try{src.start(at,readOff,L);}catch(e){try{src.start(at);}catch(_){}}
     stops.push(()=>{try{src.stop();}catch(e){}});
   }
 
   if(pb.mode==='EVENT'){
-    oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse);
+    oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse,0.05);
   }else if(pb.mode==='LOOP'){
-    const loopLen=Math.max(0.05,pb.loopLen||0.09); // floor 50ms to avoid click-trains
+    const loopLen=Math.max(0.06,pb.loopLen||0.09); // floor 60ms
     const total=5.0; let t=now,pos=rs;
     while(t<now+total){
-      oneShot(t,pos,loopLen,0.8,pb.reverse);
-      t+=loopLen*0.92; // slight overlap between repeats (crossfade-ish)
+      oneShot(t,pos,loopLen,0.7,pb.reverse,0.35); // longer fade fraction for loop edges
+      t+=loopLen*0.9; // overlap repeats slightly
       pos+=loopLen*(pb.scanSpeed||0); if(pos>re-loopLen)pos=rs;
     }
   }else if(pb.mode==='SCAN'){
-    const total=7.0, win=0.5, step=0.16; // step<win → windows overlap (no gaps/clicks)
+    const win=0.5, step=0.16, total=7.0;
+    const overlap=Math.max(1,Math.round(win/step)); // ~3 overlapping windows
+    const gComp=0.5/Math.sqrt(overlap); // overlap gain compensation
     const span=re-rs; let t=now,frac=0;
     const speed=pb.scanSpeed||0.15;
     while(t<now+total){
       const pos=rs+span*clamp(frac,0,0.999);
-      oneShot(t,pos,win,0.5,pb.reverse);
+      oneShot(t,pos,win,gComp,pb.reverse,0.4);
       t+=step; frac+=speed*step;
       if(frac>1)frac=0;
     }
   }else if(pb.mode==='DRIFT'){
-    const total=8.0, win=0.7, step=0.30, span=re-rs; let t=now,frac=0;
+    const win=0.7, step=0.30, total=8.0;
+    const overlap=Math.max(1,Math.round(win/step));
+    const gComp=0.5/Math.sqrt(overlap);
+    const span=re-rs; let t=now,frac=0;
     const speed=pb.scanSpeed||0.06;
     while(t<now+total){
       const pos=rs+span*clamp(frac,0,0.999);
-      oneShot(t,pos,win,0.5,pb.reverse);
+      oneShot(t,pos,win,gComp,pb.reverse,0.4);
       t+=step; frac+=speed*step;
       if(frac>1)frac=1;
     }
   }else if(pb.mode==='SWARM'){
-    const total=6.0,win=0.6,step=0.25,span=re-rs;
+    const win=0.6,step=0.25,total=6.0,span=re-rs;
+    const overlap=Math.max(1,Math.round(win/step))*3; // 3 layers
+    const gComp=0.45/Math.sqrt(overlap);
     for(let layer=0;layer<3;layer++){
       let t=now+layer*0.08,frac=layer*0.2;
       while(t<now+total){
-        oneShot(t,rs+span*clamp(frac,0,0.999),win,0.4,pb.reverse);
+        oneShot(t,rs+span*clamp(frac,0,0.999),win,gComp,pb.reverse,0.4);
         t+=step;frac+=(pb.scanSpeed||0.3)*step;if(frac>1)frac=0;
       }
     }
   }
   _dfAuditionStops=stops;
-  setTimeout(()=>{try{out.disconnect();}catch(e){}},11000);
+  setTimeout(()=>{try{out.disconnect();lim.disconnect();}catch(e){}},11000);
 }
 // Find first energy onset (so 'transient' region isn't just leading silence)
 function dfFindOnset(buf){
