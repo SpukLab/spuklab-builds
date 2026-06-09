@@ -809,6 +809,7 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
     <div class="sec">
       <div class="st">3 · GENERATE</div>
       <button class="df-generate" id="df-generate">GENERATE VARIANT</button>
+      <button class="wtool" id="df-isolation" style="width:100%;margin-bottom:6px;">ISOLATION AUDIT: OFF</button>
       <div class="df-log" id="df-log"></div>
       <div class="df-variant-list" id="df-variant-list"></div>
     </div>
@@ -2632,6 +2633,7 @@ const DF_PROFILES={
   }
 };
 let DF_activeProfile='dark';
+let DF_DEBUG_SINGLE_GRAIN=false; // isolation audit: one continuous grain per role
 let DF_variants=[]; // {id, label, role, cfg, slotType, saved, provenance}
 let DF_genCounter=0;
 
@@ -2879,6 +2881,21 @@ function dfPlaybackAudition(pb,roleLabel){
     stops.push(()=>{try{src.stop();}catch(e){}});
   }
 
+  // ═══ ISOLATION AUDIT — single continuous BufferSource, no chaining ═══
+  // When ON: every mode plays ONE grain reading the whole region continuously.
+  // Keeps region/pitch/rate/reverse; removes loop/scan/drift/swarm/retrigger.
+  // If clicks vanish here → cause is the multi-event transition, not the grain/fade.
+  if(DF_DEBUG_SINGLE_GRAIN){
+    const L=Math.min(re-rs, 8.0); // continuous read of the region (cap 8s)
+    oneShot(now, rs, L, 0.9, pb.reverse, 0.02);
+    dbg('dnaforge',`[ISOLATION] single grain: region=${pb.region} s=${rs.toFixed(2)} len=${L.toFixed(2)} rate=${rate} pitch=${pb.pitch||0} rev=${pb.reverse?'Y':'N'}`);
+    const le=document.getElementById('df-log');
+    if(le)le.textContent=`[ISOLATION] 1 grain · ${pb.region} · len=${L.toFixed(2)}s rate=${rate} pitch=${pb.pitch||0} rev=${pb.reverse?'Y':'N'}`;
+    _dfAuditionStops=stops;
+    setTimeout(()=>{try{out.disconnect();lim.disconnect();}catch(e){}},11000);
+    return;
+  }
+
   if(pb.mode==='EVENT'){
     oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse,0.02);
   }else if(pb.mode==='LOOP'){
@@ -3024,6 +3041,17 @@ function initDNAForge(){
   if(gen){
     gen.addEventListener('click',dfGenerate);
     gen.addEventListener('touchstart',e=>{e.preventDefault();dfGenerate();},{passive:false});
+  }
+  const iso=document.getElementById('df-isolation');
+  if(iso){
+    const flip=()=>{
+      DF_DEBUG_SINGLE_GRAIN=!DF_DEBUG_SINGLE_GRAIN;
+      iso.textContent='ISOLATION AUDIT: '+(DF_DEBUG_SINGLE_GRAIN?'ON':'OFF');
+      iso.style.color=DF_DEBUG_SINGLE_GRAIN?'#ffe6a8':'';
+      iso.style.borderColor=DF_DEBUG_SINGLE_GRAIN?'rgba(255,210,120,.6)':'';
+    };
+    iso.addEventListener('click',flip);
+    iso.addEventListener('touchstart',e=>{e.preventDefault();flip();},{passive:false});
   }
   const goExp=document.getElementById('df-goto-export');
   if(goExp){
