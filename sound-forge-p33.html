@@ -2831,22 +2831,28 @@ function dfPlaybackAudition(pb,roleLabel){
   // fadeSec is an ABSOLUTE fade time (not a fraction) so adjacent windows can be made
   // to overlap-crossfade: if fadeSec >= step, windows sum to ~constant power (no clicks).
   function oneShot(at,offset,length,gain,rev,fadeSec){
-    const EDGE=0.006; // keep reads 6ms off absolute buffer edges (boundary clicks, esp reverse)
+    const EDGE=0.006; // keep reads 6ms off absolute buffer edges
     let readOff=rev?clamp(dur-offset-length,EDGE,dur-EDGE):clamp(offset,EDGE,dur-EDGE);
-    const L=Math.max(0.03,Math.min(length,dur-readOff-EDGE));
+    const Lbuf=Math.max(0.03,Math.min(length,dur-readOff-EDGE)); // buffer-seconds consumed
     const src=AC.createBufferSource();
     src.buffer=playBuf;src.playbackRate.value=rate;
     if(src.detune)src.detune.value=detune;
+    // CRITICAL: start(at,offset,dur) — dur is in BUFFER-seconds, but the grain occupies
+    // Lout = Lbuf/rate OUTPUT-seconds. The gain envelope runs in wall-clock (output) time,
+    // so it must be scheduled against Lout, not Lbuf. Mismatch = fade after source ended = click.
+    // Effective speed combines playbackRate AND detune (both change how fast the buffer plays).
+    const speedFactor=Math.max(0.05,rate*Math.pow(2,detune/1200));
+    const Lout=Lbuf/speedFactor;
     const g=AC.createGain();
-    // Linear fades from TRUE zero — exponential-from-near-zero leaves an abrupt edge (click).
     let fade=fadeSec||0.01;
-    if(fade>L*0.5)fade=L*0.5; // can't fade more than half each side
+    if(fade>Lout*0.5)fade=Lout*0.5;
     g.gain.setValueAtTime(0,at);
     g.gain.linearRampToValueAtTime(gain,at+fade);
-    g.gain.setValueAtTime(gain,at+(L-fade));
-    g.gain.linearRampToValueAtTime(0,at+L);
+    g.gain.setValueAtTime(gain,at+(Lout-fade));
+    g.gain.linearRampToValueAtTime(0,at+Lout);
     src.connect(g);g.connect(out);
-    try{src.start(at,readOff,L);}catch(e){try{src.start(at);}catch(_){}}
+    try{src.start(at,readOff,Lbuf);}catch(e){try{src.start(at);}catch(_){}}
+    src.stop(at+Lout+0.01);
     stops.push(()=>{try{src.stop();}catch(e){}});
   }
 
