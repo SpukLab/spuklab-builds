@@ -872,8 +872,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
       <button class="ctxCatBtn" data-c="ritual">RITUAL</button>
     </div>
     <button class="ctxBtn"      data-a="normNow">NORMALIZE</button>
-    <button class="ctxBtn"      data-a="moveGroup">MOVE TO GROUP ▸</button>
+    <button class="ctxBtn rootonly" data-a="moveGroup">MOVE TO GROUP ▸</button>
     <div id="ctxGroupGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;border-bottom:1px solid rgba(153,68,255,.1)"></div>
+    <button class="ctxBtn rootonly" data-a="moveUp">MOVE UP</button>
+    <button class="ctxBtn rootonly" data-a="moveDown">MOVE DOWN</button>
     <button class="ctxBtn del"  data-a="del">DELETE</button>
   </div>
 
@@ -4356,7 +4358,30 @@ function _childrenOf(id){ return A.samples.filter(function(x){ return x.parentId
 function _isRoot(s){ return !s.parentId || !A.samples.find(function(x){ return x.id===s.parentId; }); }
 // ── GROUPS (v44): root.group is the only new field. Derivatives inherit via root. ──
 function existingGroups(){ return Array.from(new Set(A.samples.filter(_isRoot).map(function(r){return r.group;}).filter(Boolean))).sort(); }
-function assignGroupToRootOf(id, group){ var rid=_rootOf(id); var r=A.samples.find(function(x){return x.id===rid;}); if(!r) return; r.group=group||null; if(typeof dbPut==='function')dbPut(r); }
+function assignGroupToRootOf(id, group){ var rid=_rootOf(id); var r=A.samples.find(function(x){return x.id===rid;}); if(!r) return; var tgt=group||null; if(r.group!==tgt){ r.order=undefined; } r.group=tgt; if(typeof dbPut==='function')dbPut(r); }
+// ── ROOT ORDERING (v44 narrative sequencing) — root.order, roots only ──
+// Display sort: explicit order first (ascending); unordered roots keep insertion order and sink last.
+function _sortRootsForDisplay(arr){
+  return arr.slice().sort(function(a,b){
+    var ao=(typeof a.order==='number')?a.order:null, bo=(typeof b.order==='number')?b.order:null;
+    if(ao!=null && bo!=null) return ao-bo;
+    if(ao!=null) return -1;
+    if(bo!=null) return 1;
+    return 0;
+  });
+}
+function moveRoot(id, dir){
+  var r=A.samples.find(function(x){return x.id===id;}); if(!r || !_isRoot(r)) return;
+  var g=(r.group||'UNGROUPED');
+  var inG=_sortRootsForDisplay(A.samples.filter(function(x){ return _isRoot(x) && (x.group||'UNGROUPED')===g; }));
+  var idx=-1; for(var i=0;i<inG.length;i++){ if(inG[i].id===id){idx=i;break;} }
+  var swap=idx+dir;
+  if(idx<0 || swap<0 || swap>=inG.length) return; // edge: first up / last down → no change
+  var t=inG[idx]; inG[idx]=inG[swap]; inG[swap]=t;
+  inG.forEach(function(rt,i){ rt.order=i; if(typeof dbPut==='function')dbPut(rt); }); // normalize 0..n-1 + persist
+  renderLibrary();
+  HISTORY.showToast(dir<0?'moved up':'moved down');
+}
 function _rootOf(id){
   var cur=A.samples.find(function(x){return x.id===id;}); var guard=0;
   while(cur && cur.parentId && A.samples.find(function(x){return x.id===cur.parentId;}) && guard<12){
@@ -4549,7 +4574,7 @@ function renderLibraryTree(){
     order.forEach(function(g){
       var gExp=A.groupExpanded[g]!==false; // default expanded
       // P6: roots · total derivatives · total duration (computed from existing structures)
-      var gRoots=groups[g], nRoots=gRoots.length, nDer=0, totDur=0;
+      var gRoots=_sortRootsForDisplay(groups[g]), nRoots=gRoots.length, nDer=0, totDur=0;
       gRoots.forEach(function(r){ var fids=_familyIds(r.id); nDer+=(fids.size-1); fids.forEach(function(id){ var sm=A.samples.find(x=>x.id===id); if(sm)totDur+=(sm.duration||0); }); });
       var mm=Math.floor(totDur/60), ss=Math.round(totDur%60); var durStr=mm+':'+(ss<10?'0':'')+ss;
       html+='<div class="treeGroup" data-group="'+String(g).replace(/"/g,'&quot;')+'">'+
@@ -4635,7 +4660,7 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var mgBtn=menu.querySelector('[data-a="moveGroup"]');if(mgBtn)mgBtn.style.display=_isRoot(s)?'':'none';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var isR=_isRoot(s);menu.querySelectorAll('.rootonly').forEach(function(b){b.style.display=isR?'':'none';});menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -4685,6 +4710,8 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     case 'setType':{ break; }
     case 'moveCat':{ break; }
     case 'moveGroup':{ break; }
+    case 'moveUp':{ moveRoot(id,-1); break; }
+    case 'moveDown':{ moveRoot(id,1); break; }
     case 'fav':s.favorite=!s.favorite;await dbPut(s);renderLibrary();break;
     case 'tray':MONTAGE.addFrag(s);renderLibrary();break;
     case 'surgery':selectSample(id,false);setMode('surgery');break;
