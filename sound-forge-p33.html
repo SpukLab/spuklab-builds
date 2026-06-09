@@ -2848,11 +2848,31 @@ function dfPlaybackAudition(pb,roleLabel){
     const Lout=Lbuf/speedFactor;
     const g=AC.createGain();
     let fade=fadeSec||0.01;
+    if(fade<0.012)fade=0.012; // floor: <12ms linear corner clicks on bass-heavy material
     if(fade>Lout*0.5)fade=Lout*0.5;
-    g.gain.setValueAtTime(0,at);
-    g.gain.linearRampToValueAtTime(gain,at+fade);
-    g.gain.setValueAtTime(gain,at+(Lout-fade));
-    g.gain.linearRampToValueAtTime(0,at+Lout);
+    // Raised-cosine (Hann) fades — smooth in value AND slope. Linear ramps have a
+    // slope discontinuity at the corners that clicks on low-freq/high-amplitude material.
+    const STEPS=24;
+    const fadeIn=new Float32Array(STEPS);
+    const fadeOut=new Float32Array(STEPS);
+    for(let i=0;i<STEPS;i++){
+      const x=i/(STEPS-1);
+      fadeIn[i]=gain*(0.5-0.5*Math.cos(Math.PI*x));   // 0→gain, smooth
+      fadeOut[i]=gain*(0.5-0.5*Math.cos(Math.PI*(1-x)));// gain→0, smooth
+    }
+    try{
+      g.gain.setValueAtTime(0,at);
+      g.gain.setValueCurveAtTime(fadeIn,at,fade);
+      g.gain.setValueAtTime(gain,at+fade);
+      g.gain.setValueAtTime(gain,at+(Lout-fade));
+      g.gain.setValueCurveAtTime(fadeOut,at+(Lout-fade),fade);
+    }catch(e){
+      // Fallback to linear if curve scheduling overlaps
+      g.gain.setValueAtTime(0,at);
+      g.gain.linearRampToValueAtTime(gain,at+fade);
+      g.gain.setValueAtTime(gain,at+(Lout-fade));
+      g.gain.linearRampToValueAtTime(0,at+Lout);
+    }
     src.connect(g);g.connect(out);
     try{src.start(at,readOff,Lbuf);}catch(e){try{src.start(at);}catch(_){}}
     src.stop(at+Lout+0.01);
