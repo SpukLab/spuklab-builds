@@ -2831,8 +2831,9 @@ function dfPlaybackAudition(pb,roleLabel){
   // fadeSec is an ABSOLUTE fade time (not a fraction) so adjacent windows can be made
   // to overlap-crossfade: if fadeSec >= step, windows sum to ~constant power (no clicks).
   function oneShot(at,offset,length,gain,rev,fadeSec){
-    const readOff=rev?clamp(dur-offset-length,0,dur):clamp(offset,0,dur);
-    const L=Math.max(0.03,Math.min(length,dur-readOff));
+    const EDGE=0.006; // keep reads 6ms off absolute buffer edges (boundary clicks, esp reverse)
+    let readOff=rev?clamp(dur-offset-length,EDGE,dur-EDGE):clamp(offset,EDGE,dur-EDGE);
+    const L=Math.max(0.03,Math.min(length,dur-readOff-EDGE));
     const src=AC.createBufferSource();
     src.buffer=playBuf;src.playbackRate.value=rate;
     if(src.detune)src.detune.value=detune;
@@ -2852,9 +2853,9 @@ function dfPlaybackAudition(pb,roleLabel){
   if(pb.mode==='EVENT'){
     oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse,0.02);
   }else if(pb.mode==='LOOP'){
-    const loopLen=Math.max(0.06,pb.loopLen||0.09);
-    const step=loopLen*0.7; // 30% overlap between repeats
-    const fade=loopLen*0.35;  // fade >= overlap → crossfade
+    const loopLen=Math.max(0.08,pb.loopLen||0.09); // floor 80ms (GRAIN clicked at shorter)
+    const step=loopLen*0.55;   // 45% overlap
+    const fade=step;           // fade == step → true crossfade (was 35%, left a gap = click)
     const total=5.0; let t=now,pos=rs;
     while(t<now+total){
       oneShot(t,pos,loopLen,0.7,pb.reverse,fade);
@@ -2882,9 +2883,9 @@ function dfPlaybackAudition(pb,roleLabel){
     }
   }else if(pb.mode==='SWARM'){
     const win=0.6,step=0.3,total=6.0,span=re-rs;
-    const fade=step,gComp=0.4;
+    const fade=step,gComp=0.33; // lower per-grain gain (3 layers sum)
     for(let layer=0;layer<3;layer++){
-      let t=now+layer*0.1,frac=layer*0.2;
+      let t=now+layer*(step/3),frac=layer*0.3; // stagger layers by 1/3 step
       while(t<now+total){
         oneShot(t,rs+span*clamp(frac,0,0.999),win,gComp,pb.reverse,fade);
         t+=step;frac+=(pb.scanSpeed||0.3)*step;if(frac>1)frac=0;
