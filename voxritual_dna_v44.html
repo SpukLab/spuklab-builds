@@ -47,6 +47,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .treeGroupPack{flex-shrink:0;margin-left:.3rem;padding:.2rem .45rem;font-size:.58rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,220,160,.3);background:rgba(0,220,160,.07);color:rgba(0,235,170,.85);border-radius:3px;cursor:pointer}
 .treeSeq{flex-shrink:0;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:rgba(0,220,160,.6);min-width:1.5rem;text-align:right;letter-spacing:.04em}
 .treePromo{flex-shrink:0;color:rgba(0,255,180,.95);font-size:.72rem}
+.treePlay{flex-shrink:0;width:1.5rem;height:1.5rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(0,220,160,.3);background:rgba(0,220,160,.06);border-radius:50%;cursor:pointer;padding:0}
+.treePlay::before{content:'';border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent rgba(0,235,170,.9);margin-left:2px}
+.treePlay:active{background:rgba(0,220,160,.25)}
+#treeCatBar{display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.42rem .5rem;background:rgba(0,200,255,.06);border-bottom:1px solid rgba(0,200,255,.16);position:sticky;top:0;z-index:2}
+#treeCatBar::-webkit-scrollbar{height:0;display:none}
+.treeCatChip{flex-shrink:0;padding:.3rem .55rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.2);background:rgba(0,200,255,.05);color:rgba(150,210,255,.7);border-radius:12px;cursor:pointer;white-space:nowrap}
+.treeCatChip.on{background:rgba(0,200,255,.25);border-color:rgba(0,200,255,.6);color:#fff;font-weight:700}
 .treeChild.promoted{background:rgba(0,220,160,.06)}
 .treeChild.promoted .treeName{color:rgba(120,255,200,.95);font-weight:700}
 .treeInPack{flex-shrink:0;font-size:.54rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:rgba(0,200,255,.9);border:1px solid rgba(0,180,255,.35);background:rgba(0,180,255,.08);border-radius:2px;padding:0 .22rem;letter-spacing:.03em}
@@ -4543,17 +4550,30 @@ function renderLibraryTree(){
     if(sel){
       var selIsRoot=_isRoot(sel);
       var rootOfSel=_rootOf(sel.id); var rootObj=rootOfSel?A.samples.find(x=>x.id===rootOfSel):sel;
-      strip+='<div id="treeNodeBar">'+
-        '<button class="tnbBtn" data-op="pitchDn">PITCH-</button>'+
-        '<button class="tnbBtn" data-op="pitchUp">PITCH+</button>'+
-        '<button class="tnbBtn" data-op="slow">SLOW</button>'+
-        '<button class="tnbBtn" data-op="fast">FAST</button>'+
-        '<button class="tnbBtn" data-op="rev">REV</button>'+
-        '<button class="tnbBtn" data-op="fadeOut">FADE</button>'+
-        '<button class="tnbBtn" data-op="dupe">DUPE</button>'+
-        '<button class="tnbBtn ren" data-ren="'+sel.id+'">RENAME</button>'+
-        '<button class="tnbBtn focus" data-focus="'+(rootOfSel||sel.id)+'">'+(A.focusRoot?'SHOW ALL':'FOCUS')+'</button>'+
-        '</div>';
+      if(selIsRoot){
+        // Narrative phase: category chips (one tap) + rename + focus — no deep menus
+        var chips='';
+        ['captures','spoken','whispers','breaths','hooks','fragments','corrupted','textures','ritual'].forEach(function(c){
+          chips+='<button class="treeCatChip'+((sel.cat===c)?' on':'')+'" data-catset="'+c+'">'+c.toUpperCase()+'</button>';
+        });
+        strip+='<div id="treeCatBar">'+chips+
+          '<button class="tnbBtn ren" data-ren="'+sel.id+'">RENAME</button>'+
+          '<button class="tnbBtn focus" data-focus="'+(rootOfSel||sel.id)+'">'+(A.focusRoot?'SHOW ALL':'FOCUS')+'</button>'+
+          '</div>';
+      } else {
+        // Exploration phase (variant selected): surgery ops
+        strip+='<div id="treeNodeBar">'+
+          '<button class="tnbBtn" data-op="pitchDn">PITCH-</button>'+
+          '<button class="tnbBtn" data-op="pitchUp">PITCH+</button>'+
+          '<button class="tnbBtn" data-op="slow">SLOW</button>'+
+          '<button class="tnbBtn" data-op="fast">FAST</button>'+
+          '<button class="tnbBtn" data-op="rev">REV</button>'+
+          '<button class="tnbBtn" data-op="fadeOut">FADE</button>'+
+          '<button class="tnbBtn" data-op="dupe">DUPE</button>'+
+          '<button class="tnbBtn ren" data-ren="'+sel.id+'">RENAME</button>'+
+          '<button class="tnbBtn focus" data-focus="'+(rootOfSel||sel.id)+'">'+(A.focusRoot?'SHOW ALL':'FOCUS')+'</button>'+
+          '</div>';
+      }
     } else if(A.focusRoot){
       strip+='<div id="treeNodeBar"><button class="tnbBtn focus" data-focus="clear">SHOW ALL</button></div>';
     }
@@ -4578,6 +4598,7 @@ function renderLibraryTree(){
     var tog=A.rootsOnly?'·':(famCount?(expanded?'▾':'▸'):'·');
     var h='<div class="treeRoot'+(A.selSet.has(root.id)?' selrow':'')+'" data-id="'+root.id+'">'+
       selCheck(root.id)+
+      '<button class="treePlay" data-play="'+root.id+'" title="play"></button>'+
       '<span class="treeToggle" data-toggle="'+root.id+'">'+tog+'</span>'+
       (seq?'<span class="treeSeq">'+(String(seq).length<2?'0'+seq:seq)+'</span>':'')+
       _treeIndicators(root)+
@@ -4619,7 +4640,7 @@ function renderLibraryTree(){
       function _ms(t){ var m=Math.floor(t/60), s=Math.round(t%60); return m+':'+(s<10?'0':'')+s; }
       html+='<div class="treeGroup" data-group="'+String(g).replace(/"/g,'&quot;')+'">'+
         '<span class="treeGroupToggle">'+(gExp?'▾':'▸')+'</span>'+
-        '<span class="treeGroupName">'+g+'</span>'+
+        '<span class="treeGroupName">[ '+g+' ]</span>'+
         '<span class="treeGroupMeta">'+nRoots+' roots · '+nDer+' der · '+_ms(rootDur)+' roots · '+_ms(totDur)+' total</span>'+
         '<button class="treeGroupPack" data-gpack="'+String(g).replace(/"/g,'&quot;')+'">+pack</button>'+
         (g!=='UNGROUPED'?'<button class="treeGroupFocus" data-gfocus="'+String(g).replace(/"/g,'&quot;')+'">focus</button>':'')+
@@ -4665,6 +4686,14 @@ function renderLibraryTree(){
   });
   // Batch actions (select mode)
   lib.querySelectorAll('.tnbBtn[data-batch]').forEach(function(el){ el.addEventListener('click',function(){ _batchAction(el.dataset.batch); }); });
+  // P4: inline ▶ play per root — one tap, plays without depending on prior selection
+  lib.querySelectorAll('.treePlay[data-play]').forEach(function(el){
+    el.addEventListener('click',async function(e){ e.stopPropagation(); var s=A.samples.find(function(x){return x.id===el.dataset.play;}); if(!s)return; await ensureAC(); A.selectedId=s.id; LME.play(toAB(s),LME.mutType); HISTORY.showToast('▶ '+(_entityLabel(s)).slice(0,22)); renderLibrary(); });
+  });
+  // P3: category chips (one tap) on selected root
+  lib.querySelectorAll('.treeCatChip[data-catset]').forEach(function(el){
+    el.addEventListener('click',async function(){ var s=A.samples.find(function(x){return x.id===A.selectedId;}); if(!s)return; s.cat=el.dataset.catset; await dbPut(s); if(typeof PACK!=='undefined'&&PACK.updateChecklist)PACK.updateChecklist(); renderLibrary(); HISTORY.showToast('category → '+el.dataset.catset.toUpperCase()); });
+  });
   // Explicit context button (mobile-reliable)
   lib.querySelectorAll('.treeCtx[data-ctx]').forEach(function(el){
     el.addEventListener('click',function(e){ e.stopPropagation(); showCtx(el.dataset.ctx,el); });
