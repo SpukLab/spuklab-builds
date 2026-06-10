@@ -2348,6 +2348,30 @@ function fragTriggerMode(slotType){
   return'textural'; // default: emergent
 }
 
+// ─── MATERIAL CLASSIFICATION ─────────────────────────────
+// Single source of truth = slotType. type/role/source/folder all derive from it.
+//   role 'structural' = rhythmic articulation (sequencer-fed)
+//   role 'ecological' = atmosphere/movement/narrative (generative-fed)
+const FRAG_TYPE_MAP={
+  // structural
+  kick_a:{type:'KICK',role:'structural'}, kick_b:{type:'KICK',role:'structural'},
+  snare:{type:'SNARE',role:'structural'}, hat:{type:'HAT',role:'structural'},
+  bass:{type:'BASS',role:'structural'},
+  // ecological
+  texture:{type:'TEXTURE',role:'ecological'}, void:{type:'FX',role:'ecological'},
+  entity:{type:'ATMOS',role:'ecological'},
+  luminous_drone:{type:'DRONE',role:'ecological'}, luminous_spectral:{type:'VOX',role:'ecological'},
+  luminous_tail:{type:'FX',role:'ecological'}, luminous_riser:{type:'FX',role:'ecological'},
+  dark_core:{type:'DRONE',role:'ecological'},
+  vocal:{type:'VOX',role:'ecological'}, voxritual:{type:'RITUAL',role:'ecological'}
+};
+function fragClass(slotType,provenance){
+  const base=FRAG_TYPE_MAP[slotType]||{type:'TEXTURE',role:'ecological'};
+  // source: autoforge if it came from a DNA FORGE profile generation, else manual material/slicing
+  const source=(provenance&&provenance.profile)?'autoforge':'material';
+  return{type:base.type,role:base.role,source};
+}
+
 // ─── LUMINOUS HALO — shared spatial signature for cohesion ───
 // Renders a fragment through a common reverb tail so all fragments share
 // the same space. This is what makes them cohere instead of sounding dry+loose.
@@ -2402,19 +2426,17 @@ async function exportFragmentBank(){
   await new Promise(r=>setTimeout(r,16));
   try{
     const zip=new MinimalZip();
+    // Folder = material type. Structural + ecological coexist in one pack.
     const folderFor=st=>{
-      if(st==='dark_core')return'dark';
-      if(st&&st.startsWith('luminous_'))return'luminous';
-      if(st==='void')return'void';
-      if(['kick_a','kick_b','snare','hat'].includes(st))return'percussion';
-      if(st==='bass')return'bass';
-      return'texture';
+      const c=fragClass(st);
+      return c.type; // KICK / SNARE / HAT / BASS / TEXTURE / DRONE / VOX / FX / ATMOS / RITUAL
     };
     const samples={};   // id -> path  (what BeatsOne loads)
     const entities={};  // id -> behavior (what BeatsOne triggers)
     let li=0,di=0;
     const phaseCounter={}; // round-robin phase assignment per slotType
     const modeCounts={rhythmic:0,textural:0,vocal:0,sub:0};
+    const roleCounts={structural:0,ecological:0};
     const haloOn=document.getElementById('bank-halo-toggle')?.classList.contains('on');
     const haloAmt=0.5; // shared halo amount
     for(let i=0;i<FragmentLibrary.length;i++){
@@ -2442,8 +2464,17 @@ async function exportFragmentBank(){
       const assignedPhase=phaseList[pc%phaseList.length];
       // Slight emergence jitter so no two are identical
       const emJitter=b.emergenceProbability*(0.85+Math.random()*0.3);
+      const cls=fragClass(fr.slotType,fr.provenance);
+      // tags: derive from slotType + provenance role for searchability
+      const tags=[];
+      if(fr.slotType==='dark_core')tags.push('dark','core');
+      if(fr.slotType&&fr.slotType.startsWith('luminous_'))tags.push('luminous',fr.slotType.replace('luminous_',''));
+      if(fr.provenance&&fr.provenance.profile)tags.push(fr.provenance.profile);
+      if(fr.provenance&&fr.provenance.role)tags.push(fr.provenance.role);
       entities[id]={
-        id, type:b.type, folder, audio:file,
+        id, type:b.type, materialType:cls.type, role:cls.role, source:cls.source,
+        tags:tags.length?tags:undefined,
+        folder, audio:file,
         triggerMode:fragTriggerMode(fr.slotType),
         slotType:fr.slotType,
         weatherAffinity:b.weatherAffinity,
@@ -2462,6 +2493,7 @@ async function exportFragmentBank(){
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
       const tm=fragTriggerMode(fr.slotType);if(tm in modeCounts)modeCounts[tm]++;
+      if(cls.role==='structural')roleCounts.structural++;else roleCounts.ecological++;
     }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
     const manifest={
@@ -2479,7 +2511,8 @@ async function exportFragmentBank(){
         bpmAffinity:{min:90,max:140,sweet:120},
         silenceTolerance:0.4,
         verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di},
-        triggerModes:modeCounts
+        triggerModes:modeCounts,
+        materialRoles:roleCounts
       },
       routing:{
         maxSimultaneousEntities:6, maxPolyphony:12,
