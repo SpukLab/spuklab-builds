@@ -2821,6 +2821,7 @@ function dfPlaybackAudition(pb,roleLabel){
   out.connect(lim);lim.connect(masterGain);
   const now=AC.currentTime+0.02;
   const stops=[];
+  const EDGE_G=0.006; // shared edge margin (oneShot uses its own local EDGE too)
 
   // TEMPORAL LOG — role / mode / region / start / end / duration / rate / pitch
   const logLine=`[${roleLabel||'?'}] ${pb.mode}·${pb.region} `
@@ -2879,6 +2880,7 @@ function dfPlaybackAudition(pb,roleLabel){
     try{src.start(at,readOff,Lbuf);}catch(e){try{src.start(at);}catch(_){}}
     src.stop(at+Lout+0.01);
     stops.push(()=>{try{src.stop();}catch(e){}});
+    return Lout; // OUTPUT-time duration — scheduler advances by this, not by buffer length
   }
 
   // ═══ ISOLATION AUDIT — single continuous BufferSource, no chaining ═══
@@ -2896,51 +2898,83 @@ function dfPlaybackAudition(pb,roleLabel){
     return;
   }
 
+  // ═══ OUTPUT-TIME SCHEDULER ═══
+  // Single conceptual rule: everything is scheduled against Lout (output-time grain length,
+  // already incorporating rate + detune), NEVER against buffer-time window length.
+  //   step = Lout / maxConcurrency   → exactly N grains overlap, no gaps, no pile-ups
+  //   fade = step                    → constant-power crossfade with real geometry
+  // Each organism declares maxConcurrency explicitly.
+  const speedF=Math.max(0.05,rate*Math.pow(2,detune/1200));
+  const loutOf=bufLen=>{
+    const ro=clamp(rs,EDGE_G,dur-EDGE_G);
+    const lb=Math.max(0.03,Math.min(bufLen,dur-ro-EDGE_G));
+    return lb/speedF;
+  };
+
   if(pb.mode==='EVENT'){
     oneShot(now,rs,Math.min(re-rs,2.0),0.9,pb.reverse,0.02);
+
   }else if(pb.mode==='LOOP'){
-    const loopLen=Math.max(0.08,pb.loopLen||0.09); // floor 80ms
-    const step=loopLen*0.55;   // 45% overlap
-    const fade=step;           // fade == step → true crossfade
+    const MAXC=2;                       // ≤2 concurrent
+    const loopLen=Math.max(0.08,pb.loopLen||0.09);
+    const Lout=loutOf(loopLen);
+    const step=Lout/MAXC*0.85;          // output-time step, 15% safety overlap (edge-shortened grains never gap)
+    const fade=step;
     const total=5.0; let t=now,pos=rs;
-    const advance=loopLen*(pb.scanSpeed||0);
-    let dir=1; // ping-pong direction instead of hard reset (reset = content jump = click)
+    // limit position drift per step so adjacent grains don't read near-identical points
+    // out of phase (the HYBRID CONSERVATIVE comb-click); cap advance to a musical fraction
+    const advance=Math.min(loopLen*(pb.scanSpeed||0), loopLen*0.5);
+    let dir=1;
     while(t<now+total){
       oneShot(t,pos,loopLen,0.7,pb.reverse,fade);
       t+=step; pos+=advance*dir;
-      if(pos>re-loopLen){pos=re-loopLen;dir=-1;}
+      if(pos>re-loopLen){pos=Math.max(rs,re-loopLen);dir=-1;}
       else if(pos<rs){pos=rs;dir=1;}
     }
+
   }else if(pb.mode==='SCAN'){
-    const win=0.5, step=0.25, total=7.0; // step = win/2 → exactly 2 overlap
-    const fade=step;            // fade == step → constant-power crossfade between windows
-    const gComp=0.62;
-    const span=re-rs; let t=now,frac=0,dir=1;
-    const speed=pb.scanSpeed||0.15;
-    while(t<now+total){
-      oneShot(t,rs+span*clamp(frac,0,0.999),win,gComp,pb.reverse,fade);
-      t+=step; frac+=speed*step*dir;
-      if(frac>1){frac=1;dir=-1;}else if(frac<0){frac=0;dir=1;} // ping-pong, no jump
-    }
-  }else if(pb.mode==='DRIFT'){
-    const win=0.8, step=0.4, total=8.0;
+    const MAXC=2;
+    const win=0.5;
+    const Lout=loutOf(win);
+    const step=Lout/MAXC*0.85; // 15% safety overlap
     const fade=step;
-    const gComp=0.62;
-    const span=re-rs; let t=now,frac=0;
-    const speed=pb.scanSpeed||0.06;
+    const total=7.0, span=re-rs; let t=now,frac=0,dir=1;
+    // position advance is per-step in OUTPUT time; scanSpeed scales musical traversal
+    const fracPerStep=(pb.scanSpeed||0.15)*step;
     while(t<now+total){
-      oneShot(t,rs+span*clamp(frac,0,0.999),win,gComp,pb.reverse,fade);
-      t+=step; frac+=speed*step; if(frac>1)frac=1; // drift settles, never jumps
+      oneShot(t,rs+span*clamp(frac,0,0.999),win,0.62,pb.reverse,fade);
+      t+=step; frac+=fracPerStep*dir;
+      if(frac>1){frac=1;dir=-1;}else if(frac<0){frac=0;dir=1;}
     }
+
+  }else if(pb.mode==='DRIFT'){
+    const MAXC=2;
+    const win=0.8;
+    const Lout=loutOf(win);
+    const step=Lout/MAXC*0.85; // 15% safety overlap
+    const fade=step;
+    const total=8.0, span=re-rs; let t=now,frac=0;
+    const fracPerStep=(pb.scanSpeed||0.06)*step;
+    while(t<now+total){
+      oneShot(t,rs+span*clamp(frac,0,0.999),win,0.62,pb.reverse,fade);
+      t+=step; frac+=fracPerStep; if(frac>1)frac=1; // settles, never jumps
+    }
+
   }else if(pb.mode==='SWARM'){
-    const win=0.6,step=0.3,total=6.0,span=re-rs;
-    const fade=step,gComp=0.33; // lower per-grain gain (3 layers sum)
+    const MAXC=3;                        // ≤3 concurrent total
+    const win=0.6;
+    const Lout=loutOf(win);
+    // For N layers each at MAXC/N concurrency: step so total overlap = MAXC
+    const step=Lout/MAXC*3;              // 3 layers staggered → ~3 concurrent overall
+    const fade=Lout/2;                   // each grain crossfades with its layer neighbor
+    const total=6.0, span=re-rs;
     for(let layer=0;layer<3;layer++){
-      let t=now+layer*(step/3),frac=layer*0.3,dir=1; // stagger layers
+      let t=now+layer*(step/3),frac=layer*0.3,dir=1;
+      const fracPerStep=(pb.scanSpeed||0.3)*step;
       while(t<now+total){
-        oneShot(t,rs+span*clamp(frac,0,0.999),win,gComp,pb.reverse,fade);
-        t+=step;frac+=(pb.scanSpeed||0.3)*step*dir;
-        if(frac>1){frac=1;dir=-1;}else if(frac<0){frac=0;dir=1;} // ping-pong, no jump
+        oneShot(t,rs+span*clamp(frac,0,0.999),win,0.33,pb.reverse,fade);
+        t+=step;frac+=fracPerStep*dir;
+        if(frac>1){frac=1;dir=-1;}else if(frac<0){frac=0;dir=1;}
       }
     }
   }
