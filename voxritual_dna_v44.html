@@ -843,6 +843,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .ctxGroupBtn:active{background:rgba(0,220,160,.22);color:#fff}
 .ctxGroupBtn.new{flex:1 1 100%;border-color:rgba(0,220,160,.45);color:rgba(0,255,180,.95);font-weight:700}
 .ctxGroupBtn.none{flex:1 1 100%;border-color:rgba(255,255,255,.12);color:rgba(255,255,255,.4)}
+.ctxGenBtn{flex:1 1 45%;padding:.4rem .2rem;font-size:.62rem;font-weight:700;font-family:'JetBrains Mono',monospace;border:1px solid rgba(180,120,255,.3);background:rgba(180,120,255,.08);color:rgba(210,170,255,.9);border-radius:3px;cursor:pointer;white-space:nowrap}
+.ctxGenBtn:active{background:rgba(180,120,255,.28);color:#fff}
 .ctxBtn.tray{color:rgba(0,220,160,.65)}
 #ctxOverlay{position:fixed;inset:0;z-index:299;display:none}
 #fInput{display:none}
@@ -889,6 +891,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
     <div id="ctxGroupGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;border-bottom:1px solid rgba(153,68,255,.1)"></div>
     <button class="ctxBtn rootonly" data-a="moveUp">MOVE UP</button>
     <button class="ctxBtn rootonly" data-a="moveDown">MOVE DOWN</button>
+    <button class="ctxBtn rootonly" data-a="gen8">GENERATE 8 ▸</button>
+    <div id="ctxGenGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;border-bottom:1px solid rgba(153,68,255,.1)">
+      <button class="ctxGenBtn" data-gen="neutral">NEUTRAL</button>
+      <button class="ctxGenBtn" data-gen="ritual">RITUAL</button>
+      <button class="ctxGenBtn" data-gen="ghost">GHOST</button>
+      <button class="ctxGenBtn" data-gen="degraded">DEGRADED</button>
+    </div>
     <button class="ctxBtn derivonly" data-a="promote">PROMOTE</button>
     <button class="ctxBtn del"  data-a="del">DELETE</button>
   </div>
@@ -4734,7 +4743,7 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var isR=_isRoot(s);menu.querySelectorAll('.rootonly').forEach(function(b){b.style.display=isR?'':'none';});menu.querySelectorAll('.derivonly').forEach(function(b){b.style.display=isR?'none':'';});var pB=menu.querySelector('[data-a="promote"]');if(pB)pB.textContent=s.promoted?'UNPROMOTE':'PROMOTE';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var gengrid=document.getElementById('ctxGenGrid');if(gengrid)gengrid.style.display='none';var isR=_isRoot(s);menu.querySelectorAll('.rootonly').forEach(function(b){b.style.display=isR?'':'none';});menu.querySelectorAll('.derivonly').forEach(function(b){b.style.display=isR?'none':'';});var pB=menu.querySelector('[data-a="promote"]');if(pB)pB.textContent=s.promoted?'UNPROMOTE':'PROMOTE';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -4779,11 +4788,19 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     }
     return;
   }
+  // GENERATE 8 reveals the bias grid (neutral/ritual/ghost/degraded)
+  if(btn.dataset.a==='gen8'){
+    var gen=document.getElementById('ctxGenGrid'); var tg3=document.getElementById('ctxTypeGrid'); var cg3=document.getElementById('ctxCatGrid'); var gg3=document.getElementById('ctxGroupGrid');
+    if(tg3)tg3.style.display='none'; if(cg3)cg3.style.display='none'; if(gg3)gg3.style.display='none';
+    if(gen) gen.style.display=(gen.style.display==='none'?'flex':'none');
+    return;
+  }
   const id=ctxId;hideCtx();const s=A.samples.find(x=>x.id===id);if(!s)return;
   switch(btn.dataset.a){
     case 'setType':{ break; }
     case 'moveCat':{ break; }
     case 'moveGroup':{ break; }
+    case 'gen8':{ break; }
     case 'moveUp':{ moveRoot(id,-1); break; }
     case 'moveDown':{ moveRoot(id,1); break; }
     case 'promote':{ s.promoted=!s.promoted; await dbPut(s); renderLibrary(); HISTORY.showToast(s.promoted?('promoted · '+(s.mutationOf||'variant')):'unpromoted'); break; }
@@ -4795,6 +4812,13 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     case 'normNow':{await ensureAC();const mode=A.normMode==='off'?'soft':A.normMode;const{gain,meta}=NORM.compute(toAB(s),mode);const nb=NORM.applyToBuffer(toAB(s),gain);const child=await buildRecord(nb,{name:`${s.name}_N${mode}`,cat:s.cat,parentId:s.id,mutationOf:`norm_${mode}`});child.fragmentIdentity.normalized=meta;await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);break;}
   }
 }));
+// Context-menu GENERATE 8 bias buttons → generate variants on ctxId root
+document.querySelectorAll('.ctxGenBtn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var id=ctxId; hideCtx();
+    generate8(id, btn.dataset.gen);
+  });
+});
 // Context-menu entity-type buttons → apply to ctxId (reuses setFragType)
 document.querySelectorAll('.ctxTypeBtn').forEach(function(btn){
   btn.addEventListener('click',function(){
@@ -5055,6 +5079,52 @@ async function offlineRender(srcBuf,type){
   const len=srcBuf.length,rate=srcBuf.sampleRate;const offAC=new OfflineAudioContext(2,len,rate);const stereo=offAC.createBuffer(2,len,rate);for(let c=0;c<2;c++)stereo.copyToChannel(srcBuf.getChannelData(Math.min(c,srcBuf.numberOfChannels-1)),c);const src=offAC.createBufferSource();src.buffer=stereo;let last=src;
   switch(type){case 'dissolve':{const ds=[0.031,0.088,0.21].map(t=>{const d=offAC.createDelay(2);d.delayTime.value=t;return d;});const ws=[0.22,0.13,0.06].map(v=>offMkG(offAC,v));const dry=offMkG(offAC,0.88),mix=offAC.createGain();src.connect(dry);ds.forEach((d,i)=>{src.connect(d);d.connect(ws[i]);ws[i].connect(mix);});dry.connect(mix);last=mix;break;}case 'collapse':{const hpf=offAC.createBiquadFilter();hpf.type='highpass';hpf.frequency.value=180;const bp=offAC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=1.4;const sat=offAC.createWaveShaper();sat.curve=dCurve(28);sat.oversample='2x';const satG=offMkG(offAC,0.18),dryG=offMkG(offAC,0.85),mix=offAC.createGain(),outG=offMkG(offAC,0.76);src.connect(hpf);hpf.connect(bp);bp.connect(dryG);dryG.connect(mix);bp.connect(sat);sat.connect(satG);satG.connect(mix);mix.connect(outG);last=outG;break;}case 'ritual':{const lpf=offAC.createBiquadFilter();lpf.type='lowshelf';lpf.frequency.value=3200;lpf.gain.value=-4;const d=offAC.createDelay(2);d.delayTime.value=0.195;const fb=offMkG(offAC,0.27),wet=offMkG(offAC,0.30),dry=offMkG(offAC,0.84),mix=offMkG(offAC,0.88);src.connect(lpf);lpf.connect(dry);src.connect(d);d.connect(fb);fb.connect(d);d.connect(wet);dry.connect(mix);wet.connect(mix);last=mix;break;}case 'fever':{src.playbackRate.value=1+(Math.random()*0.014-0.007);const split=offAC.createChannelSplitter(2),merge=offAC.createChannelMerger(2);const lG=offMkG(offAC,1.0),rG=offMkG(offAC,0.84),tremG=offAC.createGain();tremG.gain.value=0.9;const step=0.024,dur=srcBuf.duration;for(let t=0;t<dur;t+=step){const v=0.82+Math.sin(t*7.3*6.283)*0.10+Math.sin(t*15.1*6.283)*0.03;tremG.gain.setValueAtTime(Math.max(0.52,v),t);}src.connect(split);split.connect(lG,0);lG.connect(merge,0,0);split.connect(rG,1);rG.connect(merge,0,1);merge.connect(tremG);const outG=offMkG(offAC,0.82);tremG.connect(outG);last=outG;break;}}
   const lim=offAC.createDynamicsCompressor();lim.threshold.value=-9;lim.knee.value=3;lim.ratio.value=12;lim.attack.value=0.002;lim.release.value=0.1;last.connect(lim);lim.connect(offAC.destination);src.start(0);return offAC.startRendering();
+}
+
+// ═══ GENERATE 8 — narrative variant generator (orchestrates EXISTING offline renders only) ═══
+var GEN_TX = {
+  pitchUp: function(b){return surgPitch(b,1.122,0,b.duration);},
+  pitchDn: function(b){return surgPitch(b,0.891,0,b.duration);},
+  slow:    function(b){return surgPitch(b,0.5,0,b.duration);},
+  fast:    function(b){return surgPitch(b,1.5,0,b.duration);},
+  reverse: function(b){return surgReverse(b,0,b.duration);},
+  fadeIn:  function(b){return surgFade(b,'in',0,b.duration);},
+  fadeOut: function(b){return surgFade(b,'out',0,b.duration);},
+  dissolve:function(b){return offlineRender(b,'dissolve');},
+  collapse:function(b){return offlineRender(b,'collapse');},
+  ritual:  function(b){return offlineRender(b,'ritual');},
+  fever:   function(b){return offlineRender(b,'fever');},
+  drift:   function(b){return renderVIE(b,'drift');},
+  tunnel:  function(b){return renderVIE(b,'tunnel');},
+  memory:  function(b){return renderVIE(b,'memory');},
+  hollow:  function(b){return renderVIE(b,'hollow');}
+};
+// 8 distinct recipes per bias (no duplicates; order matters → distinct audio)
+var GEN_RECIPES = {
+  neutral:  [['pitchUp'],['pitchDn'],['slow'],['fast'],['reverse'],['fadeOut'],['pitchDn','slow'],['pitchUp','reverse']],
+  ritual:   [['ritual'],['ritual','slow'],['drift'],['tunnel'],['drift','ritual'],['tunnel','ritual'],['slow','drift'],['slow','ritual','tunnel']],
+  ghost:    [['dissolve'],['memory'],['hollow'],['dissolve','memory'],['dissolve','hollow'],['memory','hollow'],['dissolve','memory','hollow'],['memory','dissolve']],
+  degraded: [['collapse'],['fever'],['fast'],['reverse'],['collapse','fast'],['fever','reverse'],['collapse','fever'],['fast','reverse','collapse']]
+};
+async function generate8(rootId, bias){
+  var root=A.samples.find(function(x){return x.id===rootId;}); if(!root) return;
+  if(!_isRoot(root)){ HISTORY.showToast('generate works on roots only'); return; }
+  var recipes=GEN_RECIPES[bias]; if(!recipes) return;
+  await ensureAC();
+  for(var i=0;i<recipes.length;i++){
+    var steps=recipes[i], label=steps.join('+');
+    HISTORY.showToast('Generating '+(i+1)+'/8 · '+label);
+    try{
+      var buf=toAB(root);
+      for(var k=0;k<steps.length;k++){ buf=await GEN_TX[steps[k]](buf); }
+      buf=applyFadeTails(buf,10);
+      var child=await buildRecord(buf,{name:root.name+'_'+label,cat:root.cat,parentId:root.id,mutationOf:label});
+      await dbPut(child); A.samples.push(child);
+    }catch(e){ console.error('generate8',label,e); }
+  }
+  A.treeExpanded[root.id]=true; // reveal the new variants
+  renderLibrary();
+  HISTORY.showToast('generated 8 · '+bias.toUpperCase());
 }
 
 // ─── NORMALIZATION UI ─────────────────────────────────────────────────────
