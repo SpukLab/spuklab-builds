@@ -44,6 +44,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .treeGroupName{font-size:.8rem;font-weight:700;color:rgba(120,235,195,.92);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
 .treeGroupMeta{font-size:.62rem;color:rgba(0,220,160,.45);margin-left:auto;flex-shrink:0}
 .treeGroupFocus{flex-shrink:0;margin-left:.4rem;padding:.2rem .45rem;font-size:.58rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,200,255,.25);background:rgba(0,200,255,.06);color:rgba(140,210,255,.8);border-radius:3px;cursor:pointer}
+.treeGroupPack{flex-shrink:0;margin-left:.3rem;padding:.2rem .45rem;font-size:.58rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,220,160,.3);background:rgba(0,220,160,.07);color:rgba(0,235,170,.85);border-radius:3px;cursor:pointer}
+.treeSeq{flex-shrink:0;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:rgba(0,220,160,.6);min-width:1.3rem;text-align:right}
+.treeInPack{flex-shrink:0;font-size:.54rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:rgba(0,200,255,.9);border:1px solid rgba(0,180,255,.35);background:rgba(0,180,255,.08);border-radius:2px;padding:0 .22rem;letter-spacing:.03em}
 .treeSelCheck{min-width:1.3rem;height:1.3rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,180,0,.4);border-radius:3px;background:rgba(255,180,0,.05);color:rgba(255,210,100,.95);font-size:.7rem;cursor:pointer;flex-shrink:0;user-select:none}
 .treeSelCheck.on{background:rgba(255,180,0,.28);border-color:rgba(255,200,0,.7)}
 .treeRoot.selrow,.treeChild.selrow{background:rgba(255,180,0,.08)}
@@ -1127,6 +1130,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
              <button class="sBtn" data-op="fadeOut">FADE-OUT</button>
              <button class="sBtn bounce" id="bounceBtn">BOUNCE</button>
              <button class="sBtn" id="surgSendGroupBtn">→ GROUP ▸</button>
+             <button class="sBtn" id="surgSendLastBtn">→ LAST</button>
            </div>
            <div id="surgGroupGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px"></div>
          </div><!-- /surgBasic -->
@@ -3444,7 +3448,7 @@ const A = {
   activeMode:'capture', cycleActive:false, cycleTimer:null,
   cap:{stream:null,recorder:null,chunks:[],timer:null,startMs:0,msrc:null},
   // ── CONSOLIDATION (v44) — search, tree view, pack selection ──
-  search:'', libView:'list', treeExpanded:{}, packSel:new Set(), focusRoot:null, renamingId:null, groupView:'grouped', groupExpanded:{}, selectMode:false, selSet:new Set(), focusGroup:null,
+  search:'', libView:'list', treeExpanded:{}, packSel:new Set(), focusRoot:null, renamingId:null, groupView:'grouped', groupExpanded:{}, selectMode:false, selSet:new Set(), focusGroup:null, lastGroup:null,
   debugOn:false
 };
 const STATES=['fragile','collapse','ritual','ghost','fever'];
@@ -4358,7 +4362,7 @@ function _childrenOf(id){ return A.samples.filter(function(x){ return x.parentId
 function _isRoot(s){ return !s.parentId || !A.samples.find(function(x){ return x.id===s.parentId; }); }
 // ── GROUPS (v44): root.group is the only new field. Derivatives inherit via root. ──
 function existingGroups(){ return Array.from(new Set(A.samples.filter(_isRoot).map(function(r){return r.group;}).filter(Boolean))).sort(); }
-function assignGroupToRootOf(id, group){ var rid=_rootOf(id); var r=A.samples.find(function(x){return x.id===rid;}); if(!r) return; var tgt=group||null; if(r.group!==tgt){ r.order=undefined; } r.group=tgt; if(typeof dbPut==='function')dbPut(r); }
+function assignGroupToRootOf(id, group){ var rid=_rootOf(id); var r=A.samples.find(function(x){return x.id===rid;}); if(!r) return; var tgt=group||null; if(r.group!==tgt){ r.order=undefined; } r.group=tgt; if(tgt) A.lastGroup=tgt; if(typeof dbPut==='function')dbPut(r); }
 // ── ROOT ORDERING (v44 narrative sequencing) — root.order, roots only ──
 // Display sort: explicit order first (ascending); unordered roots keep insertion order and sink last.
 function _sortRootsForDisplay(arr){
@@ -4370,18 +4374,32 @@ function _sortRootsForDisplay(arr){
     return 0;
   });
 }
-function moveRoot(id, dir){
-  var r=A.samples.find(function(x){return x.id===id;}); if(!r || !_isRoot(r)) return;
-  var g=(r.group||'UNGROUPED');
-  var inG=_sortRootsForDisplay(A.samples.filter(function(x){ return _isRoot(x) && (x.group||'UNGROUPED')===g; }));
-  var idx=-1; for(var i=0;i<inG.length;i++){ if(inG[i].id===id){idx=i;break;} }
-  var swap=idx+dir;
-  if(idx<0 || swap<0 || swap>=inG.length) return; // edge: first up / last down → no change
-  var t=inG[idx]; inG[idx]=inG[swap]; inG[swap]=t;
-  inG.forEach(function(rt,i){ rt.order=i; if(typeof dbPut==='function')dbPut(rt); }); // normalize 0..n-1 + persist
-  renderLibrary();
-  HISTORY.showToast(dir<0?'moved up':'moved down');
+function _rootsInGroup(g){ return A.samples.filter(function(x){ return _isRoot(x) && (x.group||'UNGROUPED')===g; }); }
+// P7: re-sequence a group's roots to contiguous 0..n-1 and persist (shared by MOVE UP/DOWN + future drag)
+function normalizeRootOrder(g){
+  var L=_sortRootsForDisplay(_rootsInGroup(g));
+  L.forEach(function(rt,i){ if(rt.order!==i){ rt.order=i; if(typeof dbPut==='function')dbPut(rt); } });
+  return L;
 }
+// P7/P1: move a block of roots (1..n) up/down within their group, preserving internal order
+function moveRootBlock(ids, dir){
+  if(!ids || !ids.length) return;
+  var first=A.samples.find(function(x){return x.id===ids[0];}); if(!first || !_isRoot(first)) return;
+  var g=(first.group||'UNGROUPED');
+  var L=_sortRootsForDisplay(_rootsInGroup(g));
+  var sel=new Set(ids.filter(function(id){ var r=A.samples.find(x=>x.id===id); return r && _isRoot(r) && (r.group||'UNGROUPED')===g; }));
+  if(!sel.size) return;
+  var selItems=L.filter(function(r){ return sel.has(r.id); });
+  var before=[], after=[], seenSel=false;
+  L.forEach(function(r){ if(sel.has(r.id)){ seenSel=true; return; } if(!seenSel) before.push(r); else after.push(r); });
+  var neworder;
+  if(dir<0){ if(!before.length) return; neworder=before.slice(0,before.length-1).concat(selItems,[before[before.length-1]],after); }
+  else     { if(!after.length)  return; neworder=before.concat([after[0]],selItems,after.slice(1)); }
+  neworder.forEach(function(rt,i){ rt.order=i; if(typeof dbPut==='function')dbPut(rt); });
+  renderLibrary();
+  HISTORY.showToast((selItems.length>1?'block ':'')+(dir<0?'moved up':'moved down'));
+}
+function moveRoot(id, dir){ moveRootBlock([id], dir); }
 function _rootOf(id){
   var cur=A.samples.find(function(x){return x.id===id;}); var guard=0;
   while(cur && cur.parentId && A.samples.find(function(x){return x.id===cur.parentId;}) && guard<12){
@@ -4415,6 +4433,15 @@ function _batchAction(kind){
   if(kind==='pack'){ ids.forEach(function(id){ A.packSel.add(id); }); HISTORY.showToast(ids.length+' added to pack'); renderLibrary(); return; }
   if(kind==='group'){ _batchShowGrid('group'); return; }
   if(kind==='type'){ _batchShowGrid('type'); return; }
+  if(kind==='up' || kind==='down'){
+    // P1: block reorder — only the selected ROOTS, within their group, preserving internal order
+    var selRoots=ids.filter(function(id){ var r=A.samples.find(x=>x.id===id); return r && _isRoot(r); });
+    if(!selRoots.length){ HISTORY.showToast('select roots to reorder'); return; }
+    // order them by current display order so the block is coherent
+    selRoots=_sortRootsForDisplay(selRoots.map(function(id){return A.samples.find(x=>x.id===id);})).map(function(r){return r.id;});
+    moveRootBlock(selRoots, kind==='up'?-1:1);
+    return;
+  }
   if(kind==='del'){
     if(!_batchDelArm){ _batchDelArm=true; HISTORY.showToast('tap DELETE again to remove '+ids.length+' (+derivatives)'); setTimeout(function(){_batchDelArm=false;},3000); return; }
     _batchDelArm=false;
@@ -4494,6 +4521,8 @@ function renderLibraryTree(){
     strip+='<div id="treeBatchBar"><span class="tnbSel">'+nSel+' selected</span>';
     if(nSel>0){
       strip+='<button class="tnbBtn" data-batch="group">MOVE TO GROUP ▸</button>'+
+             '<button class="tnbBtn" data-batch="up">MOVE UP</button>'+
+             '<button class="tnbBtn" data-batch="down">MOVE DOWN</button>'+
              '<button class="tnbBtn" data-batch="type">SET TYPE ▸</button>'+
              '<button class="tnbBtn" data-batch="fav">FAVORITE</button>'+
              '<button class="tnbBtn" data-batch="pack">ADD TO PACK</button>'+
@@ -4533,7 +4562,7 @@ function renderLibraryTree(){
   }
   var html=strip;
   function selCheck(id){ return A.selectMode?('<span class="treeSelCheck'+(A.selSet.has(id)?' on':'')+'" data-sel="'+id+'">'+(A.selSet.has(id)?'✓':'')+'</span>'):''; }
-  function rootHtml(root){
+  function rootHtml(root, seq){
     var fam=_familyIds(root.id);
     var famCount=fam.size-1;
     var expanded=A.treeExpanded[root.id]!==false;
@@ -4542,8 +4571,10 @@ function renderLibraryTree(){
     var h='<div class="treeRoot'+(A.selSet.has(root.id)?' selrow':'')+'" data-id="'+root.id+'">'+
       selCheck(root.id)+
       '<span class="treeToggle" data-toggle="'+root.id+'">'+(famCount?(expanded?'▾':'▸'):'·')+'</span>'+
+      (seq?'<span class="treeSeq">'+seq+'.</span>':'')+
       _treeIndicators(root)+
       nameCell(root,false)+
+      (inPack?'<span class="treeInPack">IN PACK</span>':'')+
       '<span class="treeMeta">'+fmt(root.duration)+(fi.type?' · '+fi.type:'')+(famCount?' · ['+famCount+']':'')+'</span>'+
       '<button class="treeCtx" data-ctx="'+root.id+'">...</button>'+
       '<button class="treeAddFam'+(inPack?' on':'')+'" data-fam="'+root.id+'">+pack</button>'+
@@ -4574,16 +4605,17 @@ function renderLibraryTree(){
     order.forEach(function(g){
       var gExp=A.groupExpanded[g]!==false; // default expanded
       // P6: roots · total derivatives · total duration (computed from existing structures)
-      var gRoots=_sortRootsForDisplay(groups[g]), nRoots=gRoots.length, nDer=0, totDur=0;
-      gRoots.forEach(function(r){ var fids=_familyIds(r.id); nDer+=(fids.size-1); fids.forEach(function(id){ var sm=A.samples.find(x=>x.id===id); if(sm)totDur+=(sm.duration||0); }); });
-      var mm=Math.floor(totDur/60), ss=Math.round(totDur%60); var durStr=mm+':'+(ss<10?'0':'')+ss;
+      var gRoots=_sortRootsForDisplay(groups[g]), nRoots=gRoots.length, nDer=0, totDur=0, rootDur=0;
+      gRoots.forEach(function(r){ rootDur+=(r.duration||0); var fids=_familyIds(r.id); nDer+=(fids.size-1); fids.forEach(function(id){ var sm=A.samples.find(x=>x.id===id); if(sm)totDur+=(sm.duration||0); }); });
+      function _ms(t){ var m=Math.floor(t/60), s=Math.round(t%60); return m+':'+(s<10?'0':'')+s; }
       html+='<div class="treeGroup" data-group="'+String(g).replace(/"/g,'&quot;')+'">'+
         '<span class="treeGroupToggle">'+(gExp?'▾':'▸')+'</span>'+
         '<span class="treeGroupName">'+g+'</span>'+
-        '<span class="treeGroupMeta">'+nRoots+' roots · '+nDer+' der · '+durStr+'</span>'+
+        '<span class="treeGroupMeta">'+nRoots+' roots · '+nDer+' der · '+_ms(rootDur)+' roots · '+_ms(totDur)+' total</span>'+
+        '<button class="treeGroupPack" data-gpack="'+String(g).replace(/"/g,'&quot;')+'">+pack</button>'+
         (g!=='UNGROUPED'?'<button class="treeGroupFocus" data-gfocus="'+String(g).replace(/"/g,'&quot;')+'">focus</button>':'')+
         '</div>';
-      if(gExp) gRoots.forEach(function(r){ html+=rootHtml(r); });
+      if(gExp) gRoots.forEach(function(r,ri){ html+=rootHtml(r,ri+1); });
     });
   } else {
     roots.forEach(function(r){ html+=rootHtml(r); });
@@ -4592,6 +4624,10 @@ function renderLibraryTree(){
   // Group focus button (isolate one group) — stop propagation so it doesn't toggle collapse
   lib.querySelectorAll('.treeGroupFocus[data-gfocus]').forEach(function(el){
     el.addEventListener('click',function(e){ e.stopPropagation(); A.focusGroup=el.dataset.gfocus; renderLibrary(); });
+  });
+  // P2: +PACK GROUP — add every root family in the group to the pack (dedup via Set)
+  lib.querySelectorAll('.treeGroupPack[data-gpack]').forEach(function(el){
+    el.addEventListener('click',function(e){ e.stopPropagation(); var g=el.dataset.gpack; _rootsInGroup(g).forEach(function(r){ _familyIds(r.id).forEach(function(id){ A.packSel.add(id); }); }); HISTORY.showToast('Group added to pack'); renderLibrary(); });
   });
   // SHOW ALL GROUPS bar
   lib.querySelectorAll('[data-groupfocus]').forEach(function(el){
@@ -4923,6 +4959,15 @@ document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
       grid.style.display='none'; A.groupView='grouped'; renderLibrary();
       HISTORY.showToast(target?('sent → '+target):'ungrouped');
     }); });
+  });
+  // P4: → LAST sends the current sample's root to the last group used, no picker
+  var bl=document.getElementById('surgSendLastBtn');
+  if(bl) bl.addEventListener('click',function(){
+    var cur=sample(); if(!cur){ HISTORY.showToast('select a fragment first'); return; }
+    if(!A.lastGroup){ HISTORY.showToast('no last group yet — use → GROUP once'); return; }
+    assignGroupToRootOf(cur.id, A.lastGroup);
+    A.groupView='grouped'; renderLibrary();
+    HISTORY.showToast('sent → '+A.lastGroup);
   });
 })();
 
