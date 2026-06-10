@@ -60,7 +60,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .treeSelCheck{min-width:1.3rem;height:1.3rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,180,0,.4);border-radius:3px;background:rgba(255,180,0,.05);color:rgba(255,210,100,.95);font-size:.7rem;cursor:pointer;flex-shrink:0;user-select:none}
 .treeSelCheck.on{background:rgba(255,180,0,.28);border-color:rgba(255,200,0,.7)}
 .treeRoot.selrow,.treeChild.selrow{background:rgba(255,180,0,.08)}
-#treeBatchBar,#treeGroupFocusBar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.42rem .5rem;background:rgba(255,180,0,.07);border-bottom:1px solid rgba(255,180,0,.18);position:sticky;top:0;z-index:2}
+#treeBatchBar,#treeGroupFocusBar{display:flex;align-items:center;gap:.4rem;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.42rem .5rem;background:rgba(255,180,0,.07);border-bottom:1px solid rgba(255,180,0,.18);position:sticky;top:0;z-index:2}
+#treeBatchBar::-webkit-scrollbar{height:0;display:none}
+.batchArrow{flex-shrink:0;color:rgba(0,235,170,.8);font-size:.78rem;font-weight:700}
+.batchSep{flex-shrink:0;width:1px;height:1.1rem;background:rgba(255,255,255,.18);margin:0 .1rem}
+.bGroupChip{flex-shrink:0;padding:.3rem .55rem;font-size:.62rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(0,220,160,.3);background:rgba(0,220,160,.08);color:rgba(0,235,170,.9);border-radius:12px;cursor:pointer;white-space:nowrap}
+.bGroupChip:active{background:rgba(0,220,160,.28);color:#fff}
+.bGroupChip.new{border-color:rgba(0,220,160,.5);color:rgba(0,255,180,.95);font-weight:700}
 #treeGroupFocusBar{background:rgba(0,200,255,.07);border-bottom-color:rgba(0,200,255,.18)}
 .treeRoot{display:flex;align-items:center;gap:.34rem;padding:.5rem .55rem;border-bottom:1px solid rgba(153,68,255,.06);font-family:'JetBrains Mono',monospace}
 .treeChild{display:flex;align-items:center;gap:.34rem;padding:.42rem .55rem;border-bottom:1px solid rgba(153,68,255,.03);font-family:'JetBrains Mono',monospace}
@@ -823,7 +829,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
 .modeTab.flash{animation:montFlash .7s ease-out}
 /* Context menu */
 #ctxMenu{position:fixed;z-index:300;background:rgba(14,11,26,.97);border:1px solid rgba(153,68,255,.25);
-  border-radius:3px;display:none;flex-direction:column;min-width:145px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+  border-radius:3px;display:none;flex-direction:column;min-width:145px;box-shadow:0 4px 20px rgba(0,0,0,.6);max-height:calc(100vh - 16px);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .ctxBtn{padding:.44rem .72rem;border:none;background:transparent;color:rgba(255,255,255,.68);
   font-size:.73rem;font-weight:700;cursor:pointer;text-align:left;letter-spacing:.04em;
   border-bottom:1px solid rgba(153,68,255,.07)}
@@ -4452,8 +4458,8 @@ function _batchAction(kind){
   var ids=Array.from(A.selSet);
   if(kind==='clear'){ A.selSet.clear(); _batchDelArm=false; renderLibrary(); return; }
   if(!ids.length) return;
-  if(kind==='fav'){ ids.forEach(function(id){ var s=A.samples.find(x=>x.id===id); if(s){s.favorite=true;dbPut(s);} }); HISTORY.showToast(ids.length+' favorited'); renderLibrary(); return; }
-  if(kind==='pack'){ ids.forEach(function(id){ A.packSel.add(id); }); HISTORY.showToast(ids.length+' added to pack'); renderLibrary(); return; }
+  if(kind==='fav'){ ids.forEach(function(id){ var s=A.samples.find(x=>x.id===id); if(s){s.favorite=true;dbPut(s);} }); A.selSet.clear(); HISTORY.showToast(ids.length+' favorited'); renderLibrary(); return; }
+  if(kind==='pack'){ ids.forEach(function(id){ A.packSel.add(id); }); A.selSet.clear(); HISTORY.showToast(ids.length+' added to pack'); renderLibrary(); return; }
   if(kind==='group'){ _batchShowGrid('group'); return; }
   if(kind==='type'){ _batchShowGrid('type'); return; }
   if(kind==='up' || kind==='down'){
@@ -4463,6 +4469,7 @@ function _batchAction(kind){
     // order them by current display order so the block is coherent
     selRoots=_sortRootsForDisplay(selRoots.map(function(id){return A.samples.find(x=>x.id===id);})).map(function(r){return r.id;});
     moveRootBlock(selRoots, kind==='up'?-1:1);
+    A.selSet.clear(); renderLibrary();
     return;
   }
   if(kind==='del'){
@@ -4541,15 +4548,20 @@ function renderLibraryTree(){
   }
   if(A.selectMode){
     var nSel=A.selSet.size;
-    strip+='<div id="treeBatchBar"><span class="tnbSel">'+nSel+' selected</span>';
+    strip+='<div id="treeBatchBar"><span class="tnbSel">'+nSel+' sel</span>';
     if(nSel>0){
-      strip+='<button class="tnbBtn" data-batch="group">MOVE TO GROUP ▸</button>'+
-             '<button class="tnbBtn" data-batch="up">MOVE UP</button>'+
-             '<button class="tnbBtn" data-batch="down">MOVE DOWN</button>'+
-             '<button class="tnbBtn" data-batch="type">SET TYPE ▸</button>'+
-             '<button class="tnbBtn" data-batch="fav">FAVORITE</button>'+
-             '<button class="tnbBtn" data-batch="pack">ADD TO PACK</button>'+
-             '<button class="tnbBtn del" data-batch="del">DELETE</button>'+
+      // P4: one-tap move-to-group — destinations inline (no submenu)
+      strip+='<span class="batchArrow">→</span>';
+      strip+='<button class="bGroupChip new" data-bmg="__new__">+NEW</button>';
+      existingGroups().forEach(function(g){ strip+='<button class="bGroupChip" data-bmg="'+String(g).replace(/"/g,'&quot;')+'">'+g+'</button>'; });
+      strip+='<span class="batchSep"></span>';
+      // P3: streamlined secondary actions
+      strip+='<button class="tnbBtn" data-batch="up">UP</button>'+
+             '<button class="tnbBtn" data-batch="down">DN</button>'+
+             '<button class="tnbBtn" data-batch="type">TYPE ▸</button>'+
+             '<button class="tnbBtn" data-batch="fav">FAV</button>'+
+             '<button class="tnbBtn" data-batch="pack">PACK</button>'+
+             '<button class="tnbBtn del" data-batch="del">DEL</button>'+
              '<button class="tnbBtn" data-batch="clear">CLEAR</button>';
     }
     strip+='<div id="treeBatchGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px;flex-basis:100%"></div>';
@@ -4695,6 +4707,8 @@ function renderLibraryTree(){
   });
   // Batch actions (select mode)
   lib.querySelectorAll('.tnbBtn[data-batch]').forEach(function(el){ el.addEventListener('click',function(){ _batchAction(el.dataset.batch); }); });
+  // P4: inline batch group chips — one tap moves all selected (auto-clears)
+  lib.querySelectorAll('.bGroupChip[data-bmg]').forEach(function(el){ el.addEventListener('click',function(){ _batchApplyGroup(el.dataset.bmg); }); });
   // P4: inline ▶ play per root — one tap, plays without depending on prior selection
   lib.querySelectorAll('.treePlay[data-play]').forEach(function(el){
     el.addEventListener('click',async function(e){ e.stopPropagation(); var s=A.samples.find(function(x){return x.id===el.dataset.play;}); if(!s)return; await ensureAC(); A.selectedId=s.id; LME.play(toAB(s),LME.mutType); HISTORY.showToast('▶ '+(_entityLabel(s)).slice(0,22)); renderLibrary(); });
@@ -4743,14 +4757,16 @@ function _wireTreeStrip(){
 
 // CONTEXT MENU
 let ctxId=null;
-function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var gengrid=document.getElementById('ctxGenGrid');if(gengrid)gengrid.style.display='none';var isR=_isRoot(s);menu.querySelectorAll('.rootonly').forEach(function(b){b.style.display=isR?'':'none';});menu.querySelectorAll('.derivonly').forEach(function(b){b.style.display=isR?'none':'';});var pB=menu.querySelector('[data-a="promote"]');if(pB)pB.textContent=s.promoted?'UNPROMOTE':'PROMOTE';menu.style.display='flex';menu.style.top=Math.min(rect.bottom,window.innerHeight-300)+'px';menu.style.left=Math.min(rect.left+10,window.innerWidth-170)+'px';document.getElementById('ctxOverlay').style.display='block';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}}
+var _ctxRect=null;
+function positionCtx(){var menu=document.getElementById('ctxMenu');if(!menu||!_ctxRect)return;var vw=window.innerWidth,vh=window.innerHeight,margin=8;var mh=menu.offsetHeight,mw=menu.offsetWidth;var top=_ctxRect.bottom;if(top+mh+margin>vh)top=Math.max(margin,vh-mh-margin);var left=_ctxRect.left+10;if(left+mw+margin>vw)left=Math.max(margin,vw-mw-margin);menu.style.top=top+'px';menu.style.left=left+'px';}
+function showCtx(id,el){ctxId=id;const s=A.samples.find(x=>x.id===id);if(!s)return;const menu=document.getElementById('ctxMenu'),rect=el.getBoundingClientRect();var grid=document.getElementById('ctxTypeGrid');if(grid)grid.style.display='none';var cgrid=document.getElementById('ctxCatGrid');if(cgrid)cgrid.style.display='none';var ggrid=document.getElementById('ctxGroupGrid');if(ggrid)ggrid.style.display='none';var gengrid=document.getElementById('ctxGenGrid');if(gengrid)gengrid.style.display='none';var isR=_isRoot(s);menu.querySelectorAll('.rootonly').forEach(function(b){b.style.display=isR?'':'none';});menu.querySelectorAll('.derivonly').forEach(function(b){b.style.display=isR?'none':'';});var pB=menu.querySelector('[data-a="promote"]');if(pB)pB.textContent=s.promoted?'UNPROMOTE':'PROMOTE';menu.querySelector('.ctxBtn.fav').textContent=s.favorite?'UNFAVORITE':'FAVORITE';var dB=menu.querySelector('.ctxBtn.del');if(dB){dB.dataset.pendingDel='';dB.textContent='DELETE';}menu.style.display='flex';_ctxRect=rect;positionCtx();document.getElementById('ctxOverlay').style.display='block';}
 function hideCtx(){document.getElementById('ctxMenu').style.display='none';document.getElementById('ctxOverlay').style.display='none';ctxId=null;}
 document.getElementById('ctxOverlay').addEventListener('click',hideCtx);
 document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',async()=>{
   // SET TYPE reveals the inline type grid without closing the menu
-  if(btn.dataset.a==='setType'){ var g=document.getElementById('ctxTypeGrid'); var gc=document.getElementById('ctxCatGrid'); if(gc)gc.style.display='none'; if(g)g.style.display=(g.style.display==='none'?'flex':'none'); return; }
+  if(btn.dataset.a==='setType'){ var g=document.getElementById('ctxTypeGrid'); var gc=document.getElementById('ctxCatGrid'); if(gc)gc.style.display='none'; if(g)g.style.display=(g.style.display==='none'?'flex':'none'); positionCtx(); return; }
   // MOVE CATEGORY reveals the inline category grid (no prompt, closed vocabulary)
-  if(btn.dataset.a==='moveCat'){ var cg=document.getElementById('ctxCatGrid'); var tg=document.getElementById('ctxTypeGrid'); var gg0=document.getElementById('ctxGroupGrid'); if(tg)tg.style.display='none'; if(gg0)gg0.style.display='none'; if(cg)cg.style.display=(cg.style.display==='none'?'flex':'none'); return; }
+  if(btn.dataset.a==='moveCat'){ var cg=document.getElementById('ctxCatGrid'); var tg=document.getElementById('ctxTypeGrid'); var gg0=document.getElementById('ctxGroupGrid'); if(tg)tg.style.display='none'; if(gg0)gg0.style.display='none'; if(cg)cg.style.display=(cg.style.display==='none'?'flex':'none'); positionCtx(); return; }
   // MOVE TO GROUP reveals a dynamic grid: NEW GROUP + NONE + existing groups
   if(btn.dataset.a==='moveGroup'){
     var gg=document.getElementById('ctxGroupGrid'); var tg2=document.getElementById('ctxTypeGrid'); var cg2=document.getElementById('ctxCatGrid');
@@ -4764,6 +4780,7 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
       gg.innerHTML=h;
       gg.style.display='flex';
     }
+    positionCtx();
     return;
   }
   // DELETE — two-tap confirm with the menu kept OPEN; second tap cascades the subtree
@@ -4793,6 +4810,7 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     var gen=document.getElementById('ctxGenGrid'); var tg3=document.getElementById('ctxTypeGrid'); var cg3=document.getElementById('ctxCatGrid'); var gg3=document.getElementById('ctxGroupGrid');
     if(tg3)tg3.style.display='none'; if(cg3)cg3.style.display='none'; if(gg3)gg3.style.display='none';
     if(gen) gen.style.display=(gen.style.display==='none'?'flex':'none');
+    positionCtx();
     return;
   }
   const id=ctxId;hideCtx();const s=A.samples.find(x=>x.id===id);if(!s)return;
