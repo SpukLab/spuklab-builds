@@ -3747,27 +3747,32 @@ const LME = {
     src.connect(router);
     this.routerGain = router;
 
-    // VIE chain
-    let vieOut;
-    try {
-      const vie = VIE.buildLive(AC, VIE.state);
-      router.connect(vie.input);
-      vieOut = vie.output;
-    } catch(e) {
-      vieOut = router; // fallback: bypass VIE
-    }
-    this.vieOut = vieOut;
-
-    // Mutation chain
-    let chain;
-    try {
-      chain = buildMutChain(type);
-      vieOut.connect(chain.input);
-      chain.output.connect(A.analyser);
-    } catch(e) {
-      // Fallback: dry playback — organism never goes silent
-      vieOut.connect(A.analyser);
-      chain = { input: vieOut, output: A.analyser, _dry: true };
+    // VIE + mutation are SURGERY PREVIEW only. CAPTURE/library plays the STORED BUFFER raw —
+    // no global VIE.state, no VIE.macros, no LME.mutType. This is what eliminates the double-VIE
+    // and the "global monitor" contamination across trees/groups.
+    let vieOut, chain;
+    if (A.activeMode === 'surgery') {
+      // PREVIEW (experimentation monitor): live VIE + live mutation
+      try {
+        const vie = VIE.buildLive(AC, VIE.state);
+        router.connect(vie.input);
+        vieOut = vie.output;
+      } catch(e) { vieOut = router; }
+      this.vieOut = vieOut;
+      try {
+        chain = buildMutChain(type);
+        vieOut.connect(chain.input);
+        chain.output.connect(A.analyser);
+      } catch(e) {
+        vieOut.connect(A.analyser);
+        chain = { input: vieOut, output: A.analyser, _dry: true };
+      }
+    } else {
+      // RAW: exactly what is stored. Baked derivatives (ghost/ritual) sound only as baked.
+      vieOut = router;
+      this.vieOut = vieOut;
+      router.connect(A.analyser);
+      chain = { input: router, output: A.analyser, _dry: true };
     }
     A.analyser.connect(AC.destination);
     this.chain = chain;
@@ -4453,6 +4458,15 @@ function addFamilyToPack(rootId){
   renderLibrary();
 }
 function _entityLabel(root){ return (root.alias||root.name||root.id); }
+// P3: strip technical process tokens so a promoted root reads as a narrative phrase,
+// not as its surgery history. The full technical string stays in .name (hidden metadata/history).
+function _cleanRootName(nm){
+  if(!nm) return nm;
+  var ops={trimmed:1,trim:1,pitchdn:1,pitchup:1,slow:1,fast:1,rev:1,reverse:1,fade:1,fadein:1,fadeout:1,dupe:1,norm:1,normalized:1,dissolve:1,collapse:1,ritual:1,fever:1,drift:1,tunnel:1,memory:1,hollow:1,ghost:1,degraded:1,neutral:1,root:1};
+  var parts=String(nm).split(/[_\-+]+/).filter(Boolean);
+  while(parts.length>1 && ops[parts[parts.length-1].toLowerCase()]) parts.pop();
+  return parts.join(' ');
+}
 // ── BATCH (multi-select) actions — runtime only, reuse existing ops ──
 var _batchDelArm=false;
 function _batchAction(kind){
@@ -5043,6 +5057,7 @@ document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
       if(grid.dataset.mode==='root'){
         // promote current sample to a standalone narrative root, in the chosen group
         cur.parentId=null; cur.order=undefined; cur.group=target||null; if(target)A.lastGroup=target;
+        if(!cur.alias){ cur.alias=_cleanRootName(cur.name); } // P3: narrative name; technical history stays in cur.name
         dbPut(cur);
         HISTORY.showToast('→ new root'+(target?(' · '+target):''));
       } else {
