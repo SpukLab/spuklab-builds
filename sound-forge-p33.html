@@ -428,6 +428,19 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 
 /* Slot type chips */
 .slottype-row{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;}
+.domain-row{display:flex;gap:5px;}
+.domain-chip{flex:1;padding:10px 8px;border-radius:5px;cursor:pointer;font-family:var(--mono);
+  font-size:12px;letter-spacing:.05em;border:1px solid var(--vdim);
+  background:rgba(153,68,255,.04);color:var(--gray);transition:all .1s;
+  -webkit-tap-highlight-color:transparent;}
+.domain-chip[data-domain="ECOLOGICAL"].active{background:rgba(0,255,200,.14);border-color:rgba(0,255,200,.5);color:rgba(0,255,210,.9);}
+.domain-chip[data-domain="STRUCTURAL"].active{background:rgba(255,140,60,.14);border-color:rgba(255,140,60,.5);color:rgba(255,180,110,.95);}
+.mtype-row{display:flex;gap:3px;flex-wrap:wrap;}
+.mtype-chip{padding:5px 9px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+  font-size:11px;letter-spacing:.04em;border:1px solid var(--vdim);
+  background:rgba(153,68,255,.03);color:var(--gray);transition:all .1s;
+  -webkit-tap-highlight-color:transparent;}
+.mtype-chip.active{background:rgba(153,68,255,.16);border-color:var(--violet);color:#fff;}
 .stchip{padding:4px 6px;border-radius:3px;cursor:pointer;font-family:var(--mono);
   font-size:11px;letter-spacing:.05em;border:1px solid var(--vdim);
   background:rgba(153,68,255,.03);color:var(--gray);
@@ -1100,8 +1113,18 @@ footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
       <button class="obtn"        data-org="2">SLOT C</button>
     </div>
 
-    <!-- SLOT TYPE — export classification tag (feeds manifest for SpukBeatsOne) -->
-    <div class="st-sub" style="margin-bottom:4px;">SLOT TYPE · export tag</div>
+    <!-- DOMAIN — functional axis (what it IS): structural vs ecological -->
+    <div class="st-sub" style="margin-bottom:4px;">DOMAIN · what it builds</div>
+    <div class="domain-row" id="domain-row">
+      <button class="domain-chip active" data-domain="ECOLOGICAL">ECOLOGICAL · ecosystem</button>
+      <button class="domain-chip" data-domain="STRUCTURAL">STRUCTURAL · rhythm</button>
+    </div>
+    <!-- MATERIAL TYPE — optional specific type, depends on domain -->
+    <div class="st-sub" style="margin:6px 0 4px;">MATERIAL TYPE · optional</div>
+    <div class="mtype-row" id="mtype-row"><!-- populated by domain --></div>
+
+    <!-- SLOT TYPE — aesthetic axis (how it behaves), independent of domain -->
+    <div class="st-sub" style="margin:8px 0 4px;">AESTHETIC · how it behaves</div>
     <div class="slottype-row" id="slottype-row">
       <div class="stchip active" data-st="kick_a">KICK A</div>
       <div class="stchip" data-st="kick_b">KICK B</div>
@@ -2117,11 +2140,13 @@ const FragDB={
 };
 
 // Serialize AudioBuffer → storable record (raw Float32 per channel)
-function bufferToRecord(id,name,buffer,duration,slotType,provenance){
+function bufferToRecord(id,name,buffer,duration,slotType,provenance,domain,materialType){
   const nCh=buffer.numberOfChannels;
   const channels=[];
   for(let ch=0;ch<nCh;ch++)channels.push(buffer.getChannelData(ch).slice(0));
-  return{id,name,duration,slotType,provenance:provenance||null,sampleRate:buffer.sampleRate,length:buffer.length,nCh,channels};
+  return{id,name,duration,slotType,provenance:provenance||null,
+    domain:domain||null,materialType:materialType||null,
+    sampleRate:buffer.sampleRate,length:buffer.length,nCh,channels};
 }
 // Rehydrate record → AudioBuffer
 function recordToBuffer(rec){
@@ -2139,7 +2164,8 @@ async function loadFragmentsFromDB(){
     for(const rec of recs){
       FragmentLibrary.push({
         id:rec.id,name:rec.name,buffer:recordToBuffer(rec),
-        duration:rec.duration,slotType:rec.slotType,provenance:rec.provenance||null
+        duration:rec.duration,slotType:rec.slotType,provenance:rec.provenance||null,
+        domain:rec.domain||null,materialType:rec.materialType||null
       });
     }
     renderFragmentList();
@@ -2280,11 +2306,14 @@ function saveFragment(provenance){
   // Name reflects provenance role if present (e.g. luminous_halo_03)
   const roleTag=(provenance&&provenance.role)?`_${provenance.role}`:'';
   const name=`${MatEditState.slotType}${roleTag}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
-  FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType,provenance:provenance||null});
+  const domain=MatEditState.domain||'ECOLOGICAL';
+  const materialType=MatEditState.materialType||(domain==='STRUCTURAL'?'PERC':'TEXTURE');
+  FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType,
+    domain,materialType,provenance:provenance||null});
   renderFragmentList();
-  setT('mat-status',`saved: ${name} (${len.toFixed(2)}s)`);
-  // Persist to IndexedDB (provenance included)
-  FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType,provenance||null))
+  setT('mat-status',`saved: ${name} [${domain}/${materialType}]`);
+  // Persist to IndexedDB (domain/materialType/provenance included)
+  FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType,provenance||null,domain,materialType))
     .catch(e=>console.warn('[SF3] fragment save fail:',e.message));
 }
 
@@ -2349,27 +2378,40 @@ function fragTriggerMode(slotType){
 }
 
 // ─── MATERIAL CLASSIFICATION ─────────────────────────────
-// Single source of truth = slotType. type/role/source/folder all derive from it.
-//   role 'structural' = rhythmic articulation (sequencer-fed)
-//   role 'ecological' = atmosphere/movement/narrative (generative-fed)
-const FRAG_TYPE_MAP={
-  // structural
-  kick_a:{type:'KICK',role:'structural'}, kick_b:{type:'KICK',role:'structural'},
-  snare:{type:'SNARE',role:'structural'}, hat:{type:'HAT',role:'structural'},
-  bass:{type:'BASS',role:'structural'},
-  // ecological
-  texture:{type:'TEXTURE',role:'ecological'}, void:{type:'FX',role:'ecological'},
-  entity:{type:'ATMOS',role:'ecological'},
-  luminous_drone:{type:'DRONE',role:'ecological'}, luminous_spectral:{type:'VOX',role:'ecological'},
-  luminous_tail:{type:'FX',role:'ecological'}, luminous_riser:{type:'FX',role:'ecological'},
-  dark_core:{type:'DRONE',role:'ecological'},
-  vocal:{type:'VOX',role:'ecological'}, voxritual:{type:'RITUAL',role:'ecological'}
+// TWO INDEPENDENT AXES:
+//   Functional (what it IS):  domain → materialType → role → triggerMode
+//   Aesthetic  (how it behaves): slotType / profile  (parallel, separate)
+// domain + materialType are ASSIGNED by the user (or defaulted), NOT derived from slotType.
+const DOMAIN_TYPES={
+  STRUCTURAL:['KICK','SNARE','HAT','PERC','TOM','IMPACT','ONE_SHOT'],
+  ECOLOGICAL:['TEXTURE','DRONE','VOX','GLITCH','FX','ATMOS','RITUAL']
 };
-function fragClass(slotType,provenance){
-  const base=FRAG_TYPE_MAP[slotType]||{type:'TEXTURE',role:'ecological'};
-  // source: autoforge if it came from a DNA FORGE profile generation, else manual material/slicing
+// materialType → triggerMode (functional axis drives playback engine)
+const TYPE_TRIGGER={
+  KICK:'rhythmic',SNARE:'rhythmic',HAT:'rhythmic',PERC:'rhythmic',TOM:'rhythmic',
+  IMPACT:'rhythmic',ONE_SHOT:'rhythmic',
+  TEXTURE:'textural',DRONE:'textural',ATMOS:'textural',FX:'textural',GLITCH:'textural',
+  VOX:'vocal',RITUAL:'vocal'
+};
+function domainOf(materialType){
+  if(DOMAIN_TYPES.STRUCTURAL.includes(materialType))return'STRUCTURAL';
+  if(DOMAIN_TYPES.ECOLOGICAL.includes(materialType))return'ECOLOGICAL';
+  return'ECOLOGICAL';
+}
+// Resolve the functional classification of a fragment.
+// Source of truth = fragment's own domain/materialType. Falls back to ECOLOGICAL/TEXTURE.
+function fragClass(fr){
+  const provenance=fr&&fr.provenance;
+  let domain=fr&&fr.domain, materialType=fr&&fr.materialType;
+  if(!materialType){
+    // default: autoforge output is ecological texture; manual unset → texture
+    materialType='TEXTURE';
+  }
+  if(!domain)domain=domainOf(materialType);
+  const role=domain==='STRUCTURAL'?'structural':'ecological';
   const source=(provenance&&provenance.profile)?'autoforge':'material';
-  return{type:base.type,role:base.role,source};
+  const triggerMode=TYPE_TRIGGER[materialType]||'textural';
+  return{domain,materialType,role,source,triggerMode};
 }
 
 // ─── LUMINOUS HALO — shared spatial signature for cohesion ───
@@ -2426,10 +2468,10 @@ async function exportFragmentBank(){
   await new Promise(r=>setTimeout(r,16));
   try{
     const zip=new MinimalZip();
-    // Folder = material type. Structural + ecological coexist in one pack.
-    const folderFor=st=>{
-      const c=fragClass(st);
-      return c.type; // KICK / SNARE / HAT / BASS / TEXTURE / DRONE / VOX / FX / ATMOS / RITUAL
+    // Folder = DOMAIN/materialType (structural + ecological coexist in one pack).
+    const folderFor=fr=>{
+      const c=fragClass(fr);
+      return `${c.domain}/${c.materialType}`; // e.g. ECOLOGICAL/TEXTURE, STRUCTURAL/KICK
     };
     const samples={};   // id -> path  (what BeatsOne loads)
     const entities={};  // id -> behavior (what BeatsOne triggers)
@@ -2449,7 +2491,7 @@ async function exportFragmentBank(){
         try{outBuf=await renderLuminousHalo(fr.buffer,fr.slotType,haloAmt);}catch(e){outBuf=fr.buffer;}
       }
       const wav=encodeWAV(outBuf);
-      const folder=folderFor(fr.slotType);
+      const folder=folderFor(fr);
       const safe=fr.name.replace(/[^a-z0-9_]/gi,'_');
       const file=`${safe}.wav`;
       const path=`audio/${folder}/${file}`;
@@ -2458,25 +2500,27 @@ async function exportFragmentBank(){
       samples[id]=path;
       const b=fragBehavior(fr.slotType);
       const lum=deriveLuminous(fr.slotType);
-      // Round-robin: spread fragments of the same tag across its compatible phases
       const pc=(phaseCounter[fr.slotType]||0);phaseCounter[fr.slotType]=pc+1;
       const phaseList=b.phases||['TENSION'];
       const assignedPhase=phaseList[pc%phaseList.length];
-      // Slight emergence jitter so no two are identical
       const emJitter=b.emergenceProbability*(0.85+Math.random()*0.3);
-      const cls=fragClass(fr.slotType,fr.provenance);
-      // tags: derive from slotType + provenance role for searchability
+      const cls=fragClass(fr); // {domain, materialType, role, source, triggerMode}
+      // tags: aesthetic axis (slotType) + provenance, for cross-axis search in SBO
       const tags=[];
       if(fr.slotType==='dark_core')tags.push('dark','core');
       if(fr.slotType&&fr.slotType.startsWith('luminous_'))tags.push('luminous',fr.slotType.replace('luminous_',''));
       if(fr.provenance&&fr.provenance.profile)tags.push(fr.provenance.profile);
       if(fr.provenance&&fr.provenance.role)tags.push(fr.provenance.role);
       entities[id]={
-        id, type:b.type, materialType:cls.type, role:cls.role, source:cls.source,
-        tags:tags.length?tags:undefined,
-        folder, audio:file,
-        triggerMode:fragTriggerMode(fr.slotType),
+        id, audio:file, folder,
+        // FUNCTIONAL AXIS (source of truth): domain → materialType → role → triggerMode
+        domain:cls.domain, materialType:cls.materialType, role:cls.role,
+        triggerMode:cls.triggerMode, source:cls.source,
+        // AESTHETIC AXIS (independent): how it behaves / where it came from
         slotType:fr.slotType,
+        profile:(fr.provenance&&fr.provenance.profile)||undefined,
+        tags:tags.length?tags:undefined,
+        // ecological/behavioral hints for the generative engine
         weatherAffinity:b.weatherAffinity,
         preferredPhase:assignedPhase,
         densityWeight:b.densityWeight,
@@ -3039,7 +3083,10 @@ function dfReversedBuffer(buf){
 function dfSaveVariant(vid){
   const v=DF_variants.find(x=>x.id===vid);if(!v||v.saved)return;
   dfApplyConfig(v.cfg);
-  // Capture region as fragment, carrying provenance (intent, not just params)
+  // Auto Forge output is ecological by default; map profile→materialType
+  const profMType={dark:'DRONE',fracture:'GLITCH',textural:'TEXTURE',luminous:'FX',hybrid:'ATMOS'};
+  MatEditState.domain='ECOLOGICAL';
+  MatEditState.materialType=profMType[v.provenance&&v.provenance.profile]||'TEXTURE';
   saveFragment(v.provenance);
   v.saved=true;
   dfRenderVariants();
@@ -3300,6 +3347,8 @@ const MatEditState={
   loopSize:.30,   // 0→1 → 12…400ms
   loopDrift:.20,
   slotType:'kick_a',
+  domain:'ECOLOGICAL',     // functional axis: STRUCTURAL | ECOLOGICAL (source of truth)
+  materialType:'TEXTURE',  // specific functional type within domain (optional)
   zoomStart:0,    // visible window start (0..1 of full buffer)
   zoomEnd:1,      // visible window end
   _sliceN:0       // active slice count (drawn on canvas; 0=none)
@@ -5110,6 +5159,37 @@ document.querySelectorAll('.pbchip[data-pb]').forEach(chip=>{
   chip.addEventListener('click',select);
   chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
 });
+
+// ─── DOMAIN + MATERIAL TYPE CHIPS (functional axis) ──────
+function populateMaterialTypes(domain){
+  const row=document.getElementById('mtype-row');if(!row)return;
+  row.innerHTML='';
+  const types=DOMAIN_TYPES[domain]||[];
+  // default materialType = first in list if current doesn't belong to this domain
+  if(!types.includes(MatEditState.materialType))MatEditState.materialType=types[0];
+  types.forEach(t=>{
+    const chip=document.createElement('div');
+    chip.className='mtype-chip'+(t===MatEditState.materialType?' active':'');
+    chip.textContent=t;chip.dataset.mtype=t;
+    const sel=()=>{
+      MatEditState.materialType=t;
+      row.querySelectorAll('.mtype-chip').forEach(c=>c.classList.toggle('active',c===chip));
+    };
+    chip.addEventListener('click',sel);
+    chip.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
+    row.appendChild(chip);
+  });
+}
+document.querySelectorAll('.domain-chip[data-domain]').forEach(chip=>{
+  const sel=()=>{
+    MatEditState.domain=chip.dataset.domain;
+    document.querySelectorAll('.domain-chip').forEach(c=>c.classList.toggle('active',c===chip));
+    populateMaterialTypes(MatEditState.domain);
+  };
+  chip.addEventListener('click',sel);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();sel();},{passive:false});
+});
+populateMaterialTypes(MatEditState.domain); // initial fill
 
 // ─── SLOT TYPE CHIPS ────────────────────────────────────
 document.querySelectorAll('.stchip[data-st]').forEach(chip=>{
