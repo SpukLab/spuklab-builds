@@ -1157,6 +1157,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
              <button class="sBtn" data-op="fadeOut">FADE-OUT</button>
              <button class="sBtn bounce" id="bounceBtn">BOUNCE</button>
              <button class="sBtn" id="surgSendGroupBtn">→ GROUP ▸</button>
+             <button class="sBtn" id="surgSendRootBtn">→ ROOT ▸</button>
              <button class="sBtn" id="surgSendLastBtn">→ LAST</button>
            </div>
            <div id="surgGroupGrid" style="display:none;flex-wrap:wrap;gap:3px;padding:5px"></div>
@@ -4247,7 +4248,7 @@ document.getElementById('warmBtn').addEventListener('click',toggleWarm);
 async function toggleWarm(){if(WARM.active){stopWarm();return;}await ensureAC();try{const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});WARM.stream=stream;WARM.chunks=[];const msrc=A.AC.createMediaStreamSource(stream);msrc.connect(A.analyser);WARM.msrc=msrc;const mr=new MediaRecorder(stream,{mimeType:bestMime()});mr.ondataavailable=e=>{if(e.data.size>0){WARM.chunks.push(e.data);if(WARM.chunks.length>WARM.max)WARM.chunks.shift();}};mr.start(100);WARM.recorder=mr;WARM.active=true;document.getElementById('warmBtn').classList.add('on');document.getElementById('warmBtn').textContent='WARM ●';}catch(e){}}
 function stopWarm(){if(!WARM.active)return;if(WARM.recorder&&WARM.recorder.state!=='inactive')WARM.recorder.stop();WARM.stream&&WARM.stream.getTracks().forEach(t=>t.stop());if(WARM.msrc){try{WARM.msrc.disconnect();}catch(e){}}WARM.stream=null;WARM.recorder=null;WARM.msrc=null;WARM.active=false;document.getElementById('warmBtn').classList.remove('on');document.getElementById('warmBtn').textContent='WARM';}
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fInput').click());
-document.getElementById('fInput').addEventListener('change',async function(e){const inp=e.target;const file=inp.files[0];if(!file){inp.value='';return;}console.log('LOAD start',file.name);await ensureAC();setCT('…');try{const buf=await A.AC.decodeAudioData((await file.arrayBuffer()).slice(0));console.log('decode ok',buf.duration);const s=await buildRecord(buf,{name:file.name.replace(/\.[^.]+$/,''),cat:'spoken',parentId:null});console.log('sample created',s.id);await dbPut(s);A.samples.push(s);renderLibrary();selectSample(s.id,true);console.log('render complete');setCT('');}catch(err){console.log('LOAD error',err&&err.message);setCT('err');}finally{inp.value='';}});
+document.getElementById('fInput').addEventListener('change',async function(e){const inp=e.target;const file=inp.files[0];if(!file){inp.value='';return;}console.log('LOAD start',file.name);await ensureAC();setCT('…');try{const buf=await A.AC.decodeAudioData((await file.arrayBuffer()).slice(0));console.log('decode ok',buf.duration);const s=await buildRecord(buf,{name:file.name.replace(/\.[^.]+$/,''),cat:'spoken',parentId:null});console.log('sample created',s.id);if(A.lastGroup)s.group=A.lastGroup;await dbPut(s);A.samples.push(s);A.libView='tree';A.groupView='grouped';renderLibrary();selectSample(s.id,true);HISTORY.showToast(A.lastGroup?('imported → '+A.lastGroup):'imported → tree');console.log('render complete');setCT('');}catch(err){console.log('LOAD error',err&&err.message);setCT('err');}finally{inp.value='';}});
 
 // ─── RAPID AUDITION ───────────────────────────────────────────────────────
 document.getElementById('audPlay').addEventListener('click',async()=>{const s=sample();if(!s)return;await ensureAC();LME.play(toAB(s),LME.mutType);document.getElementById('audStatus').textContent=s.name.slice(0,18);});
@@ -5021,14 +5022,17 @@ function applyExtractPreset(preset){
 // ─── SURGERY OPERATIONS ──────────────────────────────────────────────────
 document.querySelectorAll('.sBtn[data-op]').forEach(btn=>btn.addEventListener('click',()=>execSurgery(btn.dataset.op)));
 document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
-// P5: Surgery → SEND TO GROUP (assigns the current sample's root to a group; reuses group helpers)
+// Surgery → TREE: send current to a group, OR promote current to a NEW ROOT in a group.
 (function(){
-  var b=document.getElementById('surgSendGroupBtn'); var grid=document.getElementById('surgGroupGrid');
-  if(!b||!grid) return;
-  b.addEventListener('click',function(){
-    if(grid.style.display!=='none'){ grid.style.display='none'; return; }
+  var grid=document.getElementById('surgGroupGrid'); if(!grid) return;
+  var bG=document.getElementById('surgSendGroupBtn');
+  var bR=document.getElementById('surgSendRootBtn');
+  var bl=document.getElementById('surgSendLastBtn');
+  function fill(mode){
     var s=sample(); if(!s){ HISTORY.showToast('select a fragment first'); return; }
-    var h='<button class="ctxGroupBtn new" data-sg="__new__">+ NEW GROUP</button><button class="ctxGroupBtn none" data-sg="__none__">UNGROUP</button>';
+    if(grid.style.display!=='none' && grid.dataset.mode===mode){ grid.style.display='none'; return; }
+    grid.dataset.mode=mode;
+    var h='<button class="ctxGroupBtn new" data-sg="__new__">+ NEW GROUP</button><button class="ctxGroupBtn none" data-sg="__none__">'+(mode==='root'?'NO GROUP':'UNGROUP')+'</button>';
     existingGroups().forEach(function(g){ h+='<button class="ctxGroupBtn" data-sg="'+String(g).replace(/"/g,'&quot;')+'">'+g+'</button>'; });
     grid.innerHTML=h; grid.style.display='flex';
     grid.querySelectorAll('[data-sg]').forEach(function(btn){ btn.addEventListener('click',function(){
@@ -5036,18 +5040,27 @@ document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
       var g=btn.dataset.sg, target;
       if(g==='__new__'){ var nm=prompt('New group name:',''); if(nm===null)return; nm=nm.trim(); if(!nm)return; target=nm; }
       else if(g==='__none__'){ target=null; } else target=g;
-      assignGroupToRootOf(cur.id, target);
-      grid.style.display='none'; A.groupView='grouped'; renderLibrary();
-      HISTORY.showToast(target?('sent → '+target):'ungrouped');
+      if(grid.dataset.mode==='root'){
+        // promote current sample to a standalone narrative root, in the chosen group
+        cur.parentId=null; cur.order=undefined; cur.group=target||null; if(target)A.lastGroup=target;
+        dbPut(cur);
+        HISTORY.showToast('→ new root'+(target?(' · '+target):''));
+      } else {
+        assignGroupToRootOf(cur.id, target);
+        HISTORY.showToast(target?('sent → '+target):'ungrouped');
+      }
+      grid.style.display='none'; A.groupView='grouped'; A.libView='tree';
+      renderLibrary();
     }); });
-  });
-  // P4: → LAST sends the current sample's root to the last group used, no picker
-  var bl=document.getElementById('surgSendLastBtn');
+  }
+  if(bG) bG.addEventListener('click',function(){ fill('group'); });
+  if(bR) bR.addEventListener('click',function(){ fill('root'); });
+  // → LAST sends the current sample's root to the last group used, no picker
   if(bl) bl.addEventListener('click',function(){
     var cur=sample(); if(!cur){ HISTORY.showToast('select a fragment first'); return; }
     if(!A.lastGroup){ HISTORY.showToast('no last group yet — use → GROUP once'); return; }
     assignGroupToRootOf(cur.id, A.lastGroup);
-    A.groupView='grouped'; renderLibrary();
+    A.groupView='grouped'; A.libView='tree'; renderLibrary();
     HISTORY.showToast('sent → '+A.lastGroup);
   });
 })();
