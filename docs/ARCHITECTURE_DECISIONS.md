@@ -115,6 +115,34 @@ es más potente, pero la decisión condiciona F5.
 por organismo ya es forward-compatible con Modelo B.
 **Consecuencia:** bloquea parcialmente F5 y la parte estadio de T5; no bloquea F2.
 
+## ADR-014 — Los eventos de carga no tienen autoridad sobre mezcla, foco ni atención
+**Contexto:** `_autoArm` activaba `voxSolo=true` (más un flip global a
+`priorityMode='sample'` que muteaba buses de otros organismos) al decodificar un
+vox pack, eclipsando el Rhythm/Texture ya cargado. Disponibilidad de material y
+relevancia perceptual son capas distintas; el código las acoplaba
+(`material_ready → foco`).
+**Decisión:** la llegada de material para un organismo (Rhythm, Texture o Vox)
+solo puede modificar el estado de *disponibilidad* de dicho organismo. Un evento
+de carga no puede imponer cambios de mezcla, foco, atención, solo/mute ni
+protagonismo sobre otros organismos. Se prohíben las transiciones automáticas:
+- `material_ready → solo`
+- `material_ready → mute de terceros`
+- `material_ready → protagonista`
+- `material_ready → atención dominante`
+
+La selección interna de fuente sonora (sample/synth u otras equivalentes) podrá
+modificarse automáticamente **siempre que permanezca confinada al organismo
+afectado** y no altere el comportamiento de otros organismos. La atención, el
+foco perceptual y cualquier forma de relevancia distribuida pertenecen
+exclusivamente a las capas F2/T4 o a sus sucesoras constitucionales.
+**Principio:** Disponibilidad no implica relevancia. Cargar material no implica
+otorgarle autoridad.
+**Consecuencia:** se deroga el auto-`voxSolo` por disponibilidad. La
+auto-selección de fuente sobrevive solo si es per-organismo; el `priorityMode`
+global actual + `applyPriorityToBuses` (que mutea Rhythm/Texture) queda del lado
+prohibido hasta volverse per-organismo. La política de atención distribuida se
+realiza cuando exista F2-controlador; hasta entonces rige estado-propio.
+
 ---
 
 ## Regla práctica de sesión
