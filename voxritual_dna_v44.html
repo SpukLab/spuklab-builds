@@ -4458,6 +4458,17 @@ function addFamilyToPack(rootId){
   renderLibrary();
 }
 function _entityLabel(root){ return (root.alias||root.name||root.id); }
+// Correct sample clone: JSON round-trip destroys Float32Array PCM (becomes {0:..,1:..} → silence).
+// Copy metadata, but deep-copy channelData as real Float32Arrays.
+function _cloneSample(s){
+  var c=Object.assign({},s);
+  c.id=uid(); c.createdAt=Date.now();
+  c.channelData=(s.channelData||[]).map(function(a){return a.slice();});
+  c.fragmentIdentity=JSON.parse(JSON.stringify(s.fragmentIdentity||{}));
+  c.name=s.name+'_copy';
+  if(c.alias) c.alias=c.alias+' copy';
+  return c;
+}
 // P3: strip technical process tokens so a promoted root reads as a narrative phrase,
 // not as its surgery history. The full technical string stays in .name (hidden metadata/history).
 function _cleanRootName(nm){
@@ -4841,7 +4852,7 @@ document.querySelectorAll('.ctxBtn').forEach(btn=>btn.addEventListener('click',a
     case 'tray':MONTAGE.addFrag(s);renderLibrary();break;
     case 'surgery':selectSample(id,false);setMode('surgery');break;
     case 'rename':{ if(A.libView==='tree'){ A.renamingId=id; renderLibrary(); break; } const n=prompt('Rename:',s.name);if(n&&n.trim()){s.name=n.trim();await dbPut(s);renderLibrary();}break;}
-    case 'dupe':{const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+'_copy';c.createdAt=Date.now();await dbPut(c);A.samples.push(c);renderLibrary();break;}
+    case 'dupe':{const c=_cloneSample(s);await dbPut(c);A.samples.push(c);renderLibrary();break;}
     case 'normNow':{await ensureAC();const mode=A.normMode==='off'?'soft':A.normMode;const{gain,meta}=NORM.compute(toAB(s),mode);const nb=NORM.applyToBuffer(toAB(s),gain);const child=await buildRecord(nb,{name:`${s.name}_N${mode}`,cat:s.cat,parentId:s.id,mutationOf:`norm_${mode}`});child.fragmentIdentity.normalized=meta;await dbPut(child);A.samples.push(child);renderLibrary();selectSample(child.id,true);break;}
   }
 }));
@@ -5049,23 +5060,36 @@ document.getElementById('bounceBtn').addEventListener('click',bounceQuick);
     var h='<button class="ctxGroupBtn new" data-sg="__new__">+ NEW GROUP</button><button class="ctxGroupBtn none" data-sg="__none__">'+(mode==='root'?'NO GROUP':'UNGROUP')+'</button>';
     existingGroups().forEach(function(g){ h+='<button class="ctxGroupBtn" data-sg="'+String(g).replace(/"/g,'&quot;')+'">'+g+'</button>'; });
     grid.innerHTML=h; grid.style.display='flex';
-    grid.querySelectorAll('[data-sg]').forEach(function(btn){ btn.addEventListener('click',function(){
+    grid.querySelectorAll('[data-sg]').forEach(function(btn){ btn.addEventListener('click',async function(){
       var cur=sample(); if(!cur)return;
       var g=btn.dataset.sg, target;
       if(g==='__new__'){ var nm=prompt('New group name:',''); if(nm===null)return; nm=nm.trim(); if(!nm)return; target=nm; }
       else if(g==='__none__'){ target=null; } else target=g;
+      grid.style.display='none';
       if(grid.dataset.mode==='root'){
-        // promote current sample to a standalone narrative root, in the chosen group
-        cur.parentId=null; cur.order=undefined; cur.group=target||null; if(target)A.lastGroup=target;
-        if(!cur.alias){ cur.alias=_cleanRootName(cur.name); } // P3: narrative name; technical history stays in cur.name
-        dbPut(cur);
-        HISTORY.showToast('→ new root'+(target?(' · '+target):''));
-      } else {
-        assignGroupToRootOf(cur.id, target);
-        HISTORY.showToast(target?('sent → '+target):'ungrouped');
+        // CONSOLIDATION: bake EXACTLY what's audible in Surgery (region + VIE + mutation + fade + norm)
+        // into a NEW root. Source fragment is kept for comparison. "What I hear = what I get."
+        try{
+          await ensureAC();
+          var t0=REGION.startSec(cur.duration), t1=REGION.endSec(cur.duration);
+          var buf=await surgTrim(toAB(cur), t0, t1);
+          if(VIE.state!=='none')      buf=await renderVIE(buf, VIE.state);
+          if(LME.mutType!=='source')  buf=await offlineRender(buf, LME.mutType);
+          buf=applyFadeTails(buf,10);
+          if(A.normMode!=='off'){ var rr=NORM.compute(buf,A.normMode); buf=NORM.applyToBuffer(buf, rr.gain); }
+          var root=await buildRecord(buf, {name:cur.name, cat:cur.cat, parentId:null, mutationOf:null});
+          root.alias=_cleanRootName(cur.alias||cur.name);
+          root.group=target||null; if(target)A.lastGroup=target;
+          await dbPut(root); A.samples.push(root);
+          A.groupView='grouped'; A.libView='tree'; renderLibrary(); selectSample(root.id,false);
+          HISTORY.showToast('→ root (baked)'+(target?(' · '+target):''));
+        }catch(e){ console.error('→ root bake',e); HISTORY.showToast('root bake failed'); }
+        return;
       }
-      grid.style.display='none'; A.groupView='grouped'; A.libView='tree';
-      renderLibrary();
+      // ORGANIZATION: pure metadata move of an existing root — never renders audio.
+      assignGroupToRootOf(cur.id, target);
+      A.groupView='grouped'; A.libView='tree'; renderLibrary();
+      HISTORY.showToast(target?('sent → '+target):'ungrouped');
     }); });
   }
   if(bG) bG.addEventListener('click',function(){ fill('group'); });
@@ -5086,7 +5110,7 @@ async function execSurgery(op){
   try{switch(op){
     case 'trim':newBuf=await surgTrim(srcBuf,t0,t1);break;
     case 'split':{const mid=t0+(t1-t0)*0.5;const[b1,b2]=await surgSplit(srcBuf,mid);const s1=await buildRecord(b1,{name:s.name+'_A',cat:s.cat,parentId:s.id,mutationOf:'split_A'});const s2=await buildRecord(b2,{name:s.name+'_B',cat:s.cat,parentId:s.id,mutationOf:'split_B'});await dbPut(s1);await dbPut(s2);A.samples.push(s1);A.samples.push(s2);renderLibrary();selectSample(s1.id,true);return;}
-    case 'dupe':{const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+'_copy';c.createdAt=Date.now();await dbPut(c);A.samples.push(c);renderLibrary();selectSample(c.id,false);return;}
+    case 'dupe':{const c=_cloneSample(s);await dbPut(c);A.samples.push(c);renderLibrary();selectSample(c.id,false);return;}
     case 'rev':newBuf=await surgReverse(srcBuf,t0,t1);break;
     case 'fadeIn':newBuf=await surgFade(srcBuf,'in',t0,t1);break;
     case 'fadeOut':newBuf=await surgFade(srcBuf,'out',t0,t1);break;
