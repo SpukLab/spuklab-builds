@@ -145,6 +145,48 @@ realiza cuando exista F2-controlador; hasta entonces rige estado-propio.
 
 ---
 
+## ADR-015 — Fuentes de verdad ecológicas y bridge futuro de visualización
+**Contexto:** la auditoría de SBO identificó una divergencia entre estructuras
+diseñadas para coexistencia multi-pack y estructuras diseñadas para un único pack
+activo. `SAL.voxSlots`, `PACK_MEM.bank` y `VOXMEM` operan de forma acumulativa.
+`VOXDNA.fragments` y `VOXDNA.relations` operan con reemplazo total por import. La
+metadata curatorial completa permanece retenida en `PACK_MEM.bank[].pack.fragments`
+incluso tras sucesivos imports; el scheduler vocal consume `VOXDNA.fragments` y
+`VOXDNA.relations`. Existe `PACK_MEM.getHot()` como interfaz pública diseñada para
+exponer múltiples packs activos simultáneamente, actualmente sin consumidores.
+Existe `SPUK_STATE_BUS` documentado como "Future visual bridge". La pérdida
+observada tras imports sucesivos no es destrucción de metadata sino pérdida de
+indexación: la información continúa en `PACK_MEM` pero deja de ser visible para
+ciertos consumidores.
+**Decisión:** se establece la siguiente jerarquía conceptual de autoridad:
+- **PACK_MEM** — fuente de verdad ecológica persistente: catálogo completo de
+  packs, metadata curatorial, genealogías, relaciones, estados HOT/WARM/COLD,
+  coexistencia multi-pack.
+- **SAL** — fuente de verdad de reproducción: buffers, estado de decode,
+  disponibilidad de audio, routing operativo.
+- **VOXMEM** — fuente de verdad de memoria narrativa de sesión: historial de
+  reproducción, fatiga, residuos narrativos, memoria de cadenas.
+- **SPUK_STATE_BUS** — API pública de exportación ecológica (rol futuro): estado
+  agregado del ecosistema, bridge hacia visualizadores externos, desacoplamiento
+  de consumidores externos de la implementación interna del scheduler.
+- **VOXDNA** — vista operativa del scheduler: selección, scoring, gates
+  narrativos, estado operativo temporal. No debe considerarse fuente de verdad
+  persistente.
+
+Ningún consumidor externo deberá depender de `VOXDNA.fragments` ni
+`VOXDNA.relations` como fuente persistente de estado ecológico. Los futuros
+visualizadores, bridges, exportadores o herramientas curatoriales deberán
+consumir desde `PACK_MEM`, `VOXMEM` o `SPUK_STATE_BUS`.
+**Consecuencia:** este ADR no modifica comportamiento ni autoriza cambios de
+código. Fija autoridad conceptual para evitar futuras decisiones incompatibles
+con la evolución multi-pack del ecosistema. Cualquier futura evolución del
+scheduler, del sistema de packs o del visualizador deberá preservar la separación
+entre almacenamiento ecológico (`PACK_MEM`), reproducción (`SAL`), memoria
+narrativa (`VOXMEM`), exportación de estado (`SPUK_STATE_BUS`) y selección
+operativa (`VOXDNA`), aunque internamente compartan datos o estructuras.
+
+---
+
 ## Regla práctica de sesión
 Antes de cualquier auditoría o cambio de código, cargar en este orden:
 `BEATSONE_CONSTITUTION_v1.md` → `ARCHITECTURE_DECISIONS.md`. Recién después auditar.
