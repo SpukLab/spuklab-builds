@@ -187,6 +187,88 @@ operativa (`VOXDNA`), aunque internamente compartan datos o estructuras.
 
 ---
 
+## ADR-016 — Session Presets: INSTALLATION, PERFORMANCE, FREE (reservado)
+**Contexto:** SBO valida ahora scheduler multi-pack (ADR-015), PACK_MEM como
+autoridad ecológica, DESTINY hasta TERMINAL, Graceful Death y REBIRTH (existente,
+deshabilitado por default, sin wiring). Tres sistemas — `PROFILES` (parámetros
+temporales SHORT/IMMERSION/DEEP/INST), `SYS.perfMode` (LIVE/INSTALLATION/HYBRID,
+gobierna autonomía y macro weights) y `REBIRTH.enabled` (ciclo muerte/renacimiento)
+— existen de forma independiente, sin selector unificado, exactamente la
+dispersión que la Constitution ya marcó como corrección pendiente ("Autonomía
+dispersa en 4 lugares... → consolidar"; "RITUAL PROFILE renombrado → SESSION
+PRESET").
+
+**Decisión:** SESSION PRESET es la capa conceptual que **agrupa** configuraciones
+de sistemas existentes — nunca una autoridad nueva, nunca un sistema paralelo.
+Selecciona valores iniciales de `PROFILES`/`perfMode`/`REBIRTH.enabled`; el
+operador puede modificarlos individualmente después sin restricción.
+
+Tres presets:
+
+**INSTALLATION** — `PROFILES.INST` + `perfMode='INSTALLATION'` +
+`REBIRTH.enabled=true` + política REBIRTH HÍBRIDO (ver abajo). DESTINY activo,
+opera sin intervención humana.
+
+**PERFORMANCE** — `PROFILES` a elección del operador + `perfMode='LIVE'` +
+`REBIRTH.enabled=false`. DESTINY activo; al llegar a TERMINAL, Graceful Death es
+definitiva — el silencio final es parte de la obra. El operador decide cuándo
+reiniciar.
+
+**FREE** — *reservado, no implementar*. Documentado únicamente como intención
+conceptual: un futuro modo donde DESTINY no impone cierre narrativo. Su mecanismo
+(p.ej. un flag de neutralidad de DESTINY) queda **fuera de alcance** de este ADR y
+requiere su propio ADR cuando se aborde — probablemente cruzándose con la futura
+F4 (DESTINY neutro).
+
+**Política REBIRTH HÍBRIDO:** en cada transición de renacimiento
+(`REBIRTH._emerge()`):
+
+*Resetear* — estado transitorio de `_s` (vocFatigue, clarityDebt,
+coherenceDesire, voiceMemory, lastNarrativeTime, lastGhostTime,
+forcedSilenceUntil, forcedFragUntil, bioCollapsing, orchRecovering — "locks
+temporales" que gobiernan *cuándo* puede emerger algo); `VOXMEM.recent`;
+`VOXMEM._played` (chain-locks); `VOXMEM.attentionFatigue`. DESTINY se reinicia
+vía `DESTINY.init()` (ya ocurre hoy). `attentionFatigue` se clasifica junto a
+`vocFatigue` como mecanismo transitorio de regulación de emergencia — ninguna de
+las dos variables constituye memoria narrativa ni contaminación ecológica
+persistente; conservarla haría nacer cada vida nueva parcialmente fatigada por la
+vida anterior.
+
+*Conservar* — `VOXMEM.residue` (narrative/ghost/subconscious — la "huella
+ecológica" de tendencias de largo arco); `REBIRTH.inherited` (contaminación SMEM,
+weatherBias, crystal, traumaShadow — ya implementado, sin cambios). `PACK_MEM` no
+participa de este reset — el catálogo de packs es independiente de los ciclos de
+vida (confirma ADR-015).
+
+**Tres escalas temporales declaradas:**
+- *Nueva sesión* (PLAY tras STOP) → reset completo (`VOXDNA.reset()` existente,
+  incluye `residue`). La obra nace desde cero.
+- *Nueva vida* (REBIRTH) → reset parcial (`VOXDNA.rebirthReset()`, nuevo). La obra
+  recuerda tendencias/clima/contaminación; olvida bloqueos, cansancio y cadenas
+  recorridas.
+- *Continuidad ecológica* → `residue`, `weatherBias`, `crystal`, `traumaShadow`,
+  `PACK_MEM` persisten a través de vidas. El ecosistema continúa aunque una vida
+  termine.
+
+**Mecanismo nuevo requerido:** `VOXDNA.rebirthReset()` — **distinto** del reset
+completo existente (`VOXDNA.reset()`, invocado en `_doStartPlay()`, que limpia
+*todo* incluyendo `residue`). Los dos resets tienen semánticas distintas y no
+deben confundirse ni unificarse: reset completo = evento de sesión
+(operador-iniciado); reset parcial = evento de vida (autónomo, dentro de la misma
+sesión).
+
+**Consecuencia:** PERFORMANCE requiere cero código nuevo — es el default actual
+(`REBIRTH.enabled=false`), nombrado. INSTALLATION requiere: (1)
+`VOXDNA.rebirthReset()`, (2) wiring de los tres sistemas existentes bajo un
+selector de preset, (3) verificación en dispositivo de al menos un ciclo completo
+(muerte → residual → renacimiento → nueva vida) antes de production-ready, dado
+que la combinación PROFILES.INST + perfMode=INSTALLATION + REBIRTH nunca fue
+probada junta. FREE queda como nombre reservado sin implementación ni primitivas
+nuevas — ninguna implementación futura debe tocar `DESTINY` bajo el nombre FREE
+sin su propio ADR.
+
+---
+
 ## Regla práctica de sesión
 Antes de cualquier auditoría o cambio de código, cargar en este orden:
 `BEATSONE_CONSTITUTION_v1.md` → `ARCHITECTURE_DECISIONS.md`. Recién después auditar.
