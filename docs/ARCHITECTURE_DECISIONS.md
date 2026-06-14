@@ -289,6 +289,37 @@ determinada por `TEMPORAL.plannedDuration` y los parámetros derivados por
 política REBIRTH HÍBRIDO, la definición de `rebirthReset()`, la persistencia de
 PACK_MEM y la reserva explícita de FREE permanecen sin cambios.
 
+### ADR-016 — Enmienda 02
+
+**Contexto:** la validación empírica de Fase B (v61) mostró que con
+`REBIRTH.enabled=true` + `perfMode='INSTALLATION'`, el ciclo TERMINAL → Graceful
+Death → REBIRTH no se activa. `_gracefulDeath()` — único disparador de
+`onDeath()`/`_emerge()`/`rebirthReset()` — está condicionado por
+`phase01>=1 && GOVERNANCE.autonomy>.5 && isPlaying` (L1947). `GOVERNANCE.autonomy`
+(default `.3`) es independiente de `perfMode`/`autoAutonomyCap`/`REBIRTH.enabled`
+y no formaba parte del bundle SESSION PRESET. Existía por tanto una dependencia no
+documentada entre DESTINY, REBIRTH y CONSCIOUSNESS/autonomy que invalidaba el
+comportamiento esperado del preset INSTALLATION.
+
+**Corrección:** el preset INSTALLATION setea adicionalmente
+`GOVERNANCE.autonomy=1`; el preset PERFORMANCE setea adicionalmente
+`GOVERNANCE.autonomy=.3` (valor original por defecto). Definiciones resultantes:
+- **INSTALLATION** = `TEMPORAL.plannedDuration` (larga) + `perfMode='INSTALLATION'`
+  + `REBIRTH.enabled=true` + `GOVERNANCE.autonomy=1`.
+- **PERFORMANCE** = `perfMode='LIVE'` + `REBIRTH.enabled=false` +
+  `GOVERNANCE.autonomy=.3`.
+
+Esto es coherente con el significado operativo de ambos modos: en PERFORMANCE el
+operador conduce (autonomía baja); en INSTALLATION el sistema conduce (autonomía
+alta).
+
+**Aclaración:** INSTALLATION requiere autonomía suficiente para permitir la
+transición TERMINAL → Graceful Death → REBIRTH. Actualmente esto equivale a
+`GOVERNANCE.autonomy>.5`, pero el ADR no depende del valor numérico concreto sino
+de la capacidad del sistema para completar autónomamente su ciclo de vida; si el
+umbral cambiara en el futuro, `GOVERNANCE.autonomy=1` seguiría satisfaciéndolo por
+construcción. No se modifica ninguna otra sección de ADR-016 ni de su Enmienda 01.
+
 ---
 
 ## Regla práctica de sesión
