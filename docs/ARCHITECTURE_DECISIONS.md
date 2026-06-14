@@ -267,6 +267,28 @@ probada junta. FREE queda como nombre reservado sin implementación ni primitiva
 nuevas — ninguna implementación futura debe tocar `DESTINY` bajo el nombre FREE
 sin su propio ADR.
 
+### ADR-016 — Enmienda 01
+
+**Contexto:** durante la auditoría previa a la Fase B se verificó que
+`TEMPORAL.computeParams(durationMin)` sobrescribe en cada PLAY los parámetros
+temporales efectivos (`phaseMult`, `collapseMult`, `silCycles`, `maxEvPerBar`,
+`memDecay`, `satDecay` y `driftMult`) a partir de `TEMPORAL.plannedDuration`. Como
+consecuencia, `PROFILES.INST` no constituye una autoridad persistente sobre el
+comportamiento temporal de la sesión y no debe ser considerado el mecanismo
+principal del preset INSTALLATION.
+
+**Corrección:** reemplazar en la definición del preset INSTALLATION
+"`PROFILES.INST` + `perfMode='INSTALLATION'` + `REBIRTH.enabled=true`" por
+"`TEMPORAL.plannedDuration` (larga duración, valor a definir por implementación) +
+`perfMode='INSTALLATION'` + `REBIRTH.enabled=true`".
+
+**Aclaración:** `PROFILES` puede seguir utilizándose como capa de interfaz o
+clasificación conceptual, pero la dinámica temporal efectiva de INSTALLATION queda
+determinada por `TEMPORAL.plannedDuration` y los parámetros derivados por
+`TEMPORAL.computeParams()`. No se modifica ninguna otra sección de ADR-016: la
+política REBIRTH HÍBRIDO, la definición de `rebirthReset()`, la persistencia de
+PACK_MEM y la reserva explícita de FREE permanecen sin cambios.
+
 ---
 
 ## Regla práctica de sesión
