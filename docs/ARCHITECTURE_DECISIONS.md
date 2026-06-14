@@ -322,6 +322,95 @@ construcción. No se modifica ninguna otra sección de ADR-016 ni de su Enmienda
 
 ---
 
+## ADR-017 — Reorganización de UI por intención operativa (PERFORMANCE / DNA CENTER / MATERIAL / SYSTEM)
+
+**Contexto:** la auditoría de superficies LIVE (ver hallazgos previos a este ADR)
+encontró 15+ controles ya implementados y funcionales — sliders ENERGY/TENS/
+DENS/MUT, IMM, MASS, 5 perfiles de identidad (ORG/SIG/MASS/GEO/SIL vía
+`BEHAVIORAL_PROFILES.setProfile()`), botones de WEATHER, AUTO+phase-adv (`PE`),
+8 pads de gesto (`injectGesture`), CONSCIOUSNESS (autonomy), SESSION PRESET
+(ADR-016), CONDUCTOR (FOCUS/ENTITY/VOX) — pero distribuidos entre `header`,
+`LAB`, `EXPORT`, `RHYTHM DNA`, `SOUND DNA` y `VOX DNA` según la **historia interna
+del desarrollo**, no según el flujo mental del operador. Esto hace que capacidades
+ya construidas (en particular MASS, los 5 perfiles de identidad, WEATHER manual y
+PHASE ADV) nunca hayan sido probadas en conjunto, porque viven en tres lugares
+distintos.
+
+**Decisión:** reorganizar la UI en 4 tabs por intención operativa, reemplazando
+las 6 actuales (RHYTHM DNA / SOUND DNA / VOX DNA / PERFORMANCE / EXPORT / LAB):
+
+### PERFORMANCE — todo lo que se toca durante una sesión
+
+| Subgrupo | Controles | Ubicación actual |
+|---|---|---|
+| STAGE | AUTO (`#tgl-auto`), PHASE ADV (`#phase-adv`) | PERFORMANCE/PHASES |
+| STAGE | botones WEATHER (`.wbtn`) | EXPORT |
+| STAGE | SESSION PRESET (INSTALLATION/PERFORMANCE) | LAB |
+| STAGE | DURATION | RHYTHM DNA |
+| ENERGY | sliders ENERGY/TENS/DENS/MUT | LAB/GLOBAL STATE |
+| ENERGY | IMM (`#imm-btn`) | header |
+| ENERGY | MASS slider (`#mass-slider`, `RHYTHM_DNA.mass`) | RHYTHM DNA |
+| ENERGY | CONSCIOUSNESS (autonomy) | LAB |
+| INTERVENTION | 8 pads BREAK/FILL/VOID/GHOST/MORPH/CHAOS/MUTE/CONCLUDE (`#bot_h`) | flotante, sin tab |
+| INTERVENTION | VOX MONITOR (`#vox-mon-btn`), REC | header |
+| CONDUCTOR | FOCUS/ENTITY/VOX (`#cond-*`) | PERFORMANCE/CONDUCTOR (sin cambio) |
+
+### DNA CENTER — todo lo que define la identidad del sistema
+
+| Subgrupo | Controles | Ubicación actual |
+|---|---|---|
+| IDENTITY | 5 perfiles ORG/SIG/MASS/GEO/SIL (`.bp-btn` → `BEHAVIORAL_PROFILES.setProfile()`), consolidar la versión de header (7px) y la de RHYTHM DNA/ENGINE PRESETS en una sola | header + RHYTHM DNA |
+| IDENTITY | RITUAL PROFILE | EXPORT |
+| IDENTITY | DNA IDENTITY / ANCHOR (`PACKS[]`/`DNA.setAnchor`) | SOUND DNA |
+| RHYTHM | RHYTHM DNA CODE editor | RHYTHM DNA |
+| RHYTHM | TEMPO CURVE | RHYTHM DNA |
+| VOX | ENTITY ENGINE, VOICE ECOLOGY, VOX PRESENCE, PRIORITY MODE | VOX DNA |
+
+### MATERIAL — todo lo que es contenido
+
+| Controles | Ubicación actual |
+|---|---|
+| PACK BANK, SAMPLES | SOUND DNA |
+| PACK BRIDGE (ADR-015) | LAB |
+| `audio-mode-ind` "HYBRID" (prioridad sample/synth) | header |
+| MIC | header |
+
+### SYSTEM — todo lo técnico
+
+| Controles | Ubicación actual |
+|---|---|
+| SESSION LOG | LAB |
+| SESSION EXPORT, STATE BUS | EXPORT |
+| SPATIAL, SIM MULT | LAB |
+| DBG / DBG▶ / `sys-ready-ind` | header |
+
+### Header (se mantiene, reducido)
+
+BPM (`-`/`+`/TAP), PLAY/STOP, LIVE MODE, indicadores compactos siempre visibles
+(`#ob-proto`, `#ob-tension`+bar, `#ob-arc`, `#ob-vox`, `#ob-sub`, `#dna-badge`,
+DBG compacto). Los 5 botones de identidad y el slider MASS se retiran del header
+y de RHYTHM DNA respectivamente, consolidados en DNA CENTER/PERFORMANCE.
+
+**Restricción (mover, no rediseñar):** cada control conserva su `id`, su event
+listener y la autoridad/sistema que ya lee o escribe (`G.*`, `PE.*`,
+`BEHAVIORAL_PROFILES`, `RHYTHM_DNA`, `WEATHER`, `GOVERNANCE.autonomy`, `REBIRTH`,
+`PACK_MEM`, etc.). Esta reorganización es exclusivamente de contenedores HTML/CSS
+(qué `<div class="ws-panel" id="tab-X">` envuelve a cada elemento) y de la barra
+de tabs (`#ws-tab-bar`, 6 botones → 4). No se modifica `PE`, `VOXDNA`, `DESTINY`,
+`REBIRTH`, `BEHAVIORAL_PROFILES`, `PACK_MEM`, ni ningún ADR previo (014/015/016).
+
+**Consecuencia:** riesgo bajo, reversible (es HTML/CSS). Habilita la primera
+prueba conjunta de MASS + DENS/TENS + PHASE ADV + perfiles de identidad — todos
+accesibles desde una sola tab por primera vez. Antes de implementar, verificar:
+(1) que ningún listener dependa de un selector acotado al contenedor de tab
+actual (p.ej. `#tab-lab .sl-wrap` en vez de `.sl-wrap` global) — el patrón
+observado hasta ahora es `document.querySelectorAll` global, sin acotar; (2) que
+no existan IDs duplicados entre las variantes `_h` (landscape) y no-`_h` de un
+mismo control al consolidarlos; (3) que `init*()` functions (llamadas una vez en
+boot) no asuman visibilidad/`display` del contenedor original.
+
+---
+
 ## Regla práctica de sesión
 Antes de cualquier auditoría o cambio de código, cargar en este orden:
 `BEATSONE_CONSTITUTION_v1.md` → `ARCHITECTURE_DECISIONS.md`. Recién después auditar.
