@@ -411,6 +411,48 @@ boot) no asuman visibilidad/`display` del contenedor original.
 
 ---
 
+## ADR-018 — Pipeline de import de voces: 7 fixes consolidados (v65–v73)
+
+**Contexto:** auditoría forense de extremo a extremo del pipeline de import de
+packs, disparada por "ALL BOUND 13/13 pero solo se escucha ruido". Detalle
+completo, causa raíz por causa raíz, en `docs/SBO_FIX_LOG_v65-v73.md`.
+
+**Decisión:** quedan **fijados como comportamiento correcto** (no revertir sin
+releer el fix log primero):
+1. `VOX_ARC.phaseWeight()` bypassea a `.7` para `command`/`ritual` cuando
+   `SAL.voxReady>0`, espejando el bypass ya existente en `allows()`.
+2. `VOXMEM.score()` otorga el bonus `wAffinities` (+0.28) a `command`/`ritual`
+   bajo la misma condición — esas dos categorías nunca aparecen en las listas
+   de afinidad climática por nombre, así que sin este bypass nunca son
+   competitivas frente al clúster `ghost`.
+3. `_decodeDataURL()` decodifica base64 manualmente (`atob`+`Uint8Array`) en
+   vez de `fetch(dataURL)` — `fetch()` sobre URLs `data:` puede devolver los
+   bytes ASCII crudos del string en vez del binario, produciendo audio
+   "decodificado con éxito" pero compuesto de ruido. Esta es la causa raíz
+   central de todo el síntoma original.
+4. `VOXTRACE` ahora también registra los fallbacks legacy
+   (`_legacyNarrativeFire`/`_legacyGhostFire`) — un `REJECTED` de `fire()` no
+   implica silencio, porque esos fallbacks no repiten ninguno de sus gates.
+5. Tab nueva **DNA CENTER (AUDIT MODE)** — diagnóstico puro (pack/entity
+   inspector, audición directa bypass-total, analizador de buffer real,
+   monitor de actividad, solo/mute/gain auditable para RHYTHM/VOX/TEXTURE).
+   No toca scheduler/scoring/decode/parsing.
+
+**⚠️ Conflicto con ADR-017:** ADR-017 ya reserva el nombre "DNA CENTER" para
+la tab de **identidad** (perfiles, RITUAL PROFILE, ANCHOR). La tab de
+diagnóstico de este ADR usa el mismo nombre para un propósito no relacionado.
+Pendiente de resolver antes de implementar ADR-017 — alguna de las dos
+necesita renombrarse.
+
+**Pendiente, no resuelto en esta tanda:** P1 (`weatherAffinity`/
+`preferredPhase` del manifest siguen sin leerse en ningún punto de
+scoring/scheduling — metadata muerta); causa del contenido ruidoso de
+`semantic_ghost_a/b` trasladada a investigación en Sound Forge
+(`sound-forge-p33.html`, `_renderSemanticGhost`), aún sin confirmar si ese
+código corre en el pipeline real de Bank Export o es legado inactivo.
+
+---
+
 ## Regla práctica de sesión
 Antes de cualquier auditoría o cambio de código, cargar en este orden:
 `BEATSONE_CONSTITUTION_v1.md` → `ARCHITECTURE_DECISIONS.md`. Recién después auditar.
