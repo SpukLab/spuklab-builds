@@ -5714,7 +5714,14 @@ async function _renderSemanticGhost(variant){
   // HP — shaped by airPush: more air = higher HP
   const hp=ctx.createBiquadFilter();hp.type='highpass';
   hp.frequency.value=800+ForgeState.airPush*1800;hp.Q.value=.5;
-  // Allpass shimmer chain (spectral comb)
+  // LP — AUDIT FIX: allpass is phase-only and never shaped magnitude, leaving raw
+  // broadband noise after the HP (ZCR~0.55, centroid~13.5kHz — measured as indistinguishable
+  // from white noise). This narrows the band so the allpass shimmer is audible on a
+  // sculpted signal instead of on full-band hiss.
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';
+  lp.frequency.value=4000-ForgeState.airPush*2000; // 2000–4000Hz, modulated
+  lp.Q.value=1.8;
+  // Allpass shimmer chain (spectral comb) — now working on a narrowed signal
   const ap1=ctx.createBiquadFilter();ap1.type='allpass';ap1.frequency.value=480+ForgeState.bodyWeight*600;ap1.Q.value=4+ForgeState.coneStress*8;
   const ap2=ctx.createBiquadFilter();ap2.type='allpass';ap2.frequency.value=1100+ForgeState.airPush*1200;ap2.Q.value=3+ForgeState.coneStress*6;
   const ap3=ctx.createBiquadFilter();ap3.type='allpass';ap3.frequency.value=240+ForgeState.bodyWeight*320;ap3.Q.value=5;
@@ -5726,7 +5733,7 @@ async function _renderSemanticGhost(variant){
   env.gain.setValueAtTime(.28,dur-.9);env.gain.linearRampToValueAtTime(.00001,dur);
   const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw('exhausted',1+ForgeState.coneStress*.8);
   const pan=ctx.createStereoPanner();pan.pan.value=(variant==='b'?-.55:.62);
-  ns.connect(hp);hp.connect(ap1);ap1.connect(ap2);ap2.connect(ap3);ap3.connect(sat);sat.connect(env);
+  ns.connect(hp);hp.connect(lp);lp.connect(ap1);ap1.connect(ap2);ap2.connect(ap3);ap3.connect(sat);sat.connect(env);
   lfo.connect(lfoGain);lfoGain.connect(env.gain);
   env.connect(pan);addOfflineLimiter(ctx,pan,.18);
   ns.start();lfo.start();
@@ -5750,6 +5757,13 @@ async function _renderRitualVoice(variant){
   bp.frequency.linearRampToValueAtTime(baseF*(variant==='b'?1.5:.9),dur);
   const bp2=ctx.createBiquadFilter();bp2.type='bandpass';
   bp2.frequency.value=baseF*(variant==='b'?3.1:2.4);bp2.Q.value=5;
+  // AUDIT NOTE (moderate finding): default ritual_voice sits close to erosion_texture
+  // in spectral fingerprint (both mid-band resonant noise, similar duration). Light touch:
+  // a slow pitch vibrato on the 2nd formant — a voice-like trait erosion's amplitude-only
+  // tremolo doesn't have — without restructuring the working formant chain.
+  const vibLfo=ctx.createOscillator();vibLfo.type='sine';vibLfo.frequency.value=4.2+Math.random()*1.5; // 4–6Hz, vocal vibrato range
+  const vibDepth=ctx.createGain();vibDepth.gain.value=baseF*(variant==='b'?3.1:2.4)*0.035; // ~3.5% depth
+  vibLfo.connect(vibDepth);vibDepth.connect(bp2.frequency);
   const merge=ctx.createGain();merge.gain.value=.5;
   const sat=ctx.createWaveShaper();sat.curve=buildSatCurveRaw(currentSatProfile,ForgeState.satDrive*.7);
   const env=ctx.createGain();env.gain.setValueAtTime(0,0);
@@ -5758,7 +5772,7 @@ async function _renderRitualVoice(variant){
   const pan=ctx.createStereoPanner();pan.pan.value=(variant==='b'?.38:-.28);
   ns.connect(bp);ns.connect(bp2);bp.connect(merge);bp2.connect(merge);
   merge.connect(sat);sat.connect(env);env.connect(pan);addOfflineLimiter(ctx,pan,.38);
-  ns.start();
+  ns.start();vibLfo.start();
   return startRenderingCompat(ctx);
 }
 
