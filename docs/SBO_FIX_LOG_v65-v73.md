@@ -240,29 +240,45 @@ iniciado.
 
 ---
 
-## Pendiente — investigación trasladada a Sound Forge
+## RESUELTO — investigación trasladada a Sound Forge (confirmado)
 
 Después de los 7 fixes de SBO, el "ruido" remanente en entidades `ghost`
 (`semantic_ghost_a/b`) se confirmó **escuchando los `.wav` extraídos
-directamente del `.zip`, fuera de SBO por completo** — es contenido real del
+directamente del `.zip`, fuera de SBO por completo** — era contenido real del
 archivo exportado, no un bug de reproducción.
 
-Auditoría forense en Sound Forge (otra sesión, `sound-forge-p33.html`)
-confirmó numéricamente: `_renderSemanticGhost()` usa
+Auditoría forense en Sound Forge (`sound-forge-p33.html`) confirmó
+numéricamente: `_renderSemanticGhost()` usaba
 `ruido→highpass→3×allpass→saturación` — los allpass en serie no esculpen
 magnitud espectral (solo fase), dejando ruido de banda ancha crudo después
-del highpass. Comparado con generadores que sí funcionan
-(`_renderCollapseResidue`, `_renderMemoryTrace`, `_renderRitualVoice`), todos
-usan lowpass/bandpass para esculpir magnitud antes de cualquier color de
-fase.
+del highpass (ZCR=0.557, centroide=13.5kHz, casi idéntico al ruido blanco de
+`spectral_click`).
 
-**Pregunta abierta sin resolver:** si esa función (parte del Entity Catalog
-viejo, commiteado 22 de mayo, ligado al botón FORGE PACK) es la que realmente
-generó el contenido de `piano1_g2_v01`, o si Bank Export la usa como relleno
-automático para roles (`ghost`/`ritual_voice`) sin variante manual asignada
-por el usuario. SpukLab va a generar un pack nuevo vía Bank Export real
-(`.spukpack`) y probarlo en DNA CENTER (PLAY RAW por entidad) antes de tocar
-ningún código de Sound Forge.
+**Pregunta que quedaba abierta:** si esa función (parte del Entity Catalog
+viejo, botón FORGE PACK / `forgeSpukPack→buildEntityCatalog`) es la que
+generó `piano1_g2_v01`, o si Bank Export la usa como relleno automático.
+**Respuesta confirmada por la sesión de Sound Forge:** el Entity Catalog
+(`forgeSpukPack→buildEntityCatalog`) está **confirmado independiente** de
+Bank Export (`exportFragmentBank`) — Bank Export **nunca toca ese código**.
+Es decir: el ruido en `piano1_g2_v01` vino del botón FORGE PACK viejo, no del
+flujo de trabajo real actual del usuario. El pack nuevo generado vía Bank
+Export (`.spukpack`, en curso) no puede heredar este bug específico, porque
+corre por un camino de código completamente distinto.
+
+**Fix aplicado (commit `369706e`, Sound Forge):**
+1. `_renderSemanticGhost`: agregado lowpass resonante (2000–4000Hz, Q1.8)
+   entre el highpass y la cascada de allpass. Verificado numéricamente:
+   ZCR 0.557→0.144, centroide 13517→3277Hz, distancia espectral a
+   `spectral_click` 0.075→0.741 (de "casi idéntico" a "territorio de shimmer
+   real, no hiss").
+2. `_renderRitualVoice`: vibrato de pitch sutil (4-6Hz, ~3.5% de profundidad)
+   en el segundo formante — el audit encontró a `ritual_voice` cerca de
+   `erosion_texture` en huella espectral+duración (d=0.058-0.064); el
+   vibrato es un rasgo de FM vocal que el tremolo (solo AM) de
+   `erosion_texture` no tiene.
+
+**Estado:** cerrado para el Entity Catalog viejo. Sin impacto en el flujo de
+trabajo real del usuario (Bank Export), que nunca pasó por este código.
 
 ---
 

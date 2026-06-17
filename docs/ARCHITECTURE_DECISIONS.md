@@ -446,10 +446,14 @@ necesita renombrarse.
 
 **Pendiente, no resuelto en esta tanda:** P1 (`weatherAffinity`/
 `preferredPhase` del manifest siguen sin leerse en ningún punto de
-scoring/scheduling — metadata muerta); causa del contenido ruidoso de
-`semantic_ghost_a/b` trasladada a investigación en Sound Forge
-(`sound-forge-p33.html`, `_renderSemanticGhost`), aún sin confirmar si ese
-código corre en el pipeline real de Bank Export o es legado inactivo.
+scoring/scheduling — metadata muerta).
+
+**Resuelto (commit `369706e`, sesión Sound Forge):** el ruido de
+`semantic_ghost_a/b` venía del Entity Catalog viejo (botón FORGE PACK),
+confirmado independiente de Bank Export — no afecta el flujo de trabajo real
+del usuario. Fix aplicado y verificado numéricamente en `sound-forge-p33.html`
+(lowpass agregado a `_renderSemanticGhost`, vibrato agregado a
+`_renderRitualVoice`). Detalle completo en `docs/SBO_FIX_LOG_v65-v73.md`.
 
 ---
 
