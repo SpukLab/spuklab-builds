@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Spk_OrSet — Prototype v0.3</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: linear-gradient(155deg,#13111f,#1b1726);
+    color: #fff; font-family: Inter,-apple-system,sans-serif; font-size: 13px;
+    overscroll-behavior: none;
+  }
+  .mono { font-family: 'JetBrains Mono',monospace; font-style: italic; }
+  #app  { min-height: 100%; display: flex; flex-direction: column; }
+
+  #topbar { padding: 14px 18px 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .logoSpk    { font-weight: 800; font-size: 22px; color: #fff; }
+  .logoOrset  { font-weight: 300; font-size: 22px; color: #00ffff; }
+  .subtitle   { font-size: 11px; color: rgba(255,255,255,.5); }
+
+  #status { padding: 0 18px 8px; font-size: 12px; color: rgba(255,255,255,.6); min-height: 16px; }
+
+  #startOverlay { flex:1; display:flex; align-items:center; justify-content:center; padding:20px; }
+
+  button {
+    font-family: Inter,sans-serif; font-size: 13px; color: #fff;
+    background: rgba(153,68,255,.07); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 6px; padding: 8px 14px; cursor: pointer;
+  }
+  button:disabled { opacity: .35; }
+  #btnInit { font-size: 15px; padding: 16px 28px; background: rgba(153,68,255,.12); border-color: rgba(153,68,255,.4); }
+
+  #mainPanel { display: flex; flex-direction: column; gap: 10px; padding: 0 18px 24px; }
+  #transport { display: flex; gap: 10px; }
+
+  #workArea { display: flex; flex-direction: row; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ---- MATERIAL PANEL ---- */
+  #materialPanel {
+    flex: 0 0 228px; min-width: 200px;
+    background: rgba(153,68,255,.04); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 9px;
+  }
+  #materialPanel h3 { margin: 0; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,.55); }
+  .matRow  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .matLabel { font-size: 11px; color: rgba(255,255,255,.45); min-width: 54px; }
+  .matSel, .matNum {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(153,68,255,.18);
+    color: #fff; border-radius: 4px; padding: 5px 7px; font-size: 12px;
+  }
+  .matSel { flex: 1; }
+  .matNum { width: 54px; }
+  .matTA {
+    width: 100%; min-height: 55px; resize: vertical;
+    background: rgba(255,255,255,.03); border: 1px solid rgba(153,68,255,.18);
+    color: #fff; border-radius: 4px; padding: 6px; font-size: 10px;
+    font-family: 'JetBrains Mono',monospace;
+  }
+  #matInfo  { font-size: 11px; color: rgba(0,255,255,.75); }
+  #segInfo  { font-size: 11px; color: #b580ff; }
+  .matDivider { border: none; border-top: 1px solid rgba(153,68,255,.1); margin: 1px 0; }
+
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  /* ---- ENTITIES ---- */
+  #entities { flex: 1 1 360px; display: flex; flex-direction: column; gap: 6px; min-width: 250px; }
+
+  .familyLabel {
+    font-size: 11px; color: rgba(255,255,255,.28); letter-spacing: 1.5px;
+    padding: 5px 0 3px; border-bottom: 1px solid rgba(153,68,255,.08);
+  }
+
+  .entityCard {
+    background: rgba(153,68,255,.06); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 7px; padding: 8px 11px;
+    transition: border-color .07s, box-shadow .07s;
+  }
+  .entityCard.trigger { border-color: #00ffff; box-shadow: 0 0 11px rgba(153,68,255,.28); }
+
+  @keyframes breatheAnim {
+    0%,100% { border-color: rgba(153,68,255,.18); box-shadow: none; }
+    50%     { border-color: rgba(0,255,255,.35);  box-shadow: 0 0 10px rgba(0,255,255,.1); }
+  }
+  .entityCard.breathing { animation: breatheAnim var(--breathe-dur,5s) ease-in-out infinite; }
+
+  .entityRow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .entityName { font-weight: 700; font-size: 13px; min-width: 68px; }
+  .entityFamily {
+    font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+  }
+  .fam-event { background: rgba(153,68,255,.2); color: #d0a0ff; }
+  .fam-cont  { background: rgba(0,255,255,.12);  color: #00ffff; }
+  .fam-frag  { background: rgba(255,0,255,.12);  color: #ff88ff; }
+  .entityBeh { font-size: 11px; color: rgba(255,255,255,.38); }
+
+  .entityCtrl { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 5px; }
+  .btnMute,.btnSolo { width: 27px; height: 27px; padding: 0; font-size: 11px; font-weight: 700; }
+  .btnMute.active { background: rgba(255,80,80,.25); border-color: #ff5050; color: #ffb0b0; }
+  .btnSolo.active { background: rgba(153,68,255,.3); border-color: #b580ff; }
+  .wLabel { font-size: 11px; color: rgba(255,255,255,.4); display: flex; align-items: center; gap: 5px; }
+  .wSlider { width: 68px; }
+
+  /* ---- DNA CENTER ---- */
+  #dnaCenter {
+    flex: 0 0 208px; min-width: 186px;
+    background: rgba(153,68,255,.04); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px;
+  }
+  #dnaCenter h3  { margin: 0; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,.55); }
+  #dnaCenter label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: rgba(255,255,255,.5); }
+  #dnaCenter select, #dnaCenter input[type=number] {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(153,68,255,.18);
+    color: #fff; border-radius: 4px; padding: 5px 7px; font-size: 12px; width: 100%;
+  }
+  .noteSmall { font-size: 11px; color: rgba(255,255,255,.24); line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<!--
+SPK_ORSET — Prototype v0.3
+Hipotesis a validar: mismo material vocal →
+  VOICE A  EVENT / Density+Granular   → "secuenciador"
+  VOICE B  CONTINUOUS / Breathe       → "organismo"
+  VOICE C  FRAGMENT / Scatter         → "lenguaje roto"
+  VOICE D  FRAGMENT / Phrase          → "discurso parcial"
+  VOICE E  FRAGMENT / Echo            → "memoria o recuerdo"
+
+MATERIAL: capa separada de la familia
+  segmentacion: FIXED / SILENCE / MANUAL
+  regiones compartidas por Voice C, D, E
+-->
+
+<div id="app">
+  <div id="topbar">
+    <span class="logoSpk">SPK</span><span class="logoOrset">_ORSET</span>
+    <span class="subtitle mono">prototype v0.3 — MATERIAL / FRAGMENT: scatter · phrase · echo</span>
+  </div>
+  <div id="status">presiona INICIAR AUDIO para comenzar</div>
+
+  <div id="startOverlay">
+    <button id="btnInit">INICIAR AUDIO</button>
+  </div>
+
+  <div id="mainPanel" style="display:none;">
+
+    <div id="transport">
+      <button id="btnPlay" disabled>PLAY</button>
+      <button id="btnStop" disabled>STOP</button>
+    </div>
+
+    <div id="workArea">
+
+      <!-- MATERIAL PANEL -->
+      <div id="materialPanel">
+        <h3 class="mono">MATERIAL</h3>
+
+        <div class="matRow">
+          <span class="matLabel">fuente</span>
+          <button id="btnLoadMaterial" style="font-size:11px;padding:5px 9px;">cargar</button>
+          <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_material">
+        </div>
+        <div id="matInfo">sintetico (5.0s)</div>
+
+        <hr class="matDivider">
+
+        <div class="matRow">
+          <span class="matLabel">modo</span>
+          <select class="matSel" id="segMode">
+            <option value="fixed">FIXED</option>
+            <option value="silence">SILENCE</option>
+            <option value="manual">MANUAL</option>
+          </select>
+        </div>
+
+        <div id="ctrlFixed" class="matRow">
+          <span class="matLabel">N partes</span>
+          <input type="number" class="matNum" id="fixedN" min="2" max="32" value="8">
+        </div>
+
+        <div id="ctrlSilence" class="matRow" style="display:none;">
+          <span class="matLabel">threshold</span>
+          <input type="number" class="matNum" id="silThreshold" min="0.005" max="0.5" step="0.005" value="0.04">
+        </div>
+
+        <div id="ctrlManual" style="display:none;">
+          <textarea class="matTA" id="manualInput"
+            placeholder='[{"start":0,"end":1.5},{"start":2,"end":4}]'></textarea>
+        </div>
+
+        <div class="matRow">
+          <button id="btnBuild" style="font-size:11px;padding:5px 9px;">BUILD</button>
+          <span id="segInfo">— 8 regiones (fixed)</span>
+        </div>
+
+        <hr class="matDivider">
+
+        <div class="matRow">
+          <span class="matLabel" style="min-width:36px;">kick</span>
+          <button id="btnLoadKick" style="font-size:11px;padding:5px 9px;">cargar</button>
+          <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_kick">
+        </div>
+
+        <div class="matRow">
+          <span class="matLabel" style="min-width:36px;">noise</span>
+          <button id="btnLoadNoise" style="font-size:11px;padding:5px 9px;">cargar</button>
+          <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_noise">
+        </div>
+
+        <div class="noteSmall">carga tu propio material vocal para resultados expresivos. El sintetico es un placeholder para validar la arquitectura.</div>
+      </div>
+
+      <!-- ENTITIES -->
+      <div id="entities">
+
+        <div class="familyLabel mono">EVENT</div>
+
+        <div class="entityCard" id="card_kick">
+          <div class="entityRow">
+            <span class="entityName">KICK</span>
+            <span class="entityFamily fam-event">EVENT</span>
+            <span class="entityBeh mono">Grid + ghost</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="kick">M</button>
+            <button class="btnSolo" data-entity="kick">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="85" class="wSlider" data-entity="kick"></label>
+          </div>
+        </div>
+
+        <div class="entityCard" id="card_voiceA">
+          <div class="entityRow">
+            <span class="entityName">VOICE A</span>
+            <span class="entityFamily fam-event">EVENT</span>
+            <span class="entityBeh mono">Density + Granular</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="voiceA">M</button>
+            <button class="btnSolo" data-entity="voiceA">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="100" class="wSlider" data-entity="voiceA"></label>
+          </div>
+        </div>
+
+        <div class="familyLabel mono">CONTINUOUS</div>
+
+        <div class="entityCard" id="card_voiceB">
+          <div class="entityRow">
+            <span class="entityName">VOICE B</span>
+            <span class="entityFamily fam-cont">CONTINUOUS</span>
+            <span class="entityBeh mono">Breathe</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="voiceB">M</button>
+            <button class="btnSolo" data-entity="voiceB">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="90" class="wSlider" data-entity="voiceB"></label>
+          </div>
+        </div>
+
+        <div class="familyLabel mono">FRAGMENT</div>
+
+        <div class="entityCard" id="card_voiceC">
+          <div class="entityRow">
+            <span class="entityName">VOICE C</span>
+            <span class="entityFamily fam-frag">FRAGMENT</span>
+            <span class="entityBeh mono">Scatter — saltos aleatorios</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="voiceC">M</button>
+            <button class="btnSolo" data-entity="voiceC">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="90" class="wSlider" data-entity="voiceC"></label>
+          </div>
+        </div>
+
+        <div class="entityCard" id="card_voiceD">
+          <div class="entityRow">
+            <span class="entityName">VOICE D</span>
+            <span class="entityFamily fam-frag">FRAGMENT</span>
+            <span class="entityBeh mono">Phrase — avance continuo</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="voiceD">M</button>
+            <button class="btnSolo" data-entity="voiceD">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="90" class="wSlider" data-entity="voiceD"></label>
+          </div>
+        </div>
+
+        <div class="entityCard" id="card_voiceE">
+          <div class="entityRow">
+            <span class="entityName">VOICE E</span>
+            <span class="entityFamily fam-frag">FRAGMENT</span>
+            <span class="entityBeh mono">Echo — memoria reciente</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="voiceE">M</button>
+            <button class="btnSolo" data-entity="voiceE">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="90" class="wSlider" data-entity="voiceE"></label>
+          </div>
+        </div>
+
+        <div class="familyLabel mono">CONTINUOUS</div>
+
+        <div class="entityCard" id="card_noise">
+          <div class="entityRow">
+            <span class="entityName">NOISE</span>
+            <span class="entityFamily fam-cont">CONTINUOUS</span>
+            <span class="entityBeh mono">Gate</span>
+          </div>
+          <div class="entityCtrl">
+            <button class="btnMute" data-entity="noise">M</button>
+            <button class="btnSolo" data-entity="noise">S</button>
+            <label class="wLabel">w<input type="range" min="0" max="100" value="55" class="wSlider" data-entity="noise"></label>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- DNA CENTER -->
+      <div id="dnaCenter">
+        <h3 class="mono">DNA CENTER</h3>
+
+        <label>focus target
+          <select id="focusTarget">
+            <option value="none">ninguno</option>
+            <option value="kick">kick</option>
+            <option value="voiceA">voice A — event</option>
+            <option value="voiceB">voice B — continuous</option>
+            <option value="voiceC">voice C — scatter</option>
+            <option value="voiceD">voice D — phrase</option>
+            <option value="voiceE">voice E — echo</option>
+            <option value="noise">noise</option>
+          </select>
+        </label>
+
+        <label>focus amount
+          <input type="range" id="focusAmount" min="0" max="100" value="0">
+        </label>
+
+        <label>complexity
+          <input type="range" id="complexity" min="0" max="100" value="40">
+        </label>
+
+        <label>bpm
+          <input type="number" id="bpmInput" min="40" max="220" value="120">
+        </label>
+
+        <div class="noteSmall">
+          complexity afecta cada familia de forma distinta: Event gana densidad, Continuous acelera respiracion, Scatter sube rate, Phrase agrega saltos aleatorios, Echo extiende memoria y reduce repeticion.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SPK_ORSET — Prototype v0.3
+// MATERIAL (capa propia) + FRAGMENT: Scatter / Phrase / Echo
+// Tres modos de segmentacion: FIXED / SILENCE / MANUAL
+// ============================================================
+
+// ---------- helpers ----------
+
+function clamp(v, lo, hi) {
+  if (v < lo) { return lo; }
+  if (v > hi) { return hi; }
+  return v;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function randExp(rate) {
+  var r = Math.random();
+  if (r < 0.000001) { r = 0.000001; }
+  return -Math.log(1 - r) / rate;
+}
+
+// ---------- global state ----------
+
+var state = {
+  complexity:  40,
+  focusTarget: null,
+  focusAmount: 0,
+  bpm:         120
+};
+
+// ---------- MATERIAL layer ----------
+// Existe independientemente de las familias.
+// Todas las entidades Fragment comparten material.buffer y material.regions.
+
+var material = {
+  buffer:           null,
+  duration:         0,
+  segmentMode:      'fixed',  // 'fixed' | 'silence' | 'manual'
+  fixedN:           8,
+  silenceThreshold: 0.04,
+  manualInput:      [],       // parsed from textarea
+  regions:          []        // [{start, end, index}] — resultado activo
+};
+
+// -- segmentation: FIXED --
+function segmentFixed(buffer, N) {
+  var dur = buffer.duration;
+  var seg = dur / N;
+  var out = [];
+  var i = 0;
+  while (i < N) {
+    out.push({ start: i * seg, end: (i + 1) * seg, index: i });
+    i = i + 1;
+  }
+  return out;
+}
+
+// -- segmentation: SILENCE --
+// Detecta regiones no-silenciosas usando RMS por ventanas de 20ms.
+// No busca precision perfecta. Valida utilidad musical.
+function segmentBySilence(buffer, threshold) {
+  var data  = buffer.getChannelData(0);
+  var sr    = buffer.sampleRate;
+  var hop   = Math.floor(sr * 0.02);   // 20ms
+  var nHops = Math.floor(data.length / hop);
+  var minRunHops = 10;                  // 200ms minimo por region
+
+  // RMS por hop → boolean silence
+  var isSilent = [];
+  var h = 0;
+  while (h < nHops) {
+    var sum = 0;
+    var s = 0;
+    while (s < hop) {
+      var v = data[h * hop + s] || 0;
+      sum = sum + v * v;
+      s = s + 1;
+    }
+    isSilent.push(Math.sqrt(sum / hop) < threshold);
+    h = h + 1;
+  }
+
+  // Encontrar runs no-silenciosos
+  var regions = [];
+  var runStart = -1;
+  var idx = 0;
+  h = 0;
+  while (h <= nHops) {
+    var silent = (h === nHops) || isSilent[h];
+    if (!silent && runStart < 0) {
+      runStart = h;
+    } else if (silent && runStart >= 0) {
+      var runLen = h - runStart;
+      if (runLen >= minRunHops) {
+        regions.push({
+          start: runStart * hop / sr,
+          end:   Math.min(h * hop / sr, buffer.duration),
+          index: idx
+        });
+        idx = idx + 1;
+      }
+      runStart = -1;
+    }
+    h = h + 1;
+  }
+
+  if (regions.length < 2) { return null; }
+  return regions;
+}
+
+// -- segmentation: MANUAL --
+function segmentManual(parsed) {
+  var out = [];
+  var i = 0;
+  while (i < parsed.length) {
+    var r = parsed[i];
+    var s = parseFloat(r.start);
+    var e = parseFloat(r.end);
+    if (!isNaN(s) && !isNaN(e) && e > s) {
+      out.push({ start: s, end: e, index: i });
+    }
+    i = i + 1;
+  }
+  return out.length >= 1 ? out : null;
+}
+
+// -- rebuild: despacha segun modo y resetea estados de Fragment --
+function rebuildRegions() {
+  if (!material.buffer) {
+    setStatus('carga un archivo de material primero');
+    return;
+  }
+
+  var regions = null;
+  var mode    = material.segmentMode;
+
+  if (mode === 'fixed') {
+    regions = segmentFixed(material.buffer, material.fixedN);
+
+  } else if (mode === 'silence') {
+    regions = segmentBySilence(material.buffer, material.silenceThreshold);
+    if (!regions) {
+      setStatus('SILENCE: sin regiones detectadas — usando FIXED como fallback');
+      regions = segmentFixed(material.buffer, material.fixedN);
+      mode    = 'fixed (fallback)';
+    }
+
+  } else if (mode === 'manual') {
+    if (material.manualInput && material.manualInput.length > 0) {
+      regions = segmentManual(material.manualInput);
+    }
+    if (!regions) {
+      setStatus('MANUAL: formato invalido — usando FIXED como fallback');
+      regions = segmentFixed(material.buffer, material.fixedN);
+      mode    = 'fixed (fallback)';
+    }
+  }
+
+  material.regions = regions;
+
+  // Resetear estados internos de Fragment
+  voiceC.lastIndex     = -1;
+  voiceD.currentIndex  = -1;
+  voiceD.phraseDir     = 1;
+  voiceE.recentIndices = [];
+
+  var infoEl = document.getElementById('segInfo');
+  if (infoEl) {
+    infoEl.textContent = regions.length + ' regiones (' + mode + ')';
+  }
+  if (mode === material.segmentMode) {
+    setStatus('segments: ' + regions.length + ' regiones, duracion media ' +
+      ((material.buffer.duration / regions.length)).toFixed(2) + 's');
+  }
+}
+
+// -- parse manual textarea and apply --
+function parseAndApplyManual() {
+  var ta = document.getElementById('manualInput');
+  if (!ta) { return; }
+  var raw = ta.value.trim();
+  if (!raw) {
+    material.manualInput = [];
+    return;
+  }
+  try {
+    var parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      material.manualInput = parsed;
+    } else {
+      material.manualInput = [];
+      setStatus('MANUAL: debe ser un array JSON');
+    }
+  } catch (e) {
+    material.manualInput = [];
+    setStatus('MANUAL: JSON invalido — ' + e.message);
+  }
+}
+
+// -- apply new voice buffer (shared by all Fragment + Event + Continuous voice entities) --
+function applyNewVoiceBuffer(decoded, label) {
+  material.buffer   = decoded;
+  material.duration = decoded.duration;
+  voiceA.buffer     = decoded;
+  voiceB.buffer     = decoded;
+  voiceC.buffer     = decoded;
+  voiceD.buffer     = decoded;
+  voiceE.buffer     = decoded;
+
+  if (voiceB.started) {
+    stopVoiceB();
+    startVoiceB();
+    refreshVoiceBGain();
+  }
+
+  rebuildRegions();
+
+  var matInfoEl = document.getElementById('matInfo');
+  if (matInfoEl) {
+    matInfoEl.textContent = label + ' (' + decoded.duration.toFixed(1) + 's)';
+  }
+}
+
+// ---------- entities ----------
+
+var kick = {
+  id: 'kick', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 85,
+  stepIndex: 0, nextTime: 0,
+  pattern: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]
+};
+
+var voiceA = {
+  id: 'voiceA', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 100,
+  nextTime: 0
+};
+
+var voiceB = {
+  id: 'voiceB', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  srcNode: null, breatheOsc: null, breatheDepth: null, baseGain: null,
+  started: false
+};
+
+var voiceC = {   // FRAGMENT / Scatter
+  id: 'voiceC', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  nextTime: 0, lastIndex: -1
+};
+
+var voiceD = {   // FRAGMENT / Phrase
+  id: 'voiceD', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  nextTime: 0, currentIndex: -1, phraseDir: 1
+};
+
+var voiceE = {   // FRAGMENT / Echo
+  id: 'voiceE', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  nextTime: 0, recentIndices: []   // indices recientes, max 8
+};
+
+var noise = {
+  id: 'noise', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 55,
+  sourceNode: null, gateOsc: null, gateDepthGain: null, gateNode: null,
+  started: false
+};
+
+function getEntity(id) {
+  if (id === 'kick')   { return kick;   }
+  if (id === 'voiceA') { return voiceA; }
+  if (id === 'voiceB') { return voiceB; }
+  if (id === 'voiceC') { return voiceC; }
+  if (id === 'voiceD') { return voiceD; }
+  if (id === 'voiceE') { return voiceE; }
+  return noise;
+}
+
+// ---------- audio context ----------
+
+var audioCtx         = null;
+var masterGain       = null;
+var limiter          = null;
+var running          = false;
+var lookahead        = 0.13;
+var schedulerInterval = null;
+
+function initAudio() {
+  if (audioCtx) { return; }
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume();
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.76;
+
+  limiter = audioCtx.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.knee.value      = 0;
+  limiter.ratio.value     = 20;
+  limiter.attack.value    = 0.001;
+  limiter.release.value   = 0.15;
+
+  masterGain.connect(limiter);
+  limiter.connect(audioCtx.destination);
+
+  kick.gainNode   = audioCtx.createGain(); kick.gainNode.gain.value   = 1.0; kick.gainNode.connect(masterGain);
+  voiceA.gainNode = audioCtx.createGain(); voiceA.gainNode.gain.value = 1.0; voiceA.gainNode.connect(masterGain);
+  voiceB.gainNode = audioCtx.createGain(); voiceB.gainNode.gain.value = 1.0; voiceB.gainNode.connect(masterGain);
+  voiceC.gainNode = audioCtx.createGain(); voiceC.gainNode.gain.value = 1.0; voiceC.gainNode.connect(masterGain);
+  voiceD.gainNode = audioCtx.createGain(); voiceD.gainNode.gain.value = 1.0; voiceD.gainNode.connect(masterGain);
+  voiceE.gainNode = audioCtx.createGain(); voiceE.gainNode.gain.value = 1.0; voiceE.gainNode.connect(masterGain);
+  noise.gainNode  = audioCtx.createGain(); noise.gainNode.gain.value  = 0.0; noise.gainNode.connect(masterGain);
+
+  buildBuffers();
+}
+
+// ---------- synthetic material (placeholders) ----------
+
+function buildKickBuffer(ctx) {
+  var dur = 0.38;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var i = 0;
+  while (i < len) {
+    var t   = i / sr;
+    var fr  = 140 * Math.exp(-t * 18);
+    var env = Math.exp(-t * 12);
+    d[i] = Math.sin(2 * Math.PI * fr * t) * env;
+    i = i + 1;
+  }
+  return buf;
+}
+
+function buildNoiseBuffer(ctx) {
+  var dur = 2.0;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var i = 0;
+  while (i < len) {
+    d[i] = (Math.random() * 2 - 1) * 0.55;
+    i = i + 1;
+  }
+  return buf;
+}
+
+function buildVoiceBuffer(ctx, callback) {
+  // Material sintetico placeholder: ruido filtrado con dos formantes que imitan vocalidad.
+  // 5 segundos para que los 8 segmentos (FIXED) tengan 0.625s cada uno.
+  var dur    = 5.0;
+  var sr     = ctx.sampleRate;
+  var frames = Math.floor(sr * dur);
+
+  try {
+    var offline  = new OfflineAudioContext(1, frames, sr);
+    var noiseBuf = offline.createBuffer(1, frames, sr);
+    var nd       = noiseBuf.getChannelData(0);
+    var i = 0;
+    while (i < nd.length) { nd[i] = (Math.random() * 2 - 1); i = i + 1; }
+
+    var src = offline.createBufferSource();
+    src.buffer = noiseBuf;
+
+    // F1: formante baja, se mueve lentamente
+    var f1 = offline.createBiquadFilter();
+    f1.type = 'bandpass'; f1.Q.value = 9;
+    f1.frequency.setValueAtTime(350, 0);
+    f1.frequency.linearRampToValueAtTime(680, dur * 0.3);
+    f1.frequency.linearRampToValueAtTime(290, dur * 0.65);
+    f1.frequency.linearRampToValueAtTime(520, dur);
+
+    // F2: formante alta, movimiento opuesto
+    var f2 = offline.createBiquadFilter();
+    f2.type = 'bandpass'; f2.Q.value = 6;
+    f2.frequency.setValueAtTime(1050, 0);
+    f2.frequency.linearRampToValueAtTime(2100, dur * 0.3);
+    f2.frequency.linearRampToValueAtTime(880, dur * 0.65);
+    f2.frequency.linearRampToValueAtTime(1550, dur);
+
+    var m1 = offline.createGain(); m1.gain.value = 0.5;
+    var m2 = offline.createGain(); m2.gain.value = 0.5;
+    var ev = offline.createGain();
+    ev.gain.setValueAtTime(0.0001, 0);
+    ev.gain.linearRampToValueAtTime(0.88, 0.55);
+    ev.gain.setValueAtTime(0.88, dur * 0.5);
+    ev.gain.linearRampToValueAtTime(0.0001, dur);
+
+    src.connect(f1); f1.connect(m1); m1.connect(ev);
+    src.connect(f2); f2.connect(m2); m2.connect(ev);
+    ev.connect(offline.destination);
+    src.start(0);
+
+    offline.startRendering().then(function(rendered) {
+      callback(rendered);
+    }).catch(function() {
+      callback(buildVoiceFallback(ctx));
+    });
+  } catch (e) {
+    callback(buildVoiceFallback(ctx));
+  }
+}
+
+function buildVoiceFallback(ctx) {
+  var dur = 5.0;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var ph  = 0;
+  var i = 0;
+  while (i < len) {
+    var t  = i / sr;
+    var fr = 300 + Math.sin(t * 0.4) * 200 + Math.sin(t * 1.3) * 80;
+    var en = Math.min(1, t * 1.5) * Math.min(1, (dur - t) * 1.5) * 0.6;
+    ph     = ph + 2 * Math.PI * fr / sr;
+    d[i]  = Math.sin(ph) * en;
+    i      = i + 1;
+  }
+  return buf;
+}
+
+function buildBuffers() {
+  kick.buffer  = buildKickBuffer(audioCtx);
+  noise.buffer = buildNoiseBuffer(audioCtx);
+  setStatus('preparando material sintetico de voz...');
+  buildVoiceBuffer(audioCtx, function(rendered) {
+    applyNewVoiceBuffer(rendered, 'sintetico');
+    document.getElementById('btnPlay').disabled = false;
+    document.getElementById('btnStop').disabled = false;
+    setStatus('listo — carga tu propio material vocal o presiona PLAY');
+  });
+}
+
+// ---------- activity: mute / solo / focus ----------
+
+function activityMultiplier(entityId) {
+  var ent = getEntity(entityId);
+  if (ent.mute) { return 0; }
+
+  var anySolo = kick.solo || voiceA.solo || voiceB.solo ||
+                voiceC.solo || voiceD.solo || voiceE.solo || noise.solo;
+  if (anySolo && !ent.solo) { return 0; }
+
+  var base = 1.0;
+  if (state.focusTarget && state.focusTarget !== 'none') {
+    if (state.focusTarget === entityId) {
+      base = 1.0 + (state.focusAmount / 100) * 0.3;
+    } else {
+      base = 1.0 - (state.focusAmount / 100) * 0.75;
+    }
+  }
+  return clamp(base, 0, 1.3);
+}
+
+// ---------- complexity-derived values ----------
+
+function ghostProb()      { return (state.complexity / 100) * 0.35; }
+function voiceARate()     { return lerp(0.5, 7.0, state.complexity / 100); }
+function grainSizeSec()   { return lerp(0.24, 0.025, state.complexity / 100); }
+function gateFrequency()  { return lerp(1.0, 18.0, state.complexity / 100); }
+function getBreatheFreq() { return 0.04 + (state.complexity / 100) * 0.46; }
+function scatterRate()    { return lerp(0.25, 2.2, state.complexity / 100); }
+function phraseRate()     { return lerp(0.2, 1.6, state.complexity / 100); }
+function echoRate()       { return lerp(0.2, 1.8, state.complexity / 100); }
+function phraseJumpProb() { return (state.complexity / 100) * 0.42; }
+function stepDuration()   { return (60 / state.bpm) / 4; }
+function getBreatheAnimDur() { return lerp(10, 1.4, state.complexity / 100); }
+
+// ---------- EVENT / Grid: KICK ----------
+
+function scheduleKick(untilTime) {
+  while (kick.nextTime < untilTime) {
+    var stepIdx = kick.stepIndex % 16;
+    var hit     = kick.pattern[stepIdx] === 1;
+    var ghost   = false;
+
+    if (!hit && Math.random() < ghostProb()) {
+      hit = true; ghost = true;
+    }
+    if (hit) {
+      var activity = activityMultiplier('kick');
+      if (activity > 0.02) {
+        var vel = ghost ? 0.27 : 1.0;
+        playKick(kick.nextTime, vel * activity);
+        scheduleFlash('kick', kick.nextTime);
+      }
+    }
+    kick.stepIndex = kick.stepIndex + 1;
+    kick.nextTime  = kick.nextTime + stepDuration();
+  }
+}
+
+function playKick(time, vel) {
+  if (!kick.buffer) { return; }
+  var src = audioCtx.createBufferSource();
+  src.buffer = kick.buffer;
+  var g = audioCtx.createGain();
+  g.gain.value = vel;
+  src.connect(g);
+  g.connect(kick.gainNode);
+  src.start(time);
+}
+
+// ---------- EVENT / Density + Granular: VOICE A ----------
+
+function scheduleVoiceA(untilTime) {
+  while (voiceA.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceA');
+    if (activity > 0.02 && voiceA.buffer) {
+      playGrainA(voiceA.nextTime, activity);
+      scheduleFlash('voiceA', voiceA.nextTime);
+    }
+    var rate = Math.max(0.15, voiceARate() * Math.max(activity, 0.15));
+    voiceA.nextTime = voiceA.nextTime + randExp(rate);
+  }
+}
+
+function playGrainA(time, activity) {
+  var buf  = voiceA.buffer;
+  var gs   = grainSizeSec();
+  var maxO = Math.max(0.01, buf.duration - gs - 0.01);
+  var offs = Math.random() * maxO;
+
+  var src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  var env  = audioCtx.createGain();
+  var fade = Math.min(gs * 0.35, 0.04);
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.linearRampToValueAtTime(activity, time + fade);
+  env.gain.linearRampToValueAtTime(0.0001, time + gs);
+
+  src.connect(env);
+  env.connect(voiceA.gainNode);
+  src.start(time, offs, gs);
+  src.stop(time + gs + 0.06);
+}
+
+// ---------- CONTINUOUS / Breathe: VOICE B ----------
+
+function startVoiceB() {
+  if (voiceB.started || !voiceB.buffer) { return; }
+
+  voiceB.srcNode = audioCtx.createBufferSource();
+  voiceB.srcNode.buffer = voiceB.buffer;
+  voiceB.srcNode.loop   = true;
+
+  voiceB.baseGain = audioCtx.createGain();
+  voiceB.baseGain.gain.value = 0.55;
+
+  voiceB.breatheOsc = audioCtx.createOscillator();
+  voiceB.breatheOsc.type = 'sine';
+  voiceB.breatheOsc.frequency.value = getBreatheFreq();
+
+  voiceB.breatheDepth = audioCtx.createGain();
+  voiceB.breatheDepth.gain.value = 0.4;
+
+  voiceB.breatheOsc.connect(voiceB.breatheDepth);
+  voiceB.breatheDepth.connect(voiceB.baseGain.gain);
+
+  voiceB.srcNode.connect(voiceB.baseGain);
+  voiceB.baseGain.connect(voiceB.gainNode);
+
+  voiceB.srcNode.start();
+  voiceB.breatheOsc.start();
+  voiceB.started = true;
+
+  var card = document.getElementById('card_voiceB');
+  if (card) { card.classList.add('breathing'); }
+}
+
+function stopVoiceB() {
+  if (voiceB.srcNode)    { try { voiceB.srcNode.stop(); }    catch (e) {} }
+  if (voiceB.breatheOsc) { try { voiceB.breatheOsc.stop(); } catch (e) {} }
+  voiceB.srcNode = null; voiceB.breatheOsc = null;
+  voiceB.breatheDepth = null; voiceB.baseGain = null;
+  voiceB.started = false;
+  var card = document.getElementById('card_voiceB');
+  if (card) { card.classList.remove('breathing'); }
+}
+
+function updateBreatheFreq() {
+  if (voiceB.breatheOsc) {
+    voiceB.breatheOsc.frequency.setTargetAtTime(getBreatheFreq(), audioCtx.currentTime, 0.3);
+  }
+  document.documentElement.style.setProperty('--breathe-dur', getBreatheAnimDur() + 's');
+}
+
+function refreshVoiceBGain() {
+  if (!voiceB.gainNode || !audioCtx) { return; }
+  voiceB.gainNode.gain.setTargetAtTime(activityMultiplier('voiceB'), audioCtx.currentTime, 0.15);
+}
+
+// ---------- FRAGMENT helpers: playFragment (compartido por C, D, E) ----------
+
+function playFragment(voice, region, time, activity) {
+  if (!voice.buffer || !region) { return; }
+  var dur = region.end - region.start;
+  if (dur <= 0.01) { return; }
+
+  var src = audioCtx.createBufferSource();
+  src.buffer = voice.buffer;
+
+  var env  = audioCtx.createGain();
+  var fade = Math.min(dur * 0.15, 0.08);
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.linearRampToValueAtTime(activity * 0.9, time + fade);
+  env.gain.linearRampToValueAtTime(0.0001, time + dur);
+
+  src.connect(env);
+  env.connect(voice.gainNode);
+  src.start(time, region.start, dur);
+}
+
+// ---------- FRAGMENT / Scatter: VOICE C ----------
+// Seleccion completamente aleatoria. Puede repetir cualquier fragmento.
+// Complexity: mas alta = mayor frecuencia de disparo.
+
+function scheduleVoiceC(untilTime) {
+  var regions = material.regions;
+  while (voiceC.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceC');
+    if (activity > 0.02 && voiceC.buffer && regions.length > 0) {
+      var idx = Math.floor(Math.random() * regions.length);
+      playFragment(voiceC, regions[idx], voiceC.nextTime, activity);
+      scheduleFlash('voiceC', voiceC.nextTime);
+    }
+    var rate = Math.max(0.1, scatterRate() * Math.max(activity, 0.12));
+    voiceC.nextTime = voiceC.nextTime + randExp(rate);
+  }
+}
+
+// ---------- FRAGMENT / Phrase: VOICE D ----------
+// Avanza secuencialmente entre fragmentos adyacentes.
+// Complexity alta: mas saltos aleatorios + mas frecuencia.
+// Complexity baja: muy secuencial, casi sin saltos (discurso parcial).
+
+function nextPhraseIndex() {
+  var n = material.regions.length;
+  if (n === 0) { return 0; }
+
+  if (voiceD.currentIndex < 0) {
+    voiceD.currentIndex = Math.floor(Math.random() * n);
+    return voiceD.currentIndex;
+  }
+
+  if (Math.random() < phraseJumpProb()) {
+    // Salto: nueva posicion aleatoria
+    voiceD.currentIndex = Math.floor(Math.random() * n);
+  } else {
+    // Avance secuencial (con posibilidad de invertir direccion)
+    if (Math.random() < 0.07) {
+      voiceD.phraseDir = -voiceD.phraseDir;
+    }
+    voiceD.currentIndex = (voiceD.currentIndex + voiceD.phraseDir + n) % n;
+  }
+  return voiceD.currentIndex;
+}
+
+function scheduleVoiceD(untilTime) {
+  var regions = material.regions;
+  while (voiceD.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceD');
+    if (activity > 0.02 && voiceD.buffer && regions.length > 0) {
+      var idx = nextPhraseIndex();
+      playFragment(voiceD, regions[idx], voiceD.nextTime, activity);
+      scheduleFlash('voiceD', voiceD.nextTime);
+    }
+    var rate = Math.max(0.1, phraseRate() * Math.max(activity, 0.12));
+    voiceD.nextTime = voiceD.nextTime + randExp(rate);
+  }
+}
+
+// ---------- FRAGMENT / Echo: VOICE E ----------
+// Mantiene memoria de fragmentos recientes y los repite con alta probabilidad.
+// Complexity baja: repite el mismo fragmento, memoria muy corta (sensacion de loop/recuerdo).
+// Complexity alta: mas variacion, memoria mas larga, menos repeticion directa.
+
+function nextEchoIndex() {
+  var n = material.regions.length;
+  if (n === 0) { return 0; }
+
+  // Low complexity: repeatProb alto (0.85), memSize pequeno (2)
+  // High complexity: repeatProb bajo (0.25), memSize grande (6)
+  var repeatProb = lerp(0.85, 0.25, state.complexity / 100);
+  var memSize    = Math.max(1, Math.round(lerp(2, 6, state.complexity / 100)));
+
+  var idx;
+  if (voiceE.recentIndices.length > 0 && Math.random() < repeatProb) {
+    // Repetir de memoria reciente
+    var avail = Math.min(voiceE.recentIndices.length, memSize);
+    var pick  = Math.floor(Math.random() * avail);
+    idx = voiceE.recentIndices[voiceE.recentIndices.length - 1 - pick];
+  } else {
+    // Nuevo fragmento
+    idx = Math.floor(Math.random() * n);
+  }
+
+  // Guardar en memoria reciente (max 8)
+  voiceE.recentIndices.push(idx);
+  if (voiceE.recentIndices.length > 8) {
+    voiceE.recentIndices.shift();
+  }
+  return idx;
+}
+
+function scheduleVoiceE(untilTime) {
+  var regions = material.regions;
+  while (voiceE.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceE');
+    if (activity > 0.02 && voiceE.buffer && regions.length > 0) {
+      var idx = nextEchoIndex();
+      playFragment(voiceE, regions[idx], voiceE.nextTime, activity);
+      scheduleFlash('voiceE', voiceE.nextTime);
+    }
+    var rate = Math.max(0.1, echoRate() * Math.max(activity, 0.12));
+    voiceE.nextTime = voiceE.nextTime + randExp(rate);
+  }
+}
+
+// ---------- CONTINUOUS / Gate: NOISE ----------
+
+function startNoise() {
+  if (noise.started || !noise.buffer) { return; }
+
+  noise.sourceNode = audioCtx.createBufferSource();
+  noise.sourceNode.buffer = noise.buffer;
+  noise.sourceNode.loop   = true;
+
+  noise.gateOsc = audioCtx.createOscillator();
+  noise.gateOsc.type = 'square';
+  noise.gateOsc.frequency.value = gateFrequency();
+
+  noise.gateDepthGain = audioCtx.createGain();
+  noise.gateDepthGain.gain.value = 0.5;
+
+  noise.gateNode = audioCtx.createGain();
+  noise.gateNode.gain.value = 0.5;
+
+  noise.gateOsc.connect(noise.gateDepthGain);
+  noise.gateDepthGain.connect(noise.gateNode.gain);
+  noise.sourceNode.connect(noise.gateNode);
+  noise.gateNode.connect(noise.gainNode);
+
+  noise.sourceNode.start();
+  noise.gateOsc.start();
+  noise.started = true;
+}
+
+function stopNoiseNodes() {
+  if (noise.sourceNode) { try { noise.sourceNode.stop(); } catch (e) {} }
+  if (noise.gateOsc)    { try { noise.gateOsc.stop(); }    catch (e) {} }
+  noise.sourceNode = null; noise.gateOsc = null;
+  noise.gateDepthGain = null; noise.gateNode = null;
+  noise.started = false;
+}
+
+function updateGateFrequency() {
+  if (noise.gateOsc) {
+    noise.gateOsc.frequency.setTargetAtTime(gateFrequency(), audioCtx.currentTime, 0.08);
+  }
+}
+
+function refreshNoiseGain() {
+  if (!noise.gainNode || !audioCtx) { return; }
+  noise.gainNode.gain.setTargetAtTime(0.62 * activityMultiplier('noise'), audioCtx.currentTime, 0.1);
+}
+
+// ---------- scheduler ----------
+
+function schedulerTick() {
+  if (!audioCtx) { return; }
+  var until = audioCtx.currentTime + lookahead;
+  scheduleKick(until);
+  scheduleVoiceA(until);
+  scheduleVoiceC(until);
+  scheduleVoiceD(until);
+  scheduleVoiceE(until);
+  // Voice B y Noise son CONTINUOUS: no necesitan scheduler
+}
+
+function startTransport() {
+  if (!audioCtx) { return; }
+  var now = audioCtx.currentTime + 0.05;
+  kick.nextTime   = now;
+  kick.stepIndex  = 0;
+  voiceA.nextTime = now + 0.03;
+  voiceC.nextTime = now + 0.06;
+  voiceD.nextTime = now + 0.09;
+  voiceE.nextTime = now + 0.12;
+
+  startVoiceB();
+  startNoise();
+  refreshNoiseGain();
+  refreshVoiceBGain();
+  document.documentElement.style.setProperty('--breathe-dur', getBreatheAnimDur() + 's');
+
+  if (schedulerInterval) { clearInterval(schedulerInterval); }
+  schedulerInterval = setInterval(schedulerTick, 25);
+  running = true;
+  updateTransportUI();
+}
+
+function stopTransport() {
+  if (schedulerInterval) { clearInterval(schedulerInterval); }
+  schedulerInterval = null;
+  running = false;
+  stopVoiceB();
+  stopNoiseNodes();
+  updateTransportUI();
+}
+
+// ---------- flash / visual feedback ----------
+
+function scheduleFlash(entityId, time) {
+  var delay = (time - audioCtx.currentTime) * 1000;
+  if (delay < 0) { delay = 0; }
+  setTimeout(function() { flashCard(entityId); }, delay);
+}
+
+function flashCard(entityId) {
+  var el = document.getElementById('card_' + entityId);
+  if (!el) { return; }
+  el.classList.add('trigger');
+  setTimeout(function() { el.classList.remove('trigger'); }, 90);
+}
+
+// ---------- UI helpers ----------
+
+function setStatus(msg) {
+  var el = document.getElementById('status');
+  if (el) { el.textContent = msg; }
+}
+
+function updateTransportUI() {
+  document.getElementById('btnPlay').disabled = running;
+  document.getElementById('btnStop').disabled = !running;
+}
+
+// ---------- mute / solo / weight ----------
+
+function onMuteClick(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  var ent = getEntity(id);
+  ent.mute = !ent.mute;
+  ev.target.classList.toggle('active', ent.mute);
+  refreshNoiseGain();
+  refreshVoiceBGain();
+}
+
+function onSoloClick(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  var ent = getEntity(id);
+  ent.solo = !ent.solo;
+  ev.target.classList.toggle('active', ent.solo);
+  refreshNoiseGain();
+  refreshVoiceBGain();
+}
+
+function onWeightInput(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  getEntity(id).weight = parseInt(ev.target.value, 10);
+}
+
+// ---------- file loading ----------
+
+function decodeFile(file, onSuccess, onError) {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var ab = ev.target.result.slice(0);
+    audioCtx.decodeAudioData(ab, onSuccess, onError);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function bindLoadMaterial() {
+  document.getElementById('btnLoadMaterial').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_material').click();
+  });
+  document.getElementById('file_material').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    setStatus('decodificando material...');
+    decodeFile(file, function(decoded) {
+      applyNewVoiceBuffer(decoded, file.name);
+      setStatus('material cargado: ' + file.name + ' (' + decoded.duration.toFixed(1) + 's)');
+    }, function() {
+      setStatus('error al decodificar el archivo');
+    });
+  });
+}
+
+function bindLoadKick() {
+  document.getElementById('btnLoadKick').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_kick').click();
+  });
+  document.getElementById('file_kick').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    decodeFile(file, function(decoded) {
+      kick.buffer = decoded;
+      setStatus('kick: ' + file.name);
+    }, function() { setStatus('error al decodificar kick'); });
+  });
+}
+
+function bindLoadNoise() {
+  document.getElementById('btnLoadNoise').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_noise').click();
+  });
+  document.getElementById('file_noise').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    decodeFile(file, function(decoded) {
+      var wasRunning = noise.started;
+      if (wasRunning) { stopNoiseNodes(); }
+      noise.buffer = decoded;
+      if (wasRunning) { startNoise(); refreshNoiseGain(); }
+      setStatus('noise: ' + file.name);
+    }, function() { setStatus('error al decodificar noise'); });
+  });
+}
+
+// ---------- Material Panel bindings ----------
+
+function bindMaterialPanel() {
+  // Segmentation mode toggle
+  document.getElementById('segMode').addEventListener('change', function(ev) {
+    material.segmentMode = ev.target.value;
+    document.getElementById('ctrlFixed').style.display   = (ev.target.value === 'fixed')   ? 'flex' : 'none';
+    document.getElementById('ctrlSilence').style.display = (ev.target.value === 'silence')  ? 'flex' : 'none';
+    document.getElementById('ctrlManual').style.display  = (ev.target.value === 'manual')   ? 'block': 'none';
+  });
+
+  // Fixed N
+  document.getElementById('fixedN').addEventListener('change', function(ev) {
+    var v = parseInt(ev.target.value, 10);
+    if (!isNaN(v) && v >= 2 && v <= 32) { material.fixedN = v; }
+  });
+
+  // Silence threshold
+  document.getElementById('silThreshold').addEventListener('change', function(ev) {
+    var v = parseFloat(ev.target.value);
+    if (!isNaN(v)) { material.silenceThreshold = v; }
+  });
+
+  // Build button
+  document.getElementById('btnBuild').addEventListener('click', function() {
+    if (material.segmentMode === 'manual') { parseAndApplyManual(); }
+    rebuildRegions();
+  });
+}
+
+// ---------- DNA Center bindings ----------
+
+function bindDnaCenter() {
+  document.getElementById('focusTarget').addEventListener('change', function(ev) {
+    var v = ev.target.value;
+    state.focusTarget = (v === 'none') ? null : v;
+    refreshNoiseGain();
+    refreshVoiceBGain();
+  });
+
+  document.getElementById('focusAmount').addEventListener('input', function(ev) {
+    state.focusAmount = parseInt(ev.target.value, 10);
+    refreshNoiseGain();
+    refreshVoiceBGain();
+  });
+
+  document.getElementById('complexity').addEventListener('input', function(ev) {
+    state.complexity = parseInt(ev.target.value, 10);
+    updateGateFrequency();
+    updateBreatheFreq();
+  });
+
+  document.getElementById('bpmInput').addEventListener('change', function(ev) {
+    var v = parseInt(ev.target.value, 10);
+    if (!isNaN(v) && v >= 40 && v <= 220) { state.bpm = v; }
+  });
+}
+
+// ---------- init ----------
+
+function bindEntityButtons() {
+  var muteButtons = document.getElementsByClassName('btnMute');
+  var i = 0;
+  while (i < muteButtons.length) {
+    muteButtons[i].addEventListener('click', onMuteClick);
+    i = i + 1;
+  }
+  var soloButtons = document.getElementsByClassName('btnSolo');
+  i = 0;
+  while (i < soloButtons.length) {
+    soloButtons[i].addEventListener('click', onSoloClick);
+    i = i + 1;
+  }
+  var wSliders = document.getElementsByClassName('wSlider');
+  i = 0;
+  while (i < wSliders.length) {
+    wSliders[i].addEventListener('input', onWeightInput);
+    i = i + 1;
+  }
+}
+
+function onVisibilityChange() {
+  if (audioCtx && document.visibilityState === 'visible' && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+window.onload = function() {
+  bindEntityButtons();
+  bindDnaCenter();
+  bindMaterialPanel();
+  bindLoadMaterial();
+  bindLoadKick();
+  bindLoadNoise();
+
+  document.getElementById('btnInit').addEventListener('click', function() {
+    initAudio();
+    document.getElementById('startOverlay').style.display = 'none';
+    document.getElementById('mainPanel').style.display = 'flex';
+    setStatus('preparando material sintetico...');
+  });
+
+  document.getElementById('btnPlay').addEventListener('click', function() {
+    if (audioCtx) { startTransport(); }
+  });
+
+  document.getElementById('btnStop').addEventListener('click', function() {
+    stopTransport();
+  });
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+};
+
+</script>
+</body>
+</html>
