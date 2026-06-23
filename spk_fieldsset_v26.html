@@ -186,6 +186,8 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .sBtn.sel{background:rgba(67,229,255,.08);border-color:rgba(67,229,255,.4);color:#43E5FF;}
 .sBtn.saved::after{content:'';position:absolute;top:3px;right:3px;width:4px;height:4px;border-radius:50%;background:#43E5FF;}
 .sBtn.saving{animation:sceneSave .6s ease-out;}
+.bankBtn.hasMat::after{content:'';position:absolute;top:2px;right:2px;width:3px;height:3px;border-radius:50%;background:#43E5FF;opacity:.7;}
+.bankBtn{position:relative;}
 @keyframes sceneSave{0%{background:rgba(67,229,255,.3);border-color:#43E5FF;}100%{background:transparent;border-color:rgba(255,255,255,.07);}}
 .rolesToggle{width:100%;text-align:left;font-size:9px;letter-spacing:0.12em;padding:5px 0;
   color:rgba(255,255,255,.25);background:transparent;border:none;cursor:pointer;
@@ -736,9 +738,22 @@ function buildDefaultBuffers(){
   setStatus('listo — carga tus propios samples o PLAY');startAnimLoop();
   setTimeout(function(){pushHistory();},200);
 }
+function showToast(msg){
+  var t=document.getElementById('spkToast');
+  if(!t){t=document.createElement('div');t.id='spkToast';
+    t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);'+
+    'background:rgba(4,6,10,.92);border:1px solid rgba(67,229,255,.25);border-radius:5px;'+
+    'padding:6px 14px;font-size:11px;color:#43E5FF;letter-spacing:0.06em;z-index:99;'+
+    'pointer-events:none;transition:opacity .3s;white-space:nowrap;';
+    document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._tid);
+  t._tid=setTimeout(function(){t.style.opacity='0';},2200);
+}
+
 function loadMaterialForEntity(entity,file){
   setStatus('cargando '+file.name+'...');var reader=new FileReader();
-  reader.onload=function(le){var ab=le.target.result.slice(0);audioCtx.decodeAudioData(ab,function(decoded){var slot=materialPool[entity.materialId];slot.buffer=decoded;slot.duration=decoded.duration;slot.name=file.name;buildWaveformCacheForSlot(entity.materialId);buildSegmentsForEntity(entity);if(!rafId){startAnimLoop();}if(entity.contActive){stopContinuousView(entity);if(running){startContinuousView(entity);}}if(!entity.localPlaying&&!running){startLocalPlay(entity);}var mn=document.getElementById('matname_'+entity.id);if(mn){mn.textContent=file.name;}var dot=document.getElementById('matdot_'+entity.id);if(dot){dot.classList.add('loaded');}setStatus(entity.name+': '+file.name+' ('+decoded.duration.toFixed(1)+'s)');},function(){setStatus('error al decodificar '+file.name);});};reader.readAsArrayBuffer(file);
+  reader.onload=function(le){var ab=le.target.result.slice(0);audioCtx.decodeAudioData(ab,function(decoded){var slot=materialPool[entity.materialId];slot.buffer=decoded;slot.duration=decoded.duration;slot.name=file.name;buildWaveformCacheForSlot(entity.materialId);buildSegmentsForEntity(entity);if(!rafId){startAnimLoop();}if(entity.contActive){stopContinuousView(entity);if(running){startContinuousView(entity);}}var mn=document.getElementById('matname_'+entity.id);if(mn){mn.textContent=file.name;}var dot=document.getElementById('matdot_'+entity.id);if(dot){dot.classList.add('loaded');}var abk=entity.activeBank||'A';var bkbtn=document.querySelector('#card_'+entity.id+' .bankBtn[data-bank="'+abk+'"]');if(bkbtn){bkbtn.classList.add('hasMat');}showToast(entity.name+' — '+file.name.replace(/.*[/\\]/,'')+' ('+decoded.duration.toFixed(1)+'s)');},function(){setStatus('error al decodificar '+file.name);});};reader.readAsArrayBuffer(file);
 }
 function buildSegmentsForEntity(entity){var buf=getBuffer(entity);if(!buf){entity._segments=[];return;}var N=entity._segN||8,dur=buf.duration,seg=dur/N;entity._segments=[];var i=0;while(i<N){entity._segments.push({start:i*seg,end:(i+1)*seg,index:i});i++;}entity.phraseIdx=-1;entity.echoMem=[];}
 function buildAllSegments(){var N=parseInt(document.getElementById('fixedN').value,10)||8;var i=0;while(i<entities.length){entities[i]._segN=N;buildSegmentsForEntity(entities[i]);i++;}var el=document.getElementById('segInfo');if(el){el.textContent=N+' segmentos por entidad';}}
