@@ -199,6 +199,34 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .histLabel{color:rgba(255,255,255,.5);flex:1;}
 .histEntry.current .histLabel{color:rgba(67,229,255,.9);}
 .histEntry.current .histTime{color:#43E5FF;}
+
+#debugPanel{position:fixed;top:50px;right:0;width:min(440px,92vw);height:calc(100vh - 50px);
+  height:calc(100dvh - 50px);background:rgba(4,6,10,.98);border-left:1px solid rgba(67,229,255,.25);
+  z-index:60;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;
+  font-family:'JetBrains Mono',monospace;padding:12px 14px 40px;}
+#debugPanel.open{transform:translateX(0);}
+#debugPanel h3{font-size:11px;letter-spacing:0.12em;color:#43E5FF;margin:14px 0 6px;
+  border-bottom:1px solid rgba(67,229,255,.15);padding-bottom:3px;}
+#debugPanel h3:first-child{margin-top:0;}
+.dbgRow{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:1px 0;line-height:1.4;}
+.dbgKey{color:rgba(255,255,255,.45);}
+.dbgVal{color:rgba(255,255,255,.9);text-align:right;word-break:break-all;}
+.dbgVal.ok{color:#5fffa0;}
+.dbgVal.bad{color:#ff5a7a;}
+.dbgVal.warn{color:#ffcc55;}
+.dbgBtns{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;}
+.dbgBtns button{font-size:11px;padding:6px 10px;letter-spacing:0.05em;
+  background:rgba(67,229,255,.08);border:1px solid rgba(67,229,255,.25);color:#43E5FF;
+  border-radius:4px;cursor:pointer;touch-action:manipulation;}
+.dbgBtns button:active{background:rgba(67,229,255,.2);}
+.dbgErr{font-size:10px;color:#ff8a9a;padding:3px 0;border-bottom:1px solid rgba(255,90,122,.1);
+  line-height:1.35;word-break:break-all;}
+.dbgErrEmpty{font-size:11px;color:rgba(95,255,160,.7);padding:4px 0;}
+#btnDebug{font-size:10px;padding:3px 8px;letter-spacing:0.06em;
+  color:rgba(67,229,255,.7);border-color:rgba(67,229,255,.25);flex-shrink:0;}
+#btnDebug.active{background:rgba(67,229,255,.15);color:#43E5FF;}
+.dbgCheckpoint{font-size:10px;padding:1px 0;color:rgba(255,255,255,.5);}
+.dbgCheckpoint.reached{color:#5fffa0;}
 .scenesRow{display:flex;align-items:center;gap:4px;padding:6px 0 4px;flex-wrap:nowrap;}
 .scenesRow .macroLbl{min-width:40px;font-size:9px;}
 .sBtn{flex:1;font-size:11px;font-weight:600;padding:6px 4px;position:relative;letter-spacing:0.05em;}
@@ -367,7 +395,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <button id="btnRedo" disabled>→</button>
   </div>
   <span id="statusBar">STANDBY — PLAY para activar</span>
-  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button>
+  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button><button id="btnDebug" title="panel de diagnostico">DEBUG</button>
 </div>
 
 <div id="histPanel"></div>
@@ -483,6 +511,25 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
   </div>
 
+  <!-- DEBUG PANEL -->
+  <div id="debugPanel">
+    <h3>RUNTIME</h3>
+    <div id="dbgRuntime"></div>
+    <h3>TRANSPORT CLICKS</h3>
+    <div id="dbgClicks"></div>
+    <h3>TOPBAR HIT-TEST</h3>
+    <div id="dbgTopbar"></div>
+    <h3>ONLOAD CHECKPOINTS</h3>
+    <div id="dbgCheckpoints"></div>
+    <h3>ERROR LOG</h3>
+    <div id="dbgErrors"></div>
+    <div class="dbgBtns">
+      <button id="btnDbgRefresh">REFRESH</button>
+      <button id="btnDbgCopy">COPY REPORT</button>
+      <button id="btnDbgClose">CLOSE</button>
+    </div>
+  </div>
+
   <div id="entityArea">
     <div id="eRow0" class="eRow"></div>
     <div id="eRow1" class="eRow"></div>
@@ -493,6 +540,40 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 // ====================================================================
 // SPK_FieldsSet v1.1
 // ====================================================================
+
+// ====================================================
+// DEBUG SYSTEM — diagnóstico interno (FieldsSet)
+// ====================================================
+var DEBUG={
+  checkpoints:[],
+  errors:[],
+  marks:{},
+  mark:function(name){
+    this.marks[name]=true;
+    this.checkpoints.push({name:name,t:(typeof performance!=='undefined'?performance.now():Date.now())});
+  },
+  lastCheckpoint:function(){
+    if(!this.checkpoints.length){return 'NONE';}
+    return this.checkpoints[this.checkpoints.length-1].name;
+  },
+  logError:function(msg,src,line,col){
+    this.errors.push({
+      ts:new Date().toTimeString().slice(0,8),
+      msg:String(msg),
+      src:src?String(src).split('/').pop():'',
+      line:line||0,col:col||0
+    });
+    if(this.errors.length>50){this.errors.shift();}
+  }
+};
+// FASE 5: captura global de errores — instalada lo antes posible
+window.onerror=function(msg,src,line,col,err){
+  DEBUG.logError(msg,src,line,col);
+  return false;
+};
+window.onunhandledrejection=function(ev){
+  DEBUG.logError('Promise: '+(ev.reason?(ev.reason.message||ev.reason):'rejection'),'',0,0);
+};
 
 function clamp(v,a,b){return v<a?a:v>b?b:v;}
 function lerp(a,b,t){return a+(b-a)*t;}
@@ -2077,11 +2158,218 @@ function fitLayout(){
   if(el){el.style.height=(window.innerHeight-50)+'px';}
 }
 
+// ====================================================
+// DEBUG PANEL — render
+// ====================================================
+function dbgRow(k,v,cls){
+  return '<div class="dbgRow"><span class="dbgKey">'+k+'</span>'+
+    '<span class="dbgVal'+(cls?' '+cls:'')+'">'+v+'</span></div>';
+}
+function dbgGet(id){return document.getElementById(id);}
+
+function dbgRenderRuntime(){
+  var el=dbgGet('dbgRuntime');if(!el){return;}
+  var loaded=0;
+  Object.keys(materialPool).forEach(function(k){
+    if(materialPool[k]&&materialPool[k].buffer){loaded++;}
+  });
+  var h='';
+  h+=dbgRow('version','v3.1');
+  h+=dbgRow('viewport',window.innerWidth+' x '+window.innerHeight);
+  h+=dbgRow('devicePixelRatio',window.devicePixelRatio||1);
+  var acs=audioCtx?audioCtx.state:'null';
+  h+=dbgRow('audioCtx',acs,acs==='running'?'ok':(acs==='null'?'warn':'bad'));
+  h+=dbgRow('running',running,running?'ok':'');
+  h+=dbgRow('schedInterval',schedInterval?'active':'null',schedInterval?'ok':'');
+  h+=dbgRow('localScheduler',localSchedInterval?'active':'null');
+  h+=dbgRow('rafId(anim)',rafId?'active':'null',rafId?'ok':'warn');
+  h+=dbgRow('entities',entities.length);
+  h+=dbgRow('loaded materials',loaded+' / '+Object.keys(materialPool).length);
+  h+=dbgRow('current scene',selScene||'none');
+  h+=dbgRow('history length',historyStack.length);
+  h+=dbgRow('queue length',audioQueue.items.length);
+  h+=dbgRow('captureTake',captureEngine&&captureEngine.active?'ACTIVE':'idle',captureEngine&&captureEngine.active?'warn':'');
+  el.innerHTML=h;
+}
+
+function dbgRenderClicks(){
+  var el=dbgGet('dbgClicks');if(!el){return;}
+  var c=window.SPK_DEBUG.transportClicks;
+  var h='';
+  h+=dbgRow('PLAY clicks',c.play,c.play>0?'ok':'');
+  h+=dbgRow('STOP clicks',c.stop,c.stop>0?'ok':'');
+  h+=dbgRow('PANIC clicks',c.panic,c.panic>0?'ok':'');
+  el.innerHTML=h;
+}
+
+function dbgRenderTopbar(){
+  var el=dbgGet('dbgTopbar');if(!el){return;}
+  var ids=['btnPlay','btnStop','btnPanic'];var h='';
+  ids.forEach(function(id){
+    var b=document.getElementById(id);
+    if(!b){h+=dbgRow(id,'MISSING','bad');return;}
+    var r=b.getBoundingClientRect();
+    h+=dbgRow(id+' exists','yes','ok');
+    h+=dbgRow('  disabled',b.disabled,b.disabled?'bad':'ok');
+    h+=dbgRow('  rect',Math.round(r.left)+','+Math.round(r.top)+' '+Math.round(r.width)+'x'+Math.round(r.height));
+    var inView=(r.width>0&&r.height>0&&r.top>=0&&r.bottom<=window.innerHeight+1);
+    h+=dbgRow('  in viewport',inView,inView?'ok':'bad');
+    var cx=r.left+r.width/2,cy=r.top+r.height/2;
+    var hit=document.elementFromPoint(cx,cy);
+    var hitId=hit?(hit.id||hit.tagName.toLowerCase()+(hit.className?'.'+(typeof hit.className==='string'?hit.className.split(' ')[0]:''):'')):'null';
+    var hitOk=(hit===b||(b.contains&&b.contains(hit)));
+    h+=dbgRow('  hit target',hitId,hitOk?'ok':'bad');
+  });
+  // topbar overflow check
+  var tb=document.getElementById('topBar');
+  if(tb){
+    var tr=tb.getBoundingClientRect();
+    var overflow=tb.scrollHeight>tr.height+2;
+    h+=dbgRow('topBar h',Math.round(tr.height)+' (scroll '+tb.scrollHeight+')',overflow?'bad':'ok');
+    h+=dbgRow('topBar overflowing',overflow,overflow?'bad':'ok');
+  }
+  el.innerHTML=h;
+}
+
+function dbgRenderCheckpoints(){
+  var el=dbgGet('dbgCheckpoints');if(!el){return;}
+  var expected=['initPool','renderEntityCards','buildRolesPanel','bindEntityGrid',
+    'bindScenes','bindMorph','bindQueuePanel','playEnabled','stopEnabled','onloadComplete'];
+  var h='';
+  expected.forEach(function(name){
+    var reached=DEBUG.marks[name];
+    h+='<div class="dbgCheckpoint'+(reached?' reached':'')+'">'+
+      (reached?'[OK] ':'[--] ')+name+'</div>';
+  });
+  h+=dbgRow('last checkpoint',DEBUG.lastCheckpoint(),
+    DEBUG.marks['onloadComplete']?'ok':'bad');
+  el.innerHTML=h;
+}
+
+function dbgRenderErrors(){
+  var el=dbgGet('dbgErrors');if(!el){return;}
+  if(!DEBUG.errors.length){
+    el.innerHTML='<div class="dbgErrEmpty">no errors captured</div>';
+    return;
+  }
+  var h='';var i=DEBUG.errors.length-1;
+  while(i>=0&&i>=DEBUG.errors.length-50){
+    var e=DEBUG.errors[i];
+    h+='<div class="dbgErr">['+e.ts+'] '+e.msg+
+      (e.src?(' @'+e.src+':'+e.line):'')+'</div>';
+    i--;
+  }
+  el.innerHTML=h;
+}
+
+function dbgRefreshAll(){
+  dbgRenderRuntime();
+  dbgRenderClicks();
+  dbgRenderTopbar();
+  dbgRenderCheckpoints();
+  dbgRenderErrors();
+}
+
+function dbgBuildReport(){
+  var loaded=[];
+  Object.keys(materialPool).forEach(function(k){
+    if(materialPool[k]&&materialPool[k].buffer){
+      loaded.push(k+'='+(materialPool[k].name||'?'));
+    }
+  });
+  var c=window.SPK_DEBUG.transportClicks;
+  var lines=[];
+  lines.push('=== SPK_FieldsSet DEBUG REPORT ===');
+  lines.push('ts: '+new Date().toISOString());
+  lines.push('version: v3.1');
+  lines.push('');
+  lines.push('[ENV]');
+  lines.push('userAgent: '+navigator.userAgent);
+  lines.push('viewport: '+window.innerWidth+'x'+window.innerHeight);
+  lines.push('devicePixelRatio: '+(window.devicePixelRatio||1));
+  lines.push('');
+  lines.push('[RUNTIME]');
+  lines.push('audioCtx: '+(audioCtx?audioCtx.state:'null'));
+  lines.push('running: '+running);
+  lines.push('schedInterval: '+(schedInterval?'active':'null'));
+  lines.push('localScheduler: '+(localSchedInterval?'active':'null'));
+  lines.push('rafId: '+(rafId?'active':'null'));
+  lines.push('entities: '+entities.length);
+  lines.push('loadedMaterials: '+loaded.length+' ['+loaded.join(', ')+']');
+  lines.push('currentScene: '+(selScene||'none'));
+  lines.push('historyLength: '+historyStack.length);
+  lines.push('queueLength: '+audioQueue.items.length);
+  lines.push('');
+  lines.push('[TRANSPORT CLICKS]');
+  lines.push('play: '+c.play+'  stop: '+c.stop+'  panic: '+c.panic);
+  lines.push('');
+  lines.push('[TOPBAR HIT-TEST]');
+  ['btnPlay','btnStop','btnPanic'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(!b){lines.push(id+': MISSING');return;}
+    var r=b.getBoundingClientRect();
+    var cx=r.left+r.width/2,cy=r.top+r.height/2;
+    var hit=document.elementFromPoint(cx,cy);
+    var hitId=hit?(hit.id||hit.tagName):'null';
+    lines.push(id+': disabled='+b.disabled+
+      ' rect='+Math.round(r.left)+','+Math.round(r.top)+' '+Math.round(r.width)+'x'+Math.round(r.height)+
+      ' hit='+hitId+(hit===b?' [SELF]':' [BLOCKED]'));
+  });
+  var tb=document.getElementById('topBar');
+  if(tb){var tr=tb.getBoundingClientRect();
+    lines.push('topBar: h='+Math.round(tr.height)+' scrollH='+tb.scrollHeight+
+      ' overflow='+(tb.scrollHeight>tr.height+2));}
+  lines.push('');
+  lines.push('[CHECKPOINTS]');
+  lines.push('last: '+DEBUG.lastCheckpoint());
+  lines.push('reached: '+Object.keys(DEBUG.marks).join(', '));
+  lines.push('');
+  lines.push('[ERROR LOG ('+DEBUG.errors.length+')]');
+  if(!DEBUG.errors.length){lines.push('(no errors)');}
+  else{
+    var i=DEBUG.errors.length-1;
+    while(i>=0){var e=DEBUG.errors[i];
+      lines.push('['+e.ts+'] '+e.msg+(e.src?(' @'+e.src+':'+e.line):''));i--;}
+  }
+  return lines.join('\n');
+}
+
+function dbgCopyReport(){
+  var txt=dbgBuildReport();
+  function fallback(){
+    var ta=document.createElement('textarea');
+    ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    try{document.execCommand('copy');setStatus('DEBUG report copiado');}
+    catch(e_){setStatus('copia manual — ver consola');console.log(txt);}
+    document.body.removeChild(ta);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      setStatus('DEBUG report copiado al portapapeles');
+    }).catch(fallback);
+  }else{fallback();}
+}
+
+function toggleDebugPanel(){
+  var p=document.getElementById('debugPanel');
+  var b=document.getElementById('btnDebug');
+  if(!p){return;}
+  var open=p.classList.toggle('open');
+  if(b){b.classList.toggle('active',open);}
+  if(open){dbgRefreshAll();}
+}
+
 window.onload=function(){
   fitLayout();
   window.addEventListener("resize",fitLayout);
-  initPool();renderEntityCards();buildRolesPanel();
-  bindEntityGrid();bindRolesPanel();bindScenes();bindMorph();bindMacros();bindQueuePanel();buildQueueList();
+  DEBUG.mark("initPool");initPool();
+  DEBUG.mark("renderEntityCards");renderEntityCards();
+  DEBUG.mark("buildRolesPanel");buildRolesPanel();
+  DEBUG.mark("bindEntityGrid");bindEntityGrid();bindRolesPanel();
+  DEBUG.mark("bindScenes");bindScenes();
+  DEBUG.mark("bindMorph");bindMorph();bindMacros();
+  DEBUG.mark("bindQueuePanel");bindQueuePanel();buildQueueList();
   // QUEUE DRAWER
   var btnQ=document.getElementById("btnQueue");if(btnQ){
     btnQ.addEventListener("click",function(){
@@ -2099,12 +2387,17 @@ window.onload=function(){
   buildTakesList();
   // auto-init audio on first tap
   document.addEventListener('pointerdown',function _fi(){document.removeEventListener('pointerdown',_fi);if(!audioCtx){initAudio();}},false);
-  document.getElementById('btnPlay').disabled=false;
-  document.getElementById('btnStop').disabled=false;
+  DEBUG.mark("playEnabled");document.getElementById('btnPlay').disabled=false;
+  DEBUG.mark("stopEnabled");document.getElementById('btnStop').disabled=false;
   document.getElementById('btnPlay').addEventListener('click',function(){window.SPK_DEBUG.transportClicks.play++;console.log('[PLAY CLICK]',window.SPK_DEBUG.transportClicks.play);if(!audioCtx){initAudio();}if(audioCtx){startTransport();}});
   document.getElementById('btnStop').addEventListener('click',function(){window.SPK_DEBUG.transportClicks.stop++;console.log('[STOP CLICK]',window.SPK_DEBUG.transportClicks.stop);stopTransport();});
   var btnUn=document.getElementById('btnUndo');if(btnUn){btnUn.addEventListener('click',function(){if(historyIdx<=0){return;}historyIdx--;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Undo → '+(historyStack[historyIdx]._label||'estado'));});}
   var btnRd=document.getElementById('btnRedo');if(btnRd){btnRd.addEventListener('click',function(){if(historyIdx>=historyStack.length-1){return;}historyIdx++;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Redo → '+(historyStack[historyIdx]._label||'estado'));});}
+  var btnDbg=document.getElementById('btnDebug');if(btnDbg){btnDbg.addEventListener('click',toggleDebugPanel);}
+  var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);}
+  var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
+  var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
+  DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
   // iOS backup: reanudar AudioContext en cualquier interacción táctil
   document.addEventListener('touchstart',function(){
