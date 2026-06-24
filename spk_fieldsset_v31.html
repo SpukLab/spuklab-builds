@@ -2289,11 +2289,10 @@ function dbgRenderErrors(){
 }
 
 function dbgRefreshAll(){
-  dbgRenderRuntime();
-  dbgRenderClicks();
-  dbgRenderTopbar();
-  dbgRenderCheckpoints();
-  dbgRenderErrors();
+  var fns=[dbgRenderRuntime,dbgRenderClicks,dbgRenderTopbar,dbgRenderCheckpoints,dbgRenderErrors];
+  fns.forEach(function(fn){
+    try{fn();}catch(e_){DEBUG.logError("dbg render fail: "+e_.message,"debug",0,0);}
+  });
 }
 
 function dbgBuildReport(){
@@ -2383,7 +2382,7 @@ function toggleDebugPanel(){
   if(!p){return;}
   var open=p.classList.toggle('open');
   if(b){b.classList.toggle('active',open);}
-  if(open){dbgRefreshAll();}
+  if(open){try{dbgRefreshAll();}catch(e_){DEBUG.logError("toggleDebug: "+e_.message,"debug",0,0);}}
 }
 
 window.onload=function(){
@@ -2413,6 +2412,15 @@ window.onload=function(){
       var isOpen=drawer.classList.toggle("open");
       bQ.classList.toggle("active",isOpen);
       if(isOpen&&typeof buildQueueList==="function"){buildQueueList();}
+    });}
+    var bHT=document.getElementById("btnHistToggle");
+    if(bHT){bHT.addEventListener("click",function(){
+      var panel=document.getElementById("histPanel");
+      if(!panel){return;}
+      var vis=panel.style.display!=="none";
+      panel.style.display=vis?"none":"block";
+      bHT.classList.toggle("open",!vis);
+      if(!vis&&typeof rebuildHistPanel==="function"){rebuildHistPanel();}
     });}
     DEBUG.mark("criticalBindsInstalled");
   }catch(eCrit){DEBUG.logError("CRITICAL BIND FAIL: "+eCrit.message,"onload",0,0);}
