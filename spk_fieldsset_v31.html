@@ -575,6 +575,28 @@ window.onunhandledrejection=function(ev){
   DEBUG.logError('Promise: '+(ev.reason?(ev.reason.message||ev.reason):'rejection'),'',0,0);
 };
 
+// Listener delegado: funciona aunque window.onload no complete
+document.addEventListener('click',function(ev){
+  var t=ev.target;
+  if(!t){return;}
+  // Buscar botón DEBUG por id (puede ser el botón o un hijo)
+  var btn=t.id==='btnDebug'?t:(t.closest?t.closest('#btnDebug'):null);
+  if(btn){
+    if(typeof toggleDebugPanel==='function'){toggleDebugPanel();}
+    else{
+      // Panel aún no tiene función — toggle manual
+      var p=document.getElementById('debugPanel');
+      if(p){p.classList.toggle('open');}
+    }
+    return;
+  }
+  // Botones internos del panel (delegados también)
+  if(t.id==='btnDbgRefresh'&&typeof dbgRefreshAll==='function'){dbgRefreshAll();return;}
+  if(t.id==='btnDbgCopy'&&typeof dbgCopyReport==='function'){dbgCopyReport();return;}
+  if(t.id==='btnDbgClose'){var p2=document.getElementById('debugPanel');if(p2){p2.classList.remove('open');}return;}
+},true);
+
+
 function clamp(v,a,b){return v<a?a:v>b?b:v;}
 function lerp(a,b,t){return a+(b-a)*t;}
 function note2rate(st){return Math.pow(2,st/12);}
@@ -2361,6 +2383,17 @@ function toggleDebugPanel(){
 }
 
 window.onload=function(){
+  // CRÍTICO PRIMERO: habilitar e instalar PLAY/STOP/DEBUG antes que nada
+  try{
+    var bP=document.getElementById('btnPlay');
+    var bS=document.getElementById('btnStop');
+    if(bP){bP.disabled=false;bP.addEventListener("click",function(){window.SPK_DEBUG.transportClicks.play++;console.log("[PLAY CLICK]",window.SPK_DEBUG.transportClicks.play);if(!audioCtx){initAudio();}if(audioCtx){startTransport();}});}
+    if(bS){bS.disabled=false;bS.addEventListener("click",function(){window.SPK_DEBUG.transportClicks.stop++;console.log("[STOP CLICK]",window.SPK_DEBUG.transportClicks.stop);stopTransport();});}
+    DEBUG.mark("criticalBindsInstalled");
+  }catch(eCrit){DEBUG.logError("CRITICAL BIND FAIL: "+eCrit.message,"onload",0,0);}
+  // Resto del onload protegido
+  try{
+
   fitLayout();
   window.addEventListener("resize",fitLayout);
   DEBUG.mark("initPool");initPool();
@@ -2387,10 +2420,7 @@ window.onload=function(){
   buildTakesList();
   // auto-init audio on first tap
   document.addEventListener('pointerdown',function _fi(){document.removeEventListener('pointerdown',_fi);if(!audioCtx){initAudio();}},false);
-  DEBUG.mark("playEnabled");document.getElementById('btnPlay').disabled=false;
-  DEBUG.mark("stopEnabled");document.getElementById('btnStop').disabled=false;
-  document.getElementById('btnPlay').addEventListener('click',function(){window.SPK_DEBUG.transportClicks.play++;console.log('[PLAY CLICK]',window.SPK_DEBUG.transportClicks.play);if(!audioCtx){initAudio();}if(audioCtx){startTransport();}});
-  document.getElementById('btnStop').addEventListener('click',function(){window.SPK_DEBUG.transportClicks.stop++;console.log('[STOP CLICK]',window.SPK_DEBUG.transportClicks.stop);stopTransport();});
+  DEBUG.mark("playEnabled");DEBUG.mark("stopEnabled");// PLAY/STOP ya instalados en critical block
   var btnUn=document.getElementById('btnUndo');if(btnUn){btnUn.addEventListener('click',function(){if(historyIdx<=0){return;}historyIdx--;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Undo → '+(historyStack[historyIdx]._label||'estado'));});}
   var btnRd=document.getElementById('btnRedo');if(btnRd){btnRd.addEventListener('click',function(){if(historyIdx>=historyStack.length-1){return;}historyIdx++;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Redo → '+(historyStack[historyIdx]._label||'estado'));});}
   var btnDbg=document.getElementById('btnDebug');if(btnDbg){btnDbg.addEventListener('click',toggleDebugPanel);}
@@ -2403,6 +2433,10 @@ window.onload=function(){
   document.addEventListener('touchstart',function(){
     if(audioCtx&&audioCtx.state==='suspended'){audioCtx.resume();}
   },{passive:true,capture:true});
+  }catch(eMain){
+    DEBUG.logError("ONLOAD ABORT @"+DEBUG.lastCheckpoint()+": "+eMain.message,"onload",eMain.lineNumber||0,0);
+    console.error("[ONLOAD ABORTED]",eMain);
+  }
 };
 
 // ====================================================
