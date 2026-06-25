@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPK_FieldsSet — Guía de Usuario</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: linear-gradient(155deg, #13111f, #1b1726);
+    --bg-card: rgba(153,68,255,.07);
+    --border: rgba(153,68,255,.18);
+    --glow: rgba(153,68,255,.08);
+    --accent-v: #9944ff;
+    --accent-c: #00ffff;
+    --accent-m: #ff00ff;
+    --active-bg: rgba(153,68,255,.18);
+    --active-text: #b580ff;
+    --text: #e8e4f0;
+    --text-muted: rgba(232,228,240,.5);
+    --text-dim: rgba(232,228,240,.35);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: #13111f;
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* CANVAS HERO */
+  #hero-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.45;
+  }
+
+  /* LAYOUT */
+  .shell {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* SIDEBAR NAV */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 240px;
+    height: 100vh;
+    background: rgba(13,11,24,.92);
+    border-right: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    overflow-y: auto;
+  }
+
+  .logo {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-spuk {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 2px;
+  }
+
+  .logo-lab {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--accent-c);
+    letter-spacing: 2px;
+  }
+
+  .logo-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .nav-section {
+    padding: 16px 0 8px;
+  }
+
+  .nav-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 0 24px 8px;
+    text-transform: uppercase;
+  }
+
+  .nav-item {
+    display: block;
+    padding: 8px 24px;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all .15s;
+    border-left: 2px solid transparent;
+  }
+
+  .nav-item:hover {
+    color: var(--text);
+    background: var(--glow);
+  }
+
+  .nav-item.active {
+    color: var(--active-text);
+    background: var(--active-bg);
+    border-left-color: var(--accent-v);
+  }
+
+  .nav-version {
+    margin-top: auto;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* CONTENT */
+  .content {
+    margin-left: 240px;
+    flex: 1;
+    padding: 0;
+  }
+
+  /* HERO SECTION */
+  .hero {
+    padding: 80px 64px 64px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(153,68,255,.04) 0%, transparent 100%);
+  }
+
+  .hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent-c);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .hero-title {
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fff 30%, var(--accent-v) 70%, var(--accent-m) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+
+  .hero-desc {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 560px;
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+
+  .hero-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    background: var(--bg-card);
+  }
+
+  .tag.cyan { border-color: rgba(0,255,255,.3); color: var(--accent-c); }
+  .tag.violet { border-color: rgba(153,68,255,.4); color: var(--active-text); }
+
+  /* SECTIONS */
+  .section {
+    padding: 64px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section:last-child { border-bottom: none; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent-v);
+    background: var(--active-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  .section-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(153,68,255,.2);
+    color: var(--active-text);
+    font-weight: 400;
+  }
+
+  .card-title .badge.cyan {
+    background: rgba(0,255,255,.1);
+    color: var(--accent-c);
+  }
+
+  .card-body {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  /* GRID */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  /* CONTROL DIAGRAM */
+  .diagram {
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin: 24px 0;
+    font-family: var(--mono);
+  }
+
+  .diagram-title {
+    font-size: 11px;
+    color: var(--accent-c);
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+
+  .flow-node {
+    background: rgba(153,68,255,.12);
+    border: 1px solid rgba(153,68,255,.3);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--active-text);
+    text-align: center;
+  }
+
+  .flow-node.cyan {
+    background: rgba(0,255,255,.08);
+    border-color: rgba(0,255,255,.25);
+    color: var(--accent-c);
+  }
+
+  .flow-node.dim {
+    background: rgba(255,255,255,.04);
+    border-color: rgba(255,255,255,.1);
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .flow-arrow {
+    color: var(--text-dim);
+    font-size: 18px;
+  }
+
+  /* CALLOUT */
+  .callout {
+    border-left: 3px solid var(--accent-v);
+    background: rgba(153,68,255,.06);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .callout.tip {
+    border-color: var(--accent-c);
+    background: rgba(0,255,255,.04);
+  }
+
+  .callout.warn {
+    border-color: #ff9944;
+    background: rgba(255,153,68,.05);
+    color: rgba(255,200,150,.8);
+  }
+
+  .callout strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* GLOSARIO */
+  .glos-item {
+    border-bottom: 1px solid rgba(153,68,255,.1);
+    padding: 20px 0;
+  }
+
+  .glos-item:last-child { border-bottom: none; }
+
+  .glos-term {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--active-text);
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .glos-cat {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid rgba(153,68,255,.3);
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-weight: 400;
+  }
+
+  .glos-def {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    max-width: 640px;
+  }
+
+  /* SEARCH */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    background: rgba(0,0,0,.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    gap: 10px;
+    margin-bottom: 32px;
+    max-width: 480px;
+  }
+
+  .search-bar input {
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    flex: 1;
+  }
+
+  .search-bar input::placeholder { color: var(--text-dim); }
+
+  .search-icon { color: var(--text-dim); font-size: 14px; }
+
+  /* STEP LIST */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .steps li::before {
+    content: counter(step);
+    font-family: var(--mono);
+    font-size: 11px;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--active-bg);
+    color: var(--active-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  /* KEY SHORTCUT */
+  kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: var(--text);
+  }
+
+  /* WAVEFORM MOCK */
+  .mock-entity {
+    background: rgba(0,0,0,.5);
+    border: 1px solid rgba(153,68,255,.25);
+    border-radius: 10px;
+    padding: 0;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+
+  .mock-entity-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(153,68,255,.15);
+    background: rgba(153,68,255,.06);
+  }
+
+  .mock-entity-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--active-text);
+  }
+
+  .mock-entity-body { padding: 12px 16px; }
+
+  .waveform-bar {
+    height: 48px;
+    background: rgba(0,255,255,.06);
+    border: 1px solid rgba(0,255,255,.12);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .waveform-bar svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mock-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .mock-btn {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 4px 10px;
+    border: 1px solid rgba(153,68,255,.3);
+    border-radius: 4px;
+    color: var(--text-muted);
+    background: rgba(153,68,255,.06);
+  }
+
+  .mock-btn.active {
+    border-color: var(--accent-c);
+    color: var(--accent-c);
+    background: rgba(0,255,255,.08);
+  }
+
+  /* MOBILE */
+  @media (max-width: 900px) {
+    .sidebar {
+      width: 200px;
+    }
+    .content { margin-left: 200px; }
+    .hero { padding: 48px 32px; }
+    .section { padding: 48px 32px; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .hero-title { font-size: 32px; }
+  }
+
+  @media (max-width: 640px) {
+    .sidebar { display: none; }
+    .content { margin-left: 0; }
+    .hero { padding: 32px 20px; }
+    .section { padding: 40px 20px; }
+  }
+
+  /* FILTER HIDDEN */
+  .glos-item.hidden { display: none; }
+
+  /* ANCHOR OFFSET */
+  .anchor-target { scroll-margin-top: 32px; }
+
+  /* inline highlight */
+  mark {
+    background: rgba(153,68,255,.2);
+    color: var(--active-text);
+    border-radius: 2px;
+    padding: 0 3px;
+  }
+
+  .inline-cyan { color: var(--accent-c); }
+  .inline-violet { color: var(--active-text); }
+  .inline-magenta { color: var(--accent-m); }
+
+  p { margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="hero-canvas"></canvas>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="logo">
+      <div><span class="logo-spuk">SPUK</span><span class="logo-lab">LAB</span></div>
+      <div class="logo-sub">SPK_FIELDSSET GUIDE</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Inicio</div>
+      <a class="nav-item active" href="#intro">Qué es esto</a>
+      <a class="nav-item" href="#setup">Primer arranque</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Interfaz</div>
+      <a class="nav-item" href="#entities">Entidades</a>
+      <a class="nav-item" href="#dna">DNA Center</a>
+      <a class="nav-item" href="#transport">Transporte</a>
+      <a class="nav-item" href="#queue">Queue Drawer</a>
+      <a class="nav-item" href="#capture">Captura</a>
+      <a class="nav-item" href="#debug">Panel Debug</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Flujo de trabajo</div>
+      <a class="nav-item" href="#workflow">Flujo básico</a>
+      <a class="nav-item" href="#export">Exportar audio</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Referencia</div>
+      <a class="nav-item" href="#glosario">Glosario completo</a>
+    </div>
+
+    <div class="nav-version">
+      v3.1 — iPad Safari M3<br>
+      Build: SpukLab 2026
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="content">
+
+    <!-- HERO -->
+    <div class="hero" id="intro">
+      <div class="hero-eyebrow">SpukLab — Instrumento de performance en vivo</div>
+      <h1 class="hero-title">SPK_FieldsSet</h1>
+      <p class="hero-desc">
+        Un sampler granular y motor de transformación sonora diseñado para performance en vivo. 
+        Cargás samples, los fragmentás en granos y los proyectás en tiempo real sobre el escenario. 
+        Esta guía es para quienes lo usan por primera vez.
+      </p>
+      <div class="hero-tags">
+        <span class="tag cyan">iPad Safari M3</span>
+        <span class="tag violet">Web Audio API</span>
+        <span class="tag">Granular Synthesis</span>
+        <span class="tag">Live Performance</span>
+        <span class="tag">v3.1</span>
+      </div>
+    </div>
+
+    <!-- PRIMER ARRANQUE -->
+    <section class="section anchor-target" id="setup">
+      <div class="section-header">
+        <span class="section-num">01</span>
+        <h2 class="section-title">Primer arranque</h2>
+      </div>
+
+      <div class="callout tip">
+        <strong>Plataforma objetivo:</strong> iPad con Safari (chip M3). Funciona en iPhone y en Chrome de escritorio para desarrollo, pero la experiencia óptima es iPad.
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        La app corre completamente en el navegador — no hay instalación. Abrís la URL en Safari, y listo.
+      </p>
+
+      <ol class="steps">
+        <li>Abrí el link en <strong>Safari</strong> desde tu iPad. No uses Chrome en iOS para audio.</li>
+        <li>La primera vez que toques un control que genera sonido, el sistema te pedirá permiso para audio. Aceptá.</li>
+        <li>Cargá un sample tocando cualquier entidad (zona de waveform) y seleccionando un archivo de audio desde tu biblioteca.</li>
+        <li>Tocá <kbd>PLAY</kbd> en el transporte para comenzar la reproducción granular.</li>
+        <li>Explorá los parámetros de DNA CENTER para transformar el sonido.</li>
+      </ol>
+
+      <div class="callout warn" style="margin-top:24px;">
+        <strong>Importante en iOS:</strong> Si el audio no arranca, salí y volvé a entrar a la app. iOS Safari requiere un gesto del usuario antes de activar el motor de audio. Siempre tocá algo en pantalla primero.
+      </div>
+    </section>
+
+    <!-- ENTIDADES -->
+    <section class="section anchor-target" id="entities">
+      <div class="section-header">
+        <span class="section-num">02</span>
+        <h2 class="section-title">Entidades</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        Una <span class="inline-cyan">entidad</span> es la unidad básica de trabajo: un sample cargado con sus propios parámetros de reproducción, comportamiento granular y carácter. Podés tener múltiples entidades activas simultáneamente.
+      </p>
+
+      <!-- MOCK ENTITY CARD -->
+      <div class="mock-entity">
+        <div class="mock-entity-header">
+          <span class="mock-entity-name">ENTITY A — voz_campo.wav</span>
+          <span class="mock-btn active">ARM</span>
+        </div>
+        <div class="mock-entity-body">
+          <div class="waveform-bar">
+            <svg viewBox="0 0 400 48" preserveAspectRatio="none">
+              <polyline points="0,24 10,18 20,28 30,12 40,32 50,20 60,15 70,30 80,10 90,35 100,22 110,16 120,28 130,8 140,36 150,20 160,14 170,32 180,12 190,28 200,24 210,18 220,30 230,10 240,34 250,20 260,16 270,28 280,8 290,38 300,22 310,16 320,30 330,10 340,34 350,24 360,18 370,28 380,14 390,24 400,24" fill="none" stroke="rgba(0,255,255,0.5)" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <div class="mock-controls">
+            <span class="mock-btn">ANCLAJE</span>
+            <span class="mock-btn">EXPLORACIÓN</span>
+            <span class="mock-btn active">DISRUPCIÓN</span>
+            <span class="mock-btn">···</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:24px;">
+        <div class="card">
+          <div class="card-title">Waveform</div>
+          <div class="card-body">Muestra la forma de onda del sample cargado. Tocándolo podés navegar la posición de lectura. Es el acceso visual directo al material sonoro de esa entidad.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Selector de CHARACTER</div>
+          <div class="card-body">Define el <em>modo de comportamiento</em> de la entidad en la performance. Cada character aplica una configuración granular diferente sobre el mismo material.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Fila de comportamiento <span class="badge">···</span></div>
+          <div class="card-body">El botón <kbd>···</kbd> togglea la fila de parámetros de comportamiento detallados: densidad granular, pitch, dispersión, y más.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Estado de captura de mic</div>
+          <div class="card-body">Indicador de tres estados: <span class="inline-violet">OFF</span> (sin mic), <span class="inline-cyan">ARM</span> (listo para capturar), <span class="inline-magenta">MONITOR</span> (escucha activa del mic en vivo).</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Tip de performance:</strong> Cada entidad tiene una identidad sonora independiente. Pensalas como "voces" que conviven en el espacio. ANCLAJE estabiliza, DISRUPCIÓN fragmenta.
+      </div>
+    </section>
+
+    <!-- DNA CENTER -->
+    <section class="section anchor-target" id="dna">
+      <div class="section-header">
+        <span class="section-num">03</span>
+        <h2 class="section-title">DNA Center</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        El <span class="inline-violet">DNA Center</span> es el corazón paramétrico del instrumento. Acá se definen los presets de comportamiento granular (llamados <em>DNA</em>) y se aplican a las entidades activas. Está ubicado en la barra lateral derecha, junto a SCENES y MORPH.
+      </p>
+
+      <div class="diagram">
+        <div class="diagram-title">Estructura del DNA Center</div>
+        <div class="flow">
+          <div class="flow-node">DNA PRESET<br><small style="font-size:10px;opacity:.7;">seleccionado</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node cyan">MORPH<br><small style="font-size:10px;opacity:.7;">interpolación</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">ENTIDAD<br><small style="font-size:10px;opacity:.7;">sonido transformado</small></div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">DNA <span class="badge">Preset</span></div>
+          <div class="card-body">Snapshot de un conjunto de parámetros granulares. Aplicar un DNA cambia instantáneamente cómo la entidad fragmenta y proyecta el sonido.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">SCENES</div>
+          <div class="card-body">Estados globales de la performance. Un scene guarda la configuración de múltiples entidades simultáneamente. Ideal para transiciones de sección.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">MORPH</div>
+          <div class="card-body">Interpolación en tiempo real entre dos estados (DNA o Scenes). El slider de MORPH mezcla progresivamente entre el estado A y el estado B.</div>
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <strong>Filosofía:</strong> Los DNA no "colorean" el sonido — lo <em>disuelven</em>. La intención es transformar la identidad del material fuente hasta hacerlo irreconocible, no aplicar un efecto con firma propia.
+      </div>
+    </section>
+
+    <!-- TRANSPORTE -->
+    <section class="section anchor-target" id="transport">
+      <div class="section-header">
+        <span class="section-num">04</span>
+        <h2 class="section-title">Transporte</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        El transporte controla el estado global de reproducción del instrumento. Está fijo en la parte superior de la pantalla.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">PLAY / STOP</div>
+          <div class="card-body">
+            Arranca o detiene el motor granular para todas las entidades activas. 
+            Al hacer STOP, los granos en vuelo se desvanecen gradualmente — no hay corte abrupto.
+            <br><br>
+            <strong style="color:var(--text);">Nota:</strong> Si PLAY no responde, verificá el panel DEBUG — puede indicar que el AudioContext no está activo.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">PANIC STOP</div>
+          <div class="card-body">
+            Detención de emergencia. Corta todo el audio de forma inmediata, resetea el scheduler y libera recursos. Útil en situaciones de feedback o sonido inesperado en escena.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">REC TAKE</div>
+          <div class="card-body">
+            Inicia la grabación interna de la salida del instrumento. Lo que escuchás es lo que se graba.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">TAKES → RENDER WAV</div>
+          <div class="card-body">
+            Accede a la biblioteca de takes grabados. Desde ahí podés escuchar, nombrar y exportar cada take como archivo WAV. Este es el flujo canónico de exportación de audio en iOS.
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>iOS y grabación:</strong> El formato WebM no está soportado en Safari iOS. El flujo correcto es siempre: <strong>REC TAKE → TAKES → RENDER WAV</strong>. No hay grabación directa a WebM.
+      </div>
+    </section>
+
+    <!-- QUEUE DRAWER -->
+    <section class="section anchor-target" id="queue">
+      <div class="section-header">
+        <span class="section-num">05</span>
+        <h2 class="section-title">Queue Drawer</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        El <span class="inline-cyan">Queue Drawer</span> es el panel flotante de cola de eventos. Se abre deslizando desde el borde o tocando el ícono de cola. Muestra qué entidades están programadas para activarse, en qué orden y con qué parámetros.
+      </p>
+
+      <div class="card">
+        <div class="card-title">Leer la cola</div>
+        <div class="card-body">
+          Cada ítem en la cola representa un evento futuro: qué entidad se activa, cuándo (en beats o segundos), y con qué DNA. Podés reorganizar items antes de que ejecuten, o eliminarlos de la cola sin afectar las entidades ya activas.
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Modo Free (versión de acceso):</strong> En la versión gratuita, la cola es de solo lectura. Podés ver los eventos programados pero no editarlos. La escritura completa de cola es parte de la versión Pro.
+      </div>
+    </section>
+
+    <!-- CAPTURA -->
+    <section class="section anchor-target" id="capture">
+      <div class="section-header">
+        <span class="section-num">06</span>
+        <h2 class="section-title">Capture Engine</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        El motor de captura permite usar el micrófono del iPad como fuente de audio en tiempo real. Cada entidad tiene su propio estado de captura, independiente del resto.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Estado OFF</div>
+          <div class="card-body">Sin captura activa. La entidad reproduce solo el sample cargado desde archivo.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Estado ARM <span class="badge cyan">activo</span></div>
+          <div class="card-body">La entidad está lista para capturar. El motor escucha el mic y lo alimenta al motor granular cuando PLAY está activo.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Estado MONITOR</div>
+          <div class="card-body">Escucha directa del mic en tiempo real, procesada por la cadena de efectos de esa entidad. Útil para chequear el signal antes de armar.</div>
+        </div>
+      </div>
+
+      <ol class="steps" style="margin-top:16px;">
+        <li>Tocá el indicador de mic en la entidad para pasar de OFF a ARM.</li>
+        <li>Asegurate de que iOS haya dado permiso de micrófono a Safari (Ajustes → Safari → Micrófono).</li>
+        <li>Tocá PLAY. El audio del mic entrará al motor granular de esa entidad.</li>
+        <li>Ajustá DNA para transformar la voz capturada en tiempo real.</li>
+      </ol>
+    </section>
+
+    <!-- DEBUG -->
+    <section class="section anchor-target" id="debug">
+      <div class="section-header">
+        <span class="section-num">07</span>
+        <h2 class="section-title">Panel DEBUG</h2>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">
+        El panel DEBUG es una herramienta de diagnóstico permanente. Se abre desde el borde derecho de la pantalla (slide-in). No afecta el audio — es solo lectura del estado interno del instrumento.
+      </p>
+
+      <div class="diagram">
+        <div class="diagram-title">Secciones del panel DEBUG</div>
+        <div style="display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--text-muted);">
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">AUDIO CONTEXT</span>
+            <span>Estado del motor de audio: running / suspended / closed. Si está suspended, el audio no va a funcionar.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">SCHEDULER</span>
+            <span>Estado del planificador de granos. Muestra si el tiempo de lookahead está corriendo correctamente.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">ENTITIES</span>
+            <span>Lista de entidades cargadas, su estado y si tienen buffer de audio decodificado.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">TRANSPORT</span>
+            <span>Estado PLAY/STOP/REC y próximo evento programado.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">MIC</span>
+            <span>Estado de los streams de micrófono activos.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">ERRORS</span>
+            <span>Log de errores internos. Útil para reportar bugs.</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:var(--accent-c); min-width:120px;">COPY REPORT</span>
+            <span>Botón que copia todo el estado al portapapeles para enviar al desarrollador.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <strong>Para testers:</strong> Si encontrás un bug, abrí el DEBUG panel y usá <strong>COPY REPORT</strong> antes de cerrar la app. Eso captura el estado completo del instrumento en ese momento.
+      </div>
+    </section>
+
+    <!-- WORKFLOW -->
+    <section class="section anchor-target" id="workflow">
+      <div class="section-header">
+        <span class="section-num">08</span>
+        <h2 class="section-title">Flujo básico de performance</h2>
+      </div>
+
+      <div class="flow" style="margin-bottom:32px;">
+        <div class="flow-node dim">Cargar samples</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node dim">Configurar DNA</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node cyan">PLAY</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">Transformar en vivo</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node dim">REC TAKE</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node dim">Export WAV</div>
+      </div>
+
+      <ol class="steps">
+        <li><strong>Cargar:</strong> Tocá la zona de waveform de una entidad vacía. Seleccioná un archivo .wav, .mp3, .m4a, .aiff, o .caf desde tu iPad.</li>
+        <li><strong>Asignar DNA:</strong> En el DNA Center, seleccioná un preset. Eso define cómo esa entidad va a granularizar el sonido.</li>
+        <li><strong>Ajustar CHARACTER:</strong> En la entidad, elegí el character apropiado para el momento de la performance (ANCLAJE para estabilidad, DISRUPCIÓN para fragmentación).</li>
+        <li><strong>Reproducir:</strong> Tocá PLAY. Todos los entities armados arrancan simultáneamente.</li>
+        <li><strong>Transformar:</strong> Usá MORPH para interpolar entre estados. Cambiá DNA en tiempo real. Ajustá parámetros con la fila <kbd>···</kbd>.</li>
+        <li><strong>Grabar:</strong> Cuando encontrés un momento que querés guardar, tocá REC TAKE. Grabá la duración deseada y tocá STOP.</li>
+        <li><strong>Exportar:</strong> Ir a TAKES → seleccioná el take → RENDER WAV → guardá en Archivos.</li>
+      </ol>
+    </section>
+
+    <!-- EXPORT -->
+    <section class="section anchor-target" id="export">
+      <div class="section-header">
+        <span class="section-num">09</span>
+        <h2 class="section-title">Exportar audio</h2>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">REC TAKE → TAKES → RENDER WAV <span class="badge cyan">Flujo canónico</span></div>
+        <div class="card-body">
+          Este es el único flujo de exportación disponible en iOS Safari. No existe grabación directa a formato comprimido (WebM no está soportado en iOS). El archivo resultante es WAV sin pérdida.
+        </div>
+      </div>
+
+      <ol class="steps">
+        <li>Durante la performance, tocá <kbd>REC TAKE</kbd> para iniciar la grabación. Un indicador visual confirma que estás grabando.</li>
+        <li>Tocá <kbd>STOP</kbd> o <kbd>REC TAKE</kbd> nuevamente para finalizar el take.</li>
+        <li>Abrí la sección <kbd>TAKES</kbd>. Aparece el take grabado con duración y timestamp.</li>
+        <li>Seleccioná el take y tocá <kbd>RENDER WAV</kbd>. El sistema procesa el buffer.</li>
+        <li>iOS te presentará el diálogo de Compartir. Podés guardarlo en Archivos, AirDroppearlo, o enviarlo por cualquier app.</li>
+      </ol>
+
+      <div class="callout warn">
+        <strong>Formato de archivo:</strong> Los takes se exportan como WAV. La versión Pro exporta a 32-bit float / 48kHz. La versión Free usa 16-bit / 44.1kHz.
+      </div>
+    </section>
+
+    <!-- GLOSARIO -->
+    <section class="section anchor-target" id="glosario">
+      <div class="section-header">
+        <span class="section-num">10</span>
+        <h2 class="section-title">Glosario</h2>
+      </div>
+
+      <div class="search-bar">
+        <span class="search-icon">&#x2315;</span>
+        <input type="text" id="glos-search" placeholder="Buscar término..." autocomplete="off">
+      </div>
+
+      <div id="glos-list">
+
+        <div class="glos-item" data-term="anclaje">
+          <div class="glos-term">ANCLAJE <span class="glos-cat">character / stage</span></div>
+          <div class="glos-def">Estado neurobiológico de performance que corresponde a estabilidad y arraigo. En SPK_FieldsSet, el character ANCLAJE configura la entidad con baja fragmentación granular, alta coherencia de pitch y comportamiento predecible. Es el estado de "tierra" del instrumento.</div>
+        </div>
+
+        <div class="glos-item" data-term="exploración">
+          <div class="glos-term">EXPLORACIÓN <span class="glos-cat">character / stage</span></div>
+          <div class="glos-def">Estado de búsqueda activa. Configura la entidad con mayor variación paramétrica, dispersión espacial moderada y densidad de granos media. El sonido empieza a moverse y explorar el espacio.</div>
+        </div>
+
+        <div class="glos-item" data-term="disrupción">
+          <div class="glos-term">DISRUPCIÓN <span class="glos-cat">character / stage</span></div>
+          <div class="glos-def">Fragmentación máxima. Alta densidad de granos, dispersión espacial extrema, pitch randomization agresivo. La identidad del sample fuente comienza a disolverse. Corresponde a la etapa de quiebre en el arco dramatúrgico.</div>
+        </div>
+
+        <div class="glos-item" data-term="liberación">
+          <div class="glos-term">LIBERACIÓN <span class="glos-cat">character / stage</span></div>
+          <div class="glos-def">Post-disrupción. El sonido se abre, reverberación extendida, granos largos y dispersos. Sensación de expansión después del quiebre.</div>
+        </div>
+
+        <div class="glos-item" data-term="retorno">
+          <div class="glos-term">RETORNO <span class="glos-cat">character / stage</span></div>
+          <div class="glos-def">Vuelta a la forma. Reintegración gradual hacia un estado coherente. Complemento dramático de ANCLAJE al final del ciclo.</div>
+        </div>
+
+        <div class="glos-item" data-term="dna">
+          <div class="glos-term">DNA <span class="glos-cat">preset / concepto</span></div>
+          <div class="glos-def">Snapshot de un conjunto completo de parámetros granulares. Un DNA define cómo una entidad fragmenta, dispersa y proyecta el sonido. El término es una metáfora: el DNA es la "instrucción genética" del comportamiento sonoro de una entidad.</div>
+        </div>
+
+        <div class="glos-item" data-term="entidad entity">
+          <div class="glos-term">Entidad <span class="glos-cat">unidad básica</span></div>
+          <div class="glos-def">La unidad de trabajo fundamental de SPK_FieldsSet. Una entidad contiene un buffer de audio (sample cargado o captura de mic), sus parámetros de síntesis granular, su character activo, y su estado de grabación. Múltiples entidades conviven en simultaneidad.</div>
+        </div>
+
+        <div class="glos-item" data-term="granular granos grain">
+          <div class="glos-term">Síntesis granular <span class="glos-cat">técnica de síntesis</span></div>
+          <div class="glos-def">Técnica que divide el audio en pequeños fragmentos (granos) de entre 1 y 100 milisegundos, y los reordena, superpone y dispersa en el tiempo y el espacio. El resultado puede ser desde una reproducción suave hasta una nube de textura irreconocible. SPK_FieldsSet usa síntesis granular como su motor central.</div>
+        </div>
+
+        <div class="glos-item" data-term="morph morphing">
+          <div class="glos-term">MORPH <span class="glos-cat">control / técnica</span></div>
+          <div class="glos-def">Interpolación en tiempo real entre dos estados paramétricos. El slider de MORPH mezcla progresivamente entre un estado A y un estado B (pueden ser DNAs o Scenes). Permite transiciones suaves durante la performance sin cortes abruptos.</div>
+        </div>
+
+        <div class="glos-item" data-term="scene scenes escena">
+          <div class="glos-term">SCENE <span class="glos-cat">preset global</span></div>
+          <div class="glos-def">Snapshot del estado global del instrumento: qué entidades están activas, con qué DNA cada una, y sus parámetros en ese momento. Aplicar un scene cambia el estado de múltiples entidades simultáneamente. Diseñado para transiciones de sección en performance.</div>
+        </div>
+
+        <div class="glos-item" data-term="audiocontext audio context">
+          <div class="glos-term">AudioContext <span class="glos-cat">técnico / sistema</span></div>
+          <div class="glos-def">El motor de audio de bajo nivel del navegador. Debe estar en estado "running" para que el instrumento funcione. En iOS, se activa con el primer gesto del usuario. Si está en estado "suspended", el audio no se produce aunque PLAY esté activo. El panel DEBUG muestra su estado en tiempo real.</div>
+        </div>
+
+        <div class="glos-item" data-term="scheduler planificador">
+          <div class="glos-term">Scheduler <span class="glos-cat">técnico / sistema</span></div>
+          <div class="glos-def">El planificador interno que decide cuándo se dispara cada grano. Usa un sistema de lookahead (anticipación) para programar eventos con pequeña antelación y evitar glitches. Si el scheduler se detiene o pierde sincronía, la reproducción granular puede congelarse o producir clicks.</div>
+        </div>
+
+        <div class="glos-item" data-term="queue cola drawer">
+          <div class="glos-term">Queue Drawer <span class="glos-cat">interfaz</span></div>
+          <div class="glos-def">Panel flotante que muestra la cola de eventos programados. Slide-in desde el borde. En versión Free es de solo lectura. En versión Pro permite editar el orden, parámetros y timing de los eventos encolados.</div>
+        </div>
+
+        <div class="glos-item" data-term="capture captura mic microfono">
+          <div class="glos-term">Capture Engine <span class="glos-cat">sistema</span></div>
+          <div class="glos-def">Motor de captura de audio en tiempo real desde el micrófono del iPad. Cada entidad puede tener su propio estado de captura: OFF, ARM o MONITOR. El audio capturado entra directamente al motor granular de la entidad.</div>
+        </div>
+
+        <div class="glos-item" data-term="arm monitor off mic">
+          <div class="glos-term">ARM / MONITOR / OFF <span class="glos-cat">estados de captura</span></div>
+          <div class="glos-def"><strong>OFF:</strong> sin captura de mic. <strong>ARM:</strong> la entidad escucha el mic y lo alimenta al motor granular cuando PLAY está activo. <strong>MONITOR:</strong> escucha directa del mic a través de la cadena de procesado, sin necesidad de PLAY activo.</div>
+        </div>
+
+        <div class="glos-item" data-term="panic stop parada emergencia">
+          <div class="glos-term">PANIC STOP <span class="glos-cat">control de transporte</span></div>
+          <div class="glos-def">Control de emergencia que corta todo el audio inmediatamente, resetea el scheduler y libera recursos de audio activos. A diferencia de STOP normal (que deja desvanecer los granos en vuelo), PANIC STOP es un corte duro instantáneo.</div>
+        </div>
+
+        <div class="glos-item" data-term="rec take takes render wav grabación">
+          <div class="glos-term">REC TAKE / TAKES / RENDER WAV <span class="glos-cat">grabación y exportación</span></div>
+          <div class="glos-def"><strong>REC TAKE:</strong> inicia la grabación de la salida del instrumento. <strong>TAKES:</strong> biblioteca interna de tomas grabadas. <strong>RENDER WAV:</strong> convierte una toma del buffer interno a archivo WAV descargable. Este es el flujo canónico de exportación en iOS (WebM no está soportado en Safari).</div>
+        </div>
+
+        <div class="glos-item" data-term="bank banco">
+          <div class="glos-term">Bank <span class="glos-cat">organización</span></div>
+          <div class="glos-def">Grupo de entidades. SPK_FieldsSet organiza las entidades en bancos (A, B, C, D). El Bank A está disponible en la versión Free. Los Banks B, C y D requieren la versión Pro.</div>
+        </div>
+
+        <div class="glos-item" data-term="drive model drive model carácter">
+          <div class="glos-term">Drive Model <span class="glos-cat">procesado</span></div>
+          <div class="glos-def">Modelo de saturación/distorsión aplicado a la salida del motor granular. Afecta el carácter tímbrico final del sonido procesado. La versión Free incluye 1 Drive Model; la versión Pro incluye 5.</div>
+        </div>
+
+        <div class="glos-item" data-term="debug reporte copy report panel">
+          <div class="glos-term">Panel DEBUG / COPY REPORT <span class="glos-cat">diagnóstico</span></div>
+          <div class="glos-def">Panel de diagnóstico deslizable desde el borde derecho de la pantalla. Muestra el estado interno del instrumento en 7 secciones. COPY REPORT copia todo el estado al portapapeles para facilitar el reporte de bugs. No afecta el funcionamiento del instrumento.</div>
+        </div>
+
+        <div class="glos-item" data-term="character selector">
+          <div class="glos-term">CHARACTER <span class="glos-cat">control</span></div>
+          <div class="glos-def">Selector inline en cada entidad que define su modo de comportamiento dramático. Corresponde a los cinco estados neurobiológicos del lenguaje escénico de SpukLab: ANCLAJE, EXPLORACIÓN, DISRUPCIÓN, LIBERACIÓN, RETORNO.</div>
+        </div>
+
+        <div class="glos-item" data-term="waveform onda forma">
+          <div class="glos-term">Waveform <span class="glos-cat">visualización</span></div>
+          <div class="glos-def">Representación visual de la forma de onda del sample cargado en una entidad. En SPK_FieldsSet, la waveform es prominente en cada entity card y sirve también como control táctil para navegar la posición de lectura del sample.</div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// === CANVAS NEURAL FILAMENT ===
+(function() {
+  var canvas = document.getElementById('hero-canvas');
+  var ctx = canvas.getContext('2d');
+  var W, H, particles, mouse;
+
+  mouse = { x: -999, y: -999 };
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function makeParticle() {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.5 + 0.5,
+      hue: Math.random() > 0.5 ? 0 : 1 // 0=cyan, 1=magenta
+    };
+  }
+
+  function init() {
+    resize();
+    particles = [];
+    var count = Math.min(80, Math.floor(W * H / 14000));
+    for (var i = 0; i < count; i++) particles.push(makeParticle());
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+
+      // mouse repulsion
+      var dx = p.x - mouse.x;
+      var dy = p.y - mouse.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 100) {
+        p.vx += dx / dist * 0.08;
+        p.vy += dy / dist * 0.08;
+      }
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.995;
+      p.vy *= 0.995;
+
+      if (p.x < 0) p.x = W;
+      if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H;
+      if (p.y > H) p.y = 0;
+
+      // draw particle
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.hue === 0 ? 'rgba(0,255,255,0.6)' : 'rgba(255,0,255,0.5)';
+      ctx.fill();
+
+      // draw connections
+      for (var j = i + 1; j < particles.length; j++) {
+        var q = particles[j];
+        var ex = p.x - q.x;
+        var ey = p.y - q.y;
+        var ed = Math.sqrt(ex * ex + ey * ey);
+        if (ed < 120) {
+          var alpha = (1 - ed / 120) * 0.25;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = 'rgba(153,68,255,' + alpha + ')';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', function() { resize(); });
+  window.addEventListener('mousemove', function(e) { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+  init();
+  draw();
+})();
+
+// === ACTIVE NAV ===
+(function() {
+  var items = document.querySelectorAll('.nav-item');
+  var sections = [];
+
+  items.forEach(function(item) {
+    var href = item.getAttribute('href');
+    if (href && href[0] === '#') {
+      var el = document.querySelector(href);
+      if (el) sections.push({ item: item, el: el });
+    }
+    item.addEventListener('click', function() {
+      items.forEach(function(i) { i.classList.remove('active'); });
+      item.classList.add('active');
+    });
+  });
+
+  window.addEventListener('scroll', function() {
+    var scrollY = window.scrollY + 80;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    if (active) {
+      items.forEach(function(i) { i.classList.remove('active'); });
+      active.item.classList.add('active');
+    }
+  });
+})();
+
+// === GLOSARIO SEARCH ===
+(function() {
+  var input = document.getElementById('glos-search');
+  var items = document.querySelectorAll('.glos-item');
+
+  input.addEventListener('input', function() {
+    var q = input.value.toLowerCase().trim();
+    items.forEach(function(item) {
+      var term = item.getAttribute('data-term') || '';
+      var text = item.textContent.toLowerCase();
+      if (!q || term.indexOf(q) !== -1 || text.indexOf(q) !== -1) {
+        item.classList.remove('hidden');
+      } else {
+        item.classList.add('hidden');
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
