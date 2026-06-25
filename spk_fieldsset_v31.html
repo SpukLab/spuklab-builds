@@ -268,6 +268,10 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #btnQueue.active{background:rgba(67,229,255,.1);border-color:rgba(67,229,255,.4);color:#43E5FF;}
 /* behavRow oculta por defecto */
 .behavRow{display:none!important;}
+.cfgRow{display:none!important;}
+.entityCard.cfgOpen .cfgRow{display:grid!important;}
+.entityCard.cfgOpen .micRow{display:flex!important;}
+.entityCard.cfgOpen .behavRow{display:flex!important;}
 .behavRow.visible{display:flex!important;}
 /* btn toggle RESP */
 .btnResp{width:20px;height:20px;padding:0;font-size:9px;color:rgba(255,255,255,.28);
@@ -823,7 +827,7 @@ var ENTITY_TINTS={'e0':'rgba(67,229,255,.75)','e1':'rgba(255,56,209,.75)','e2':'
 function makeEntity(id,name,role,view,pi){
   return{id:id,name:name,role:role,view:view,materialId:id+"_A",level:.82,pitch:0,pan:0,filterNorm:1.0,param1:.3,param2:.5,loopIn:0,loopOut:1,mute:false,solo:false,weight:80,fieldLocked:false,gainNode:null,filterNode:null,panNode:null,srcNode:null,modOsc:null,modDepth:null,baseGain:null,contActive:false,startTime:null,nextTime:0,phraseIdx:-1,phraseDir:1,echoMem:[],_segments:[],_segN:8,_pointers:{},rhy:makeRhy(pi||0),rndMode:0,rndTimer:null,focusResponse:"none",transitionTime:0,_savedView:null,_wasFocused:true,_activeZone:-1,banks:{A:null,B:null,C:null,D:null},activeBank:"A",localPlaying:false,drive:0,reverbSendLevel:0,delaySendLevel:0,dnaPreset:'normal',driveModel:'soft',micMode:'off',micStream:null,micSource:null,micProc:null,micSinkGain:null,micChunks:[],micLen:4,micCapturing:false,micTimer:null};
 }
-var entities=[makeEntity('e0','VOICE A','voice','grain',0),makeEntity('e1','VOICE B','voice','slice',1),makeEntity('e2','TEXTURE','texture','drift',2),makeEntity('e3','RHYTHM','rhythm','loop',3)];
+var entities=[makeEntity('e0','VOICE A','voice','loop',0),makeEntity('e1','VOICE B','voice','loop',1),makeEntity('e2','TEXTURE','texture','drift',2),makeEntity('e3','RHYTHM','rhythm','loop',3)];
 entities[3].rhy.mode='grid';entities[3].rhy.p1=Math.round((16-4)/(32-4)*100);
 function getEntity(id){var i=0;while(i<entities.length){if(entities[i].id===id){return entities[i];}i++;}return null;}
 
@@ -972,16 +976,14 @@ function buildCard(entity){
   card.appendChild(bankRow);var fbadge=document.createElement('span');fbadge.className='focusBadge';fbadge.textContent='FOCUS';card.appendChild(fbadge);
   card.appendChild(head);
   card.appendChild(matRow);
-var micRow=document.createElement('div');micRow.className='micRow';var micL=document.createElement('span');micL.className='lbl';micL.textContent='MIC';['off','arm','mon'].forEach(function(m){var b=document.createElement('button');b.className='micModeBtn'+(m===e.micMode?' active'+(m==='mon'?' mon':''):'');b.textContent=m.toUpperCase();b.setAttribute('data-entity',e.id);b.setAttribute('data-btn','micmode');b.setAttribute('data-mic',m);micRow.appendChild(b);});var micLs=document.createElement('select');micLs.className='micLenSel';micLs.setAttribute('data-entity',e.id);[2,4,8,16].forEach(function(n){var op=document.createElement('option');op.value=n;op.textContent=n+'s';if(n===(e.micLen||4)){op.selected=true;}micLs.appendChild(op);});var micCap=document.createElement('button');micCap.className='micCapBtn';micCap.id='micCap_'+e.id;micCap.textContent='CAPTURE';micCap.setAttribute('data-entity',e.id);micCap.setAttribute('data-btn','miccapture');micCap.disabled=(e.micMode==='off');micRow.appendChild(micL);micRow.appendChild(micLs);micRow.appendChild(micCap);
-  card.appendChild(micRow);
   card.appendChild(canvas);
-  card.appendChild(cP);
-  card.appendChild(cVP);
-  card.appendChild(entityFxRow);
-  behavRow.classList.remove('visible');
-  card.appendChild(behavRow);
   card.appendChild(rhyRow);
   card.appendChild(strip);
+  micRow.classList.add('cfgRow');card.appendChild(micRow);
+  cP.classList.add('cfgRow');card.appendChild(cP);
+  cVP.classList.add('cfgRow');card.appendChild(cVP);
+  entityFxRow.classList.add('cfgRow');card.appendChild(entityFxRow);
+  card.appendChild(behavRow);
   return card;
 }
 
@@ -1067,7 +1069,7 @@ function bindEntityGrid(){
   grid.addEventListener('click',function(ev){var t=ev.target;if(t.classList.contains('step')&&t.getAttribute('data-entity')){var seid=t.getAttribute('data-entity');var sIdx=parseInt(t.getAttribute('data-step'),10);var se=getEntity(seid);if(se&&se.rhy.mode==='grid'&&!sceneFrozen){se.rhy.pattern[sIdx]=se.rhy.pattern[sIdx]?0:1;t.classList.toggle('on',se.rhy.pattern[sIdx]===1);}return;}var btn=t.getAttribute('data-btn');var eid=t.getAttribute('data-entity');if(!eid){return;}var e=getEntity(eid);if(btn==='load'){if(!audioCtx){initAudio();}else{audioCtx.resume();}var fi=document.getElementById('file_'+eid);if(fi){fi.click();}return;}if(!e){return;}if(btn==='mute'){e.mute=!e.mute;t.classList.toggle('muted',e.mute);refreshAllGains();emitEvent('mute',{entity:e.id,mute:e.mute});}if(btn==='solo'){e.solo=!e.solo;t.classList.toggle('soloed',e.solo);refreshAllGains();emitEvent('solo',{entity:e.id,solo:e.solo});}if(btn==='rnd'){if(audioCtx){cycleAndRandomize(e);}}if(btn==='field'){e.fieldLocked=!e.fieldLocked;t.classList.toggle('active',e.fieldLocked);refreshEntityGain(e);setStatus(e.name+' field lock: '+(e.fieldLocked?'ON — inmune al Focus':'OFF'));}if(btn==='clone'){var ci=entities.indexOf(e);cloneEntityTo(e,entities[(ci+1)%entities.length].id);}
     if(btn==='micmode'){var mt=t.getAttribute('data-mic');if(e&&mt){setMicMode(e,mt);}return;}
     if(btn==='miccapture'){if(e){if(e.micCapturing){stopMicCapture(e);}else{startMicCapture(e);}}return;}
-    if(btn==='toggleresp'){var brow=document.querySelector('#card_'+eid+' .behavRow');if(brow){brow.classList.toggle('visible');}t.classList.toggle('open',brow&&brow.classList.contains('visible'));}
+    if(btn==='toggleresp'){var cardEl=document.getElementById('card_'+eid);if(cardEl){var op=cardEl.classList.toggle('cfgOpen');t.classList.toggle('open',op);}}
     if(btn==='drivemodel'){var models=['soft','tape','tube','crush'];var mi=models.indexOf(e.driveModel||'soft');e.driveModel=models[(mi+1)%models.length];t.textContent=e.driveModel.toUpperCase();if(e.driveNode){e.driveNode.curve=makeDriveCurveForModel(e.drive,e.driveModel);}setStatus(e.name+' drive: '+e.driveModel);}
     if(btn==='lplay'){toggleLocalPlay(e);}
     if(btn==='lstop'){stopLocalPlay(e);}
