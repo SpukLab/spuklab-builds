@@ -837,7 +837,7 @@ var running=false,lookahead=.13,schedInterval=null;
 function initAudio(){
   if(audioCtx){return;}audioCtx=new (window.AudioContext||window.webkitAudioContext)();audioCtx.resume();
   masterMix=audioCtx.createGain();masterMix.gain.value=.8;convolver=audioCtx.createConvolver();convolver.buffer=buildReverbIR(audioCtx);wetGain=audioCtx.createGain();wetGain.gain.value=.15;limiter=audioCtx.createDynamicsCompressor();limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=.001;limiter.release.value=.12;
-  glbFilter=audioCtx.createBiquadFilter();glbFilter.type='lowpass';glbFilter.frequency.value=20000;glbFilter.Q.value=.5;glbDelay=audioCtx.createDelay(5.0);glbDelay.delayTime.value=.375;glbDelayFB=audioCtx.createGain();glbDelayFB.gain.value=.35;glbDelayWet=audioCtx.createGain();glbDelayWet.gain.value=0;masterMix.connect(glbFilter);glbFilter.connect(limiter);masterMix.connect(convolver);convolver.connect(wetGain);wetGain.connect(limiter);masterMix.connect(glbDelay);glbDelay.connect(glbDelayFB);glbDelayFB.connect(glbDelay);glbDelay.connect(glbDelayWet);glbDelayWet.connect(limiter);limiter.connect(audioCtx.destination);
+  glbFilter=audioCtx.createBiquadFilter();glbFilter.type='lowpass';glbFilter.frequency.value=20000;glbFilter.Q.value=.5;glbDelay=audioCtx.createDelay(5.0);glbDelay.delayTime.value=.375;glbDelayFB=audioCtx.createGain();glbDelayFB.gain.value=.35;glbDelayWet=audioCtx.createGain();glbDelayWet.gain.value=0;masterMix.connect(glbFilter);glbFilter.connect(limiter);masterMix.connect(convolver);convolver.connect(wetGain);wetGain.connect(limiter);masterMix.connect(glbDelay);glbDelay.connect(glbDelayFB);glbDelayFB.connect(glbDelay);glbDelay.connect(glbDelayWet);glbDelayWet.connect(limiter);masterGain=audioCtx.createGain();masterGain.gain.value=1;limiter.connect(masterGain);masterGain.connect(audioCtx.destination);
   var i=0;while(i<entities.length){buildEntityGraph(entities[i]);i++;}buildDefaultBuffers();
 }
 function makeDriveCurve(amount){var n=512,curve=new Float32Array(n);var k=amount<.01?0.001:amount*8;for(var i=0;i<n;i++){var x=(i*2/(n-1))-1;curve[i]=amount<.01?x:Math.tanh(x*k)/Math.tanh(k);}return curve;}
@@ -848,7 +848,7 @@ var synthDefs=[{f:300,m:2.1,d:5.0,n:'sintetico voz'},{f:600,m:3.5,d:4.0,n:'sinte
 function buildDefaultBuffers(){
   var i=0;while(i<entities.length){var e=entities[i],def=synthDefs[i];var buf=buildSimpleSynth(audioCtx,def.f,def.m,def.d);var slot=materialPool[e.materialId];slot.buffer=buf;slot.duration=buf.duration;slot.name=def.n;buildWaveformCacheForSlot(e.materialId);buildSegmentsForEntity(e);var mn=document.getElementById('matname_'+e.id);if(mn){mn.textContent=def.n;}var dot=document.getElementById('matdot_'+e.id);if(dot){dot.classList.add('loaded');}i++;}
   var strip=document.getElementById('rs_e3');if(strip){buildStepStripDOM(strip,entities[3]);}
-  var brt=document.getElementById("btnRecTake");if(brt){brt.disabled=false;}var btp=document.getElementById("btnTakes");if(btp){btp.disabled=false;}initStemRouting();entities.forEach(function(e){e.banks['A']=captureEntityState(e);});
+  var brt=document.getElementById("btnRecTake");if(brt){brt.disabled=false;}var btp=document.getElementById("btnTakes");if(btp){btp.disabled=false;}entities.forEach(function(e){e.banks['A']=captureEntityState(e);});
   setStatus('listo — carga tus propios samples o PLAY');startAnimLoop();
   setTimeout(function(){pushHistory();},200);
 }
@@ -1696,7 +1696,7 @@ function buildTakesList(){
     var m=Math.floor(take.duration/60),s=Math.floor(take.duration%60);
     meta.textContent=(m>0?m+'m':'')+s+'s · '+take.events.length+'ev';
     var renderBtn=document.createElement('button');renderBtn.className='takeRender';
-    renderBtn.textContent='RENDER';renderBtn.setAttribute('data-takeidx',i);
+    renderBtn.textContent='STEMS (DRY)';renderBtn.setAttribute('data-takeidx',i);
     var delBtn=document.createElement('button');delBtn.className='takeDel';
     delBtn.textContent='x';delBtn.setAttribute('data-takedelidx',i);
     row.appendChild(nm);row.appendChild(meta);row.appendChild(renderBtn);row.appendChild(delBtn);
@@ -1723,79 +1723,10 @@ function updateQueueButton(){
 // ====================================================
 // STEM RECORDING
 // ====================================================
-var stemDests={};
-var stemRecorders={};
-var stemChunks={};
+var masterGain=null;
 
-function initStemRouting(){
-  if(Object.keys(stemDests).length>0){return;}
-  entities.forEach(function(e){
-    var dest=audioCtx.createMediaStreamDestination();
-    e.gainNode.connect(dest);
-    stemDests[e.id]=dest;
-  });
-  if(typeof limiter!=='undefined'){
-    var masterDest=audioCtx.createMediaStreamDestination();
-    limiter.connect(masterDest);
-    stemDests['master']=masterDest;
-  }
-}
+// (sistema MediaRecorder de stems eliminado — se usa ScriptProcessor en startWAVCapture)
 
-function stemMimeType(){
-  if(typeof MediaRecorder==='undefined'){return '';}
-  if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus')){return 'audio/webm;codecs=opus';}
-  if(MediaRecorder.isTypeSupported('audio/mp4')){return 'audio/mp4';}
-  return 'audio/webm';
-}
-
-function stemExt(mt){return mt.indexOf('mp4')>=0?'.m4a':'.webm';}
-
-function startStemRecorders(){
-  stemChunks={};stemRecorders={};
-  var mt=stemMimeType();if(!mt){setStatus('MediaRecorder no soportado');return;}
-  Object.keys(stemDests).forEach(function(key){
-    stemChunks[key]=[];
-    var rec;
-    try{rec=new MediaRecorder(stemDests[key].stream,{mimeType:mt});}
-    catch(ex){rec=new MediaRecorder(stemDests[key].stream);}
-    rec.ondataavailable=(function(k){return function(ev){
-      if(ev.data&&ev.data.size>0){stemChunks[k].push(ev.data);}
-    };})(key);
-    rec.start(500);stemRecorders[key]=rec;
-  });
-}
-
-function stopStemRecorders(){
-  var mt=stemMimeType(),ext=stemExt(mt);
-  var keys=Object.keys(stemRecorders).filter(function(k){return stemRecorders[k].state==='recording';});
-  if(!keys.length){downloadStems(mt,ext);return;}
-  var done=0;
-  keys.forEach(function(key){
-    stemRecorders[key].onstop=function(){
-      done++;if(done===keys.length){downloadStems(mt,ext);}
-    };
-    stemRecorders[key].stop();
-  });
-}
-
-function downloadStems(mt,ext){
-  var ts=new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
-  var entityNames={e0:'voiceA',e1:'voiceB',e2:'texture',e3:'rhythm',master:'master'};
-  var count=0;
-  Object.keys(stemChunks).forEach(function(key){
-    if(!stemChunks[key].length){return;}
-    var blob=new Blob(stemChunks[key],{type:mt});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');a.href=url;
-    a.download='spkfields_'+(entityNames[key]||key)+'_'+ts+ext;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    setTimeout(function(){URL.revokeObjectURL(url);},3000);
-    count++;
-  });
-  var rs=document.getElementById('renderStatus');
-  if(rs){rs.style.display='block';rs.textContent=count+' stems descargados';}
-  setStatus(count+' stems descargados (.'+ext.slice(1)+')');
-}
 
 // ====================================================
 // RENDER TAKE
@@ -1810,8 +1741,8 @@ function renderTake(take){
   _applySceneInternal(take.initialState);
   buildCanvasGestures();
   
-  // Init stem routing
-  initStemRouting();
+  // RENDER SILENCIOSO: silenciar salida durante el replay
+  if(masterGain){masterGain.gain.value=0;}
   
   // Iniciar transport + grabación
   startTransport();
@@ -1829,10 +1760,11 @@ function renderTake(take){
     stopTransport();
     captureEngine.replaying=false;
     stopAndDownloadWAV();
+    if(masterGain){masterGain.gain.value=1;}
   },totalMs);
   
   var rs=document.getElementById('renderStatus');
-  if(rs){rs.style.display='block';rs.textContent='Renderizando '+take.label+'...';}
+  if(rs){rs.style.display='block';rs.textContent='Renderizando '+take.label+' (silencioso)...';}
   setStatus('RENDER: '+take.label+' — '+(take.duration+tail).toFixed(0)+'s');
   
   // Marcar botón como renderizando
@@ -2031,7 +1963,7 @@ function stopAndDownloadWAV(){
     count++;
   });
   wavCap={};
-  setStatus(count+' stems WAV descargados');
+  setStatus(count+' stems WAV (dry) + master descargados');
 }
 
 // ========================================
