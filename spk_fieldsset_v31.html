@@ -201,21 +201,6 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .histEntry.current .histTime{color:#43E5FF;}
 
 
-#waveInspector{position:fixed;inset:0;z-index:70;background:rgba(4,6,10,.92);
-  display:none;align-items:center;justify-content:center;padding:30px;}
-#waveInspector.open{display:flex;}
-#wiBox{width:min(900px,94vw);background:rgba(13,11,31,.98);
-  border:1px solid rgba(67,229,255,.3);border-radius:10px;padding:18px;
-  box-shadow:0 20px 60px rgba(0,0,0,.6);}
-#wiTitle{font-size:13px;letter-spacing:0.1em;color:#43E5FF;margin-bottom:12px;
-  display:flex;justify-content:space-between;align-items:center;}
-#wiClose{font-size:11px;padding:5px 12px;background:rgba(67,229,255,.08);
-  border:1px solid rgba(67,229,255,.3);color:#43E5FF;border-radius:5px;cursor:pointer;
-  touch-action:manipulation;}
-#wiCanvas{display:block;width:100%;height:300px;cursor:crosshair;touch-action:none;
-  border-radius:6px;background:rgba(0,0,0,.3);}
-#wiInfo{display:flex;gap:16px;margin-top:10px;font-size:11px;color:rgba(255,255,255,.5);}
-#wiInfo span b{color:#43E5FF;font-weight:600;}
 #debugPanel{position:fixed;top:50px;right:0;width:min(440px,92vw);height:calc(100vh - 50px);
   height:calc(100dvh - 50px);background:rgba(4,6,10,.98);border-left:1px solid rgba(67,229,255,.25);
   z-index:60;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;
@@ -260,6 +245,22 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .characterRow{display:flex;align-items:center;gap:3px;padding:1px 8px;}
 .characterSel{font-size:9px;padding:1px 3px;flex:1;
   color:rgba(67,229,255,.65);border-color:rgba(67,229,255,.2);}
+
+.entityCard.editLoop .cParams{display:none!important;}
+.entityCard.editLoop .cVParams{display:none!important;}
+.entityCard.editLoop .rhyRow{display:none!important;}
+.entityCard.editLoop .stepStrip{display:none!important;}
+.entityCard.editLoop .micRow{display:none!important;}
+.entityCard.editLoop .behavRow{display:none!important;}
+.entityCard.editLoop .waveCanvas{height:200px!important;flex:none;}
+.editLoopBar{display:none;align-items:center;gap:8px;padding:4px 10px;
+  background:rgba(67,229,255,.06);border-top:1px solid rgba(67,229,255,.15);}
+.entityCard.editLoop .editLoopBar{display:flex;}
+.editLoopBar .elInfo{font-size:11px;color:rgba(255,255,255,.6);}
+.editLoopBar .elInfo b{color:#43E5FF;}
+.editLoopDone{margin-left:auto;font-size:11px;padding:4px 14px;
+  background:rgba(67,229,255,.12);border:1px solid rgba(67,229,255,.35);
+  color:#43E5FF;border-radius:5px;cursor:pointer;touch-action:manipulation;}
 .entityCard.focusMode .cParams{display:none;}
 .entityCard.focusMode .cVParams{display:none;}
 .entityCard.focusMode .characterRow{display:none;}
@@ -556,19 +557,6 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
   </div>
 
-  <!-- WAVE INSPECTOR (editor flotante) -->
-  <div id="waveInspector">
-    <div id="wiBox">
-      <div id="wiTitle"><span id="wiName">VOICE A</span><button id="wiClose">CERRAR</button></div>
-      <canvas id="wiCanvas"></canvas>
-      <div id="wiInfo">
-        <span>IN <b id="wiIn">0%</b></span>
-        <span>OUT <b id="wiOut">100%</b></span>
-        <span>LEN <b id="wiLen">--</b></span>
-        <span style="margin-left:auto;color:rgba(255,255,255,.3);">arrastrá los marcadores IN/OUT</span>
-      </div>
-    </div>
-  </div>
 
   <div id="entityArea">
     <div id="eRow0" class="eRow"></div>
@@ -1022,6 +1010,13 @@ function buildCard(entity){
   card.appendChild(canvas);
   card.appendChild(rhyRow);
   card.appendChild(strip);
+  var elBar=document.createElement('div');elBar.className='editLoopBar';
+  var elInfo=document.createElement('span');elInfo.className='elInfo';elInfo.id='elInfo_'+e.id;
+  elInfo.innerHTML='IN <b>0%</b> · OUT <b>100%</b>';
+  var elDone=document.createElement('button');elDone.className='editLoopDone';elDone.textContent='LISTO';
+  elDone.setAttribute('data-entity',e.id);elDone.setAttribute('data-btn','editloopdone');
+  elBar.appendChild(elInfo);elBar.appendChild(elDone);
+  card.appendChild(elBar);
   micRow.classList.add('cfgRow');card.appendChild(micRow);
   card.appendChild(cP);  // VOL/PCH/PAN siempre visible (performativo)
   cVP.classList.add('cfgRow');card.appendChild(cVP);
@@ -1052,7 +1047,7 @@ function bindCanvasGesture(entity){
     if(audioCtx){audioCtx.resume();}
     if(captureState.active&&captureState.entity===entity){recordCaptureTap(entity);entity._pointers[ev.pointerId]={isCap:true};try{canvas.setPointerCapture(ev.pointerId);}catch(ex){}return;}
     var p=rP(ev);var ptr={startX:p.x,startY:p.y,lastX:p.x,lastY:p.y,startTime:Date.now(),dT:"xy",lSeg:-1,lpt:null};
-    if(entity.view==="slice"){ptr.dT="slice";var si=posToSegment(p.x,entity);if(si>=0){triggerSliceAt(entity,si);}ptr.lSeg=si;}else if(entity.view==="loop"){var dIn=Math.abs(p.x-entity.loopIn),dOut=Math.abs(p.x-entity.loopOut);var thresh=0.06;if(dIn<thresh&&dIn<=dOut){ptr.dT="loopIn";}else if(dOut<thresh){ptr.dT="loopOut";}}
+    if(entity.view==="slice"){ptr.dT="slice";var si=posToSegment(p.x,entity);if(si>=0){triggerSliceAt(entity,si);}ptr.lSeg=si;}else if(entity.view==="loop"){var dIn=Math.abs(p.x-entity.loopIn),dOut=Math.abs(p.x-entity.loopOut);var thresh=entity._editLoop?0.08:0.06;if(dIn<thresh&&dIn<=dOut){ptr.dT="loopIn";enterEditLoop(entity);}else if(dOut<thresh){ptr.dT="loopOut";enterEditLoop(entity);}}
     else if(entity.view==="loop"){var dI=Math.abs(p.x-entity.loopIn),dO=Math.abs(p.x-entity.loopOut);if(dI<.07){ptr.dT="loopIn";}else if(dO<.07){ptr.dT="loopOut";}else if(p.x>entity.loopIn&&p.x<entity.loopOut){if(!sceneFrozen){entity.loopIn=clamp(p.x,0,entity.loopOut-.02);updateLoopSource(entity);}ptr.dT="loopIn";}else{ptr.dT="xy";}}
     else if(entity.view==="freeze"){ptr.dT="freeze";}
     ptr.lpt=setTimeout(function(){var p2=entity._pointers[ev.pointerId];if(!p2||p2.isCap){return;}
@@ -1064,8 +1059,8 @@ function bindCanvasGesture(entity){
   function onMove(ev){var ptr=entity._pointers[ev.pointerId];if(!ptr||ptr.isCap){return;}var p=rP(ev);
     if(ptr.lpt&&(Math.abs(p.x-ptr.startX)>.05||Math.abs(p.y-ptr.startY)>.05)){clearTimeout(ptr.lpt);ptr.lpt=null;}
     if(Object.keys(entity._pointers).length>=2&&entity.view==="loop"){ptr.lastX=p.x;ptr.lastY=p.y;tfLoop();return;}
-    if(ptr.dT==="loopIn"){entity.loopIn=clamp(p.x,0,entity.loopOut-.03);ptr.lastX=p.x;return;}
-    if(ptr.dT==="loopOut"){entity.loopOut=clamp(p.x,entity.loopIn+.03,1);ptr.lastX=p.x;return;}
+    if(ptr.dT==="loopIn"){entity.loopIn=clamp(p.x,0,entity.loopOut-.03);ptr.lastX=p.x;updateEditLoopInfo(entity);return;}
+    if(ptr.dT==="loopOut"){entity.loopOut=clamp(p.x,entity.loopIn+.03,1);ptr.lastX=p.x;updateEditLoopInfo(entity);return;}
     if(!sceneFrozen){if(ptr.dT==="slice"){var si=posToSegment(p.x,entity);if(si>=0&&si!==ptr.lSeg){triggerSliceAt(entity,si);ptr.lSeg=si;}}
     else if(ptr.dT==="loopIn"){entity.loopIn=clamp(p.x,0,entity.loopOut-.02);entity.param1=entity.loopIn;updateLoopSource(entity);syncEntitySliders(entity);}
     else if(ptr.dT==="loopOut"){entity.loopOut=clamp(p.x,entity.loopIn+.02,1);entity.param2=entity.loopOut;updateLoopSource(entity);syncEntitySliders(entity);}
@@ -1078,11 +1073,8 @@ function bindCanvasGesture(entity){
     var now2=Date.now();
     if(dt<270&&dx<.06&&dy<.06&&(now2-entity._lastTap)<380){
       // DOUBLE-TAP: toggle focus mode
-      var card=document.getElementById('card_'+entity.id);
-      if(card){
-        openWaveInspector(entity);
-        setStatus(entity.name+' — editor de material');
-      }
+      enterEditLoop(entity);
+      setStatus(entity.name+' — editar loop');
       entity._lastTap=0;return;
     }
     entity._lastTap=(dt<270&&dx<.06&&dy<.06)?now2:0;
@@ -1113,7 +1105,8 @@ function bindEntityGrid(){
   grid.addEventListener('click',function(ev){var t=ev.target;if(t.classList.contains('step')&&t.getAttribute('data-entity')){var seid=t.getAttribute('data-entity');var sIdx=parseInt(t.getAttribute('data-step'),10);var se=getEntity(seid);if(se&&se.rhy.mode==='grid'&&!sceneFrozen){se.rhy.pattern[sIdx]=se.rhy.pattern[sIdx]?0:1;t.classList.toggle('on',se.rhy.pattern[sIdx]===1);}return;}var btn=t.getAttribute('data-btn');var eid=t.getAttribute('data-entity');if(!eid){return;}var e=getEntity(eid);if(btn==='load'){if(!audioCtx){initAudio();}else{audioCtx.resume();}var fi=document.getElementById('file_'+eid);if(fi){fi.click();}return;}if(!e){return;}if(btn==='mute'){e.mute=!e.mute;t.classList.toggle('muted',e.mute);refreshAllGains();emitEvent('mute',{entity:e.id,mute:e.mute});}if(btn==='solo'){e.solo=!e.solo;t.classList.toggle('soloed',e.solo);refreshAllGains();emitEvent('solo',{entity:e.id,solo:e.solo});}if(btn==='rnd'){if(audioCtx){cycleAndRandomize(e);}}if(btn==='field'){e.fieldLocked=!e.fieldLocked;t.classList.toggle('active',e.fieldLocked);refreshEntityGain(e);setStatus(e.name+' field lock: '+(e.fieldLocked?'ON — inmune al Focus':'OFF'));}if(btn==='clone'){var ci=entities.indexOf(e);cloneEntityTo(e,entities[(ci+1)%entities.length].id);}
     if(btn==='micmode'){var mt=t.getAttribute('data-mic');if(e&&mt){setMicMode(e,mt);}return;}
     if(btn==='miccapture'){if(e){if(e.micCapturing){stopMicCapture(e);}else{startMicCapture(e);}}return;}
-    if(btn==='editwave'){if(e){openWaveInspector(e);}return;}
+    if(btn==='editloopdone'){if(e){exitEditLoop(e);}return;}
+    if(btn==='editwave'){if(e){enterEditLoop(e);}return;}
     if(btn==='toggleresp'){var cardEl=document.getElementById('card_'+eid);if(cardEl&&e){var op=cardEl.classList.toggle('cfgOpen');e._cfgOpen=op;t.classList.toggle('open',op);}}
     if(btn==='drivemodel'){var models=['soft','tape','tube','crush'];var mi=models.indexOf(e.driveModel||'soft');e.driveModel=models[(mi+1)%models.length];t.textContent=e.driveModel.toUpperCase();if(e.driveNode){e.driveNode.curve=makeDriveCurveForModel(e.drive,e.driveModel);}setStatus(e.name+' drive: '+e.driveModel);}
     if(btn==='lplay'){toggleLocalPlay(e);}
@@ -2439,86 +2432,34 @@ function toggleDebugPanel(){
   if(open){try{dbgRefreshAll();}catch(e_){DEBUG.logError("toggleDebug: "+e_.message,"debug",0,0);}}
 }
 
+
 // ====================================================
-// WAVE INSPECTOR — editor flotante de material
+// EDIT LOOP — expansion contextual del waveform en la card
 // ====================================================
-var wiEntity=null;
-function openWaveInspector(entity){
-  wiEntity=entity;
-  var ins=document.getElementById('waveInspector');if(!ins){return;}
-  document.getElementById('wiName').textContent=entity.name;
-  ins.classList.add('open');
-  bindWaveInspectorGestures();
-  requestAnimationFrame(function(){drawWaveInspector();requestAnimationFrame(drawWaveInspector);});
+function enterEditLoop(entity){
+  if(entity._editLoop){updateEditLoopInfo(entity);return;}
+  entity._editLoop=true;
+  var card=document.getElementById('card_'+entity.id);
+  if(card){card.classList.add('editLoop');}
+  updateEditLoopInfo(entity);
 }
-function closeWaveInspector(){
-  var ins=document.getElementById('waveInspector');
-  if(ins){ins.classList.remove('open');}
-  wiEntity=null;
+function exitEditLoop(entity){
+  entity._editLoop=false;
+  var card=document.getElementById('card_'+entity.id);
+  if(card){card.classList.remove('editLoop');}
+  pushHistory(entity.name+' loop ajustado');
 }
-function drawWaveInspector(){
-  if(!wiEntity){return;}
-  var canvas=document.getElementById('wiCanvas');if(!canvas){return;}
-  var dpr=window.devicePixelRatio||1;
-  var cw=canvas.clientWidth||800,chh=canvas.clientHeight||300;
-  var wantW=Math.round(cw*dpr),wantH=Math.round(chh*dpr);
-  if(canvas.width!==wantW||canvas.height!==wantH){canvas.width=wantW;canvas.height=wantH;}
-  var W=canvas.width,H=canvas.height,ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,W,H);
-  var slot=materialPool[wiEntity.materialId];
-  if(slot&&slot.waveformCache){
-    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-    ctx.drawImage(slot.waveformCache,0,0,W,H);
-  }else{
-    ctx.fillStyle='rgba(255,255,255,.25)';ctx.font=(13*dpr)+'px monospace';
-    ctx.textAlign='center';ctx.fillText('sin material',W/2,H/2);
-  }
-  // Loop region + handles
-  var inX=wiEntity.loopIn*W,outX=wiEntity.loopOut*W;
-  ctx.fillStyle='rgba(67,229,255,.08)';ctx.fillRect(inX,0,outX-inX,H);
-  ctx.strokeStyle='#43E5FF';ctx.lineWidth=2*dpr;
-  ctx.beginPath();ctx.moveTo(inX,0);ctx.lineTo(inX,H);ctx.stroke();
-  ctx.fillStyle='#43E5FF';ctx.beginPath();ctx.arc(inX,14*dpr,8*dpr,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#FF38D1';ctx.beginPath();ctx.moveTo(outX,0);ctx.lineTo(outX,H);ctx.stroke();
-  ctx.fillStyle='#FF38D1';ctx.beginPath();ctx.arc(outX,14*dpr,8*dpr,0,Math.PI*2);ctx.fill();
-  // Info
-  document.getElementById('wiIn').textContent=Math.round(wiEntity.loopIn*100)+'%';
-  document.getElementById('wiOut').textContent=Math.round(wiEntity.loopOut*100)+'%';
+function updateEditLoopInfo(entity){
+  var el=document.getElementById('elInfo_'+entity.id);
+  if(!el){return;}
+  var slot=materialPool[entity.materialId];
+  var inP=Math.round(entity.loopIn*100),outP=Math.round(entity.loopOut*100);
+  var txt='IN <b>'+inP+'%</b> · OUT <b>'+outP+'%</b>';
   if(slot&&slot.duration){
-    var len=(wiEntity.loopOut-wiEntity.loopIn)*slot.duration;
-    document.getElementById('wiLen').textContent=len.toFixed(2)+'s';
+    var len=(entity.loopOut-entity.loopIn)*slot.duration;
+    txt+=' · LEN <b>'+len.toFixed(2)+'s</b>';
   }
-}
-var _wiGesturesBound=false;
-function bindWaveInspectorGestures(){
-  if(_wiGesturesBound){return;}
-  _wiGesturesBound=true;
-  var canvas=document.getElementById('wiCanvas');if(!canvas){return;}
-  var drag=null;
-  function rx(ev){var r=canvas.getBoundingClientRect();return clamp((ev.clientX-r.left)/r.width,0,1);}
-  canvas.addEventListener('pointerdown',function(ev){
-    if(!wiEntity){return;}
-    var x=rx(ev);
-    var dIn=Math.abs(x-wiEntity.loopIn),dOut=Math.abs(x-wiEntity.loopOut);
-    if(dIn<0.05&&dIn<=dOut){drag='in';}
-    else if(dOut<0.05){drag='out';}
-    else{drag=(x<((wiEntity.loopIn+wiEntity.loopOut)/2))?'in':'out';}
-    try{canvas.setPointerCapture(ev.pointerId);}catch(e_){}
-    if(drag==='in'){wiEntity.loopIn=clamp(x,0,wiEntity.loopOut-.03);}
-    else{wiEntity.loopOut=clamp(x,wiEntity.loopIn+.03,1);}
-    drawWaveInspector();
-  });
-  canvas.addEventListener('pointermove',function(ev){
-    if(!drag||!wiEntity){return;}
-    var x=rx(ev);
-    if(drag==='in'){wiEntity.loopIn=clamp(x,0,wiEntity.loopOut-.03);}
-    else{wiEntity.loopOut=clamp(x,wiEntity.loopIn+.03,1);}
-    drawWaveInspector();
-  });
-  canvas.addEventListener('pointerup',function(ev){
-    drag=null;try{canvas.releasePointerCapture(ev.pointerId);}catch(e_){}
-    if(wiEntity){pushHistory(wiEntity.name+' loop ajustado');}
-  });
+  el.innerHTML=txt;
 }
 
 window.onload=function(){
@@ -2589,8 +2530,6 @@ window.onload=function(){
   var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);}
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
-  var wiC=document.getElementById('wiClose');if(wiC){wiC.addEventListener('click',closeWaveInspector);}
-  var wiBg=document.getElementById('waveInspector');if(wiBg){wiBg.addEventListener('click',function(ev){if(ev.target===wiBg){closeWaveInspector();}});}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
   // iOS backup: reanudar AudioContext en cualquier interacción táctil
