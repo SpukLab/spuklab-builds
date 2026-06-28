@@ -713,6 +713,60 @@ function recordCaptureTap(entity){
 
 // --- MATERIAL POOL ---
 
+
+// ============================================================
+// AUDIO POOL — API PUBLICA (CONTRATO CONGELADO v1)
+// ============================================================
+// Principio: el MOTOR siempre trabaja con AudioBuffer.
+//            el STORAGE usa un formato persistente intercambiable.
+// Todo audio del ecosistema (import, mic, capture, render futuro)
+// entra al Pool y se vuelve un objeto con UUID. Slots y Queue
+// guardan SOLO referencias (audioId), nunca buffers duplicados.
+//
+// ---- ESTRUCTURA DE ENTRY ----
+// audioPool[uuid] = {
+//   uuid:        string         identificador unico
+//   name:        string         nombre legible
+//   duration:    number (s)     metadato
+//   sampleRate:  number (Hz)    metadato
+//   channels:    number         metadato
+//   peak:        number 0..1    metadato (analisis)
+//   rms:         number 0..1    metadato (analisis)
+//   parent:      uuid|null      LINAJE: de que audio nacio este
+//   source:      string         import | mic | capture | synth | render
+//   buffer:      AudioBuffer    cache para el MOTOR (siempre disponible o reconstruible)
+//   bytes:       ArrayBuffer    STORAGE persistente (lazy, formato intercambiable)
+//   meta:        object|null    PROCEDENCIA opcional (ver abajo)
+// }
+//
+// ---- meta (procedencia, opcional, para reconstruir el origen) ----
+// meta = {
+//   createdFrom: string   ej "Voice B" (entidad de origen)
+//   scene:       string   ej "C"
+//   character:   string   ej "glass"
+//   space:       string   ej "orbit"
+//   timestamp:   number   Date.now()
+// }
+//
+// ---- API PUBLICA (firmas congeladas) ----
+// poolAdd(buffer, opts)        -> uuid     opts:{name,parent,source,meta}
+// poolGet(uuid)                -> entry|null
+// poolBuffer(uuid)             -> AudioBuffer|null   (MOTOR: siempre por aca)
+// poolEnsureBytes(uuid)        -> ArrayBuffer|null   (STORAGE: genera bytes lazy)
+// poolRebuildBuffer(uuid, cb)  -> cb(AudioBuffer|null) (reconstruye cache desde bytes)
+// getSlotBuffer(slot)          -> AudioBuffer|null   (indireccion slot->pool)
+// getQueueBuffer(item)         -> AudioBuffer|null   (indireccion queue->pool)
+//
+// ---- API RESERVADA (no implementada aun — firmas comprometidas) ----
+// poolRemove(uuid)             -> bool     elimina entry (cuando no haya refs)
+// poolClone(uuid, opts)        -> uuid     copia con nuevo uuid (parent=uuid original)
+// poolCapture(entity, opts)    -> uuid     resample de entidad procesada -> pool (FASE 2)
+//
+// CONTRATO: Capture, Project, Snapshot, Recovery y SBO dependen de esta
+// interfaz. No cambiar firmas sin versionar. Agregar campos a meta es
+// compatible; quitar/renombrar campos de entry NO lo es.
+// ============================================================
+
 // ====================================================
 // AUDIO POOL — almacenamiento desacoplado del motor
 // El motor trabaja SIEMPRE con AudioBuffer (entry.buffer).
@@ -790,9 +844,10 @@ function poolAdd(buffer,opts){
     peak:meta.peak,
     rms:meta.rms,
     parent:opts.parent||null,    // linaje / ADN del sonido
-    source:opts.source||'import',// import | capture | synth
+    source:opts.source||'import',// import | mic | capture | synth | render
     buffer:buffer,               // cache AudioBuffer (motor)
-    bytes:null                   // storage lazy (se genera al guardar)
+    bytes:null,                  // storage lazy (se genera al guardar)
+    meta:opts.meta||null         // procedencia opcional (createdFrom/scene/character/space/timestamp)
   };
   return uuid;
 }
