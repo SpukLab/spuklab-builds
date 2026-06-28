@@ -550,6 +550,13 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
+    <h3>DIAG PLAY/STOP</h3>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button onclick="_diagSnap('A-PLAY')" style="font-size:10px;padding:3px 8px;background:rgba(0,255,0,.15);border:1px solid #0f0;color:#0f0;border-radius:3px">A</button>
+      <button onclick="_diagSnap('B-STOP')" style="font-size:10px;padding:3px 8px;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;border-radius:3px">B</button>
+      <button onclick="_diagSnap('C-PLAY2')" style="font-size:10px;padding:3px 8px;background:rgba(255,80,80,.15);border:1px solid #f55;color:#f55;border-radius:3px">C</button>
+    </div>
+    <div id="debugContent" style="font-size:10px;line-height:1.5"></div>
     <div class="dbgBtns">
       <button id="btnDbgRefresh">REFRESH</button>
       <button id="btnDbgCopy">COPY REPORT</button>
@@ -3057,6 +3064,69 @@ function serializeSession(){
     scene:serializeScene(), scratch:serializeScratch(),
     selScene:selScene, running:running
   };
+}
+
+// ====================================================
+// DIAGNÓSTICO PLAY/STOP — captura diff de estados A/B/C
+// ====================================================
+var _diagSnapshots=[];
+function _diagSnap(label){
+  var snap={label:label, ts:Date.now()};
+  // AudioContext
+  snap.actxState=audioCtx?audioCtx.state:'null';
+  snap.actxTime=audioCtx?audioCtx.currentTime.toFixed(3):'n/a';
+  // Transport globals
+  snap.running=running;
+  snap.schedInterval=!!schedInterval;
+  snap.rafId=!!rafId;
+  // Por entidad
+  snap.entities=entities.map(function(e){
+    return {
+      id:e.id, view:e.view,
+      contActive:e.contActive,
+      srcNode:!!e.srcNode,
+      srcNodeState:e.srcNode?(e.srcNode.playbackState!=null?e.srcNode.playbackState:'?'):'null',
+      localPlaying:e.localPlaying,
+      nextTime:e.rhy?e.rhy.nextTime.toFixed(3):'n/a',
+      hasBuf:!!(getMaterial(e)&&getMaterial(e).buffer),
+      matId:e.materialId
+    };
+  });
+  _diagSnapshots.push(snap);
+  if(_diagSnapshots.length>3){_diagSnapshots.shift();}
+  // Actualizar DEBUG si está abierto
+  var dp=document.getElementById('debugContent');
+  if(dp){dp.innerHTML=_diagBuild();}
+  return snap;
+}
+function _diagBuild(){
+  if(!_diagSnapshots.length){return '<p>Sin snapshots — usá los botones A/B/C</p>';}
+  var h='<style>.ds{font-family:monospace;font-size:10px;}.dr{color:#0f0}.dw{color:#f80}.de{color:#f55}</style>';
+  _diagSnapshots.forEach(function(s){
+    h+='<p style="color:#43E5FF;margin:4px 0"><b>['+s.label+']</b> actx='+s.actxState+
+       ' t='+s.actxTime+' running='+s.running+' sched='+s.schedInterval+'</p>';
+    s.entities.forEach(function(e){
+      var ok=e.contActive&&e.srcNode&&e.hasBuf;
+      var cls=ok?'dr':(e.hasBuf?'dw':'de');
+      h+='<span class="ds '+cls+'">'+e.id+': view='+e.view+
+         ' cont='+e.contActive+' src='+e.srcNode+
+         ' lp='+e.localPlaying+' buf='+e.hasBuf+'</span><br>';
+    });
+  });
+  if(_diagSnapshots.length>=2){
+    h+='<p style="color:#ff0;margin:4px 0"><b>DIFF '+_diagSnapshots[0].label+'→'+_diagSnapshots[_diagSnapshots.length-1].label+':</b></p>';
+    var a=_diagSnapshots[0],b=_diagSnapshots[_diagSnapshots.length-1];
+    if(a.actxState!==b.actxState){h+='<span class="ds de">actxState: '+a.actxState+' → '+b.actxState+'</span><br>';}
+    if(a.running!==b.running){h+='<span class="ds dw">running: '+a.running+' → '+b.running+'</span><br>';}
+    if(a.schedInterval!==b.schedInterval){h+='<span class="ds dw">schedInterval: '+a.schedInterval+' → '+b.schedInterval+'</span><br>';}
+    a.entities.forEach(function(ae,i){
+      var be=b.entities[i];if(!be)return;
+      if(ae.contActive!==be.contActive){h+='<span class="ds de">'+ae.id+' contActive: '+ae.contActive+' → '+be.contActive+'</span><br>';}
+      if(ae.srcNode!==be.srcNode){h+='<span class="ds de">'+ae.id+' srcNode: '+ae.srcNode+' → '+be.srcNode+'</span><br>';}
+      if(ae.view!==be.view){h+='<span class="ds dw">'+ae.id+' view: '+ae.view+' → '+be.view+'</span><br>';}
+    });
+  }
+  return h;
 }
 
 window.onload=function(){
