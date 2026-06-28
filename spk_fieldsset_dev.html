@@ -553,6 +553,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
+    <h3>PERSISTENCE MODULE</h3>
+    <button onclick="_persistSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(95,255,160,.15);border:1px solid #5fffa0;color:#5fffa0;border-radius:3px;margin-bottom:6px">RUN PERSIST TEST</button>
+    <div id="persistTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
     <h3>PROJECT ROUND-TRIP</h3>
     <button onclick="_projectSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(255,56,209,.15);border:1px solid #FF38D1;color:#FF38D1;border-radius:3px;margin-bottom:6px">RUN PROJECT TEST</button>
     <div id="projTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
@@ -3399,6 +3402,175 @@ function _projectSmokeTest(){
       deserializeProject(badDoc,function(err3){
         log(err3?'OK abort ref rota: "'+err3+'"':'FALLO: deberia abortar');
         log('<b style="color:#0f0">TEST COMPLETO</b>');
+      });
+    });
+  });
+}
+
+// ============================================================
+// PROJECT PERSISTENCE — Fase 3d (módulo puro)
+// Único consumidor de serializeProject + IndexedDB.
+// La serialización NO conoce este módulo (separación estricta).
+// Contrato: saveProject/loadProject/listProjects/deleteProject/
+//           renameProject/existsProject + projectStats
+// ============================================================
+var PROJECT_PREFIX='project:';
+
+// projectStats(doc) — resumen de diagnóstico (no UI, utilidad)
+function projectStats(doc){
+  if(!doc){return null;}
+  var audioEntries=doc.audioPool?Object.keys(doc.audioPool).length:0;
+  var audioBytes=0;
+  if(doc.audioPool){
+    Object.keys(doc.audioPool).forEach(function(u){
+      var e=doc.audioPool[u];
+      if(e.bytes){audioBytes+=e.bytes.byteLength;}
+    });
+  }
+  var sceneCount=0;
+  if(doc.scenes){
+    ['A','B','C','D'].forEach(function(k){if(doc.scenes[k]){sceneCount++;}});
+  }
+  var bankCount=doc.slots?Object.keys(doc.slots).length:0;
+  var scratchCount=doc.scratch?doc.scratch.length:0;
+  var entityCount=doc.scene&&doc.scene.entities?doc.scene.entities.length:0;
+  return {
+    audioEntries:audioEntries,
+    audioBytes:audioBytes,
+    audioSizeMB:(audioBytes/1048576).toFixed(2),
+    scenes:sceneCount,
+    banks:bankCount,
+    scratchItems:scratchCount,
+    entities:entityCount,
+    version:doc.projectVersion||0,
+    createdAt:doc.createdAt||null,
+    modifiedAt:doc.modifiedAt||null
+  };
+}
+
+function _projectKey(name){return PROJECT_PREFIX+name;}
+
+function saveProject(name,cb){
+  cb=cb||function(){};
+  if(!name){cb('nombre vacio');return;}
+  // Preservar createdAt si el proyecto ya existe
+  existsProject(name,function(err,exists){
+    if(err){cb(err);return;}
+    function doSave(createdAt){
+      var doc;
+      try{doc=serializeProject({createdAt:createdAt});}
+      catch(ex){cb('error serializando: '+ex.message);return;}
+      dbSet(_projectKey(name),doc,function(err2){
+        if(err2){cb(err2);return;}
+        cb(null,projectStats(doc));
+      });
+    }
+    if(exists){
+      dbGet(_projectKey(name),function(e,prev){
+        doSave(prev&&prev.createdAt?prev.createdAt:null);
+      });
+    }else{
+      doSave(null);
+    }
+  });
+}
+
+function loadProject(name,cb){
+  cb=cb||function(){};
+  if(!name){cb('nombre vacio');return;}
+  dbGet(_projectKey(name),function(err,doc){
+    if(err){cb(err);return;}
+    if(!doc){cb('proyecto no existe: '+name);return;}
+    deserializeProject(doc,function(err2){
+      if(err2){cb(err2);return;}
+      cb(null,projectStats(doc));
+    });
+  });
+}
+
+function listProjects(cb){
+  cb=cb||function(){};
+  dbList(function(err,keys){
+    if(err){cb(err,null);return;}
+    var names=[];
+    keys.forEach(function(k){
+      if(k.indexOf(PROJECT_PREFIX)===0){names.push(k.slice(PROJECT_PREFIX.length));}
+    });
+    cb(null,names);
+  });
+}
+
+function deleteProject(name,cb){
+  cb=cb||function(){};
+  if(!name){cb('nombre vacio');return;}
+  dbDelete(_projectKey(name),cb);
+}
+
+function existsProject(name,cb){
+  cb=cb||function(){};
+  dbGet(_projectKey(name),function(err,doc){
+    if(err){cb(err,false);return;}
+    cb(null,!!doc);
+  });
+}
+
+function renameProject(oldName,newName,cb){
+  cb=cb||function(){};
+  if(!oldName||!newName){cb('nombres invalidos');return;}
+  dbGet(_projectKey(oldName),function(err,doc){
+    if(err){cb(err);return;}
+    if(!doc){cb('proyecto no existe: '+oldName);return;}
+    existsProject(newName,function(e2,exists){
+      if(exists){cb('ya existe un proyecto: '+newName);return;}
+      dbSet(_projectKey(newName),doc,function(err3){
+        if(err3){cb(err3);return;}
+        dbDelete(_projectKey(oldName),cb);
+      });
+    });
+  });
+}
+
+// Test módulo persistencia (temporal — Fase 3d)
+function _persistSmokeTest(){
+  var out=document.getElementById('persistTestOut');
+  function log(m){if(out){out.innerHTML+=m+'<br>';}}
+  if(out){out.innerHTML='';}
+  var TESTNAME='__smoke_test_proj';
+  log('1. projectStats(serializeProject())...');
+  var doc=serializeProject();
+  var st=projectStats(doc);
+  log('  audio:'+st.audioEntries+' ('+st.audioSizeMB+'MB) scenes:'+st.scenes+
+      ' banks:'+st.banks+' scratch:'+st.scratchItems+' v'+st.version);
+  log('2. saveProject...');
+  saveProject(TESTNAME,function(err,stats){
+    if(err){log('FALLO save: '+err);return;}
+    log('OK save — '+stats.audioEntries+' audios, '+stats.audioSizeMB+'MB');
+    log('3. existsProject...');
+    existsProject(TESTNAME,function(e,exists){
+      log(exists?'OK exists=true':'FALLO: no existe');
+      log('4. listProjects...');
+      listProjects(function(e2,names){
+        if(e2){log('FALLO list: '+e2);return;}
+        log('OK list: ['+names.join(', ')+']');
+        log('5. loadProject (round-trip storage)...');
+        loadProject(TESTNAME,function(e3,stats3){
+          if(e3){log('FALLO load: '+e3);return;}
+          log('OK load — '+stats3.audioEntries+' audios restaurados');
+          log('  pool actual: '+Object.keys(audioPool).length+' entries');
+          log('6. renameProject...');
+          renameProject(TESTNAME,TESTNAME+'_renamed',function(e4){
+            if(e4){log('FALLO rename: '+e4);return;}
+            log('OK rename');
+            log('7. deleteProject (cleanup)...');
+            deleteProject(TESTNAME+'_renamed',function(e5){
+              if(e5){log('FALLO delete: '+e5);return;}
+              existsProject(TESTNAME+'_renamed',function(e6,ex6){
+                log(ex6?'FALLO: aun existe':'OK: eliminado');
+                log('<b style="color:#0f0">TEST COMPLETO</b>');
+              });
+            });
+          });
+        });
       });
     });
   });
