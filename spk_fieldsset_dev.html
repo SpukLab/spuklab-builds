@@ -291,6 +291,13 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   border-color:rgba(255,255,255,.06);letter-spacing:0;flex-shrink:0;}
 .btnResp.open{color:rgba(67,229,255,.5);border-color:rgba(67,229,255,.2);}
 /* CHAR inline en matRow */
+
+.btnCap{font-size:10px;padding:2px 6px;background:rgba(255,80,80,.1);
+  border:1px solid rgba(255,80,80,.3);color:rgba(255,80,80,.8);
+  border-radius:4px;cursor:pointer;touch-action:manipulation;letter-spacing:.03em;}
+.btnCap.capturing{background:rgba(255,80,80,.35);color:#fff;
+  animation:capPulse .6s ease-in-out infinite alternate;}
+@keyframes capPulse{from{opacity:.6;}to{opacity:1;}}
 .spaceSel{color:#FF38D1!important;border-color:rgba(255,56,209,.3)!important;}
 .autoSel{color:#5fffa0!important;border-color:rgba(95,255,160,.3)!important;}
 .charInline{font-size:9px;padding:1px 3px;max-width:82px;flex-shrink:0;
@@ -1158,8 +1165,8 @@ function buildCard(entity){
   var bRnd=document.createElement('button');bRnd.className='bRnd';bRnd.textContent=RND_BTN_LABELS[e.rndMode];bRnd.setAttribute('data-entity',e.id);bRnd.setAttribute('data-btn','rnd');bRnd.title='tap=exec,cicla: P=params V=view R=rhythm A=all';
   var bF=document.createElement('button');bF.className='bF'+(e.fieldLocked?' active':'');bF.textContent='F';bF.setAttribute('data-entity',e.id);bF.setAttribute('data-btn','field');bF.title='Field Lock: inmune parcial al Focus';
   var bM=document.createElement('button');bM.className='bMs'+(e.mute?' muted':'');bM.textContent='M';bM.setAttribute('data-entity',e.id);bM.setAttribute('data-btn','mute');
-  var bS=document.createElement('button');bS.className='bMs'+(e.solo?' soloed':'');bS.textContent='S';bS.setAttribute('data-entity',e.id);bS.setAttribute('data-btn','solo');var bResp=document.createElement('button');bResp.className='btnResp';bResp.textContent='···';bResp.setAttribute('data-entity',e.id);bResp.setAttribute('data-btn','toggleresp');bResp.title='parametros';if(e._cfgOpen){bResp.classList.add('open');}
-  head.appendChild(cName);head.appendChild(rTag);head.appendChild(vSel);head.appendChild(bRnd);head.appendChild(bF);head.appendChild(bM);head.appendChild(bS);head.appendChild(bResp);
+  var bS=document.createElement('button');bS.className='bMs'+(e.solo?' soloed':'');bS.textContent='S';bS.setAttribute('data-entity',e.id);bS.setAttribute('data-btn','solo');var bCap=document.createElement('button');bCap.className='btnCap';bCap.textContent='● CAP';bCap.id='capBtn_'+e.id;bCap.setAttribute('data-entity',e.id);bCap.setAttribute('data-btn','capture');bCap.title='Capturar entidad procesada';var bResp=document.createElement('button');bResp.className='btnResp';bResp.textContent='···';bResp.setAttribute('data-entity',e.id);bResp.setAttribute('data-btn','toggleresp');bResp.title='parametros';if(e._cfgOpen){bResp.classList.add('open');}
+  head.appendChild(cName);head.appendChild(rTag);head.appendChild(vSel);head.appendChild(bRnd);head.appendChild(bF);head.appendChild(bM);head.appendChild(bS);head.appendChild(bCap);head.appendChild(bResp);
   var matRow=document.createElement('div');matRow.className='matRow';
   var bLoad=document.createElement('button');bLoad.className='bLoad';bLoad.textContent='LOAD';bLoad.setAttribute('data-entity',e.id);bLoad.setAttribute('data-btn','load');
   var fi=document.createElement('input');fi.type='file';fi.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';fi.id='file_'+e.id;fi.setAttribute('data-entity',e.id);
@@ -1281,6 +1288,7 @@ function bindEntityGrid(){
     if(btn==='micmode'){var mt=t.getAttribute('data-mic');if(e&&mt){setMicMode(e,mt);}return;}
     if(btn==='miccapture'){if(e){if(e.micCapturing){stopMicCapture(e);}else{startMicCapture(e);}}return;}
     
+    if(btn==='capture'){if(e){poolCapture(e);}return;}
     if(btn==='toggleresp'){var cardEl=document.getElementById('card_'+eid);if(cardEl&&e){var op=cardEl.classList.toggle('cfgOpen');e._cfgOpen=op;t.classList.toggle('open',op);}}
     if(btn==='drivemodel'){var models=['soft','tape','tube','crush'];var mi=models.indexOf(e.driveModel||'soft');e.driveModel=models[(mi+1)%models.length];t.textContent=e.driveModel.toUpperCase();if(e.driveNode){e.driveNode.curve=makeDriveCurveForModel(e.drive,e.driveModel);}setStatus(e.name+' drive: '+e.driveModel);}
     if(btn==='lplay'){toggleLocalPlay(e);}
@@ -2812,6 +2820,127 @@ function setEntityAuto(entity,mode){
     }
   }
   pushHistory(entity.name+' AUTO: '+mode.toUpperCase());
+}
+
+// ====================================================
+// CAPTURE ENGINE — resample interno -> Audio Pool -> Scratch
+// captureAudio(source, opts) es el motor general.
+// poolCapture(entity) es un wrapper de conveniencia.
+// No depende de PROJECT: todo va a audioPool (en memoria).
+// ====================================================
+var _captureVersions={};  // entityId -> count (versionado automatico)
+var _activeCap=null;      // captura en curso
+
+function _captureVersion(entityId){
+  _captureVersions[entityId]=(_captureVersions[entityId]||0)+1;
+  return _captureVersions[entityId];
+}
+function _captureName(entity){
+  var v=_captureVersion(entity.id);
+  var vStr=v<10?'v0'+v:'v'+v;
+  return entity.name+' '+vStr;
+}
+
+function captureAudio(source,opts){
+  // source: {type:'entity', entity:e, tap:'wet'}
+  //         {type:'master', tap:'wet'}   (futuro)
+  //         {type:'mic'}                  (futuro)
+  // opts:   {duration:null, onDone:fn}
+  if(!audioCtx){setStatus('Capture: sin contexto de audio');return;}
+  if(_activeCap){setStatus('Capture: ya hay una captura activa');return;}
+  opts=opts||{};
+  var tap=opts.tap||'wet';
+  var entity=source.entity||null;
+
+  // Punto de captura segun source y tap
+  var captureNode=null;
+  if(source.type==='entity'&&entity){
+    captureNode=entity.gainNode;  // wet por entidad: Space+CHARACTER+Freeze+Automation
+  }
+  // futuro: if(source.type==='master'){captureNode=masterGain;}
+  if(!captureNode){setStatus('Capture: nodo no disponible');return;}
+
+  // Duracion: un ciclo de loop, o default segun vista
+  var dur=opts.duration;
+  if(!dur){
+    var slot=entity?materialPool[entity.materialId]:null;
+    if(slot&&slot.buffer&&entity){
+      dur=(entity.loopOut-entity.loopIn)*slot.buffer.duration;
+      dur=Math.max(1,Math.min(dur,16));  // clamp 1..16s
+    }else{
+      dur=4;  // default
+    }
+  }
+
+  // ScriptProcessor: conectado al captureNode, sink silenciado
+  var bufSz=4096;
+  var spNode=audioCtx.createScriptProcessor(bufSz,2,2);
+  var chunks=[];
+  spNode.onaudioprocess=function(ev){
+    chunks.push({
+      l:new Float32Array(ev.inputBuffer.getChannelData(0)),
+      r:new Float32Array(ev.inputBuffer.getChannelData(1))
+    });
+  };
+  captureNode.connect(spNode);
+  var sink=audioCtx.createGain();sink.gain.value=0;
+  spNode.connect(sink);sink.connect(audioCtx.destination);
+
+  // Feedback visual: boton parpadea
+  var capBtn=entity?document.getElementById('capBtn_'+entity.id):null;
+  if(capBtn){capBtn.classList.add('capturing');}
+  setStatus((entity?entity.name:'master')+' capturando '+dur.toFixed(1)+'s...');
+
+  _activeCap={spNode:spNode,sink:sink,entity:entity,chunks:chunks};
+
+  setTimeout(function(){
+    // Detener
+    try{spNode.disconnect();}catch(ex){}
+    try{captureNode.disconnect(spNode);}catch(ex){}
+    try{sink.disconnect();}catch(ex){}
+    if(capBtn){capBtn.classList.remove('capturing');}
+    _activeCap=null;
+
+    if(!chunks.length){setStatus('Capture: nada capturado');return;}
+
+    // Merge chunks -> Float32 stereo
+    var total=chunks.reduce(function(a,c){return a+c.l.length;},0);
+    var lAll=new Float32Array(total),rAll=new Float32Array(total);
+    var off=0;
+    chunks.forEach(function(c){lAll.set(c.l,off);rAll.set(c.r,off);off+=c.l.length;});
+
+    // Crear AudioBuffer
+    var sr=audioCtx.sampleRate;
+    var ab=audioCtx.createBuffer(2,total,sr);
+    ab.getChannelData(0).set(lAll);
+    ab.getChannelData(1).set(rAll);
+
+    // Metadatos de procedencia (linaje)
+    var pname=entity?_captureName(entity):'master_cap';
+    var parentId=entity&&materialPool[entity.materialId]?materialPool[entity.materialId].audioId:null;
+    var meta={
+      createdFrom:entity?entity.name:'master',
+      scene:selScene||null,
+      character:entity?(entity.dnaPreset||'normal'):null,
+      space:entity?(entity.space||'off'):null,
+      tap:tap,
+      timestamp:Date.now()
+    };
+
+    // Registrar en Audio Pool (fuente de verdad)
+    var uuid=poolAdd(ab,{name:pname,parent:parentId,source:'capture',meta:meta});
+
+    // Agregar al Scratch (ex-Queue)
+    audioQueue.items.push({audioId:uuid,buffer:ab,name:pname,duration:ab.duration});
+    buildQueueList();
+    setStatus(pname+' capturado ('+ab.duration.toFixed(1)+'s) → Scratch');
+    if(opts.onDone){opts.onDone(uuid);}
+  }, dur*1000);
+}
+
+// Wrapper de conveniencia (API del Pool)
+function poolCapture(entity,opts){
+  captureAudio({type:'entity',entity:entity,tap:'wet'},opts);
 }
 
 window.onload=function(){
