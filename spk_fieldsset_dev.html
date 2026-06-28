@@ -1399,11 +1399,12 @@ function captureEntityState(e){
 }
 
 function applyEntityState(entity,state){
-  deserializeEntity(entity,state); // wrapper — fuente de verdad unica
+  var prevView=entity.view; // capturar ANTES de deserializar
+  deserializeEntity(entity,state);
   if(audioCtx&&entity.gainNode){refreshEntityGain(entity);}
   if(entity.spacePanA){entity.spacePanA.pan.value=effPan(entity);}
   if(entity.filterNode){entity.filterNode.frequency.value=filterNormToHz(entity.filterNorm);}
-  if(entity.view!==entity._savedView){applyViewChange(entity,false);}
+  if(entity.view!==prevView){applyViewChange(entity,false);} // solo si cambió realmente
   updateContinuousParams(entity);updateLoopSource(entity);syncEntitySliders(entity);
 }
 
