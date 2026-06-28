@@ -553,6 +553,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
+    <h3>IDB SMOKE TEST</h3>
+    <button onclick="_dbSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(67,229,255,.15);border:1px solid #43E5FF;color:#43E5FF;border-radius:3px;margin-bottom:6px">RUN DB TEST</button>
+    <div id="dbTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
     <div class="dbgBtns">
       <button id="btnDbgRefresh">REFRESH</button>
       <button id="btnDbgCopy">COPY REPORT</button>
@@ -3062,6 +3065,141 @@ function serializeSession(){
   };
 }
 
+
+// ============================================================
+// INDEXEDDB WRAPPER — Fase 3b (módulo independiente)
+// Capa de almacenamiento desacoplada. No conectada al instrumento.
+// API estable: dbInit / dbSet / dbGet / dbDelete / dbList
+// Almacena cualquier valor serializable + ArrayBuffers (audio bytes).
+// ============================================================
+var _db=null;
+var DB_NAME='spukfields_db';
+var DB_VERSION=1;
+var DB_STORE='kv';
+
+function dbInit(cb){
+  // Abre (o crea) la base. cb(err, db)
+  cb=cb||function(){};
+  if(_db){cb(null,_db);return;}
+  if(!window.indexedDB){cb('IndexedDB no disponible',null);return;}
+  var req;
+  try{req=window.indexedDB.open(DB_NAME,DB_VERSION);}
+  catch(ex){cb('Error abriendo DB: '+ex.message,null);return;}
+  req.onupgradeneeded=function(ev){
+    var db=ev.target.result;
+    if(!db.objectStoreNames.contains(DB_STORE)){
+      db.createObjectStore(DB_STORE);
+    }
+  };
+  req.onsuccess=function(ev){_db=ev.target.result;cb(null,_db);};
+  req.onerror=function(ev){cb('Error DB: '+(ev.target.error?ev.target.error.message:'desconocido'),null);};
+}
+
+function dbSet(key,value,cb){
+  // Guarda value bajo key. cb(err)
+  cb=cb||function(){};
+  dbInit(function(err,db){
+    if(err){cb(err);return;}
+    var tx,store;
+    try{
+      tx=db.transaction(DB_STORE,'readwrite');
+      store=tx.objectStore(DB_STORE);
+      store.put(value,key);
+    }catch(ex){cb('Error set: '+ex.message);return;}
+    tx.oncomplete=function(){cb(null);};
+    tx.onerror=function(ev){cb('Error tx set: '+(ev.target.error?ev.target.error.message:'?'));};
+  });
+}
+
+function dbGet(key,cb){
+  // Recupera value de key. cb(err, value) — value null si no existe
+  cb=cb||function(){};
+  dbInit(function(err,db){
+    if(err){cb(err,null);return;}
+    var tx,store,req;
+    try{
+      tx=db.transaction(DB_STORE,'readonly');
+      store=tx.objectStore(DB_STORE);
+      req=store.get(key);
+    }catch(ex){cb('Error get: '+ex.message,null);return;}
+    req.onsuccess=function(){cb(null,req.result!==undefined?req.result:null);};
+    req.onerror=function(ev){cb('Error req get: '+(ev.target.error?ev.target.error.message:'?'),null);};
+  });
+}
+
+function dbDelete(key,cb){
+  // Elimina key. cb(err)
+  cb=cb||function(){};
+  dbInit(function(err,db){
+    if(err){cb(err);return;}
+    var tx,store;
+    try{
+      tx=db.transaction(DB_STORE,'readwrite');
+      store=tx.objectStore(DB_STORE);
+      store.delete(key);
+    }catch(ex){cb('Error delete: '+ex.message);return;}
+    tx.oncomplete=function(){cb(null);};
+    tx.onerror=function(ev){cb('Error tx delete: '+(ev.target.error?ev.target.error.message:'?'));};
+  });
+}
+
+function dbList(cb){
+  // Lista todas las keys. cb(err, [keys])
+  cb=cb||function(){};
+  dbInit(function(err,db){
+    if(err){cb(err,null);return;}
+    var tx,store,req;
+    try{
+      tx=db.transaction(DB_STORE,'readonly');
+      store=tx.objectStore(DB_STORE);
+      req=store.getAllKeys();
+    }catch(ex){cb('Error list: '+ex.message,null);return;}
+    req.onsuccess=function(){cb(null,req.result||[]);};
+    req.onerror=function(ev){cb('Error req list: '+(ev.target.error?ev.target.error.message:'?'),null);};
+  });
+}
+
+// Test de humo IndexedDB (temporal — validación de Fase 3b)
+function _dbSmokeTest(){
+  var out=document.getElementById('dbTestOut');
+  function log(msg){if(out){out.innerHTML+=msg+'<br>';}}
+  if(out){out.innerHTML='';}
+  log('1. dbInit...');
+  dbInit(function(err){
+    if(err){log('FALLO init: '+err);return;}
+    log('OK init');
+    // Test con objeto + ArrayBuffer
+    var testBuf=new ArrayBuffer(1024);
+    new Uint8Array(testBuf)[0]=42;
+    var testVal={name:'test',num:123,buf:testBuf};
+    log('2. dbSet...');
+    dbSet('smoke_test_key',testVal,function(err2){
+      if(err2){log('FALLO set: '+err2);return;}
+      log('OK set');
+      log('3. dbGet...');
+      dbGet('smoke_test_key',function(err3,val){
+        if(err3){log('FALLO get: '+err3);return;}
+        if(!val){log('FALLO: get devolvió null');return;}
+        var bufOk=val.buf&&new Uint8Array(val.buf)[0]===42;
+        log('OK get: name='+val.name+' num='+val.num+' bufByte='+(bufOk?'42 OK':'FALLO'));
+        log('4. dbList...');
+        dbList(function(err4,keys){
+          if(err4){log('FALLO list: '+err4);return;}
+          log('OK list: '+keys.length+' keys ['+keys.join(',')+']');
+          log('5. dbDelete...');
+          dbDelete('smoke_test_key',function(err5){
+            if(err5){log('FALLO delete: '+err5);return;}
+            log('OK delete');
+            dbGet('smoke_test_key',function(err6,val6){
+              log(val6===null?'OK: confirmado eliminado':'FALLO: aún existe');
+              log('<b style="color:#0f0">TEST COMPLETO</b>');
+            });
+          });
+        });
+      });
+    });
+  });
+}
 
 window.onload=function(){
   // CRÍTICO PRIMERO: habilitar e instalar PLAY/STOP/DEBUG antes que nada
