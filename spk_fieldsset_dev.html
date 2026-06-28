@@ -553,6 +553,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
+    <h3>PROJECT ROUND-TRIP</h3>
+    <button onclick="_projectSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(255,56,209,.15);border:1px solid #FF38D1;color:#FF38D1;border-radius:3px;margin-bottom:6px">RUN PROJECT TEST</button>
+    <div id="projTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
     <h3>IDB SMOKE TEST</h3>
     <button onclick="_dbSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(67,229,255,.15);border:1px solid #43E5FF;color:#43E5FF;border-radius:3px;margin-bottom:6px">RUN DB TEST</button>
     <div id="dbTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
@@ -3045,15 +3048,167 @@ function serializePoolMeta(){
   return meta;
 }
 // Esqueleto PROJECT (Fase 3c)
-function serializeProject(){
+function serializeProject(opts){
+  // Documento PROJECT puro. NO conoce IndexedDB.
+  // opts.createdAt opcional (preservar fecha de creacion en re-save).
+  opts=opts||{};
+  // Serializar el pool COMPLETO con sus bytes (formato persistente)
+  var poolDoc={};
+  Object.keys(audioPool).forEach(function(uuid){
+    var e=audioPool[uuid];
+    var bytes=poolEnsureBytes(uuid); // genera WAV PCM 16-bit si no existe
+    poolDoc[uuid]={
+      uuid:e.uuid, name:e.name, duration:e.duration,
+      sampleRate:e.sampleRate, channels:e.channels,
+      peak:e.peak, rms:e.rms, parent:e.parent,
+      source:e.source, meta:e.meta||null,
+      bytes:bytes  // ArrayBuffer (IndexedDB lo guarda nativo)
+    };
+  });
+  // Serializar materialPool (slots -> referencias audioId)
+  var slotsDoc={};
+  Object.keys(materialPool).forEach(function(slotId){
+    var s=materialPool[slotId];
+    slotsDoc[slotId]={audioId:s.audioId||null, name:s.name, duration:s.duration};
+  });
   return {
-    projectVersion:PROJECT_VERSION, appVersion:APP_VERSION,
-    createdAt:null, updatedAt:new Date().toISOString(),
+    projectVersion:PROJECT_VERSION,
+    appVersion:APP_VERSION,
+    createdAt:opts.createdAt||new Date().toISOString(),
+    modifiedAt:new Date().toISOString(),
+    state:serializeGlobalState(),
     scene:serializeScene(),
-    scenes:{A:scenes.A||null,B:scenes.B||null,C:scenes.C||null,D:scenes.D||null},
-    scratch:serializeScratch(), poolMeta:serializePoolMeta()
-    // poolBytes: se agregan en Fase 3c (ArrayBuffers separados)
+    scenes:{
+      A:scenes.A?JSON.parse(JSON.stringify(scenes.A)):null,
+      B:scenes.B?JSON.parse(JSON.stringify(scenes.B)):null,
+      C:scenes.C?JSON.parse(JSON.stringify(scenes.C)):null,
+      D:scenes.D?JSON.parse(JSON.stringify(scenes.D)):null
+    },
+    selScene:selScene,
+    slots:slotsDoc,
+    audioPool:poolDoc,
+    scratch:serializeScratch()
   };
+}
+
+// ============================================================
+// deserializeProject — carga TRANSACCIONAL
+// 1. Validar  2. Reconstruir pool  3. Verificar refs  4. Aplicar
+// Si algo falla: abortar SIN tocar el instrumento actual. cb(err).
+// ============================================================
+function deserializeProject(doc,cb){
+  cb=cb||function(){};
+
+  // ---- PASO 1: VALIDAR el documento ----
+  if(!doc){cb('documento nulo');return;}
+  if(typeof doc.projectVersion!=='number'){cb('projectVersion invalido');return;}
+  if(doc.projectVersion>PROJECT_VERSION){cb('proyecto de version mas nueva ('+doc.projectVersion+') que la app ('+PROJECT_VERSION+')');return;}
+  if(!doc.scene||!doc.scene.entities){cb('escena invalida');return;}
+  if(!doc.audioPool){cb('audioPool ausente');return;}
+  if(!doc.slots){cb('slots ausentes');return;}
+
+  // ---- PASO 2: RECONSTRUIR el Audio Pool en una estructura TEMPORAL ----
+  // (no tocamos audioPool global hasta validar todo)
+  var newPool={};
+  var poolUuids=Object.keys(doc.audioPool);
+  var pending=poolUuids.length;
+  var failed=false;
+
+  function finalizeAfterPool(){
+    if(failed){return;}
+    // ---- PASO 3: VERIFICAR REFERENCIAS ----
+    // Cada slot.audioId debe existir en newPool (o ser null)
+    var refErr=null;
+    Object.keys(doc.slots).forEach(function(slotId){
+      var aid=doc.slots[slotId].audioId;
+      if(aid&&!newPool[aid]){refErr='slot '+slotId+' referencia audioId inexistente: '+aid;}
+    });
+    if(!refErr&&doc.scratch){
+      doc.scratch.forEach(function(item){
+        if(item.audioId&&!newPool[item.audioId]){refErr='scratch referencia audioId inexistente: '+item.audioId;}
+      });
+    }
+    if(refErr){cb('referencia rota: '+refErr);return;}
+
+    // ---- PASO 4: APLICAR (reemplazar estado actual) ----
+    // A partir de aqui el commit es atomico desde la perspectiva del usuario.
+    try{
+      _commitProject(doc,newPool);
+      cb(null);
+    }catch(ex){
+      cb('error aplicando proyecto: '+ex.message);
+    }
+  }
+
+  if(pending===0){finalizeAfterPool();return;}
+  poolUuids.forEach(function(uuid){
+    var entry=doc.audioPool[uuid];
+    // Reconstruir AudioBuffer desde bytes
+    if(entry.bytes&&audioCtx){
+      _storageBytesToBuffer(entry.bytes,function(buf){
+        if(failed)return;
+        if(!buf){failed=true;cb('fallo decodificar audio '+uuid);return;}
+        newPool[uuid]={
+          uuid:entry.uuid,name:entry.name,duration:entry.duration,
+          sampleRate:entry.sampleRate,channels:entry.channels,
+          peak:entry.peak,rms:entry.rms,parent:entry.parent,
+          source:entry.source,meta:entry.meta||null,
+          buffer:buf,bytes:entry.bytes
+        };
+        pending--;
+        if(pending===0){finalizeAfterPool();}
+      });
+    }else{
+      // entry sin bytes — registrar igual con buffer null
+      newPool[uuid]={
+        uuid:entry.uuid,name:entry.name,duration:entry.duration,
+        sampleRate:entry.sampleRate,channels:entry.channels,
+        peak:entry.peak,rms:entry.rms,parent:entry.parent,
+        source:entry.source,meta:entry.meta||null,
+        buffer:null,bytes:entry.bytes||null
+      };
+      pending--;
+      if(pending===0){finalizeAfterPool();}
+    }
+  });
+}
+
+// Commit atomico: reemplaza el estado del instrumento. Solo se llama
+// cuando pool, refs y validacion pasaron.
+function _commitProject(doc,newPool){
+  // 1. Reemplazar el pool
+  audioPool=newPool;
+  // 2. Reemplazar los slots del materialPool (preservando estructura)
+  Object.keys(doc.slots).forEach(function(slotId){
+    if(!materialPool[slotId]){materialPool[slotId]={};}
+    var sd=doc.slots[slotId];
+    materialPool[slotId].audioId=sd.audioId||null;
+    materialPool[slotId].name=sd.name||'— cargar —';
+    materialPool[slotId].duration=sd.duration||0;
+    // buffer via indireccion del pool
+    materialPool[slotId].buffer=sd.audioId?poolBuffer(sd.audioId):null;
+    materialPool[slotId].waveformCache=null; // se regenera
+  });
+  // 3. Estado global
+  if(doc.state){deserializeGlobalState(doc.state);}
+  // 4. Escenas guardadas
+  scenes.A=doc.scenes&&doc.scenes.A?doc.scenes.A:null;
+  scenes.B=doc.scenes&&doc.scenes.B?doc.scenes.B:null;
+  scenes.C=doc.scenes&&doc.scenes.C?doc.scenes.C:null;
+  scenes.D=doc.scenes&&doc.scenes.D?doc.scenes.D:null;
+  selScene=doc.selScene||null;
+  // 5. Escena activa (entidades)
+  deserializeScene(doc.scene);
+  // 6. Scratch
+  if(doc.scratch){deserializeScratch(doc.scratch);}
+  // 7. Regenerar waveform caches + UI
+  Object.keys(materialPool).forEach(function(slotId){
+    if(materialPool[slotId].buffer){buildWaveformCacheForSlot(slotId);}
+  });
+  entities.forEach(function(e){buildSegmentsForEntity(e);});
+  renderEntityCards();
+  buildCanvasGestures();
+  if(typeof buildQueueList==='function'){buildQueueList();}
 }
 // Esqueleto SESSION (Fase 4a)
 function serializeSession(){
@@ -3196,6 +3351,54 @@ function _dbSmokeTest(){
             });
           });
         });
+      });
+    });
+  });
+}
+
+// Test round-trip PROJECT en memoria (temporal — Fase 3c)
+function _projectSmokeTest(){
+  var out=document.getElementById('projTestOut');
+  function log(m){if(out){out.innerHTML+=m+'<br>';}}
+  if(out){out.innerHTML='';}
+  log('1. serializeProject...');
+  var doc;
+  try{doc=serializeProject();}catch(ex){log('FALLO serialize: '+ex.message);return;}
+  log('OK serialize');
+  log('  projectVersion='+doc.projectVersion);
+  log('  entities='+doc.scene.entities.length);
+  log('  pool entries='+Object.keys(doc.audioPool).length);
+  log('  slots='+Object.keys(doc.slots).length);
+  log('  scratch='+doc.scratch.length);
+  // Medir tamaño aproximado de bytes
+  var totalBytes=0;
+  Object.keys(doc.audioPool).forEach(function(u){
+    if(doc.audioPool[u].bytes){totalBytes+=doc.audioPool[u].bytes.byteLength;}
+  });
+  log('  audio bytes='+(totalBytes/1024).toFixed(0)+'KB');
+  // Validaciones de estructura
+  log('2. validar estructura...');
+  var hasVer=typeof doc.projectVersion==='number';
+  var hasState=!!doc.state;
+  var hasCreated=!!doc.createdAt;
+  log('  version:'+hasVer+' state:'+hasState+' createdAt:'+hasCreated);
+  // Round-trip: deserializar el mismo doc
+  log('3. deserializeProject (round-trip)...');
+  deserializeProject(doc,function(err){
+    if(err){log('FALLO deserialize: '+err);return;}
+    log('OK deserialize — proyecto aplicado');
+    log('  entidades restauradas: '+entities.length);
+    log('  pool restaurado: '+Object.keys(audioPool).length+' entries');
+    // Test de validación: documento corrupto debe abortar
+    log('4. test abort (doc invalido)...');
+    deserializeProject({projectVersion:999},function(err2){
+      log(err2?'OK abort: "'+err2+'"':'FALLO: deberia haber abortado');
+      log('5. test ref rota...');
+      var badDoc=serializeProject();
+      badDoc.slots['e0_A']={audioId:'inexistente_999',name:'x',duration:1};
+      deserializeProject(badDoc,function(err3){
+        log(err3?'OK abort ref rota: "'+err3+'"':'FALLO: deberia abortar');
+        log('<b style="color:#0f0">TEST COMPLETO</b>');
       });
     });
   });
