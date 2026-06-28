@@ -204,6 +204,34 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .histEntry.current .histTime{color:#43E5FF;}
 
 
+
+#projectPanel{position:fixed;top:50px;right:0;width:min(360px,90vw);height:calc(100vh - 50px);
+  height:calc(100dvh - 50px);background:rgba(8,10,16,.98);border-left:1px solid rgba(95,255,160,.3);
+  z-index:60;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;
+  font-family:'Inter',sans-serif;padding:16px 16px 40px;}
+#projectPanel.open{transform:translateX(0);}
+#projectPanel h3{color:#5fffa0;font-size:13px;letter-spacing:.1em;margin:0 0 14px;font-weight:600;}
+#projectPanel label{display:block;font-size:10px;color:rgba(255,255,255,.5);margin-bottom:4px;letter-spacing:.05em;}
+#projName{width:100%;font-size:13px;padding:8px 10px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(95,255,160,.25);border-radius:6px;color:#fff;margin-bottom:12px;}
+#projName:focus{outline:none;border-color:rgba(95,255,160,.6);}
+.projBtnRow{display:flex;gap:8px;margin-bottom:14px;}
+.projBtn{flex:1;font-size:12px;padding:9px 0;border-radius:6px;cursor:pointer;
+  touch-action:manipulation;letter-spacing:.05em;font-weight:500;}
+.projBtnSave{background:rgba(95,255,160,.15);border:1px solid rgba(95,255,160,.4);color:#5fffa0;}
+.projBtnLoad{background:rgba(67,229,255,.12);border:1px solid rgba(67,229,255,.35);color:#43E5FF;}
+.projBtnSave:active{background:rgba(95,255,160,.3);}
+.projBtnLoad:active{background:rgba(67,229,255,.25);}
+#projList{margin-top:4px;}
+.projItem{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;
+  font-size:12px;color:rgba(255,255,255,.85);cursor:pointer;}
+.projItem:active{background:rgba(95,255,160,.1);}
+.projItem .pName{flex:1;}
+.projItem .pMeta{font-size:9px;color:rgba(255,255,255,.4);}
+.projItem .pDel{font-size:14px;color:rgba(255,80,80,.6);padding:0 4px;cursor:pointer;}
+#projStatus{font-size:11px;color:rgba(255,255,255,.5);margin-top:10px;min-height:16px;}
+#projEmpty{font-size:11px;color:rgba(255,255,255,.3);padding:8px 0;}
 #debugPanel{position:fixed;top:50px;right:0;width:min(440px,92vw);height:calc(100vh - 50px);
   height:calc(100dvh - 50px);background:rgba(4,6,10,.98);border-left:1px solid rgba(67,229,255,.25);
   z-index:60;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;
@@ -425,7 +453,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <button id="btnRedo" disabled>→</button>
   </div>
   <span id="statusBar">STANDBY — PLAY para activar</span>
-  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button><button id="btnDebug" title="panel de diagnostico">DEBUG</button>
+  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button><button id="btnProject" title="proyectos">PROJECT</button><button id="btnDebug" title="panel de diagnostico">DEBUG</button>
 </div>
 
 <div id="histPanel"></div>
@@ -553,15 +581,6 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
-    <h3>PERSISTENCE MODULE</h3>
-    <button onclick="_persistSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(95,255,160,.15);border:1px solid #5fffa0;color:#5fffa0;border-radius:3px;margin-bottom:6px">RUN PERSIST TEST</button>
-    <div id="persistTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
-    <h3>PROJECT ROUND-TRIP</h3>
-    <button onclick="_projectSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(255,56,209,.15);border:1px solid #FF38D1;color:#FF38D1;border-radius:3px;margin-bottom:6px">RUN PROJECT TEST</button>
-    <div id="projTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
-    <h3>IDB SMOKE TEST</h3>
-    <button onclick="_dbSmokeTest()" style="font-size:10px;padding:3px 10px;background:rgba(67,229,255,.15);border:1px solid #43E5FF;color:#43E5FF;border-radius:3px;margin-bottom:6px">RUN DB TEST</button>
-    <div id="dbTestOut" style="font-family:monospace;font-size:10px;line-height:1.5;color:#aaa"></div>
     <div class="dbgBtns">
       <button id="btnDbgRefresh">REFRESH</button>
       <button id="btnDbgCopy">COPY REPORT</button>
@@ -569,6 +588,19 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
   </div>
 
+
+  <div id="projectPanel">
+    <h3>PROJECT</h3>
+    <label>NOMBRE DEL PROYECTO</label>
+    <input id="projName" type="text" placeholder="Glass Forest" autocomplete="off" spellcheck="false">
+    <div class="projBtnRow">
+      <button class="projBtn projBtnSave" id="projSaveBtn">SAVE</button>
+      <button class="projBtn projBtnLoad" id="projLoadBtn">LOAD</button>
+    </div>
+    <label>PROYECTOS GUARDADOS</label>
+    <div id="projList"></div>
+    <div id="projStatus"></div>
+  </div>
 
   <div id="entityArea">
     <div id="eRow0" class="eRow"></div>
@@ -3317,95 +3349,7 @@ function dbList(cb){
   });
 }
 
-// Test de humo IndexedDB (temporal — validación de Fase 3b)
-function _dbSmokeTest(){
-  var out=document.getElementById('dbTestOut');
-  function log(msg){if(out){out.innerHTML+=msg+'<br>';}}
-  if(out){out.innerHTML='';}
-  log('1. dbInit...');
-  dbInit(function(err){
-    if(err){log('FALLO init: '+err);return;}
-    log('OK init');
-    // Test con objeto + ArrayBuffer
-    var testBuf=new ArrayBuffer(1024);
-    new Uint8Array(testBuf)[0]=42;
-    var testVal={name:'test',num:123,buf:testBuf};
-    log('2. dbSet...');
-    dbSet('smoke_test_key',testVal,function(err2){
-      if(err2){log('FALLO set: '+err2);return;}
-      log('OK set');
-      log('3. dbGet...');
-      dbGet('smoke_test_key',function(err3,val){
-        if(err3){log('FALLO get: '+err3);return;}
-        if(!val){log('FALLO: get devolvió null');return;}
-        var bufOk=val.buf&&new Uint8Array(val.buf)[0]===42;
-        log('OK get: name='+val.name+' num='+val.num+' bufByte='+(bufOk?'42 OK':'FALLO'));
-        log('4. dbList...');
-        dbList(function(err4,keys){
-          if(err4){log('FALLO list: '+err4);return;}
-          log('OK list: '+keys.length+' keys ['+keys.join(',')+']');
-          log('5. dbDelete...');
-          dbDelete('smoke_test_key',function(err5){
-            if(err5){log('FALLO delete: '+err5);return;}
-            log('OK delete');
-            dbGet('smoke_test_key',function(err6,val6){
-              log(val6===null?'OK: confirmado eliminado':'FALLO: aún existe');
-              log('<b style="color:#0f0">TEST COMPLETO</b>');
-            });
-          });
-        });
-      });
-    });
-  });
-}
 
-// Test round-trip PROJECT en memoria (temporal — Fase 3c)
-function _projectSmokeTest(){
-  var out=document.getElementById('projTestOut');
-  function log(m){if(out){out.innerHTML+=m+'<br>';}}
-  if(out){out.innerHTML='';}
-  log('1. serializeProject...');
-  var doc;
-  try{doc=serializeProject();}catch(ex){log('FALLO serialize: '+ex.message);return;}
-  log('OK serialize');
-  log('  projectVersion='+doc.projectVersion);
-  log('  entities='+doc.scene.entities.length);
-  log('  pool entries='+Object.keys(doc.audioPool).length);
-  log('  slots='+Object.keys(doc.slots).length);
-  log('  scratch='+doc.scratch.length);
-  // Medir tamaño aproximado de bytes
-  var totalBytes=0;
-  Object.keys(doc.audioPool).forEach(function(u){
-    if(doc.audioPool[u].bytes){totalBytes+=doc.audioPool[u].bytes.byteLength;}
-  });
-  log('  audio bytes='+(totalBytes/1024).toFixed(0)+'KB');
-  // Validaciones de estructura
-  log('2. validar estructura...');
-  var hasVer=typeof doc.projectVersion==='number';
-  var hasState=!!doc.state;
-  var hasCreated=!!doc.createdAt;
-  log('  version:'+hasVer+' state:'+hasState+' createdAt:'+hasCreated);
-  // Round-trip: deserializar el mismo doc
-  log('3. deserializeProject (round-trip)...');
-  deserializeProject(doc,function(err){
-    if(err){log('FALLO deserialize: '+err);return;}
-    log('OK deserialize — proyecto aplicado');
-    log('  entidades restauradas: '+entities.length);
-    log('  pool restaurado: '+Object.keys(audioPool).length+' entries');
-    // Test de validación: documento corrupto debe abortar
-    log('4. test abort (doc invalido)...');
-    deserializeProject({projectVersion:999},function(err2){
-      log(err2?'OK abort: "'+err2+'"':'FALLO: deberia haber abortado');
-      log('5. test ref rota...');
-      var badDoc=serializeProject();
-      badDoc.slots['e0_A']={audioId:'inexistente_999',name:'x',duration:1};
-      deserializeProject(badDoc,function(err3){
-        log(err3?'OK abort ref rota: "'+err3+'"':'FALLO: deberia abortar');
-        log('<b style="color:#0f0">TEST COMPLETO</b>');
-      });
-    });
-  });
-}
 
 // ============================================================
 // PROJECT PERSISTENCE — Fase 3d (módulo puro)
@@ -3530,49 +3474,65 @@ function renameProject(oldName,newName,cb){
   });
 }
 
-// Test módulo persistencia (temporal — Fase 3d)
-function _persistSmokeTest(){
-  var out=document.getElementById('persistTestOut');
-  function log(m){if(out){out.innerHTML+=m+'<br>';}}
-  if(out){out.innerHTML='';}
-  var TESTNAME='__smoke_test_proj';
-  log('1. projectStats(serializeProject())...');
-  var doc=serializeProject();
-  var st=projectStats(doc);
-  log('  audio:'+st.audioEntries+' ('+st.audioSizeMB+'MB) scenes:'+st.scenes+
-      ' banks:'+st.banks+' scratch:'+st.scratchItems+' v'+st.version);
-  log('2. saveProject...');
-  saveProject(TESTNAME,function(err,stats){
-    if(err){log('FALLO save: '+err);return;}
-    log('OK save — '+stats.audioEntries+' audios, '+stats.audioSizeMB+'MB');
-    log('3. existsProject...');
-    existsProject(TESTNAME,function(e,exists){
-      log(exists?'OK exists=true':'FALLO: no existe');
-      log('4. listProjects...');
-      listProjects(function(e2,names){
-        if(e2){log('FALLO list: '+e2);return;}
-        log('OK list: ['+names.join(', ')+']');
-        log('5. loadProject (round-trip storage)...');
-        loadProject(TESTNAME,function(e3,stats3){
-          if(e3){log('FALLO load: '+e3);return;}
-          log('OK load — '+stats3.audioEntries+' audios restaurados');
-          log('  pool actual: '+Object.keys(audioPool).length+' entries');
-          log('6. renameProject...');
-          renameProject(TESTNAME,TESTNAME+'_renamed',function(e4){
-            if(e4){log('FALLO rename: '+e4);return;}
-            log('OK rename');
-            log('7. deleteProject (cleanup)...');
-            deleteProject(TESTNAME+'_renamed',function(e5){
-              if(e5){log('FALLO delete: '+e5);return;}
-              existsProject(TESTNAME+'_renamed',function(e6,ex6){
-                log(ex6?'FALLO: aun existe':'OK: eliminado');
-                log('<b style="color:#0f0">TEST COMPLETO</b>');
-              });
-            });
-          });
-        });
-      });
+
+// ====================================================
+// PROJECT PANEL — UI minima de persistencia (Fase 3e)
+// ====================================================
+function toggleProjectPanel(){
+  var p=document.getElementById('projectPanel');
+  var b=document.getElementById('btnProject');
+  if(!p){return;}
+  var open=p.classList.toggle('open');
+  if(b){b.classList.toggle('active',open);}
+  if(open){refreshProjectList();}
+}
+function projStatus(msg,isErr){
+  var s=document.getElementById('projStatus');
+  if(s){s.innerHTML=msg;s.style.color=isErr?'#ff5050':'rgba(255,255,255,.5)';}
+}
+function refreshProjectList(){
+  var list=document.getElementById('projList');
+  if(!list){return;}
+  listProjects(function(err,names){
+    if(err){list.innerHTML='<div id="projEmpty">error: '+err+'</div>';return;}
+    if(!names.length){list.innerHTML='<div id="projEmpty">sin proyectos guardados</div>';return;}
+    list.innerHTML='';
+    names.sort();
+    names.forEach(function(name){
+      var row=document.createElement('div');row.className='projItem';
+      var nm=document.createElement('span');nm.className='pName';nm.textContent=name;
+      nm.onclick=function(){document.getElementById('projName').value=name;projDoLoad(name);};
+      var del=document.createElement('span');del.className='pDel';del.textContent='\u00d7';
+      del.onclick=function(ev){ev.stopPropagation();projDoDelete(name);};
+      row.appendChild(nm);row.appendChild(del);
+      list.appendChild(row);
     });
+  });
+}
+function projDoSave(){
+  var name=document.getElementById('projName').value.trim();
+  if(!name){projStatus('escribi un nombre primero',true);return;}
+  projStatus('guardando...');
+  saveProject(name,function(err,stats){
+    if(err){projStatus('error: '+err,true);return;}
+    projStatus('guardado: '+stats.audioEntries+' audios, '+stats.audioSizeMB+'MB');
+    refreshProjectList();
+  });
+}
+function projDoLoad(name){
+  name=name||document.getElementById('projName').value.trim();
+  if(!name){projStatus('escribi o eligi un nombre',true);return;}
+  projStatus('cargando...');
+  loadProject(name,function(err,stats){
+    if(err){projStatus('error: '+err,true);return;}
+    projStatus('cargado: '+stats.audioEntries+' audios, '+stats.scenes+' escenas');
+  });
+}
+function projDoDelete(name){
+  deleteProject(name,function(err){
+    if(err){projStatus('error: '+err,true);return;}
+    projStatus('eliminado: '+name);
+    refreshProjectList();
   });
 }
 
@@ -3644,6 +3604,9 @@ window.onload=function(){
   var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);}
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
+  var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
+  var pSave=document.getElementById("projSaveBtn");if(pSave){pSave.addEventListener("click",projDoSave);}
+  var pLoad=document.getElementById("projLoadBtn");if(pLoad){pLoad.addEventListener("click",function(){projDoLoad();});}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
   // iOS backup: reanudar AudioContext en cualquier interacción táctil
