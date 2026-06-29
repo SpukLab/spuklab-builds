@@ -1435,7 +1435,10 @@ function bindMacros(){
   // btnHistToggle: instalado en critical block
 }
 function bindExport(){var _be=document.getElementById('btnExport');if(!_be){return;}_be.addEventListener('click',function(){var data=JSON.stringify({state:state,entities:captureScene().entities,scenes:scenes},null,2);if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(data).then(function(){setStatus('JSON exportado');}).catch(function(){setStatus('clipboard no disponible');});}else{setStatus('clipboard no disponible');}});}
-function onVisibilityChange(){if(audioCtx&&document.visibilityState==='visible'&&audioCtx.state==='suspended'){audioCtx.resume();}}
+function onVisibilityChange(){
+  if(audioCtx&&document.visibilityState==='visible'&&audioCtx.state==='suspended'){audioCtx.resume();}
+  if(document.visibilityState==='hidden'){_sessionOnHide();}
+}
 
 
 function captureEntityState(e){
@@ -2433,6 +2436,8 @@ function dbgRenderRuntime(){
   h+=dbgRow('queue length',audioQueue.items.length);
   h+=dbgRow('captureTake',captureEngine&&captureEngine.active?'ACTIVE':'idle',captureEngine&&captureEngine.active?'warn':'');
   h+=dbgRow('lastLoopTouch',window.SPK_DEBUG.lastLoopTouch||'(ninguno)');
+  h+=dbgRow('session serMs',_lastSessionSerMs+' ms'+(_lastSessionSerMs>500?' (alto)':''),_lastSessionSerMs>1000?'bad':(_lastSessionSerMs>0?'ok':'warn'));
+  h+=dbgRow('last autosave',_lastAutosaveAt?new Date(_lastAutosaveAt).toLocaleTimeString():'(nunca)');
   el.innerHTML=h;
 }
 
@@ -3483,14 +3488,26 @@ function renameProject(oldName,newName,cb){
 var SESSION_KEY='session:last';
 var SESSION_VERSION=1;
 var _sessionSaving=false;  // anti-reentrada (solucion mas simple, no maquina de estados)
+var _loadingProject=false; // carga en curso (seteado por loadSession y projDoLoad)
+var _lastSessionSerMs=0;   // medicion: cuanto tardo el ultimo serializeProject
+var _lastAutosaveAt=0;     // timestamp del ultimo autosave exitoso
+var _autosaveTimer=null;
+var AUTOSAVE_INTERVAL_MS=30000; // 30s — calibrable segun _lastSessionSerMs
 
 // saveSession — envuelve serializeProject() con metadatos de sesion.
 // NO conoce la estructura interna del documento.
+// TODA la logica de proteccion vive aqui: cualquier consumidor (timer,
+// boton manual, Recovery) obtiene las mismas garantias sin duplicarlas.
 function saveSession(cb){
   cb=cb||function(){};
-  if(_sessionSaving){cb('saveSession ya en ejecucion');return;}
+  // --- GUARDS (toda la proteccion centralizada) ---
+  if(typeof historyDirty!=='undefined'&&!historyDirty){cb(null,'skip: sin cambios');return;}
+  if(_sessionSaving){cb('skip: saveSession ya en ejecucion');return;}
+  if(typeof _activeCap!=='undefined'&&_activeCap){cb('skip: captura activa');return;}
+  if(_loadingProject){cb('skip: carga en curso');return;}
   _sessionSaving=true;
   var doc;
+  var _t0=(typeof performance!=='undefined'?performance.now():Date.now());
   try{
     doc=serializeProject(); // misma funcion que PROJECT
   }catch(ex){
@@ -3498,6 +3515,8 @@ function saveSession(cb){
     cb('error serializando: '+ex.message);
     return;
   }
+  var _serMs=Math.round((typeof performance!=='undefined'?performance.now():Date.now())-_t0);
+  _lastSessionSerMs=_serMs; // medicion temporal para calibrar intervalo
   var sessionDoc={
     sessionVersion:SESSION_VERSION,
     savedAt:new Date().toISOString(),
@@ -3508,7 +3527,10 @@ function saveSession(cb){
   dbSet(SESSION_KEY,sessionDoc,function(err){
     _sessionSaving=false;
     if(err){cb(err);return;}
-    cb(null);
+    // No limpiamos historyDirty: pertenece al sistema de history/undo.
+    // El autosave usa su propio marcador para evitar re-guardar identico.
+    _lastAutosaveAt=Date.now();
+    cb(null,'saved ('+_serMs+'ms)');
   });
 }
 
@@ -3516,10 +3538,12 @@ function saveSession(cb){
 // NO conoce la estructura interna; solo desempaqueta y delega.
 function loadSession(cb){
   cb=cb||function(){};
+  _loadingProject=true;
   dbGet(SESSION_KEY,function(err,sessionDoc){
-    if(err){cb(err);return;}
-    if(!sessionDoc||!sessionDoc.doc){cb('no hay sesion guardada');return;}
+    if(err){_loadingProject=false;cb(err);return;}
+    if(!sessionDoc||!sessionDoc.doc){_loadingProject=false;cb('no hay sesion guardada');return;}
     deserializeProject(sessionDoc.doc,function(err2){
+      _loadingProject=false;
       if(err2){cb(err2);return;}
       cb(null,{
         savedAt:sessionDoc.savedAt,
@@ -3550,6 +3574,26 @@ function hasSession(cb){
       sessionVersion:sessionDoc.sessionVersion
     });
   });
+}
+
+// ============================================================
+// AUTOSAVE — Fase 4b
+// El timer/eventos SOLO deciden intentar. Toda la proteccion
+// vive dentro de saveSession() (guards centralizados).
+// ============================================================
+function _autosaveTick(){
+  // El timer no conoce las reglas: simplemente intenta.
+  saveSession(function(err,info){
+    // silencioso — los skips son normales (sin cambios, ocupado, etc.)
+  });
+}
+function startAutosave(){
+  if(_autosaveTimer){clearInterval(_autosaveTimer);}
+  _autosaveTimer=setInterval(_autosaveTick,AUTOSAVE_INTERVAL_MS);
+}
+function _sessionOnHide(){
+  // Intento oportunista al ocultar/cerrar. saveSession decide si corresponde.
+  saveSession(function(){});
 }
 
 
@@ -3601,7 +3645,9 @@ function projDoLoad(name){
   name=name||document.getElementById('projName').value.trim();
   if(!name){projStatus('escribi o eligi un nombre',true);return;}
   projStatus('cargando...');
+  _loadingProject=true; // protege autosave durante la carga
   loadProject(name,function(err,stats){
+    _loadingProject=false;
     if(err){projStatus('error: '+err,true);return;}
     projStatus('cargado: '+stats.audioEntries+' audios, '+stats.scenes+' escenas');
   });
@@ -3683,6 +3729,8 @@ window.onload=function(){
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
   var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
+  window.addEventListener("pagehide",_sessionOnHide,false);
+  startAutosave();
   var pSave=document.getElementById("projSaveBtn");if(pSave){pSave.addEventListener("click",projDoSave);}
   var pLoad=document.getElementById("projLoadBtn");if(pLoad){pLoad.addEventListener("click",function(){projDoLoad();});}
   DEBUG.mark("onloadComplete");
