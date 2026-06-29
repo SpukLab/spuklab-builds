@@ -3253,15 +3253,7 @@ function _commitProject(doc,newPool){
   if(typeof buildQueueList==='function'){buildQueueList();}
   refreshSceneButtons(); // sincronizar indicadores de escena ocupada
 }
-// Esqueleto SESSION (Fase 4a)
-function serializeSession(){
-  return {
-    projectVersion:PROJECT_VERSION, appVersion:APP_VERSION,
-    savedAt:new Date().toISOString(),
-    scene:serializeScene(), scratch:serializeScratch(),
-    selScene:selScene, running:running
-  };
-}
+// (esqueleto serializeSession descartado en Fase 4a — SESSION reutiliza serializeProject)
 
 
 // ============================================================
@@ -3478,6 +3470,84 @@ function renameProject(oldName,newName,cb){
         if(err3){cb(err3);return;}
         dbDelete(_projectKey(oldName),cb);
       });
+    });
+  });
+}
+
+// ============================================================
+// SESSION — Fase 4a (autosave + recovery)
+// Capa SOBRE project. NO tiene serialización propia.
+// Reutiliza serializeProject()/deserializeProject() — solo otro consumidor.
+// Diferencia con PROJECT: politica (key fija, uno, automatico), no datos.
+// ============================================================
+var SESSION_KEY='session:last';
+var SESSION_VERSION=1;
+var _sessionSaving=false;  // anti-reentrada (solucion mas simple, no maquina de estados)
+
+// saveSession — envuelve serializeProject() con metadatos de sesion.
+// NO conoce la estructura interna del documento.
+function saveSession(cb){
+  cb=cb||function(){};
+  if(_sessionSaving){cb('saveSession ya en ejecucion');return;}
+  _sessionSaving=true;
+  var doc;
+  try{
+    doc=serializeProject(); // misma funcion que PROJECT
+  }catch(ex){
+    _sessionSaving=false;
+    cb('error serializando: '+ex.message);
+    return;
+  }
+  var sessionDoc={
+    sessionVersion:SESSION_VERSION,
+    savedAt:new Date().toISOString(),
+    projectName:(typeof _activeProjectName!=='undefined'?_activeProjectName:null),
+    running:running,
+    doc:doc
+  };
+  dbSet(SESSION_KEY,sessionDoc,function(err){
+    _sessionSaving=false;
+    if(err){cb(err);return;}
+    cb(null);
+  });
+}
+
+// loadSession — lee el registro de sesion y restaura via deserializeProject.
+// NO conoce la estructura interna; solo desempaqueta y delega.
+function loadSession(cb){
+  cb=cb||function(){};
+  dbGet(SESSION_KEY,function(err,sessionDoc){
+    if(err){cb(err);return;}
+    if(!sessionDoc||!sessionDoc.doc){cb('no hay sesion guardada');return;}
+    deserializeProject(sessionDoc.doc,function(err2){
+      if(err2){cb(err2);return;}
+      cb(null,{
+        savedAt:sessionDoc.savedAt,
+        projectName:sessionDoc.projectName,
+        running:sessionDoc.running,
+        sessionVersion:sessionDoc.sessionVersion
+      });
+    });
+  });
+}
+
+// clearSession — elimina el registro de sesion.
+function clearSession(cb){
+  cb=cb||function(){};
+  dbDelete(SESSION_KEY,cb);
+}
+
+// hasSession — informa si existe una sesion guardada (+metadatos sin restaurar).
+function hasSession(cb){
+  cb=cb||function(){};
+  dbGet(SESSION_KEY,function(err,sessionDoc){
+    if(err){cb(err,false,null);return;}
+    if(!sessionDoc||!sessionDoc.doc){cb(null,false,null);return;}
+    cb(null,true,{
+      savedAt:sessionDoc.savedAt,
+      projectName:sessionDoc.projectName,
+      running:sessionDoc.running,
+      sessionVersion:sessionDoc.sessionVersion
     });
   });
 }
