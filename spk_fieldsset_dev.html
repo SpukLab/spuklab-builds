@@ -1155,7 +1155,7 @@ function showToast(msg){
 
 function loadMaterialForEntity(entity,file){
   setStatus('cargando '+file.name+'...');var reader=new FileReader();
-  reader.onload=function(le){var ab=le.target.result.slice(0);audioCtx.decodeAudioData(ab,function(decoded){var slot=materialPool[entity.materialId];var aid=poolAdd(decoded,{name:file.name,source:'import'});slot.audioId=aid;slot.buffer=decoded;slot.duration=decoded.duration;slot.name=file.name;buildWaveformCacheForSlot(entity.materialId);buildSegmentsForEntity(entity);if(!rafId){startAnimLoop();}if(running&&audioCtx){entity.nextTime=audioCtx.currentTime+.05;}else if(entity.localPlaying&&audioCtx){entity.nextTime=audioCtx.currentTime+.05;}if(entity.contActive){stopContinuousView(entity);if(running){startContinuousView(entity);}}var mn=document.getElementById('matname_'+entity.id);if(mn){mn.textContent=file.name;}var dot=document.getElementById('matdot_'+entity.id);if(dot){dot.classList.add('loaded');}var abk=entity.activeBank||'A';var bkbtn=document.querySelector('#card_'+entity.id+' .bankBtn[data-bank="'+abk+'"]');if(bkbtn){bkbtn.classList.add('hasMat');}showToast(entity.name+' — '+file.name.replace(/.*[/\\]/,'')+' ('+decoded.duration.toFixed(1)+'s)');},function(err){setStatus('ERROR decodificando '+file.name+' — formato no soportado');console.error('[LOAD]',file.name,err);});};reader.readAsArrayBuffer(file);
+  reader.onload=function(le){var ab=le.target.result.slice(0);audioCtx.decodeAudioData(ab,function(decoded){var slot=materialPool[entity.materialId];var aid=poolAdd(decoded,{name:file.name,source:'import'});slot.audioId=aid;slot.buffer=decoded;slot.duration=decoded.duration;slot.name=file.name;markSessionDirty();buildWaveformCacheForSlot(entity.materialId);buildSegmentsForEntity(entity);if(!rafId){startAnimLoop();}if(running&&audioCtx){entity.nextTime=audioCtx.currentTime+.05;}else if(entity.localPlaying&&audioCtx){entity.nextTime=audioCtx.currentTime+.05;}if(entity.contActive){stopContinuousView(entity);if(running){startContinuousView(entity);}}var mn=document.getElementById('matname_'+entity.id);if(mn){mn.textContent=file.name;}var dot=document.getElementById('matdot_'+entity.id);if(dot){dot.classList.add('loaded');}var abk=entity.activeBank||'A';var bkbtn=document.querySelector('#card_'+entity.id+' .bankBtn[data-bank="'+abk+'"]');if(bkbtn){bkbtn.classList.add('hasMat');}showToast(entity.name+' — '+file.name.replace(/.*[/\\]/,'')+' ('+decoded.duration.toFixed(1)+'s)');},function(err){setStatus('ERROR decodificando '+file.name+' — formato no soportado');console.error('[LOAD]',file.name,err);});};reader.readAsArrayBuffer(file);
 }
 function buildSegmentsForEntity(entity){var buf=getBuffer(entity);if(!buf){entity._segments=[];return;}var N=entity._segN||8,dur=buf.duration,seg=dur/N;entity._segments=[];var i=0;while(i<N){entity._segments.push({start:i*seg,end:(i+1)*seg,index:i});i++;}entity.phraseIdx=-1;entity.echoMem=[];}
 function buildAllSegments(){var N=parseInt(document.getElementById('fixedN').value,10)||8;var i=0;while(i<entities.length){entities[i]._segN=N;buildSegmentsForEntity(entities[i]);i++;}var el=document.getElementById('segInfo');if(el){el.textContent=N+' segmentos por entidad';}}
@@ -1397,7 +1397,7 @@ function bindScenes(){
       },16);
       holdTimer=setTimeout(function(){
         held=true;clearRing();
-        scenes[key]=captureScene();
+        scenes[key]=captureScene();markSessionDirty();
         document.querySelectorAll('[data-scene="'+key+'"]').forEach(function(b){b.classList.add('saved');});
         selScene=key;
         pushHistory('Scene '+key+' guardada');
@@ -1718,8 +1718,9 @@ function queueFire(idx,entityId){
   audioQueue.playing=idx;
   // Load into entity's material slot
   var slot=materialPool[e.materialId];
-  slot.buffer=item.buffer;slot.duration=item.duration;slot.name=item.name;
+  slot.audioId=item.audioId||null;slot.buffer=item.buffer;slot.duration=item.duration;slot.name=item.name;
   buildWaveformCacheForSlot(e.materialId);buildSegmentsForEntity(e);
+  markSessionDirty();
   if(running&&audioCtx){e.nextTime=audioCtx.currentTime+.05;}
   else if(e.localPlaying&&audioCtx){e.nextTime=audioCtx.currentTime+.05;}
   if(e.contActive){stopContinuousView(e);if(running){startContinuousView(e);}}
@@ -2965,6 +2966,7 @@ function captureAudio(source,opts){
     // Agregar al Scratch (ex-Queue)
     audioQueue.items.push({audioId:uuid,buffer:ab,name:pname,duration:ab.duration});
     buildQueueList();
+    markSessionDirty();
     setStatus(pname+' capturado ('+ab.duration.toFixed(1)+'s) → Scratch');
     if(opts.onDone){opts.onDone(uuid);}
   }, dur*1000);
@@ -3523,6 +3525,7 @@ var _lastSessionSerMs=0;   // medicion: cuanto tardo el ultimo serializeProject
 var _lastAutosaveAt=0;     // timestamp del ultimo autosave exitoso
 var _autosaveTimer=null;
 var _sessionDirty=false;  // marcador propio del autosave (independiente de historyDirty)
+function markSessionDirty(){_sessionDirty=true;} // cambios estructurales (material/captura/escena/queue)
 var AUTOSAVE_INTERVAL_MS=30000; // 30s — calibrable segun _lastSessionSerMs
 
 // saveSession — envuelve serializeProject() con metadatos de sesion.
