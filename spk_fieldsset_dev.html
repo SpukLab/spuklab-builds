@@ -238,6 +238,10 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   touch-action:manipulation;letter-spacing:.05em;font-weight:500;}
 .projBtnSave{background:rgba(95,255,160,.15);border:1px solid rgba(95,255,160,.4);color:#5fffa0;}
 .projBtnLoad{background:rgba(67,229,255,.12);border:1px solid rgba(67,229,255,.35);color:#43E5FF;}
+.projBtnExport{background:rgba(255,56,209,.1);border:1px solid rgba(255,56,209,.3);color:#FF38D1;}
+.projBtnImport{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);}
+.projBtnExport:active{background:rgba(255,56,209,.25);}
+.projBtnImport:active{background:rgba(255,255,255,.12);}
 .projBtnSave:active{background:rgba(95,255,160,.3);}
 .projBtnLoad:active{background:rgba(67,229,255,.25);}
 #projList{margin-top:4px;}
@@ -627,6 +631,11 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
       <button class="projBtn projBtnSave" id="projSaveBtn">SAVE</button>
       <button class="projBtn projBtnLoad" id="projLoadBtn">LOAD</button>
     </div>
+    <div class="projBtnRow">
+      <button class="projBtn projBtnExport" id="projExportBtn">EXPORT</button>
+      <button class="projBtn projBtnImport" id="projImportBtn">IMPORT</button>
+    </div>
+    <input type="file" id="projImportFile" accept=".spkproject,application/json" style="display:none">
     <label>PROYECTOS GUARDADOS</label>
     <div id="projList"></div>
     <div id="projStatus"></div>
@@ -3707,6 +3716,132 @@ function _sessionOnHide(){
 }
 
 
+
+// ============================================================
+// EXPORT / IMPORT — Fase 5 (.spkproject)
+// Otro consumidor de serializeProject()/deserializeProject().
+// NO crea una tercera serializacion. El documento viaja intacto.
+// ============================================================
+var SPKPROJECT_FORMAT='spkproject';
+var SPKPROJECT_FORMAT_VERSION=1;
+
+// --- Utilidades de transporte (codifican bytes, NO serializan proyecto) ---
+function bytesToBase64(arrayBuffer){
+  if(!arrayBuffer){return null;}
+  var bytes=new Uint8Array(arrayBuffer);
+  var bin='';
+  var chunk=0x8000; // procesar en bloques para no exceder el stack en archivos grandes
+  var i=0;
+  while(i<bytes.length){
+    var slice=bytes.subarray(i,Math.min(i+chunk,bytes.length));
+    bin+=String.fromCharCode.apply(null,slice);
+    i+=chunk;
+  }
+  return btoa(bin);
+}
+function base64ToBytes(b64){
+  if(!b64){return null;}
+  var bin=atob(b64);
+  var len=bin.length;
+  var bytes=new Uint8Array(len);
+  var i=0;while(i<len){bytes[i]=bin.charCodeAt(i);i++;}
+  return bytes.buffer;
+}
+
+// --- EXPORT ---
+// serializeProject() -> envolver -> bytes a base64 -> JSON -> Blob -> download
+function exportProject(name,cb){
+  cb=cb||function(){};
+  var doc;
+  try{doc=serializeProject();}catch(ex){cb('error serializando: '+ex.message);return;}
+  // Convertir bytes (ArrayBuffer) de cada entry del pool a base64 (transporte).
+  // Trabajamos sobre una copia superficial del pool para no mutar el doc original.
+  var exportPool={};
+  var ok=true;
+  Object.keys(doc.audioPool).forEach(function(uuid){
+    var e=doc.audioPool[uuid];
+    var b64=null;
+    try{b64=bytesToBase64(e.bytes);}catch(ex){ok=false;}
+    exportPool[uuid]={
+      uuid:e.uuid,name:e.name,duration:e.duration,
+      sampleRate:e.sampleRate,channels:e.channels,
+      peak:e.peak,rms:e.rms,parent:e.parent,
+      source:e.source,meta:e.meta||null,
+      bytesB64:b64  // transporte: base64 en vez de ArrayBuffer
+    };
+  });
+  if(!ok){cb('error codificando audio');return;}
+  // Documento de export: doc intacto salvo el pool con bytes en base64
+  var exportDoc={};
+  Object.keys(doc).forEach(function(k){if(k!=='audioPool'){exportDoc[k]=doc[k];}});
+  exportDoc.audioPool=exportPool;
+  // Envoltorio externo (mismo patron que saveSession)
+  var wrapper={
+    format:SPKPROJECT_FORMAT,
+    formatVersion:SPKPROJECT_FORMAT_VERSION,
+    exportedAt:new Date().toISOString(),
+    appVersion:APP_VERSION,
+    projectName:name||null,
+    doc:exportDoc
+  };
+  var json;
+  try{json=JSON.stringify(wrapper);}catch(ex){cb('error JSON: '+ex.message);return;}
+  // Descarga (patron iOS ya validado en stems export)
+  var blob=new Blob([json],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var fname=(name||'fieldsset_project').replace(/[^a-zA-Z0-9_-]/g,'_')+'.spkproject';
+  var a=document.createElement('a');a.href=url;a.download=fname;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  cb(null,{filename:fname,sizeMB:(json.length/1048576).toFixed(2)});
+}
+
+// --- IMPORT ---
+// archivo -> JSON.parse -> validar -> base64 a ArrayBuffer -> deserializeProject()
+function importProject(file,cb){
+  cb=cb||function(){};
+  if(!file){cb('sin archivo');return;}
+  var reader=new FileReader();
+  reader.onerror=function(){cb('error leyendo archivo');};
+  reader.onload=function(ev){
+    var wrapper;
+    // Validacion 1: JSON valido
+    try{wrapper=JSON.parse(ev.target.result);}
+    catch(ex){cb('archivo invalido: JSON corrupto');return;}
+    // Validacion 2: formato correcto
+    if(!wrapper||wrapper.format!==SPKPROJECT_FORMAT){cb('no es un archivo .spkproject valido');return;}
+    // Validacion 3: version de formato no futura
+    if(typeof wrapper.formatVersion!=='number'||wrapper.formatVersion>SPKPROJECT_FORMAT_VERSION){
+      cb('formato de version mas nueva ('+wrapper.formatVersion+') que esta app');return;
+    }
+    // Validacion 4: doc presente
+    if(!wrapper.doc){cb('archivo sin documento de proyecto');return;}
+    // Decodificar bytes base64 -> ArrayBuffer (reconstruir el formato que deserializeProject espera)
+    var doc=wrapper.doc;
+    if(doc.audioPool){
+      var decErr=false;
+      Object.keys(doc.audioPool).forEach(function(uuid){
+        var e=doc.audioPool[uuid];
+        if(e.bytesB64){
+          try{e.bytes=base64ToBytes(e.bytesB64);}catch(ex){decErr=true;}
+          delete e.bytesB64;
+        }else{e.bytes=null;}
+      });
+      if(decErr){cb('error decodificando audio del archivo');return;}
+    }
+    // Delegar TODA la restauracion a deserializeProject (validacion de refs, commit transaccional)
+    deserializeProject(doc,function(err){
+      if(err){cb(err);return;}
+      cb(null,{
+        projectName:wrapper.projectName,
+        exportedAt:wrapper.exportedAt,
+        appVersion:wrapper.appVersion
+      });
+    });
+  };
+  reader.readAsText(file);
+}
+
 // ====================================================
 // PROJECT PANEL — UI minima de persistencia (Fase 3e)
 // ====================================================
@@ -3741,6 +3876,31 @@ function refreshProjectList(){
     });
   });
 }
+function projDoExport(){
+  var name=document.getElementById('projName').value.trim();
+  projStatus('exportando...');
+  exportProject(name||null,function(err,info){
+    if(err){projStatus('error export: '+err,true);return;}
+    projStatus('exportado: '+info.filename+' ('+info.sizeMB+'MB)');
+  });
+}
+function projDoImport(){
+  var inp=document.getElementById('projImportFile');
+  if(inp){inp.value='';inp.click();}
+}
+function _projImportFileChosen(ev){
+  var file=ev.target.files&&ev.target.files[0];
+  if(!file){return;}
+  projStatus('importando '+file.name+'...');
+  importProject(file,function(err,info){
+    if(err){projStatus('error import: '+err,true);return;}
+    var nm=info.projectName||'(sin nombre)';
+    projStatus('importado: '+nm);
+    if(info.projectName){var pn=document.getElementById('projName');if(pn){pn.value=info.projectName;}}
+    refreshProjectList();
+  });
+}
+
 function projDoSave(){
   var name=document.getElementById('projName').value.trim();
   if(!name){projStatus('escribi un nombre primero',true);return;}
@@ -3844,6 +4004,9 @@ window.onload=function(){
   checkRecovery();
   var pSave=document.getElementById("projSaveBtn");if(pSave){pSave.addEventListener("click",projDoSave);}
   var pLoad=document.getElementById("projLoadBtn");if(pLoad){pLoad.addEventListener("click",function(){projDoLoad();});}
+  var pExp=document.getElementById("projExportBtn");if(pExp){pExp.addEventListener("click",projDoExport);}
+  var pImp=document.getElementById("projImportBtn");if(pImp){pImp.addEventListener("click",projDoImport);}
+  var pImpFile=document.getElementById("projImportFile");if(pImpFile){pImpFile.addEventListener("change",_projImportFileChosen);}
   var rRes=document.getElementById("recRestore");if(rRes){rRes.addEventListener("click",_recoveryRestore);}
   var rDis=document.getElementById("recDiscard");if(rDis){rDis.addEventListener("click",_recoveryDiscard);}
   DEBUG.mark("onloadComplete");
