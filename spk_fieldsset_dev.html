@@ -668,7 +668,7 @@ var state={complexity:40,focusTarget:null,focusAmount:0,bpm:120};
 
 // --- HISTORY ---
 var historyStack=[],historyIdx=-1,historyTimer=null,historyDirty=false,historyNavigating=false,pendingLabel=null;
-function markDirty(d,lbl){if(historyNavigating){return;}historyDirty=true;if(lbl){pendingLabel=lbl;}if(historyTimer){clearTimeout(historyTimer);}historyTimer=setTimeout(function(){if(historyDirty){pushHistory(pendingLabel||"cambio");historyDirty=false;pendingLabel=null;}historyTimer=null;},d||1500);}
+function markDirty(d,lbl){if(historyNavigating){return;}historyDirty=true;_sessionDirty=true;if(lbl){pendingLabel=lbl;}if(historyTimer){clearTimeout(historyTimer);}historyTimer=setTimeout(function(){if(historyDirty){pushHistory(pendingLabel||"cambio");historyDirty=false;pendingLabel=null;}historyTimer=null;},d||1500);}
 function pushHistory(lbl){if(historyNavigating){return;}var snap=captureScene();snap._label=lbl||"estado";snap._time=new Date().toTimeString().slice(0,8);historyStack=historyStack.slice(0,historyIdx+1);historyStack.push(snap);if(historyStack.length>100){historyStack.shift();}historyIdx=historyStack.length-1;historyDirty=false;if(historyTimer){clearTimeout(historyTimer);historyTimer=null;}updateHistoryUI();rebuildHistPanel();}
 function getHistType(label){
   if(!label){return 'type-state';}
@@ -3492,6 +3492,7 @@ var _loadingProject=false; // carga en curso (seteado por loadSession y projDoLo
 var _lastSessionSerMs=0;   // medicion: cuanto tardo el ultimo serializeProject
 var _lastAutosaveAt=0;     // timestamp del ultimo autosave exitoso
 var _autosaveTimer=null;
+var _sessionDirty=false;  // marcador propio del autosave (independiente de historyDirty)
 var AUTOSAVE_INTERVAL_MS=30000; // 30s — calibrable segun _lastSessionSerMs
 
 // saveSession — envuelve serializeProject() con metadatos de sesion.
@@ -3501,7 +3502,7 @@ var AUTOSAVE_INTERVAL_MS=30000; // 30s — calibrable segun _lastSessionSerMs
 function saveSession(cb){
   cb=cb||function(){};
   // --- GUARDS (toda la proteccion centralizada) ---
-  if(typeof historyDirty!=='undefined'&&!historyDirty){cb(null,'skip: sin cambios');return;}
+  if(!_sessionDirty){cb(null,'skip: sin cambios');return;}
   if(_sessionSaving){cb('skip: saveSession ya en ejecucion');return;}
   if(typeof _activeCap!=='undefined'&&_activeCap){cb('skip: captura activa');return;}
   if(_loadingProject){cb('skip: carga en curso');return;}
@@ -3527,8 +3528,8 @@ function saveSession(cb){
   dbSet(SESSION_KEY,sessionDoc,function(err){
     _sessionSaving=false;
     if(err){cb(err);return;}
-    // No limpiamos historyDirty: pertenece al sistema de history/undo.
-    // El autosave usa su propio marcador para evitar re-guardar identico.
+    // Limpiamos SOLO nuestro marcador (no historyDirty, que pertenece a undo/history).
+    _sessionDirty=false;
     _lastAutosaveAt=Date.now();
     cb(null,'saved ('+_serMs+'ms)');
   });
