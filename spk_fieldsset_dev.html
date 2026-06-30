@@ -205,6 +205,24 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
 
 
+
+#recoveryDialog{position:fixed;inset:0;z-index:200;display:none;
+  align-items:center;justify-content:center;background:rgba(4,6,10,.82);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+#recoveryDialog.show{display:flex;}
+#recoveryCard{width:min(380px,90vw);background:linear-gradient(155deg,#13111f,#1b1726);
+  border:1px solid rgba(95,255,160,.3);border-radius:14px;padding:22px 22px 18px;
+  box-shadow:0 18px 60px rgba(0,0,0,.6);font-family:'Inter',sans-serif;}
+#recoveryCard h3{color:#5fffa0;font-size:14px;letter-spacing:.08em;margin:0 0 10px;font-weight:600;}
+#recoveryCard p{color:rgba(255,255,255,.75);font-size:13px;line-height:1.5;margin:0 0 6px;}
+#recoveryMeta{color:rgba(255,255,255,.45);font-size:11px;margin:0 0 18px;line-height:1.5;}
+#recoveryBtns{display:flex;gap:10px;}
+.recBtn{flex:1;font-size:13px;padding:11px 0;border-radius:8px;cursor:pointer;
+  touch-action:manipulation;letter-spacing:.04em;font-weight:600;}
+.recBtnYes{background:rgba(95,255,160,.18);border:1px solid rgba(95,255,160,.5);color:#5fffa0;}
+.recBtnYes:active{background:rgba(95,255,160,.34);}
+.recBtnNo{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);}
+.recBtnNo:active{background:rgba(255,255,255,.12);}
 #projectPanel{position:fixed;top:50px;right:0;width:min(360px,90vw);height:calc(100vh - 50px);
   height:calc(100dvh - 50px);background:rgba(8,10,16,.98);border-left:1px solid rgba(95,255,160,.3);
   z-index:60;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;
@@ -588,6 +606,18 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
   </div>
 
+
+  <div id="recoveryDialog">
+    <div id="recoveryCard">
+      <h3>SESIÓN ANTERIOR</h3>
+      <p>Se encontró una sesión sin guardar como proyecto.</p>
+      <div id="recoveryMeta"></div>
+      <div id="recoveryBtns">
+        <button class="recBtn recBtnNo" id="recDiscard">EMPEZAR LIMPIO</button>
+        <button class="recBtn recBtnYes" id="recRestore">RESTAURAR</button>
+      </div>
+    </div>
+  </div>
 
   <div id="projectPanel">
     <h3>PROJECT</h3>
@@ -3578,6 +3608,69 @@ function hasSession(cb){
 }
 
 // ============================================================
+// ============================================================
+// RECOVERY — Fase 4c
+// Al iniciar: si hay sesion valida, ofrecer restaurar.
+// NO autoborra. Si el usuario elige empezar limpio, la sesion
+// permanece hasta el proximo autosave.
+// ============================================================
+var _recoveryPending=false;
+
+function _fmtSessionAge(savedAt){
+  if(!savedAt){return '';}
+  var then=new Date(savedAt).getTime();
+  var now=Date.now();
+  var sec=Math.floor((now-then)/1000);
+  if(sec<60){return 'hace '+sec+' segundos';}
+  var min=Math.floor(sec/60);
+  if(min<60){return 'hace '+min+' minuto'+(min!==1?'s':'');}
+  var hr=Math.floor(min/60);
+  if(hr<24){return 'hace '+hr+' hora'+(hr!==1?'s':'');}
+  var d=Math.floor(hr/24);
+  return 'hace '+d+' dia'+(d!==1?'s':'');
+}
+
+function checkRecovery(){
+  // Se llama al final del onload, ANTES de arrancar el autosave.
+  hasSession(function(err,exists,meta){
+    if(err||!exists||!meta){
+      startAutosave(); // sin sesion: arrancar autosave normal
+      return;
+    }
+    _recoveryPending=true;
+    var metaEl=document.getElementById('recoveryMeta');
+    if(metaEl){
+      var parts=[];
+      parts.push('Guardada '+_fmtSessionAge(meta.savedAt));
+      if(meta.projectName){parts.push('Proyecto: '+meta.projectName);}
+      metaEl.innerHTML=parts.join('<br>');
+    }
+    var dlg=document.getElementById('recoveryDialog');
+    if(dlg){dlg.classList.add('show');}
+    // NO arrancar autosave todavia: esperar la decision del usuario
+    // (evita sobrescribir la sesion antes de que decida)
+  });
+}
+
+function _recoveryRestore(){
+  var dlg=document.getElementById('recoveryDialog');
+  loadSession(function(err,meta){
+    _recoveryPending=false;
+    if(dlg){dlg.classList.remove('show');}
+    if(err){setStatus('No se pudo restaurar: '+err);}
+    else{setStatus('Sesión restaurada');}
+    startAutosave(); // ahora si, arrancar autosave
+  });
+}
+
+function _recoveryDiscard(){
+  var dlg=document.getElementById('recoveryDialog');
+  _recoveryPending=false;
+  if(dlg){dlg.classList.remove('show');}
+  // NO borrar la sesion: permanece hasta el proximo autosave
+  startAutosave();
+}
+
 // AUTOSAVE — Fase 4b
 // El timer/eventos SOLO deciden intentar. Toda la proteccion
 // vive dentro de saveSession() (guards centralizados).
@@ -3731,9 +3824,12 @@ window.onload=function(){
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
   var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
   window.addEventListener("pagehide",_sessionOnHide,false);
-  startAutosave();
+  // checkRecovery arranca el autosave despues de la decision del usuario
+  checkRecovery();
   var pSave=document.getElementById("projSaveBtn");if(pSave){pSave.addEventListener("click",projDoSave);}
   var pLoad=document.getElementById("projLoadBtn");if(pLoad){pLoad.addEventListener("click",function(){projDoLoad();});}
+  var rRes=document.getElementById("recRestore");if(rRes){rRes.addEventListener("click",_recoveryRestore);}
+  var rDis=document.getElementById("recDiscard");if(rDis){rDis.addEventListener("click",_recoveryDiscard);}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
   // iOS backup: reanudar AudioContext en cualquier interacción táctil
