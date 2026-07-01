@@ -447,6 +447,25 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #btnRec.active{background:rgba(255,40,40,.2);border-color:rgba(255,50,50,.6);color:rgba(255,100,100,.9);animation:recPulse .8s ease-in-out infinite;}
 
 
+
+/* ===== COMPACT VIEW (Live) — solo presentacion, logica intacta ===== */
+/* Variable unica de ajuste del waveform en compacto (iterar entre ensayos aqui): */
+:root{ --compact-wave-h: 64px; }
+/* Waveform reducido: indicador de actividad, no herramienta de edicion */
+#entityArea.compact .waveCanvas{ height: var(--compact-wave-h) !important; }
+/* Margenes y paddings compactados */
+#entityArea.compact{ gap:2px; padding:2px; }
+#entityArea.compact .entityCard{ }
+#entityArea.compact .cHead{ margin-bottom:2px; }
+#entityArea.compact .matRow{ margin:1px 0; }
+#entityArea.compact .pgWrap{ margin:1px 0; }
+/* Reducir espacios verticales sobrantes dentro de la card */
+#entityArea.compact .cardBody{ gap:2px; }
+/* Ocultar DEBUG del contexto principal en compacto */
+body.compactMode #btnDebug{ display:none; }
+/* Estado del boton toggle */
+#btnCompact.active{ background:rgba(95,255,160,.2); border-color:rgba(95,255,160,.5); color:#5fffa0; }
+
 </style>
 </head>
 <body>
@@ -475,7 +494,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <button id="btnRedo" disabled>→</button>
   </div>
   <span id="statusBar">STANDBY — PLAY para activar</span>
-  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button><button id="btnProject" title="proyectos">PROJECT</button><button id="btnDebug" title="panel de diagnostico">DEBUG</button>
+  <button id="btnHistToggle" title="ver historial" style="flex-shrink:0;margin-left:4px;">HIST</button><button id="btnProject" title="proyectos">PROJECT</button><button id="btnCompact" title="vista compacta (live)">LIVE</button><button id="btnDebug" title="panel de diagnostico">DEBUG</button>
 </div>
 
 <div id="histPanel"></div>
@@ -3842,6 +3861,23 @@ function importProject(file,cb){
   reader.readAsText(file);
 }
 
+// ============================================================
+// COMPACT VIEW (Live) — Fase v1 ergonomia
+// Solo presentacion: activa/desactiva una clase. No toca logica,
+// motor, serializacion ni eventos. Estado efimero (no persistente).
+// ============================================================
+var _compactView=false;
+function toggleCompactView(){
+  _compactView=!_compactView;
+  var area=document.getElementById('entityArea');
+  var btn=document.getElementById('btnCompact');
+  if(area){area.classList.toggle('compact',_compactView);}
+  document.body.classList.toggle('compactMode',_compactView);
+  if(btn){btn.classList.toggle('active',_compactView);}
+  // El waveform se reajusta solo: drawEntityCanvas() corre en cada frame()
+  // del RAF y detecta el nuevo clientHeight, redibujando a la resolucion correcta.
+}
+
 // ====================================================
 // PROJECT PANEL — UI minima de persistencia (Fase 3e)
 // ====================================================
@@ -3999,6 +4035,7 @@ window.onload=function(){
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
   var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
+  var bComp=document.getElementById("btnCompact");if(bComp){bComp.addEventListener("click",toggleCompactView);}
   window.addEventListener("pagehide",_sessionOnHide,false);
   // checkRecovery arranca el autosave despues de la decision del usuario
   checkRecovery();
