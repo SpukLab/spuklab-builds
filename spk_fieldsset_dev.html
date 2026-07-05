@@ -494,6 +494,15 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .euclidHint{font-size:8px;color:rgba(255,255,255,.3);letter-spacing:.05em;margin-top:2px;}
 
 .dupHidden{display:none!important;}
+
+.perfEntLine{display:flex;gap:3px;margin-bottom:3px;align-items:stretch;}
+.perfEntLine .perfEntBtn{flex:1;margin:0;}
+.perfSM{width:22px;flex:none;font-size:9px;font-weight:700;border-radius:4px;cursor:pointer;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);
+  touch-action:manipulation;padding:0;}
+.perfSM.soloed{background:rgba(95,255,160,.2);color:#5fffa0;border-color:rgba(95,255,160,.5);}
+.perfSM.muted{background:rgba(255,80,80,.2);color:#ff5050;border-color:rgba(255,80,80,.5);}
+
 </style>
 </head>
 <body>
@@ -551,6 +560,32 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
         </div>
       </div>
       <div class="perfBlock">
+        <div class="perfLbl">FX</div>
+        <div class="fxMacroRow">
+          <span class="macroLbl">REVERB</span>
+          <input type="range" id="perfReverb" min="0" max="100" value="15">
+          <span class="macroVal" id="perfReverbVal">15</span>
+        </div>
+<div>
+      
+      <div class="fxMacroRow">
+        <span class="macroLbl">DELAY</span>
+        <input type="range" id="fxDelayWet" min="0" max="100" value="0">
+        <span class="macroVal" id="fxDelayWetVal">0</span>
+      </div>
+      <div class="fxMacroRow">
+        <span class="macroLbl">D.TIME</span>
+        <input type="range" id="fxDelayTime" min="50" max="2000" value="375" step="25">
+        <span class="macroVal" id="fxDelayTimeVal">375ms</span>
+      </div>
+      <div class="fxMacroRow">
+        <span class="macroLbl">FILTER</span>
+        <input type="range" id="fxMasterFilter" min="0" max="100" value="100">
+        <span class="macroVal" id="fxMasterFilterVal">open</span>
+      </div>
+    </div>
+      </div>
+      <div class="perfBlock">
         <div class="perfLbl">Entity</div>
         <div class="perfEntRow" id="perfEntities"></div>
       </div>
@@ -561,7 +596,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
 
 
-    <div class="macroSec">
+    <div class="macroSec dupHidden">
       <h4 class="mono">SETUP</h4>
       <div class="macroItem dupHidden">
         <div class="macroHead"><span class="macroLbl">COMPLEXITY</span><span class="macroVal" id="complexityVal">40</span></div>
@@ -605,25 +640,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
 
     
-    <!-- GLOBAL FX -->
-    <div class="pSec fxSec">
-      <h4 class="mono">FX GLOBAL</h4>
-      <div class="fxMacroRow">
-        <span class="macroLbl">DELAY</span>
-        <input type="range" id="fxDelayWet" min="0" max="100" value="0">
-        <span class="macroVal" id="fxDelayWetVal">0</span>
-      </div>
-      <div class="fxMacroRow">
-        <span class="macroLbl">D.TIME</span>
-        <input type="range" id="fxDelayTime" min="50" max="2000" value="375" step="25">
-        <span class="macroVal" id="fxDelayTimeVal">375ms</span>
-      </div>
-      <div class="fxMacroRow">
-        <span class="macroLbl">FILTER</span>
-        <input type="range" id="fxMasterFilter" min="0" max="100" value="100">
-        <span class="macroVal" id="fxMasterFilterVal">open</span>
-      </div>
-    </div>
+    
     <div class="pSec">
       <h4 class="mono">SEGMENTS</h4>
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:4px;">
@@ -4187,12 +4204,30 @@ function renderPerfEntities(){
   row.innerHTML='';
   var sel=perfGetEntity();
   entities.forEach(function(e){
+    var line=document.createElement('div');line.className='perfEntLine';
     var b=document.createElement('button');b.className='perfEntBtn';
     b.textContent=e.name||e.role||e.id;
     if(sel&&e.id===sel.id){b.classList.add('sel');}
     b.addEventListener('click',function(){_perfEntity=e.id;renderPerfEntities();renderPerfParams();});
-    row.appendChild(b);
+    var bS=document.createElement('button');bS.className='perfSM'+(e.solo?' soloed':'');bS.textContent='S';
+    bS.addEventListener('click',function(ev){ev.stopPropagation();e.solo=!e.solo;if(typeof refreshAllGains==='function'){refreshAllGains();}if(typeof emitEvent==='function'){emitEvent('solo',{entity:e.id,solo:e.solo});}bS.classList.toggle('soloed',e.solo);_syncCardMS(e);});
+    var bM=document.createElement('button');bM.className='perfSM'+(e.mute?' muted':'');bM.textContent='M';
+    bM.addEventListener('click',function(ev){ev.stopPropagation();e.mute=!e.mute;if(typeof refreshAllGains==='function'){refreshAllGains();}if(typeof emitEvent==='function'){emitEvent('mute',{entity:e.id,mute:e.mute});}bM.classList.toggle('muted',e.mute);_syncCardMS(e);});
+    line.appendChild(b);line.appendChild(bS);line.appendChild(bM);
+    row.appendChild(line);
   });
+}
+// Sincroniza el estado visual S/M en la card original
+function _syncCardMS(e){
+  var card=document.getElementById('card_'+e.id);
+  if(!card){return;}
+  var btns=card.querySelectorAll('[data-btn]');
+  var i=0;while(i<btns.length){
+    var bt=btns[i].getAttribute('data-btn');
+    if(bt==='mute'){btns[i].classList.toggle('muted',e.mute);}
+    if(bt==='solo'){btns[i].classList.toggle('soloed',e.solo);}
+    i++;
+  }
 }
 function renderPerfParams(){
   var box=document.getElementById('perfParams');
@@ -4313,6 +4348,7 @@ window.onload=function(){
   var rDis=document.getElementById("recDiscard");if(rDis){rDis.addEventListener("click",_recoveryDiscard);}
   var pEn=document.getElementById("perfEnergy");if(pEn){pEn.addEventListener("input",function(){state.focusAmount=parseFloat(pEn.value)/100;var v=document.getElementById("perfEnergyVal");if(v){v.textContent=pEn.value;}var fa=document.getElementById("focusAmount");if(fa){fa.value=pEn.value;}});}
   var pCx=document.getElementById("perfComplexity");if(pCx){pCx.addEventListener("input",function(){state.complexity=parseInt(pCx.value,10);var v=document.getElementById("perfComplexityVal");if(v){v.textContent=pCx.value;}var cc=document.getElementById("complexity");if(cc){cc.value=pCx.value;}var ccv=document.getElementById("complexityVal");if(ccv){ccv.textContent=pCx.value;}});}
+  var pRev=document.getElementById("perfReverb");if(pRev){pRev.addEventListener("input",function(){var v=document.getElementById("reverbAmount");if(v){v.value=pRev.value;v.dispatchEvent(new Event("input"));}var pv=document.getElementById("perfReverbVal");if(pv){pv.textContent=pRev.value;}});}
   if(typeof renderPerfPanel==="function"){renderPerfPanel();}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
