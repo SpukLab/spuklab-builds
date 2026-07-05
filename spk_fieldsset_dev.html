@@ -449,6 +449,37 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
 
 
+
+/* ===== PERFORMANCE PANEL ===== */
+#perfPanel{padding:8px 10px 10px;border-bottom:1px solid rgba(153,68,255,.18);
+  background:linear-gradient(155deg,rgba(19,17,31,.6),rgba(27,23,38,.6));}
+#perfPanel h4{color:#b580ff;font-size:11px;letter-spacing:.14em;margin:0 0 8px;font-weight:600;}
+.perfBlock{margin-bottom:9px;}
+.perfLbl{font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.1em;margin-bottom:3px;text-transform:uppercase;}
+/* Scene row */
+.perfSceneRow{display:flex;gap:4px;}
+.perfSceneBtn{flex:1;font-size:12px;padding:7px 0;border-radius:5px;cursor:pointer;
+  background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);color:rgba(255,255,255,.7);
+  touch-action:manipulation;position:relative;}
+.perfSceneBtn.saved{border-color:rgba(0,255,255,.4);}
+.perfSceneBtn.sel{background:rgba(153,68,255,.28);color:#b580ff;border-color:rgba(181,128,255,.6);}
+.perfSceneBtn .dot{position:absolute;top:3px;right:4px;width:4px;height:4px;border-radius:50%;background:#00ffff;opacity:.7;}
+/* Entity selector */
+.perfEntRow{display:flex;gap:3px;flex-wrap:wrap;}
+.perfEntBtn{flex:1;min-width:0;font-size:10px;padding:5px 2px;border-radius:4px;cursor:pointer;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.6);
+  touch-action:manipulation;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.perfEntBtn.sel{background:rgba(67,229,255,.15);border-color:rgba(67,229,255,.45);color:#43E5FF;}
+/* Behavior param sliders */
+.perfParam{margin-bottom:6px;}
+.perfParamHead{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,.5);margin-bottom:2px;}
+.perfParamHead .pv{color:#43E5FF;}
+.perfSlider{width:100%;height:20px;}
+/* Energy / Complexity compact */
+.perfMacro{margin-bottom:7px;}
+.perfMacroHead{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,.5);margin-bottom:2px;letter-spacing:.08em;}
+.perfMacroHead .pv{color:#b580ff;}
+
 </style>
 </head>
 <body>
@@ -484,6 +515,37 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
 <div id="layout">
   <div id="leftPanel">
+
+    <div id="perfPanel">
+      <h4>PERFORMANCE</h4>
+      <div class="perfBlock">
+        <div class="perfLbl">Scene</div>
+        <div class="perfSceneRow" id="perfScenes"></div>
+      </div>
+      <div class="perfBlock">
+        <div class="perfLbl">Morph</div>
+        <div id="perfMorph"></div>
+      </div>
+      <div class="perfBlock">
+        <div class="perfMacro">
+          <div class="perfMacroHead"><span>ENERGY</span><span class="pv" id="perfEnergyVal">0</span></div>
+          <input type="range" id="perfEnergy" min="0" max="100" value="0" class="perfSlider">
+        </div>
+        <div class="perfMacro">
+          <div class="perfMacroHead"><span>COMPLEXITY</span><span class="pv" id="perfComplexityVal">40</span></div>
+          <input type="range" id="perfComplexity" min="0" max="100" value="40" class="perfSlider">
+        </div>
+      </div>
+      <div class="perfBlock">
+        <div class="perfLbl">Entity</div>
+        <div class="perfEntRow" id="perfEntities"></div>
+      </div>
+      <div class="perfBlock" id="perfBehavior">
+        <div class="perfLbl" id="perfBehaviorLbl">Behavior</div>
+        <div id="perfParams"></div>
+      </div>
+    </div>
+
 
     <div class="macroSec">
       <h4 class="mono">DNA CENTER</h4>
@@ -1095,7 +1157,7 @@ function _applySceneInternal(scene){
   refreshAllGains();renderEntityCards();buildCanvasGestures();entities.forEach(function(e){updateBankButtonsUI(e);});
 }
 
-function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);}
+function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);if(typeof renderPerfScenes==="function"){renderPerfScenes();}if(typeof renderPerfParams==="function"){renderPerfParams();}}
 
 function tickMorph(){
   if(!morph.active||sceneFrozen){return;}
@@ -1202,7 +1264,7 @@ function startContinuousView(entity){var buf=getBuffer(entity);if(!buf||!audioCt
 function stopContinuousView(entity){if(entity.srcNode){try{entity.srcNode.stop();}catch(e){}entity.srcNode=null;}if(entity.modOsc){try{entity.modOsc.stop();}catch(e){}entity.modOsc=null;}entity.modDepth=null;entity.baseGain=null;entity.contActive=false;entity.startTime=null;}
 function updateContinuousParams(entity){if(!entity.contActive){return;}if(entity.view==='loop'&&entity.srcNode){entity.srcNode.playbackRate.setTargetAtTime(note2rate(entity.pitch),audioCtx.currentTime,.06);}else if(entity.view==='freeze'){stopContinuousView(entity);startContinuousView(entity);}}
 function updateLoopSource(entity){if(!entity.srcNode||entity.view!=='loop'){return;}var buf=getBuffer(entity);if(!buf){return;}var inSec=entity.loopIn*buf.duration,outSec=entity.loopOut*buf.duration;if(outSec<=inSec){outSec=Math.min(buf.duration,inSec+.01);}entity.srcNode.loopStart=inSec;entity.srcNode.loopEnd=outSec;}
-function applyViewChange(entity,skip){stopContinuousView(entity);if(isContinuousView(entity.view)){if(running||entity.localPlaying){startContinuousView(entity);}}else{entity.nextTime=audioCtx?audioCtx.currentTime+.05:0;}updateViewParamsUI(entity);if(!skip){pushHistory(entity.name+" > "+entity.view);}}
+function applyViewChange(entity,skip){stopContinuousView(entity);if(isContinuousView(entity.view)){if(running||entity.localPlaying){startContinuousView(entity);}}else{entity.nextTime=audioCtx?audioCtx.currentTime+.05:0;}updateViewParamsUI(entity);if(typeof _perfEntity!=="undefined"&&_perfEntity===entity.id&&typeof renderPerfParams==="function"){renderPerfParams();}if(!skip){pushHistory(entity.name+" > "+entity.view);}}
 
 // --- randomize ---
 function randomizeParams(entity){if(sceneFrozen){return;}entity.pan=Math.random()*2-1;entity.filterNorm=.4+Math.random()*.6;entity.pitch=Math.round(Math.random()*24-12);if(entity.view==='loop'){var inR=Math.random()*.65;entity.loopIn=inR;entity.loopOut=clamp(inR+.05+Math.random()*.5,inR+.02,1);entity.param1=entity.loopIn;entity.param2=entity.loopOut;updateLoopSource(entity);}else{entity.param1=Math.random();entity.param2=Math.random();updateContinuousParams(entity);}if(entity.spacePanA){entity.spacePanA.pan.setTargetAtTime(effPan(entity),audioCtx.currentTime,.05);}if(entity.filterNode){entity.filterNode.frequency.setTargetAtTime(filterNormToHz(entity.filterNorm),audioCtx.currentTime,.05);}syncEntitySliders(entity);markDirty(400);}
@@ -1315,7 +1377,7 @@ function setStatus(msg){var el=document.getElementById('statusBar');if(el){el.te
 function updateTransportUI(){var bp=document.getElementById('btnPlay');var bs=document.getElementById('btnStop');if(bp){bp.disabled=running;}if(bs){bs.disabled=!running;}}
 
 // --- CARD RENDERING ---
-function renderEntityCards(){var __rec=true;var r0=document.getElementById('eRow0');var r1=document.getElementById('eRow1');var feg=document.getElementById('focusEntityGroup');if(!r0||!r1){return;}r0.innerHTML='';r1.innerHTML='';if(feg){feg.innerHTML='';}var rows=[[r0,[0,1]],[r1,[2,3]]];var ri=0;while(ri<rows.length){var row=rows[ri][0];var idxs=rows[ri][1];var ii=0;while(ii<idxs.length){row.appendChild(buildCard(entities[idxs[ii]]));if(feg){var op=document.createElement('option');op.value=entities[idxs[ii]].id;op.textContent=entities[idxs[ii]].id+': '+entities[idxs[ii]].name;feg.appendChild(op);}ii++;}ri++;}if(typeof buildCanvasGestures==='function'){buildCanvasGestures();}}
+function renderEntityCards(){if(typeof renderPerfEntities==="function"){setTimeout(function(){renderPerfEntities();renderPerfParams();},0);}var __rec=true;var r0=document.getElementById('eRow0');var r1=document.getElementById('eRow1');var feg=document.getElementById('focusEntityGroup');if(!r0||!r1){return;}r0.innerHTML='';r1.innerHTML='';if(feg){feg.innerHTML='';}var rows=[[r0,[0,1]],[r1,[2,3]]];var ri=0;while(ri<rows.length){var row=rows[ri][0];var idxs=rows[ri][1];var ii=0;while(ii<idxs.length){row.appendChild(buildCard(entities[idxs[ii]]));if(feg){var op=document.createElement('option');op.value=entities[idxs[ii]].id;op.textContent=entities[idxs[ii]].id+': '+entities[idxs[ii]].name;feg.appendChild(op);}ii++;}ri++;}if(typeof buildCanvasGestures==='function'){buildCanvasGestures();}}
 function buildCard(entity){
   var e=entity;var card=document.createElement('div');card.className='entityCard'+(e._cfgOpen?' cfgOpen':'');card.id='card_'+e.id;
   var head=document.createElement('div');head.className='cHead';
@@ -4016,6 +4078,113 @@ function projDoDelete(name){
   });
 }
 
+// ============================================================
+// PERFORMANCE PANEL — presentacion pura. No toca motor/serializacion.
+// _perfEntity: id de la entidad seleccionada (estado UI efimero).
+// ============================================================
+var _perfEntity=null;
+function perfGetEntity(){
+  if(_perfEntity){var e=getEntity(_perfEntity);if(e){return e;}}
+  if(entities.length){_perfEntity=entities[0].id;return entities[0];}
+  return null;
+}
+function renderPerfScenes(){
+  var row=document.getElementById('perfScenes');if(!row){return;}
+  row.innerHTML='';
+  ['A','B','C','D'].forEach(function(key){
+    var b=document.createElement('button');b.className='perfSceneBtn';b.textContent=key;
+    b.setAttribute('data-perfscene',key);
+    if(scenes[key]){var d=document.createElement('span');d.className='dot';b.appendChild(d);b.classList.add('saved');}
+    if(selScene===key){b.classList.add('sel');}
+    b.addEventListener('click',function(){
+      var real=document.querySelector('.sBtn[data-scene="'+key+'"]');
+      if(real){real.dispatchEvent(new MouseEvent('pointerup'));}
+      if(typeof applyScene==='function'&&scenes[key]){applyScene(key);}
+      renderPerfScenes();
+    });
+    row.appendChild(b);
+  });
+}
+function renderPerfMorph(){
+  var box=document.getElementById('perfMorph');if(!box){return;}
+  box.innerHTML='';
+  // Botones A B C D para FROM y TO (Priority 3 se integra aca)
+  var wrap=document.createElement('div');wrap.style.cssText='display:flex;align-items:center;gap:4px;';
+  var fromWrap=document.createElement('div');fromWrap.className='perfEntRow';fromWrap.style.flex='1';
+  var toWrap=document.createElement('div');toWrap.className='perfEntRow';toWrap.style.flex='1';
+  ['A','B','C','D'].forEach(function(key){
+    var bf=document.createElement('button');bf.className='perfEntBtn';bf.textContent=key;
+    if(morph.from===key){bf.classList.add('sel');}
+    bf.addEventListener('click',function(){morph.from=key;renderPerfMorph();syncMorphSelects();});
+    fromWrap.appendChild(bf);
+    var bt=document.createElement('button');bt.className='perfEntBtn';bt.textContent=key;
+    if(morph.to===key){bt.classList.add('sel');}
+    bt.addEventListener('click',function(){morph.to=key;renderPerfMorph();syncMorphSelects();});
+    toWrap.appendChild(bt);
+  });
+  var arrow=document.createElement('span');arrow.textContent='>';arrow.style.cssText='color:rgba(255,255,255,.4);font-size:11px;';
+  var goBtn=document.createElement('button');goBtn.className='perfSceneBtn';goBtn.textContent='MORPH';
+  goBtn.style.cssText='flex:none;padding:6px 10px;';
+  goBtn.addEventListener('click',function(){var mb=document.getElementById('btnMorph');if(mb){mb.click();}});
+  wrap.appendChild(fromWrap);wrap.appendChild(arrow);wrap.appendChild(toWrap);
+  box.appendChild(wrap);box.appendChild(goBtn);
+}
+function syncMorphSelects(){
+  // Reflejar morph.from/to en los selects originales (mantener coherencia)
+  var mf=document.getElementById('morphFrom');var mt=document.getElementById('morphTo');
+  if(mf&&morph.from){mf.value=morph.from;}
+  if(mt&&morph.to){mt.value=morph.to;}
+}
+function renderPerfEntities(){
+  var row=document.getElementById('perfEntities');if(!row){return;}
+  row.innerHTML='';
+  var sel=perfGetEntity();
+  entities.forEach(function(e){
+    var b=document.createElement('button');b.className='perfEntBtn';
+    b.textContent=e.name||e.role||e.id;
+    if(sel&&e.id===sel.id){b.classList.add('sel');}
+    b.addEventListener('click',function(){_perfEntity=e.id;renderPerfEntities();renderPerfParams();});
+    row.appendChild(b);
+  });
+}
+function renderPerfParams(){
+  var box=document.getElementById('perfParams');
+  var lbl=document.getElementById('perfBehaviorLbl');
+  if(!box){return;}
+  box.innerHTML='';
+  var e=perfGetEntity();
+  if(!e){if(lbl){lbl.textContent='Behavior';}return;}
+  var labels=viewParamLabels[e.view]||['P1','P2'];
+  if(lbl){lbl.textContent=e.view.toUpperCase()+' — '+(e.name||'');}
+  // Dos behavior params (param1/param2) con los nombres del modo actual
+  [['param1',labels[0]],['param2',labels[1]]].forEach(function(pair){
+    var key=pair[0],name=pair[1];
+    var wrap=document.createElement('div');wrap.className='perfParam';
+    var head=document.createElement('div');head.className='perfParamHead';
+    var isLoop=(e.view==='loop');
+    var val=isLoop?(key==='param1'?e.loopIn:e.loopOut):e[key];
+    var pct=Math.round(val*100);
+    head.innerHTML='<span>'+name+'</span><span class="pv" id="perfPV_'+key+'">'+pct+'</span>';
+    var sl=document.createElement('input');sl.type='range';sl.min=0;sl.max=100;sl.value=pct;sl.className='perfSlider';
+    sl.addEventListener('input',function(){
+      setEntityParam(e,key,parseFloat(sl.value));
+      var pv=document.getElementById('perfPV_'+key);if(pv){pv.textContent=sl.value;}
+      if(typeof syncEntitySliders==='function'){syncEntitySliders(e);}
+    });
+    wrap.appendChild(head);wrap.appendChild(sl);
+    box.appendChild(wrap);
+  });
+}
+function renderPerfPanel(){
+  renderPerfScenes();renderPerfMorph();renderPerfEntities();renderPerfParams();
+  var en=document.getElementById('perfEnergy');var env=document.getElementById('perfEnergyVal');
+  if(en){en.value=Math.round((state.focusAmount||0)*100);}
+  if(env){env.textContent=Math.round((state.focusAmount||0)*100);}
+  var cx=document.getElementById('perfComplexity');var cxv=document.getElementById('perfComplexityVal');
+  if(cx){cx.value=state.complexity;}
+  if(cxv){cxv.textContent=state.complexity;}
+}
+
 window.onload=function(){
   // CRÍTICO PRIMERO: habilitar e instalar PLAY/STOP/DEBUG antes que nada
   try{
@@ -4095,6 +4264,9 @@ window.onload=function(){
   var pImpFile=document.getElementById("projImportFile");if(pImpFile){pImpFile.addEventListener("change",_projImportFileChosen);}
   var rRes=document.getElementById("recRestore");if(rRes){rRes.addEventListener("click",_recoveryRestore);}
   var rDis=document.getElementById("recDiscard");if(rDis){rDis.addEventListener("click",_recoveryDiscard);}
+  var pEn=document.getElementById("perfEnergy");if(pEn){pEn.addEventListener("input",function(){state.focusAmount=parseFloat(pEn.value)/100;var v=document.getElementById("perfEnergyVal");if(v){v.textContent=pEn.value;}var fa=document.getElementById("focusAmount");if(fa){fa.value=pEn.value;}});}
+  var pCx=document.getElementById("perfComplexity");if(pCx){pCx.addEventListener("input",function(){state.complexity=parseInt(pCx.value,10);var v=document.getElementById("perfComplexityVal");if(v){v.textContent=pCx.value;}var cc=document.getElementById("complexity");if(cc){cc.value=pCx.value;}var ccv=document.getElementById("complexityVal");if(ccv){ccv.textContent=pCx.value;}});}
+  if(typeof renderPerfPanel==="function"){renderPerfPanel();}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
   // iOS backup: reanudar AudioContext en cualquier interacción táctil
