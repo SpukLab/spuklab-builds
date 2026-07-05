@@ -480,6 +480,19 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .perfMacroHead{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,.5);margin-bottom:2px;letter-spacing:.08em;}
 .perfMacroHead .pv{color:#b580ff;}
 
+
+/* ===== EUCLIDEAN EDITOR ===== */
+.euclidToggle{display:flex;gap:4px;margin:6px 0 5px;}
+.euclidModeBtn{flex:1;font-size:9px;padding:4px 0;border-radius:4px;cursor:pointer;
+  background:rgba(255,56,209,.06);border:1px solid rgba(255,56,209,.2);color:rgba(255,255,255,.6);
+  letter-spacing:.1em;touch-action:manipulation;}
+.euclidModeBtn.active{background:rgba(255,56,209,.22);color:#FF38D1;border-color:rgba(255,56,209,.55);}
+.euclidGrid{display:flex;flex-wrap:wrap;gap:2px;margin:4px 0;}
+.euclidCell{width:13px;height:13px;border-radius:2px;cursor:pointer;padding:0;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);touch-action:manipulation;}
+.euclidCell.on{background:#FF38D1;border-color:#FF38D1;box-shadow:0 0 4px rgba(255,56,209,.5);}
+.euclidHint{font-size:8px;color:rgba(255,255,255,.3);letter-spacing:.05em;margin-top:2px;}
+
 </style>
 </head>
 <body>
@@ -1125,7 +1138,7 @@ var viewParamLabels={grain:['POS','SIZE'],slice:['RATE','MOD'],loop:['IN','OUT']
 var scenes={A:null,B:null,C:null,D:null};var selScene=null;
 var morph={active:false,from:null,to:null,duration:4,startTime:0};
 
-function captureRhy(eng){return{mode:eng.mode,p1:eng.p1,p2:eng.p2,p3:eng.p3,pattern:eng.pattern.slice()};}
+function captureRhy(eng){return{mode:eng.mode,p1:eng.p1,p2:eng.p2,p3:eng.p3,pattern:eng.pattern.slice(),euclidEdit:eng.euclidEdit||false,euclidPattern:(eng.euclidPattern?eng.euclidPattern.slice():null)};}
 function captureScene(){
   return {
     focusTarget:state.focusTarget,focusAmount:state.focusAmount,
@@ -1281,7 +1294,11 @@ function tickGrid(entity,eng,until){var sd=rhyStepDur(),steps=rhyGridSteps(eng),
 function tickDensity(entity,eng,until){var epb=rhyDensAmt(eng)/100*16;if(epb<=0){eng.nextTime=until+1;return;}var rate=epb*state.bpm/(60*4);while(eng.nextTime<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));var base=1/rate;eng.nextTime+=Math.max(.02,base*(1+(Math.random()*2-1)*rhyDensVar(eng)/100*.8));}}
 function tickBurst(entity,eng,until){while(eng.burstLeft>0&&eng.burstNext<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.burstNext));eng.burstLeft--;eng.burstNext+=rhyBurstSpd(eng);}if(eng.burstLeft>0){return;}var bd=(60/state.bpm);while(eng.nextTime<until){if(Math.random()<.45){eng.burstLeft=rhyBurstCount(eng);eng.burstNext=eng.nextTime;while(eng.burstLeft>0&&eng.burstNext<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.burstNext));eng.burstLeft--;eng.burstNext+=rhyBurstSpd(eng);}if(eng.burstLeft>0){eng.nextTime+=bd*2;return;}}eng.nextTime+=bd*2;}}
 function tickProbability(entity,eng,until){var res=rhyProbResol(eng),sd=(60/state.bpm)/(res/4),chance=rhyProbChance(eng);while(eng.nextTime<until){if(Math.random()<chance){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));}eng.nextTime+=sd;}}
-function tickEuclidean(entity,eng,until){var pat=buildEuclidPat(eng),n=pat.length,sd=rhyStepDur();while(eng.nextTime<until){if(pat[eng.stepIdx%n]){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));}eng.stepIdx++;eng.nextTime+=sd;}}
+// Regenera euclidPattern desde los params actuales (para EDIT). No toca AUTO.
+function regenEuclidEditable(eng){
+  eng.euclidPattern=buildEuclidPat(eng).slice();
+}
+function tickEuclidean(entity,eng,until){var pat=(eng.euclidEdit&&eng.euclidPattern&&eng.euclidPattern.length)?eng.euclidPattern:buildEuclidPat(eng),n=pat.length,sd=rhyStepDur();while(eng.nextTime<until){if(pat[eng.stepIdx%n]){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));}eng.stepIdx++;eng.nextTime+=sd;}}
 
 function schedulerTick(){if(!audioCtx){return;}if(audioCtx.state==='suspended'){audioCtx.resume();return;}if(audioCtx.state==='closed'){return;}var until=audioCtx.currentTime+lookahead,i=0;while(i<entities.length){var e=entities[i];if(e.mute){i++;continue;}var hasRhy=e.rhy&&e.rhy.mode!=='none';if(hasRhy){tickRhythm(e,until);}else if(!isContinuousView(e.view)){if(e.view==='grain'){tickGrain(e,until);}else if(e.view==='slice'){tickSlice(e,until);}else if(e.view==='drift'){tickDrift(e,until);}}i++;}}
 function tickGrain(entity,until){var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){playGrain(entity,entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}entity.nextTime+=randExp(Math.max(.12,grainRateFor(entity)*Math.max(act,.12)));}}
@@ -1435,7 +1452,34 @@ function makePG(entity,label,param,min,max,value){var g=document.createElement('
 function rebuildViewParams(container,entity){var labels=viewParamLabels[entity.view]||['P1','P2'];container.innerHTML='';var p1v=entity.view==='loop'?Math.round(entity.loopIn*100):Math.round(entity.param1*100);var p2v=entity.view==='loop'?Math.round(entity.loopOut*100):Math.round(entity.param2*100);container.appendChild(makePG(entity,labels[0],'param1',0,100,p1v));container.appendChild(makePG(entity,labels[1],'param2',0,100,p2v));}
 function updateViewParamsUI(entity){var vp=document.getElementById('vp_'+entity.id);if(vp){rebuildViewParams(vp,entity);}var vs=document.getElementById('vsel_'+entity.id);if(vs){vs.value=entity.view;}}
 function buildStepStripDOM(container,entity){container.innerHTML='';var eng=entity.rhy;var pattern;if(eng.mode==='grid'){var steps=rhyGridSteps(eng);while(eng.pattern.length<steps){eng.pattern.push(0);}pattern=eng.pattern.slice(0,steps);}else if(eng.mode==='euclidean'){pattern=buildEuclidPat(eng);}else{return;}var i=0;while(i<pattern.length){var step=document.createElement('div');step.className='step'+(pattern[i]?' on':'');step.setAttribute('data-step',i);step.setAttribute('data-entity',entity.id);container.appendChild(step);i++;}}
-function buildRhyParams(container,entity){container.innerHTML='';var eng=entity.rhy;var labels=RHY_LABELS[eng.mode]||[];if(!labels.length){return;}var pKeys=['p1','p2','p3'].slice(0,labels.length);var i=0;while(i<labels.length){var pg=document.createElement('div');pg.className='rhyParam';var l=document.createElement('span');l.className='lbl';l.textContent=labels[i];var s=document.createElement('input');s.type='range';s.min=0;s.max=100;s.value=eng[pKeys[i]];s.setAttribute('data-entity',entity.id);s.setAttribute('data-rhy',pKeys[i]);pg.appendChild(l);pg.appendChild(s);container.appendChild(pg);i++;}}
+function buildRhyParams(container,entity){container.innerHTML='';var eng=entity.rhy;var labels=RHY_LABELS[eng.mode]||[];if(!labels.length){return;}var pKeys=['p1','p2','p3'].slice(0,labels.length);var i=0;while(i<labels.length){var pg=document.createElement('div');pg.className='rhyParam';var l=document.createElement('span');l.className='lbl';l.textContent=labels[i];var s=document.createElement('input');s.type='range';s.min=0;s.max=100;s.value=eng[pKeys[i]];s.setAttribute('data-entity',entity.id);s.setAttribute('data-rhy',pKeys[i]);pg.appendChild(l);pg.appendChild(s);container.appendChild(pg);i++;}
+  // Euclidean: toggle AUTO/EDIT + grilla editable
+  if(eng.mode==='euclidean'){buildEuclidEditor(container,entity,eng);}
+}
+function buildEuclidEditor(container,entity,eng){
+  var tog=document.createElement('div');tog.className='euclidToggle';
+  var bAuto=document.createElement('button');bAuto.className='euclidModeBtn'+(!eng.euclidEdit?' active':'');bAuto.textContent='AUTO';
+  var bEdit=document.createElement('button');bEdit.className='euclidModeBtn'+(eng.euclidEdit?' active':'');bEdit.textContent='EDIT';
+  bAuto.addEventListener('click',function(){eng.euclidEdit=false;buildRhyParams(container,entity);});
+  bEdit.addEventListener('click',function(){eng.euclidEdit=true;if(!eng.euclidPattern||!eng.euclidPattern.length){regenEuclidEditable(eng);}buildRhyParams(container,entity);});
+  tog.appendChild(bAuto);tog.appendChild(bEdit);container.appendChild(tog);
+  if(eng.euclidEdit){
+    if(!eng.euclidPattern||!eng.euclidPattern.length){regenEuclidEditable(eng);}
+    var grid=document.createElement('div');grid.className='euclidGrid';
+    var pat=eng.euclidPattern;
+    var k=0;while(k<pat.length){
+      (function(idx){
+        var cell=document.createElement('button');cell.className='euclidCell'+(pat[idx]?' on':'');
+        cell.addEventListener('click',function(){eng.euclidPattern[idx]=eng.euclidPattern[idx]?0:1;cell.classList.toggle('on');});
+        grid.appendChild(cell);
+      })(k);
+      k++;
+    }
+    container.appendChild(grid);
+    var hint=document.createElement('div');hint.className='euclidHint';hint.textContent='cambiar HITS/STEPS regenera';
+    container.appendChild(hint);
+  }
+}
 
 // --- GESTURES ---
 function buildCanvasGestures(){var i=0;while(i<entities.length){bindCanvasGesture(entities[i]);i++;}}
@@ -1503,7 +1547,7 @@ function bindCanvasGesture(entity){
 // --- ENTITY GRID DELEGATION ---
 function bindEntityGrid(){
   var grid=document.getElementById('entityArea');if(!grid){return;}
-  grid.addEventListener('input',function(ev){var t=ev.target;if(t.classList.contains('pSlider')){var e=getEntity(t.getAttribute('data-entity'));if(e){setEntityParam(e,t.getAttribute('data-param'),parseInt(t.value,10));}}if(t.hasAttribute('data-rhy')&&t.getAttribute('data-rhy')!=='mode'&&!sceneFrozen){var eid=t.getAttribute('data-entity');var e=getEntity(eid);if(e){e.rhy[t.getAttribute('data-rhy')]=parseInt(t.value,10);if(e.rhy.mode==='euclidean'||(e.rhy.mode==='grid'&&t.getAttribute('data-rhy')==='p1')){var strip=document.getElementById('rs_'+eid);if(strip){buildStepStripDOM(strip,e);}}}}});
+  grid.addEventListener('input',function(ev){var t=ev.target;if(t.classList.contains('pSlider')){var e=getEntity(t.getAttribute('data-entity'));if(e){setEntityParam(e,t.getAttribute('data-param'),parseInt(t.value,10));}}if(t.hasAttribute('data-rhy')&&t.getAttribute('data-rhy')!=='mode'&&!sceneFrozen){var eid=t.getAttribute('data-entity');var e=getEntity(eid);if(e){e.rhy[t.getAttribute('data-rhy')]=parseInt(t.value,10);if(e.rhy.mode==='euclidean'&&e.rhy.euclidEdit&&(t.getAttribute('data-rhy')==='p1'||t.getAttribute('data-rhy')==='p2')){regenEuclidEditable(e.rhy);var rp2=document.getElementById('rhyp_'+eid);if(rp2){buildRhyParams(rp2,e);}}if(e.rhy.mode==='euclidean'||(e.rhy.mode==='grid'&&t.getAttribute('data-rhy')==='p1')){var strip=document.getElementById('rs_'+eid);if(strip){buildStepStripDOM(strip,e);}}}}});
   grid.addEventListener('change',function(ev){var t=ev.target;if(t.classList.contains('vSel')&&!sceneFrozen){var e=getEntity(t.getAttribute('data-entity'));if(e){e.view=t.value;applyViewChange(e);emitEvent('view',{entity:e.id,view:e.view});}}if(t.classList.contains('micLenSel')){var mleid=t.getAttribute('data-entity');var mle=getEntity(mleid);if(mle){mle.micLen=parseInt(t.value)||4;}}
   if(t.hasAttribute('data-space')){var seid=t.getAttribute('data-entity');var se=getEntity(seid);if(se){setEntitySpace(se,t.value);}}else if(t.hasAttribute('data-auto')){var aeid=t.getAttribute('data-entity');var ae=getEntity(aeid);if(ae){setEntityAuto(ae,t.value);}}else if(t.classList.contains('characterSel')){var deid=t.getAttribute('data-entity');var de=getEntity(deid);if(de){applyDNAPreset(de,t.value);}}
     if(t.hasAttribute('data-rhy')&&t.getAttribute('data-rhy')==='mode'&&!sceneFrozen){var eid=t.getAttribute('data-entity');var e=getEntity(eid);if(!e){return;}e.rhy.mode=t.value;e.rhy.stepIdx=0;e.rhy.nextTime=audioCtx?audioCtx.currentTime+.05:0;e.rhy.burstLeft=0;var rhyp=document.getElementById('rhyp_'+eid);if(rhyp){buildRhyParams(rhyp,e);}var strip=document.getElementById('rs_'+eid);if(strip){if(e.rhy.mode==='grid'||e.rhy.mode==='euclidean'){strip.style.display='flex';buildStepStripDOM(strip,e);}else{strip.style.display='none';}}pushHistory();}if(t.type==='file'&&t.getAttribute('data-entity')){var eid=t.getAttribute('data-entity');var e=getEntity(eid);var file=t.files[0];if(file&&e){if(!audioCtx){initAudio();}if(audioCtx){audioCtx.resume();loadMaterialForEntity(e,file);}}}});
@@ -3219,6 +3263,8 @@ function deserializeEntity(entity,data){
     entity.rhy.mode=data.rhy.mode;
     entity.rhy.p1=data.rhy.p1;entity.rhy.p2=data.rhy.p2;entity.rhy.p3=data.rhy.p3;
     entity.rhy.pattern=data.rhy.pattern.slice();
+    entity.rhy.euclidEdit=data.rhy.euclidEdit||false;
+    entity.rhy.euclidPattern=(data.rhy.euclidPattern?data.rhy.euclidPattern.slice():null);
     entity.rhy.stepIdx=0;
     entity.rhy.nextTime=audioCtx?audioCtx.currentTime+.05:0;
     entity.rhy.burstLeft=0;entity.rhy.burstNext=0;
