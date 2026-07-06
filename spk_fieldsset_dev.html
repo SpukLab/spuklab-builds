@@ -503,6 +503,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .perfSM.soloed{background:rgba(95,255,160,.2);color:#5fffa0;border-color:rgba(95,255,160,.5);}
 .perfSM.muted{background:rgba(255,80,80,.2);color:#ff5050;border-color:rgba(255,80,80,.5);}
 
+
+.perfSceneBtn.pressing{background:linear-gradient(to right,rgba(153,68,255,.4) var(--rp,0%),rgba(153,68,255,.07) var(--rp,0%));}
+
 </style>
 </head>
 <body>
@@ -548,6 +551,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
       <div class="perfBlock">
         <div class="perfLbl">Morph</div>
         <div id="perfMorph"></div>
+        <div id="morphProgress" style="display:none;height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:5px;overflow:hidden;"><div id="morphBar" style="height:100%;width:0%;background:linear-gradient(90deg,#9944ff,#43E5FF);"></div></div>
       </div>
       <div class="perfBlock">
         <div class="perfMacro">
@@ -596,47 +600,16 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     </div>
 
 
-    <div class="macroSec dupHidden">
-      <h4 class="mono">SETUP</h4>
-      <div class="macroItem dupHidden">
-        <div class="macroHead"><span class="macroLbl">COMPLEXITY</span><span class="macroVal" id="complexityVal">40</span></div>
-        <input type="range" id="complexity" min="0" max="100" value="40" class="macroSlider">
-      </div>
+    <div class="macroSec">
+      <h4 class="mono">FOCUS</h4>
       <div class="macroItem">
-        <div class="macroHead"><span class="macroLbl">REVERB</span></div>
-        <input type="range" id="reverbAmount" min="0" max="100" value="15" class="macroSlider">
-      </div>
-      <div class="macroItem">
-        <div class="macroHead"><span class="macroLbl">FOCUS</span></div>
         <select id="focusTarget" style="width:100%;font-size:11px;margin-bottom:5px;">
           <option value="none">— ninguno</option>
           <optgroup label="ROLES"><option value="voice">voice</option><option value="texture">texture</option><option value="rhythm">rhythm</option><option value="noise">noise</option><option value="field">field</option></optgroup>
           <optgroup id="focusEntityGroup" label="ENTITIES"></optgroup>
         </select>
-        <div class="macroHead dupHidden"><span class="macroLbl" style="font-size:9px;color:rgba(255,255,255,.3);">AMOUNT</span><span class="macroVal" id="focusVal" style="font-size:11px;">0</span></div>
-        <input type="range" id="focusAmount" min="0" max="100" value="0" class="macroSlider dupHidden">
       </div>
       <div class="macroActions"><button id="btnFreeze">FREEZE</button></div>
-      <!-- SCENES inline (ocultas: ahora en Performance Panel, se mantienen para wiring) -->
-      <div class="scenesRow dupHidden">
-        <span class="macroLbl">SCENE</span>
-        <button class="sBtn" data-scene="A">A</button>
-        <button class="sBtn" data-scene="B">B</button>
-        <button class="sBtn" data-scene="C">C</button>
-        <button class="sBtn" data-scene="D">D</button>
-      </div>
-            <div class="dupHidden" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.04);">
-        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:1px;margin-bottom:6px;">MORPH</div>
-        <div class="morphRow">
-          <select class="mSel" id="morphFrom"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-          <span class="lbl">→</span>
-          <select class="mSel" id="morphTo"><option>B</option><option>A</option><option>C</option><option>D</option></select>
-          <input type="number" id="morphDur" min="0.5" max="60" value="4" style="width:32px;">s
-          <button id="btnBarsPreset" style="font-size:9px;padding:2px 5px;">4b</button>
-        </div>
-        <button id="btnMorph" style="width:100%;font-size:11px;margin-top:4px;">MORPH</button>
-        <div id="morphProgress"><div id="morphBar"></div></div>
-      </div>
     </div>
 
     
@@ -1154,7 +1127,7 @@ var viewParamLabels={grain:['POS','SIZE'],slice:['RATE','MOD'],loop:['IN','OUT']
 
 // --- scenes & morph ---
 var scenes={A:null,B:null,C:null,D:null};var selScene=null;
-var morph={active:false,from:null,to:null,duration:4,startTime:0};
+var morph={active:false,from:null,to:null,fromKey:null,toKey:null,duration:4,startTime:0};
 
 function captureRhy(eng){return{mode:eng.mode,p1:eng.p1,p2:eng.p2,p3:eng.p3,pattern:eng.pattern.slice(),euclidEdit:eng.euclidEdit||false,euclidPattern:(eng.euclidPattern?eng.euclidPattern.slice():null)};}
 function captureScene(){
@@ -1188,16 +1161,16 @@ function _applySceneInternal(scene){
   refreshAllGains();renderEntityCards();buildCanvasGestures();entities.forEach(function(e){updateBankButtonsUI(e);});
 }
 
-function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);if(typeof renderPerfScenes==="function"){renderPerfScenes();}if(typeof renderPerfParams==="function"){renderPerfParams();}}
+function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);if(typeof renderPerfPanel==="function"){renderPerfPanel();}}
 
 function tickMorph(){
   if(!morph.active||sceneFrozen){return;}
   var t=(performance.now()-morph.startTime)/(morph.duration*1000);
-  if(t>=1){t=1;morph.active=false;document.getElementById('morphProgress').style.display='none';var ci=0;while(ci<entities.length&&ci<morph.to.entities.length){var ce=entities[ci],cte=morph.to.entities[ci];ce.level=cte.level;ce.pan=cte.pan;ce.filterNorm=cte.filterNorm;if(ce._moff){ce._moff.level=0;ce._moff.pan=0;ce._moff.filter=0;}syncEntitySliders(ce);ci++;}pushHistory();}
+  if(t>=1){t=1;morph.active=false;var _mp=document.getElementById('morphProgress');if(_mp){_mp.style.display='none';}var ci=0;while(ci<entities.length&&ci<morph.to.entities.length){var ce=entities[ci],cte=morph.to.entities[ci];ce.level=cte.level;ce.pan=cte.pan;ce.filterNorm=cte.filterNorm;if(ce._moff){ce._moff.level=0;ce._moff.pan=0;ce._moff.filter=0;}syncEntitySliders(ce);ci++;}pushHistory();}
   var bar=document.getElementById('morphBar');if(bar){bar.style.width=(t*100)+'%';}
   var fr=morph.from,to=morph.to;
   state.complexity=Math.round(lerp(fr.complexity,to.complexity,t));state.focusAmount=Math.round(lerp(fr.focusAmount||0,to.focusAmount||0,t));
-  var cx=document.getElementById('complexity');var fa=document.getElementById('focusAmount');if(cx){cx.value=state.complexity;}if(fa){fa.value=state.focusAmount;}
+  var _pcx=document.getElementById('perfComplexity');var _pcv=document.getElementById('perfComplexityVal');if(_pcx){_pcx.value=state.complexity;}if(_pcv){_pcv.textContent=state.complexity;}var _pen=document.getElementById('perfEnergy');var _pev=document.getElementById('perfEnergyVal');if(_pen){_pen.value=state.focusAmount;}if(_pev){_pev.textContent=state.focusAmount;}var fa=document.getElementById('focusAmount');if(fa){fa.value=state.focusAmount;}
   var cv=document.getElementById('complexityVal');if(cv){cv.textContent=state.complexity;}var fv=document.getElementById('focusVal');if(fv){fv.textContent=state.focusAmount;}
   var i=0;while(i<entities.length&&i<fr.entities.length&&i<to.entities.length){var e=entities[i],fe=fr.entities[i],te=to.entities[i];
     if(e._moff){
@@ -1635,16 +1608,19 @@ function bindScenes(){
   document.querySelectorAll('.sBtn[data-scene]').forEach(setupSceneBtn);
 }
 function bindMorph(){
-  document.getElementById('btnMorph').addEventListener('click',function(){var fk=document.getElementById('morphFrom').value,tk=document.getElementById('morphTo').value;var dur=Math.max(.5,parseFloat(document.getElementById('morphDur').value)||4);if(!scenes[fk]||!scenes[tk]){setStatus('guarda las escenas '+fk+' y '+tk+' primero');return;}if(fk===tk){return;}morph.from=scenes[fk];morph.to=scenes[tk];morph.duration=dur;morph.startTime=performance.now();morph.active=true;emitEvent('morph',{from:fk,to:tk,duration:dur});document.getElementById('morphProgress').style.display='block';document.getElementById('morphBar').style.width='0%';setStatus('MORPH '+fk+' → '+tk+' ('+dur+'s)');});
-  document.getElementById('btnBarsPreset').addEventListener('click',function(){var barDur=(60/state.bpm)*4;document.getElementById('morphDur').value=Math.round(barDur*4*10)/10;setStatus('morph: 4 compases = '+(Math.round(barDur*4*10)/10)+'s @ '+state.bpm+'bpm');});
+  // btnMorph/btnBarsPreset viejos: defensivos (el morph ahora vive en el Performance Panel)
+  var bm=document.getElementById('btnMorph');
+  if(bm){bm.addEventListener('click',function(){doMorphFromPanel();});}
+  var bp=document.getElementById('btnBarsPreset');
+  if(bp){bp.addEventListener('click',function(){morph.duration=(60/state.bpm)*4*4;setStatus('morph: 4 compases');});}
 }
 
 // --- MACROS ---
 function bindMacros(){
   document.getElementById('focusTarget').addEventListener('change',function(ev){if(sceneFrozen){return;}var v=ev.target.value;state.focusTarget=(v==='none')?null:v;refreshAllGains();markDirty();});
-  document.getElementById('focusAmount').addEventListener('input',function(ev){if(sceneFrozen){return;}state.focusAmount=parseInt(ev.target.value,10);var fv=document.getElementById('focusVal');if(fv){fv.textContent=state.focusAmount;}refreshAllGains();emitEvent('focus',{target:state.focusTarget||'none',amount:state.focusAmount});markDirty();});
-  document.getElementById('complexity').addEventListener('input',function(ev){if(sceneFrozen){return;}state.complexity=parseInt(ev.target.value,10);var cv=document.getElementById('complexityVal');if(cv){cv.textContent=state.complexity;}emitEvent('complexity',{value:state.complexity});markDirty();});
-  document.getElementById('reverbAmount').addEventListener('input',function(ev){if(wetGain){wetGain.gain.setTargetAtTime(parseInt(ev.target.value,10)/100,audioCtx.currentTime,.1);}});
+  var _eFa=document.getElementById('focusAmount');if(_eFa){_eFa.addEventListener('input',function(ev){setFocusAmountValue(ev.target.value);});}
+  var _eCx=document.getElementById('complexity');if(_eCx){_eCx.addEventListener('input',function(ev){setComplexityValue(ev.target.value);});}
+  var _eRv=document.getElementById('reverbAmount');if(_eRv){_eRv.addEventListener('input',function(ev){setReverbValue(ev.target.value);});}
   document.getElementById('bpmInput').addEventListener('change',function(ev){var v=parseInt(ev.target.value,10);if(!isNaN(v)&&v>=40&&v<=220){state.bpm=v;}});
   document.getElementById('btnFreeze').addEventListener('click',toggleFreeze);
 
@@ -4142,6 +4118,42 @@ function projDoDelete(name){
   });
 }
 
+
+// ============================================================
+// CONTROLES DE PERFORMANCE — logica unica (post dedupe DNA Center)
+// ============================================================
+function setComplexityValue(v){
+  if(sceneFrozen){return;}
+  state.complexity=parseInt(v,10);
+  var pv=document.getElementById('perfComplexityVal');if(pv){pv.textContent=state.complexity;}
+  emitEvent('complexity',{value:state.complexity});
+  markDirty();
+}
+function setFocusAmountValue(v){
+  if(sceneFrozen){return;}
+  state.focusAmount=parseInt(v,10);
+  var pv=document.getElementById('perfEnergyVal');if(pv){pv.textContent=state.focusAmount;}
+  refreshAllGains();
+  emitEvent('focus',{target:state.focusTarget||'none',amount:state.focusAmount});
+}
+function setReverbValue(v){
+  if(wetGain&&audioCtx){wetGain.gain.setTargetAtTime(parseInt(v,10)/100,audioCtx.currentTime,.1);}
+  var pv=document.getElementById('perfReverbVal');if(pv){pv.textContent=v;}
+}
+function doMorphFromPanel(){
+  var fk=morph.fromKey,tk=morph.toKey;
+  if(!fk||!tk){setStatus('elegi escenas FROM y TO');return;}
+  if(!scenes[fk]||!scenes[tk]){setStatus('guarda las escenas '+fk+' y '+tk+' primero');return;}
+  if(fk===tk){return;}
+  morph.from=scenes[fk];morph.to=scenes[tk];
+  morph.duration=morph.duration||4;
+  morph.startTime=performance.now();morph.active=true;
+  var _mp=document.getElementById('morphProgress');if(_mp){_mp.style.display='block';}
+  var _mb=document.getElementById('morphBar');if(_mb){_mb.style.width='0%';}
+  setStatus('MORPH '+fk+' > '+tk);
+  emitEvent('morph',{from:fk,to:tk,duration:morph.duration});
+}
+
 // ============================================================
 // PERFORMANCE PANEL — presentacion pura. No toca motor/serializacion.
 // _perfEntity: id de la entidad seleccionada (estado UI efimero).
@@ -4157,15 +4169,31 @@ function renderPerfScenes(){
   row.innerHTML='';
   ['A','B','C','D'].forEach(function(key){
     var b=document.createElement('button');b.className='perfSceneBtn';b.textContent=key;
-    b.setAttribute('data-perfscene',key);
     if(scenes[key]){var d=document.createElement('span');d.className='dot';b.appendChild(d);b.classList.add('saved');}
     if(selScene===key){b.classList.add('sel');}
-    b.addEventListener('click',function(){
-      var real=document.querySelector('.sBtn[data-scene="'+key+'"]');
-      if(real){real.dispatchEvent(new MouseEvent('pointerup'));}
-      if(typeof applyScene==='function'&&scenes[key]){applyScene(key);}
-      renderPerfScenes();
-    });
+    // tap = aplicar escena · hold 700ms = guardar escena (misma mecanica que los botones originales)
+    var holdTimer=null,held=false,ringInt=null,t0=0;
+    function clearRing(){clearInterval(ringInt);ringInt=null;b.classList.remove('pressing');b.style.removeProperty('--rp');}
+    b.addEventListener('pointerdown',function(){
+      held=false;t0=Date.now();b.classList.add('pressing');
+      ringInt=setInterval(function(){var p=Math.min(100,(Date.now()-t0)/700*100);b.style.setProperty('--rp',p.toFixed(1)+'%');},16);
+      holdTimer=setTimeout(function(){
+        held=true;clearRing();
+        scenes[key]=captureScene();markSessionDirty({immediate:true});
+        selScene=key;
+        pushHistory('Scene '+key+' guardada');setStatus('Scene '+key+' guardada');
+        renderPerfScenes();
+      },700);
+    },false);
+    b.addEventListener('pointerup',function(){
+      clearTimeout(holdTimer);clearRing();
+      if(!held){
+        selScene=key;
+        if(typeof applyScene==='function'&&scenes[key]){applyScene(key);}
+        renderPerfScenes();
+      }
+    },false);
+    b.addEventListener('pointerleave',function(){clearTimeout(holdTimer);clearRing();},false);
     row.appendChild(b);
   });
 }
@@ -4178,27 +4206,22 @@ function renderPerfMorph(){
   var toWrap=document.createElement('div');toWrap.className='perfEntRow';toWrap.style.flex='1';
   ['A','B','C','D'].forEach(function(key){
     var bf=document.createElement('button');bf.className='perfEntBtn';bf.textContent=key;
-    if(morph.from===key){bf.classList.add('sel');}
-    bf.addEventListener('click',function(){morph.from=key;renderPerfMorph();syncMorphSelects();});
+    if(morph.fromKey===key){bf.classList.add('sel');}
+    bf.addEventListener('click',function(){morph.fromKey=key;renderPerfMorph();});
     fromWrap.appendChild(bf);
     var bt=document.createElement('button');bt.className='perfEntBtn';bt.textContent=key;
-    if(morph.to===key){bt.classList.add('sel');}
-    bt.addEventListener('click',function(){morph.to=key;renderPerfMorph();syncMorphSelects();});
+    if(morph.toKey===key){bt.classList.add('sel');}
+    bt.addEventListener('click',function(){morph.toKey=key;renderPerfMorph();});
     toWrap.appendChild(bt);
   });
   var arrow=document.createElement('span');arrow.textContent='>';arrow.style.cssText='color:rgba(255,255,255,.4);font-size:11px;';
   var goBtn=document.createElement('button');goBtn.className='perfSceneBtn';goBtn.textContent='MORPH';
   goBtn.style.cssText='flex:none;padding:6px 10px;';
-  goBtn.addEventListener('click',function(){var mb=document.getElementById('btnMorph');if(mb){mb.click();}});
+  goBtn.addEventListener('click',function(){doMorphFromPanel();});
   wrap.appendChild(fromWrap);wrap.appendChild(arrow);wrap.appendChild(toWrap);
   box.appendChild(wrap);box.appendChild(goBtn);
 }
-function syncMorphSelects(){
-  // Reflejar morph.from/to en los selects originales (mantener coherencia)
-  var mf=document.getElementById('morphFrom');var mt=document.getElementById('morphTo');
-  if(mf&&morph.from){mf.value=morph.from;}
-  if(mt&&morph.to){mt.value=morph.to;}
-}
+
 function renderPerfEntities(){
   var row=document.getElementById('perfEntities');if(!row){return;}
   row.innerHTML='';
@@ -4346,9 +4369,9 @@ window.onload=function(){
   var pImpFile=document.getElementById("projImportFile");if(pImpFile){pImpFile.addEventListener("change",_projImportFileChosen);}
   var rRes=document.getElementById("recRestore");if(rRes){rRes.addEventListener("click",_recoveryRestore);}
   var rDis=document.getElementById("recDiscard");if(rDis){rDis.addEventListener("click",_recoveryDiscard);}
-  var pEn=document.getElementById("perfEnergy");if(pEn){pEn.addEventListener("input",function(){state.focusAmount=parseFloat(pEn.value)/100;var v=document.getElementById("perfEnergyVal");if(v){v.textContent=pEn.value;}var fa=document.getElementById("focusAmount");if(fa){fa.value=pEn.value;}});}
-  var pCx=document.getElementById("perfComplexity");if(pCx){pCx.addEventListener("input",function(){state.complexity=parseInt(pCx.value,10);var v=document.getElementById("perfComplexityVal");if(v){v.textContent=pCx.value;}var cc=document.getElementById("complexity");if(cc){cc.value=pCx.value;}var ccv=document.getElementById("complexityVal");if(ccv){ccv.textContent=pCx.value;}});}
-  var pRev=document.getElementById("perfReverb");if(pRev){pRev.addEventListener("input",function(){var v=document.getElementById("reverbAmount");if(v){v.value=pRev.value;v.dispatchEvent(new Event("input"));}var pv=document.getElementById("perfReverbVal");if(pv){pv.textContent=pRev.value;}});}
+  var pEn=document.getElementById("perfEnergy");if(pEn){pEn.addEventListener("input",function(){setFocusAmountValue(pEn.value);});}
+  var pCx=document.getElementById("perfComplexity");if(pCx){pCx.addEventListener("input",function(){setComplexityValue(pCx.value);});}
+  var pRev=document.getElementById("perfReverb");if(pRev){pRev.addEventListener("input",function(){setReverbValue(pRev.value);});}
   if(typeof renderPerfPanel==="function"){renderPerfPanel();}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
