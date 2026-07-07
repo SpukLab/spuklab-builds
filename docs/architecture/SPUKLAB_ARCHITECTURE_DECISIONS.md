@@ -2,6 +2,7 @@
 
 **Bitácora técnica de decisiones (ADR) — SpukBeatsOne / Gramática Ritual v1**
 **Complemento de:** SPUKLAB_CONSTITUTION_v1.md
+**Base Constitution (Sound Forge 2):** [CONSTITUTION-v1.2.md](CONSTITUTION-v1.2.md)
 **Propósito:** registrar *por qué* se tomó cada decisión arquitectónica, no solo *qué*. Fuente de verdad sobre intención y trade-offs. No resumir ni reinterpretar.
 
 > Cada decisión: contexto → decisión → razón → consecuencias → estado. Estados: `Aceptada`, `Implementada`, `Reservada`, `Pendiente`.
