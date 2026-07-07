@@ -2466,6 +2466,29 @@ async function renderLuminousHalo(buffer,slotType,amount){
   return rendered;
 }
 
+// ─── PACK BUILDER ────────────────────────────────────────────
+// V-01 Constitution §4: PackBuilder derives identity (pure), Export serializes (I/O).
+// buildPackIdentity() is the PackBuilder motor — derives Pack identity from Fragment
+// data, never invents attributes. Callable without producing a ZIP.
+function buildPackIdentity(bankName,samples,entities,modeCounts,roleCounts,li,di,totalFragments){
+  return{
+    schema:'spukpack_v2',type:'fragment_bank',
+    meta:{packId:bankName,packName:bankName,name:bankName,author:'SpukLab',
+      created:new Date().toISOString(),generation:0,
+      entityCount:totalFragments,luminousCount:li,darkCoreCount:di},
+    ecology:{
+      weatherBias:{target:li>di?'RADIANT':'VOID'},
+      bpmAffinity:{min:90,max:140,sweet:120},
+      silenceTolerance:0.4,
+      verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di},
+      triggerModes:modeCounts,materialRoles:roleCounts
+    },
+    routing:{maxSimultaneousEntities:6,maxPolyphony:12,
+      preferredSampleRate:48000,bitDepth:24,
+      rareEntityCooldownMs:18000,eventEntityCooldownMs:8000},
+    samples,entities
+  };
+}
 async function exportFragmentBank(){
   const setB=msg=>{const el=document.getElementById('bank-status');if(el)el.textContent=msg;};
   if(FragmentLibrary.length===0){setB('no fragments to export');return;}
@@ -2545,32 +2568,8 @@ async function exportFragmentBank(){
       if(cls.role==='structural')roleCounts.structural++;else roleCounts.ecological++;
     }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
-    const manifest={
-      schema:'spukpack_v2',
-      type:'fragment_bank',
-      meta:{
-        packId:bankName, packName:bankName, name:bankName, author:'SpukLab',
-        created:new Date().toISOString(),
-        generation:0,
-        entityCount:FragmentLibrary.length,
-        luminousCount:li, darkCoreCount:di
-      },
-      ecology:{
-        weatherBias:{target:li>di?'RADIANT':'VOID'},
-        bpmAffinity:{min:90,max:140,sweet:120},
-        silenceTolerance:0.4,
-        verticalProfile:{hasLuminous:li>0,hasDarkCore:di>0,luminousCount:li,darkCoreCount:di},
-        triggerModes:modeCounts,
-        materialRoles:roleCounts
-      },
-      routing:{
-        maxSimultaneousEntities:6, maxPolyphony:12,
-        preferredSampleRate:48000, bitDepth:24,
-        rareEntityCooldownMs:18000, eventEntityCooldownMs:8000
-      },
-      samples,    // ← BeatsOne loads these
-      entities    // ← BeatsOne triggers these
-    };
+    // V-01: PackBuilder derives identity; Export serializes. Constitution §4.
+    const manifest=buildPackIdentity(bankName,samples,entities,modeCounts,roleCounts,li,di,FragmentLibrary.length);
     zip.add('manifest.json',new TextEncoder().encode(JSON.stringify(manifest,null,2)));
     setB('compressing…');
     await new Promise(r=>setTimeout(r,16));
@@ -2828,14 +2827,17 @@ function dfGenerateCuratedSet(profileKey){
   return chosen;
 }
 function dfGenerate(){
-  if(!SLOTS[currentSlot]||!SLOTS[currentSlot].buffer){
+  // V-03: mat passed explicitly — Auto Forge orchestrator no longer depends on
+  // currentSlot implementation detail. Constitution §5: Auto Forge is orchestrator.
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer){
     const lbl=document.getElementById('df-mat-sub');if(lbl)lbl.textContent='load material first';
     return;
   }
   DF_genCounter++;
   const profileKey=DF_activeProfile;
   const set=dfGenerateCuratedSet(profileKey);
-  const mat=SLOTS[currentSlot];
+  // mat already declared above (V-03)
   const reg=getPlaybackRegion(mat);
   // Build variants with provenance (intent is first-class)
   DF_variants=set.map((s,i)=>({
@@ -2852,7 +2854,8 @@ function dfGenerate(){
       generation:DF_genCounter,
       playback:{mode:s.playback.mode,region:s.playback.region,pitch:s.playback.pitch,rate:s.playback.rate,reverse:!!s.playback.reverse},
       sourceTrack:mat.name||'material',
-      sourceRegion:{start:parseFloat(reg.startSec.toFixed(3)),end:parseFloat(reg.endSec.toFixed(3))}
+      sourceRegion:{start:parseFloat(reg.startSec.toFixed(3)),end:parseFloat(reg.endSec.toFixed(3))},
+      materialId:mat.id||null // V-05: stable Material entity id (Date.now() from analyzeMaterial)
     }
   }));
   dfRenderVariants();
