@@ -1709,7 +1709,7 @@ function getVoice(){
 // ① MATERIAL IMPORT SYSTEM
 // ═══════════════════════════════════════════════════════
 // Per-slot material storage (3 slots for A/B/C)
-const SLOTS=[null,null,null]; // MaterialDef | null
+const SLOTS=[null,null,null]; // MaterialDef | null — V-08: dynamic capacity; [0..2] kept for UI compat
 let currentSlot=0;
 let precomputedWaveforms=[null,null,null]; // per slot
 let resampledBuffer=null; // latest render result
@@ -2376,6 +2376,11 @@ function fragTriggerMode(slotType){
   if(slotType==='vocal'||slotType==='voxritual')return'vocal';
   return'textural'; // default: emergent
 }
+// V-09 fix: triggerMode derived from materialType (functional axis), not slotType (aesthetic axis)
+// Constitution §7 rule 10: single source of truth per concept.
+function fragTriggerModeByType(materialType){
+  return TYPE_TRIGGER[materialType]||'textural';
+}
 
 // ─── MATERIAL CLASSIFICATION ─────────────────────────────
 // TWO INDEPENDENT AXES:
@@ -2536,7 +2541,7 @@ async function exportFragmentBank(){
       };
       if(lum&&lum.family==='luminous_energy')li++;
       if(fr.slotType==='dark_core')di++;
-      const tm=fragTriggerMode(fr.slotType);if(tm in modeCounts)modeCounts[tm]++;
+      const tm=fragTriggerModeByType(fr.materialType);if(tm in modeCounts)modeCounts[tm]++;
       if(cls.role==='structural')roleCounts.structural++;else roleCounts.ecological++;
     }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
@@ -3083,10 +3088,14 @@ function dfReversedBuffer(buf){
 function dfSaveVariant(vid){
   const v=DF_variants.find(x=>x.id===vid);if(!v||v.saved)return;
   dfApplyConfig(v.cfg);
-  // Auto Forge output is ecological by default; map profile→materialType
+  // V-02 fix: domain/materialType come from MatEditState (user-set via DOMAIN selector).
+  // Constitution §7 rule 3: Auto Forge does not decide domain.
+  // Default ECOLOGICAL only when user has not set a domain explicitly (structural workflow).
   const profMType={dark:'DRONE',fracture:'GLITCH',textural:'TEXTURE',luminous:'FX',hybrid:'ATMOS'};
-  MatEditState.domain='ECOLOGICAL';
-  MatEditState.materialType=profMType[v.provenance&&v.provenance.profile]||'TEXTURE';
+  if(!MatEditState.domain||MatEditState.domain==='ECOLOGICAL'){
+    MatEditState.domain='ECOLOGICAL';
+    MatEditState.materialType=profMType[v.provenance&&v.provenance.profile]||'TEXTURE';
+  }
   saveFragment(v.provenance);
   v.saved=true;
   dfRenderVariants();
