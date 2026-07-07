@@ -2200,6 +2200,13 @@ function initMaterialEditing(){
   bind('wt-transient',()=>sliceByTransient());
   bind('wt-save-fragment',()=>saveFragment());
   bind('wt-export-bank',()=>exportFragmentBank());
+  // V-06: keep currentPack.name in sync with pid-name input
+  const pidName=document.getElementById('pid-name');
+  if(pidName){
+    const syncName=()=>{if(currentPack)currentPack.name=pidName.value||'pack';};
+    pidName.addEventListener('input',syncName);
+    syncName(); // initial sync
+  }
   bind('bank-halo-toggle',()=>{
     const el=document.getElementById('bank-halo-toggle');
     if(!el)return;
@@ -2308,11 +2315,16 @@ function saveFragment(provenance){
   const name=`${MatEditState.slotType}${roleTag}_${(FragmentLibrary.length+1).toString().padStart(2,'0')}`;
   const domain=MatEditState.domain||'ECOLOGICAL';
   const materialType=MatEditState.materialType||(domain==='STRUCTURAL'?'PERC':'TEXTURE');
+  // V-04: packId links Fragment to its Pack entity (Constitution §3.1 RFC-003 Model A interim)
+  const packId=currentPack?currentPack.id:null;
   FragmentLibrary.push({id,name,buffer:frag,duration:len,slotType:MatEditState.slotType,
-    domain,materialType,provenance:provenance||null});
+    domain,materialType,packId,provenance:provenance||null});
+  // V-06: register Fragment in the active Pack entity
+  if(currentPack&&packId)currentPack.fragmentIds.push(id);
   renderFragmentList();
+  _updatePackCounter();
   setT('mat-status',`saved: ${name} [${domain}/${materialType}]`);
-  // Persist to IndexedDB (domain/materialType/provenance included)
+  // Persist to IndexedDB (domain/materialType/packId/provenance included)
   FragDB.put(bufferToRecord(id,name,frag,len,MatEditState.slotType,provenance||null,domain,materialType))
     .catch(e=>console.warn('[SF3] fragment save fail:',e.message));
 }
@@ -2491,8 +2503,12 @@ function buildPackIdentity(bankName,samples,entities,modeCounts,roleCounts,li,di
 }
 async function exportFragmentBank(){
   const setB=msg=>{const el=document.getElementById('bank-status');if(el)el.textContent=msg;};
-  if(FragmentLibrary.length===0){setB('no fragments to export');return;}
-  setB(`packaging ${FragmentLibrary.length} fragments…`);
+  // V-06: export only Fragments belonging to the active Pack. Constitution §3.1 Rule 5.
+  const packFrags=currentPack&&currentPack.fragmentIds.length>0
+    ? FragmentLibrary.filter(fr=>currentPack.fragmentIds.includes(fr.id))
+    : FragmentLibrary; // fallback: all fragments (legacy sessions without packId)
+  if(packFrags.length===0){setB('no fragments in current pack');return;}
+  setB(`packaging ${packFrags.length} fragments…`);
   await new Promise(r=>setTimeout(r,16));
   try{
     const zip=new MinimalZip();
@@ -2509,12 +2525,12 @@ async function exportFragmentBank(){
     const roleCounts={structural:0,ecological:0};
     const haloOn=document.getElementById('bank-halo-toggle')?.classList.contains('on');
     const haloAmt=0.5; // shared halo amount
-    for(let i=0;i<FragmentLibrary.length;i++){
-      const fr=FragmentLibrary[i];
+    for(let i=0;i<packFrags.length;i++){
+      const fr=packFrags[i];
       let outBuf=fr.buffer;
       // Apply shared LUMINOUS halo so fragments cohere in the same space
       if(haloOn){
-        setB(`rendering halo ${i+1}/${FragmentLibrary.length}…`);
+        setB(`rendering halo ${i+1}/${packFrags.length}…`);
         await new Promise(r=>setTimeout(r,0));
         try{outBuf=await renderLuminousHalo(fr.buffer,fr.slotType,haloAmt);}catch(e){outBuf=fr.buffer;}
       }
@@ -2569,7 +2585,7 @@ async function exportFragmentBank(){
     }
     const bankName=(document.getElementById('pid-name')?.value||'luminous_bank').replace(/\s+/g,'_').toLowerCase();
     // V-01: PackBuilder derives identity; Export serializes. Constitution §4.
-    const manifest=buildPackIdentity(bankName,samples,entities,modeCounts,roleCounts,li,di,FragmentLibrary.length);
+    const manifest=buildPackIdentity(bankName,samples,entities,modeCounts,roleCounts,li,di,packFrags.length);
     zip.add('manifest.json',new TextEncoder().encode(JSON.stringify(manifest,null,2)));
     setB('compressing…');
     await new Promise(r=>setTimeout(r,16));
@@ -2577,9 +2593,11 @@ async function exportFragmentBank(){
     const blob=new Blob([bytes],{type:'application/zip'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;
-    a.download=`${bankName}_bank_${FragmentLibrary.length}frag.spukpack`;
+    a.download=`${bankName}_${packFrags.length}frag.spukpack`;
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-    setB(`exported ${FragmentLibrary.length} entities (${li} luminous, ${di} dark core)`);
+    setB(`exported ${packFrags.length} fragments (${li} luminous, ${di} dark core)`);
+    // V-06: after export, init a new Pack so next session starts clean
+    initCurrentPack((document.getElementById('pid-name')?.value||'pack')+'_2');
   }catch(e){setB('export error: '+e.message);console.warn('[SF3] bank export fail:',e);}
 }
 
@@ -2715,6 +2733,26 @@ const DF_PROFILES={
 };
 let DF_activeProfile='dark';
 let DF_DEBUG_SINGLE_GRAIN=false; // isolation audit: one continuous grain per role
+
+// V-06: currentPack — the Pack entity active during this production session.
+// Constitution §3.1: a Pack must exist before the first Fragment is generated.
+// Constitution §7 Rule 5: Fragments are generated FOR a Pack.
+// Note: implementation as a module-level object; Constitution §3.1 does not prescribe
+// global vs repository — only that exactly one Pack is active per session.
+let currentPack={
+  id:'pack_'+Date.now(),
+  name:'Rust Ritual',
+  fragmentIds:[],
+  createdAt:new Date().toISOString()
+};
+function initCurrentPack(name){
+  currentPack={id:'pack_'+Date.now(),name:name||'pack',fragmentIds:[],createdAt:new Date().toISOString()};
+  _updatePackCounter();
+}
+function _updatePackCounter(){
+  const el=document.getElementById('df-pack-count');
+  if(el)el.textContent=currentPack.fragmentIds.length+' in pack';
+}
 let DF_variants=[]; // {id, label, role, cfg, slotType, saved, provenance}
 let DF_genCounter=0;
 
@@ -3105,8 +3143,7 @@ function dfSaveVariant(vid){
   dfUpdatePackCount();
 }
 function dfUpdatePackCount(){
-  const el=document.getElementById('df-pack-count');
-  if(el)el.textContent=`${FragmentLibrary.length} in pack`;
+  _updatePackCounter(); // V-06: shows currentPack fragment count, not total library
 }
 function dfRenderVariants(){
   const list=document.getElementById('df-variant-list');if(!list)return;
