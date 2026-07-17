@@ -1350,6 +1350,10 @@ function rtraceSnapshot(entity,eng,fired){
     hasBuffer:!!buf,
     act:+(typeof activityMultiplier==='function'?activityMultiplier(entity):-1).toFixed(3),
     mute:!!entity.mute,
+    soloStates:(function(){var s='';var i=0;while(i<entities.length){s+=entities[i].id+(entities[i].solo?'*':'')+(entities[i].mute?'M':'')+' ';i++;}return s.trim();})(),
+    anySolo:(function(){var i=0;while(i<entities.length){if(entities[i].solo){return true;}i++;}var rk;for(rk in roles){if(roles[rk]&&roles[rk].solo){return 'role:'+rk;}}return false;})(),
+    focusTarget:state.focusTarget||'none',
+    focusAmount:state.focusAmount,
     fired:fired
   };
 }
@@ -1401,7 +1405,7 @@ function dbgRenderRtrace(){
   var last=rtrace.events.slice(-10);
   last.forEach(function(ev){
     var s=ev.snap;
-    out+='['+ev.type+'] '+s.name+' mode='+s.mode+' step='+s.stepIdx+'/'+s.steps+' patLen='+s.patternLen+'(sum'+s.patternSum+') euLen='+s.euclidPatternLen+'(sum'+s.euclidPatternSum+') lag='+s.lag+' buf='+s.hasBuffer+' act='+s.act+'\n';
+    out+='['+ev.type+'] '+s.name+' act='+s.act+' anySolo='+s.anySolo+' solos=['+s.soloStates+'] focus='+s.focusTarget+'/'+s.focusAmount+' mode='+s.mode+' lag='+s.lag+'\n';
   });
   el.textContent=out||'(sin datos aun — deja correr el transporte)';
 }
