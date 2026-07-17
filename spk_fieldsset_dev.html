@@ -679,6 +679,13 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgCheckpoints"></div>
     <h3>ERROR LOG</h3>
     <div id="dbgErrors"></div>
+    <h3>RHYTHM TRACE</h3>
+    <div id="dbgRtrace" style="font-size:10px;white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
+    <div class="dbgBtns">
+      <button id="btnRtraceShow">RTRACE</button>
+      <button id="btnRtraceCopy">COPY RTRACE</button>
+      <button id="btnRtraceClear">CLEAR RTRACE</button>
+    </div>
     <div class="dbgBtns">
       <button id="btnDbgRefresh">REFRESH</button>
       <button id="btnDbgCopy">COPY REPORT</button>
@@ -1287,8 +1294,12 @@ function cycleAndRandomize(entity){if(sceneFrozen){return;}switch(entity.rndMode
 function updateRndButton(entity){var btn=document.querySelector('[data-entity="'+entity.id+'"][data-btn="rnd"]');if(btn){btn.textContent=RND_BTN_LABELS[entity.rndMode];}}
 
 // --- RHYTHM ---
-function fireRhythmEvent(entity,time){if(!audioCtx){return;}var act=activityMultiplier(entity);if(act<.02){return;}var buf=getBuffer(entity);if(!buf){return;}if(entity.view==='grain'){playGrain(entity,time,act);}else if(entity.view==='drift'){var _b=getBuffer(entity);if(_b){if(entity._driftHead<0){entity._driftHead=Math.random()*_b.duration;entity._driftDir=(Math.random()<.5?-1:1);}var _gsz=lerp(0.05,0.22,entity.param2);var _wan=driftWanderFor(entity);var _jit=(Math.random()+Math.random()-1)*_wan;var _pos=clamp(entity._driftHead+_jit,0,Math.max(.001,_b.duration-_gsz-.001));_playDriftGrain(entity,time,act,_pos,_gsz);entity._driftHead+=entity._driftDir*driftVelocityFor(entity)*_b.duration*0.12;if(entity._driftHead>=_b.duration){entity._driftHead=_b.duration-0.001;entity._driftDir=-1;}else if(entity._driftHead<=0){entity._driftHead=0.001;entity._driftDir=1;}else if(Math.random()<0.03){entity._driftDir=-entity._driftDir;}}}else if(entity.view==='slice'){var segs=entity._segments;if(!segs||!segs.length){return;}playSliceOf(entity,segs[nextSliceIndex(entity,segs)],time,act);}else if(entity.view==='loop'){var dur2=Math.min((entity.loopOut-entity.loopIn)*buf.duration,.4);if(dur2>.01){var src=audioCtx.createBufferSource();src.buffer=buf;src.playbackRate.value=note2rate(entity.pitch);var env=audioCtx.createGain();var fade=Math.min(dur2*.1,.02);env.gain.setValueAtTime(.0001,time);env.gain.linearRampToValueAtTime(act,time+fade);env.gain.linearRampToValueAtTime(.0001,time+dur2);src.connect(env);env.connect(entity.filterNode);src.start(time,entity.loopIn*buf.duration,dur2);}}else if(entity.view==='freeze'){var fp2=entity.param1*buf.duration;var gs2=.08;var src2=audioCtx.createBufferSource();src2.buffer=buf;src2.playbackRate.value=note2rate(entity.pitch);var env2=audioCtx.createGain();env2.gain.setValueAtTime(.0001,time);env2.gain.linearRampToValueAtTime(act,time+.01);env2.gain.linearRampToValueAtTime(.0001,time+gs2);src2.connect(env2);env2.connect(entity.filterNode);src2.start(time,clamp(fp2,0,buf.duration-gs2-.001),gs2);}scheduleFlash(entity.id,time);}
-function tickRhythm(entity,until){var eng=entity.rhy;if(!eng||eng.mode==='none'){return;}if(eng.mode==='grid'){tickGrid(entity,eng,until);}else if(eng.mode==='density'){tickDensity(entity,eng,until);}else if(eng.mode==='burst'){tickBurst(entity,eng,until);}else if(eng.mode==='probability'){tickProbability(entity,eng,until);}else if(eng.mode==='euclidean'){tickEuclidean(entity,eng,until);}}
+function fireRhythmEvent(entity,time){if(!audioCtx){return;}var act=activityMultiplier(entity);if(act<.02){return;}var buf=getBuffer(entity);if(!buf){return;}if(typeof rtrace!=='undefined'){rtrace._fireCount=(rtrace._fireCount||0)+1;}if(entity.view==='grain'){playGrain(entity,time,act);}else if(entity.view==='drift'){var _b=getBuffer(entity);if(_b){if(entity._driftHead<0){entity._driftHead=Math.random()*_b.duration;entity._driftDir=(Math.random()<.5?-1:1);}var _gsz=lerp(0.05,0.22,entity.param2);var _wan=driftWanderFor(entity);var _jit=(Math.random()+Math.random()-1)*_wan;var _pos=clamp(entity._driftHead+_jit,0,Math.max(.001,_b.duration-_gsz-.001));_playDriftGrain(entity,time,act,_pos,_gsz);entity._driftHead+=entity._driftDir*driftVelocityFor(entity)*_b.duration*0.12;if(entity._driftHead>=_b.duration){entity._driftHead=_b.duration-0.001;entity._driftDir=-1;}else if(entity._driftHead<=0){entity._driftHead=0.001;entity._driftDir=1;}else if(Math.random()<0.03){entity._driftDir=-entity._driftDir;}}}else if(entity.view==='slice'){var segs=entity._segments;if(!segs||!segs.length){return;}playSliceOf(entity,segs[nextSliceIndex(entity,segs)],time,act);}else if(entity.view==='loop'){var dur2=Math.min((entity.loopOut-entity.loopIn)*buf.duration,.4);if(dur2>.01){var src=audioCtx.createBufferSource();src.buffer=buf;src.playbackRate.value=note2rate(entity.pitch);var env=audioCtx.createGain();var fade=Math.min(dur2*.1,.02);env.gain.setValueAtTime(.0001,time);env.gain.linearRampToValueAtTime(act,time+fade);env.gain.linearRampToValueAtTime(.0001,time+dur2);src.connect(env);env.connect(entity.filterNode);src.start(time,entity.loopIn*buf.duration,dur2);}}else if(entity.view==='freeze'){var fp2=entity.param1*buf.duration;var gs2=.08;var src2=audioCtx.createBufferSource();src2.buffer=buf;src2.playbackRate.value=note2rate(entity.pitch);var env2=audioCtx.createGain();env2.gain.setValueAtTime(.0001,time);env2.gain.linearRampToValueAtTime(act,time+.01);env2.gain.linearRampToValueAtTime(.0001,time+gs2);src2.connect(env2);env2.connect(entity.filterNode);src2.start(time,clamp(fp2,0,buf.duration-gs2-.001),gs2);}scheduleFlash(entity.id,time);}
+function tickRhythm(entity,until){var eng=entity.rhy;if(!eng||eng.mode==='none'){return;}
+  var _fireBefore=rtrace._fireCount||0;
+  if(eng.mode==='grid'){tickGrid(entity,eng,until);}else if(eng.mode==='density'){tickDensity(entity,eng,until);}else if(eng.mode==='burst'){tickBurst(entity,eng,until);}else if(eng.mode==='probability'){tickProbability(entity,eng,until);}else if(eng.mode==='euclidean'){tickEuclidean(entity,eng,until);}
+  var _fired=(rtrace._fireCount||0)-_fireBefore;
+  rtraceTick(entity,eng,_fired);}
 function tickGrid(entity,eng,until){var sd=rhyStepDur(),steps=rhyGridSteps(eng),swing=rhyGridSwing(eng);while(eng.nextTime<until){var si=eng.stepIdx%steps;if(si<eng.pattern.length&&eng.pattern[si]===1){var swOff=(si%2===1)?swing*sd*.5:0;var ft=eng.nextTime+swOff;if(ft>=audioCtx.currentTime-.01){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,ft));}}eng.stepIdx++;eng.nextTime+=sd;}}
 function tickDensity(entity,eng,until){var epb=rhyDensAmt(eng)/100*16;if(epb<=0){eng.nextTime=until+1;return;}var rate=epb*state.bpm/(60*4);while(eng.nextTime<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));var base=1/rate;eng.nextTime+=Math.max(.02,base*(1+(Math.random()*2-1)*rhyDensVar(eng)/100*.8));}}
 function tickBurst(entity,eng,until){while(eng.burstLeft>0&&eng.burstNext<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.burstNext));eng.burstLeft--;eng.burstNext+=rhyBurstSpd(eng);}if(eng.burstLeft>0){return;}var bd=(60/state.bpm);while(eng.nextTime<until){if(Math.random()<.45){eng.burstLeft=rhyBurstCount(eng);eng.burstNext=eng.nextTime;while(eng.burstLeft>0&&eng.burstNext<until){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.burstNext));eng.burstLeft--;eng.burstNext+=rhyBurstSpd(eng);}if(eng.burstLeft>0){eng.nextTime+=bd*2;return;}}eng.nextTime+=bd*2;}}
@@ -1298,6 +1309,122 @@ function regenEuclidEditable(eng){
   eng.euclidPattern=buildEuclidPat(eng).slice();
 }
 function tickEuclidean(entity,eng,until){var pat=(eng.euclidEdit&&eng.euclidPattern&&eng.euclidPattern.length)?eng.euclidPattern:buildEuclidPat(eng),n=pat.length,sd=rhyStepDur();while(eng.nextTime<until){if(pat[eng.stepIdx%n]){fireRhythmEvent(entity,Math.max(audioCtx.currentTime+.001,eng.nextTime));}eng.stepIdx++;eng.nextTime+=sd;}}
+
+
+// ============================================================
+// RHYTHM TRACE — instrumentacion de diagnostico (no corrige nada).
+// Registra el estado de cada entidad ritmica y detecta el momento
+// exacto en que una entidad deja de disparar eventos.
+// Activar/desactivar: window.RTRACE_ON=true/false (default true).
+// Ver reporte: rtraceReport() en consola, o boton en debug panel.
+// ============================================================
+var RTRACE_ON=true;
+var rtrace={
+  perEntity:{},   // eid -> {lastFireT, ticksSinceFire, silentLogged, fires, ticks}
+  events:[],      // log de transiciones sonando->silencio
+  maxEvents:60
+};
+function rtraceSnapshot(entity,eng,fired){
+  var buf=null;try{buf=getBuffer(entity);}catch(e){}
+  var steps=null;
+  try{
+    if(eng.mode==='grid'){steps=rhyGridSteps(eng);}
+    else if(eng.mode==='euclidean'){steps=rhyESteps(eng);}
+  }catch(e){}
+  return {
+    t:+(audioCtx?audioCtx.currentTime:0).toFixed(3),
+    eid:entity.id,
+    name:entity.name,
+    mode:eng.mode,
+    view:entity.view,
+    stepIdx:eng.stepIdx,
+    steps:steps,
+    patternLen:(eng.pattern?eng.pattern.length:null),
+    patternSum:(eng.pattern?eng.pattern.reduce(function(a,b){return a+b;},0):null),
+    euclidEdit:!!eng.euclidEdit,
+    euclidPatternLen:(eng.euclidPattern?eng.euclidPattern.length:null),
+    euclidPatternSum:(eng.euclidPattern?eng.euclidPattern.reduce(function(a,b){return a+b;},0):null),
+    nextTime:+(eng.nextTime||0).toFixed(3),
+    ctxTime:+(audioCtx?audioCtx.currentTime:0).toFixed(3),
+    lag:+((audioCtx?audioCtx.currentTime:0)-(eng.nextTime||0)).toFixed(3),
+    hasBuffer:!!buf,
+    act:+(typeof activityMultiplier==='function'?activityMultiplier(entity):-1).toFixed(3),
+    mute:!!entity.mute,
+    fired:fired
+  };
+}
+// Llamado desde tickRhythm en cada entidad ritmica activa.
+function rtraceTick(entity,eng,firedThisTick){
+  if(!RTRACE_ON){return;}
+  var eid=entity.id;
+  var pe=rtrace.perEntity[eid];
+  if(!pe){pe={lastFireT:(audioCtx?audioCtx.currentTime:0),ticksSinceFire:0,silentLogged:false,fires:0,ticks:0};rtrace.perEntity[eid]=pe;}
+  pe.ticks++;
+  if(firedThisTick>0){
+    pe.fires+=firedThisTick;
+    pe.lastFireT=audioCtx?audioCtx.currentTime:0;
+    pe.ticksSinceFire=0;
+    if(pe.silentLogged){
+      // volvio a sonar tras silencio: registrar recuperacion
+      rtrace.events.push({type:'RECOVER',snap:rtraceSnapshot(entity,eng,firedThisTick)});
+      if(rtrace.events.length>rtrace.maxEvents){rtrace.events.shift();}
+      pe.silentLogged=false;
+    }
+  }else{
+    pe.ticksSinceFire++;
+    // La entidad esta ritmicamente activa pero no dispara.
+    // Si el patron tiene hits (deberia sonar) y lleva muchos ticks sin disparar → capturar.
+    var eng2=entity.rhy;
+    var hasHits=false;
+    if(eng2.mode==='euclidean'&&eng2.euclidEdit&&eng2.euclidPattern){hasHits=eng2.euclidPatternSum>0||eng2.euclidPattern.reduce(function(a,b){return a+b;},0)>0;}
+    else if(eng2.mode==='grid'){hasHits=eng2.pattern&&eng2.pattern.reduce(function(a,b){return a+b;},0)>0;}
+    else{hasHits=true;} // density/burst/probability siempre pueden disparar
+    // 40 ticks * 25ms = 1s sin disparar estando activa con hits y sin mute
+    if(hasHits&&!entity.mute&&pe.ticksSinceFire===40&&!pe.silentLogged){
+      pe.silentLogged=true;
+      rtrace.events.push({type:'WENT_SILENT',snap:rtraceSnapshot(entity,eng,0)});
+      if(rtrace.events.length>rtrace.maxEvents){rtrace.events.shift();}
+      if(typeof setStatus==='function'){setStatus('RTRACE: '+entity.name+' dejo de disparar ('+eng.mode+')');}
+    }
+  }
+}
+// Reporte legible en consola
+
+function dbgRenderRtrace(){
+  var el=document.getElementById('dbgRtrace');if(!el){return;}
+  var out='';
+  Object.keys(rtrace.perEntity).forEach(function(eid){
+    var pe=rtrace.perEntity[eid];
+    out+=eid+': ticks='+pe.ticks+' fires='+pe.fires+(pe.silentLogged?' [SILENCIO]':'')+' tSinceFire='+pe.ticksSinceFire+'\n';
+  });
+  out+='\n--- eventos ('+rtrace.events.length+') ---\n';
+  var last=rtrace.events.slice(-10);
+  last.forEach(function(ev){
+    var s=ev.snap;
+    out+='['+ev.type+'] '+s.name+' mode='+s.mode+' step='+s.stepIdx+'/'+s.steps+' patLen='+s.patternLen+'(sum'+s.patternSum+') euLen='+s.euclidPatternLen+'(sum'+s.euclidPatternSum+') lag='+s.lag+' buf='+s.hasBuffer+' act='+s.act+'\n';
+  });
+  el.textContent=out||'(sin datos aun — deja correr el transporte)';
+}
+
+function rtraceReport(){
+  var out='=== RHYTHM TRACE REPORT ===\n';
+  Object.keys(rtrace.perEntity).forEach(function(eid){
+    var pe=rtrace.perEntity[eid];
+    out+=eid+': ticks='+pe.ticks+' fires='+pe.fires+' silentNow='+pe.silentLogged+' ticksSinceFire='+pe.ticksSinceFire+'\n';
+  });
+  out+='\n--- EVENTOS (sonando<->silencio) ---\n';
+  rtrace.events.forEach(function(ev){
+    out+='['+ev.type+'] '+JSON.stringify(ev.snap)+'\n';
+  });
+  if(typeof console!=='undefined'){console.log(out);}
+  return out;
+}
+// Copiar el reporte al portapapeles (para pegarlo)
+function rtraceCopy(){
+  dbgRenderRtrace();var r=rtraceReport();
+  if(navigator.clipboard){navigator.clipboard.writeText(r);setStatus('RTRACE copiado al portapapeles');}
+  return r;
+}
 
 function schedulerTick(){if(!audioCtx){return;}if(audioCtx.state==='suspended'){audioCtx.resume();return;}if(audioCtx.state==='closed'){return;}var until=audioCtx.currentTime+lookahead,i=0;while(i<entities.length){var e=entities[i];if(e.mute){i++;continue;}var hasRhy=e.rhy&&e.rhy.mode!=='none';if(hasRhy){tickRhythm(e,until);}else if(!isContinuousView(e.view)){if(e.view==='grain'){tickGrain(e,until);}else if(e.view==='slice'){tickSlice(e,until);}else if(e.view==='drift'){tickDrift(e,until);}}i++;}}
 function tickGrain(entity,until){var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){playGrain(entity,entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}entity.nextTime+=randExp(Math.max(.12,grainRateFor(entity)*Math.max(act,.12)));}}
@@ -4393,6 +4520,9 @@ window.onload=function(){
   var pCx=document.getElementById("perfComplexity");if(pCx){pCx.addEventListener("input",function(){setComplexityValue(pCx.value);});}
   var pRev=document.getElementById("perfReverb");if(pRev){pRev.addEventListener("input",function(){setReverbValue(pRev.value);});}
   var bFz=document.getElementById("btnFreezeTop");if(bFz){bFz.addEventListener("click",toggleFreeze);}
+  var bRtS=document.getElementById("btnRtraceShow");if(bRtS){bRtS.addEventListener("click",dbgRenderRtrace);}
+  var bRtC=document.getElementById("btnRtraceCopy");if(bRtC){bRtC.addEventListener("click",rtraceCopy);}
+  var bRtX=document.getElementById("btnRtraceClear");if(bRtX){bRtX.addEventListener("click",function(){rtrace.perEntity={};rtrace.events=[];rtrace._fireCount=0;dbgRenderRtrace();setStatus("RTRACE limpiado");});}
   if(typeof renderPerfPanel==="function"){renderPerfPanel();}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
