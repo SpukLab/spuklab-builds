@@ -1404,7 +1404,11 @@ function dbgRenderRtrace(){
   out+='\n--- eventos ('+rtrace.events.length+') ---\n';
   var last=rtrace.events.slice(-12);
   last.forEach(function(ev){
-    if(ev.type==='ACT_ZERO'){
+    if(ev.type==='MODE_LOST'){
+      out+='[MODE_LOST t='+ev.t+'] '+ev.name+' '+ev.from+'->none | bank '+ev.bankFrom+'->'+ev.bankTo+(ev.bankChanged?' (CAMBIO BANCO)':'')+' view='+ev.view+'\n';
+    }else if(ev.type==='MUTED'){
+      out+='[MUTED t='+ev.t+'] '+ev.name+' | bank '+ev.bankFrom+'->'+ev.bankTo+(ev.bankChanged?' (CAMBIO BANCO)':'')+'\n';
+    }else if(ev.type==='ACT_ZERO'){
       out+='[ACT_ZERO t='+ev.t+'] culprit='+ev.culpritName+' why='+ev.why+' roles='+ev.rolesSoloMute+'\n';
       ev.entities.forEach(function(en){out+='    '+en.name+' solo='+en.solo+' mute='+en.mute+' bank='+en.bank+' mode='+en.mode+'\n';});
     }else if(ev.snap){
@@ -1462,6 +1466,38 @@ function rtraceCaptureZero(entity){
   if(typeof setStatus==='function'){setStatus('ACT_ZERO: '+entity.name+' → '+rtraceWhyZero(entity));}
 }
 
+
+// Vigila transiciones de estado que hacen que una entidad deje de sonar
+// SIN pasar por act=0: rhy.mode -> 'none', o mute -> true.
+// Se llama al inicio de cada schedulerTick, por entidad.
+function rtraceWatchEntity(e){
+  if(!RTRACE_ON){return;}
+  var pe=rtrace.perEntity[e.id];
+  if(!pe){pe={lastFireT:(audioCtx?audioCtx.currentTime:0),ticksSinceFire:0,silentLogged:false,fires:0,ticks:0,zeroLogged:false};rtrace.perEntity[e.id]=pe;}
+  var curMode=(e.rhy?e.rhy.mode:'none');
+  var curMute=!!e.mute;
+  var curBank=e.activeBank;
+  // Primera vez: registrar baseline
+  if(pe.lastMode===undefined){pe.lastMode=curMode;pe.lastMute=curMute;pe.lastBank=curBank;return;}
+  // Transicion de modo ritmico activo -> none
+  if(pe.lastMode!=='none'&&curMode==='none'){
+    rtrace.events.push({type:'MODE_LOST',t:+(audioCtx?audioCtx.currentTime:0).toFixed(2),
+      eid:e.id,name:e.name,from:pe.lastMode,to:'none',
+      bankFrom:pe.lastBank,bankTo:curBank,bankChanged:(pe.lastBank!==curBank),
+      view:e.view});
+    if(rtrace.events.length>rtrace.maxEvents){rtrace.events.shift();}
+    if(typeof setStatus==='function'){setStatus('MODE_LOST: '+e.name+' '+pe.lastMode+'->none'+(pe.lastBank!==curBank?' (cambio banco '+pe.lastBank+'->'+curBank+')':''));}
+  }
+  // Transicion a mute
+  if(!pe.lastMute&&curMute){
+    rtrace.events.push({type:'MUTED',t:+(audioCtx?audioCtx.currentTime:0).toFixed(2),
+      eid:e.id,name:e.name,bankFrom:pe.lastBank,bankTo:curBank,bankChanged:(pe.lastBank!==curBank)});
+    if(rtrace.events.length>rtrace.maxEvents){rtrace.events.shift();}
+    if(typeof setStatus==='function'){setStatus('MUTED: '+e.name+(pe.lastBank!==curBank?' (cambio banco)':''));}
+  }
+  pe.lastMode=curMode;pe.lastMute=curMute;pe.lastBank=curBank;
+}
+
 function rtraceReport(){
   var out='=== RHYTHM TRACE REPORT ===\n';
   Object.keys(rtrace.perEntity).forEach(function(eid){
@@ -1482,7 +1518,7 @@ function rtraceCopy(){
   return r;
 }
 
-function schedulerTick(){if(!audioCtx){return;}if(audioCtx.state==='suspended'){audioCtx.resume();return;}if(audioCtx.state==='closed'){return;}var until=audioCtx.currentTime+lookahead,i=0;while(i<entities.length){var e=entities[i];if(e.mute){i++;continue;}var hasRhy=e.rhy&&e.rhy.mode!=='none';if(hasRhy){tickRhythm(e,until);}else if(!isContinuousView(e.view)){if(e.view==='grain'){tickGrain(e,until);}else if(e.view==='slice'){tickSlice(e,until);}else if(e.view==='drift'){tickDrift(e,until);}}i++;}}
+function schedulerTick(){if(!audioCtx){return;}if(audioCtx.state==='suspended'){audioCtx.resume();return;}if(audioCtx.state==='closed'){return;}var until=audioCtx.currentTime+lookahead,i=0;while(i<entities.length){var e=entities[i];if(typeof rtraceWatchEntity==='function'){rtraceWatchEntity(e);}if(e.mute){i++;continue;}var hasRhy=e.rhy&&e.rhy.mode!=='none';if(hasRhy){tickRhythm(e,until);}else if(!isContinuousView(e.view)){if(e.view==='grain'){tickGrain(e,until);}else if(e.view==='slice'){tickSlice(e,until);}else if(e.view==='drift'){tickDrift(e,until);}}i++;}}
 function tickGrain(entity,until){var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){playGrain(entity,entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}else{if(typeof rtraceCaptureZero==='function'){rtraceCaptureZero(entity);}}entity.nextTime+=randExp(Math.max(.12,grainRateFor(entity)*Math.max(act,.12)));}}
 
 // ============================================================
