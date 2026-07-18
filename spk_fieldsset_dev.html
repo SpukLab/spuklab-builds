@@ -1294,7 +1294,7 @@ function cycleAndRandomize(entity){if(sceneFrozen){return;}switch(entity.rndMode
 function updateRndButton(entity){var btn=document.querySelector('[data-entity="'+entity.id+'"][data-btn="rnd"]');if(btn){btn.textContent=RND_BTN_LABELS[entity.rndMode];}}
 
 // --- RHYTHM ---
-function fireRhythmEvent(entity,time){if(!audioCtx){return;}var act=activityMultiplier(entity);if(act<.02){return;}var buf=getBuffer(entity);if(!buf){return;}if(typeof rtrace!=='undefined'){rtrace._fireCount=(rtrace._fireCount||0)+1;}if(entity.view==='grain'){playGrain(entity,time,act);}else if(entity.view==='drift'){var _b=getBuffer(entity);if(_b){if(entity._driftHead<0){entity._driftHead=Math.random()*_b.duration;entity._driftDir=(Math.random()<.5?-1:1);}var _gsz=lerp(0.05,0.22,entity.param2);var _wan=driftWanderFor(entity);var _jit=(Math.random()+Math.random()-1)*_wan;var _pos=clamp(entity._driftHead+_jit,0,Math.max(.001,_b.duration-_gsz-.001));_playDriftGrain(entity,time,act,_pos,_gsz);entity._driftHead+=entity._driftDir*driftVelocityFor(entity)*_b.duration*0.12;if(entity._driftHead>=_b.duration){entity._driftHead=_b.duration-0.001;entity._driftDir=-1;}else if(entity._driftHead<=0){entity._driftHead=0.001;entity._driftDir=1;}else if(Math.random()<0.03){entity._driftDir=-entity._driftDir;}}}else if(entity.view==='slice'){var segs=entity._segments;if(!segs||!segs.length){return;}playSliceOf(entity,segs[nextSliceIndex(entity,segs)],time,act);}else if(entity.view==='loop'){var dur2=Math.min((entity.loopOut-entity.loopIn)*buf.duration,.4);if(dur2>.01){var src=audioCtx.createBufferSource();src.buffer=buf;src.playbackRate.value=note2rate(entity.pitch);var env=audioCtx.createGain();var fade=Math.min(dur2*.1,.02);env.gain.setValueAtTime(.0001,time);env.gain.linearRampToValueAtTime(act,time+fade);env.gain.linearRampToValueAtTime(.0001,time+dur2);src.connect(env);env.connect(entity.filterNode);src.start(time,entity.loopIn*buf.duration,dur2);}}else if(entity.view==='freeze'){var fp2=entity.param1*buf.duration;var gs2=.08;var src2=audioCtx.createBufferSource();src2.buffer=buf;src2.playbackRate.value=note2rate(entity.pitch);var env2=audioCtx.createGain();env2.gain.setValueAtTime(.0001,time);env2.gain.linearRampToValueAtTime(act,time+.01);env2.gain.linearRampToValueAtTime(.0001,time+gs2);src2.connect(env2);env2.connect(entity.filterNode);src2.start(time,clamp(fp2,0,buf.duration-gs2-.001),gs2);}scheduleFlash(entity.id,time);}
+function fireRhythmEvent(entity,time){if(!audioCtx){return;}var act=activityMultiplier(entity);if(act<.02){if(typeof rtraceCaptureZero==='function'){rtraceCaptureZero(entity);}return;}var buf=getBuffer(entity);if(!buf){return;}if(typeof rtrace!=='undefined'){rtrace._fireCount=(rtrace._fireCount||0)+1;var _pe=rtrace.perEntity[entity.id];if(_pe){_pe.zeroLogged=false;}}if(entity.view==='grain'){playGrain(entity,time,act);}else if(entity.view==='drift'){var _b=getBuffer(entity);if(_b){if(entity._driftHead<0){entity._driftHead=Math.random()*_b.duration;entity._driftDir=(Math.random()<.5?-1:1);}var _gsz=lerp(0.05,0.22,entity.param2);var _wan=driftWanderFor(entity);var _jit=(Math.random()+Math.random()-1)*_wan;var _pos=clamp(entity._driftHead+_jit,0,Math.max(.001,_b.duration-_gsz-.001));_playDriftGrain(entity,time,act,_pos,_gsz);entity._driftHead+=entity._driftDir*driftVelocityFor(entity)*_b.duration*0.12;if(entity._driftHead>=_b.duration){entity._driftHead=_b.duration-0.001;entity._driftDir=-1;}else if(entity._driftHead<=0){entity._driftHead=0.001;entity._driftDir=1;}else if(Math.random()<0.03){entity._driftDir=-entity._driftDir;}}}else if(entity.view==='slice'){var segs=entity._segments;if(!segs||!segs.length){return;}playSliceOf(entity,segs[nextSliceIndex(entity,segs)],time,act);}else if(entity.view==='loop'){var dur2=Math.min((entity.loopOut-entity.loopIn)*buf.duration,.4);if(dur2>.01){var src=audioCtx.createBufferSource();src.buffer=buf;src.playbackRate.value=note2rate(entity.pitch);var env=audioCtx.createGain();var fade=Math.min(dur2*.1,.02);env.gain.setValueAtTime(.0001,time);env.gain.linearRampToValueAtTime(act,time+fade);env.gain.linearRampToValueAtTime(.0001,time+dur2);src.connect(env);env.connect(entity.filterNode);src.start(time,entity.loopIn*buf.duration,dur2);}}else if(entity.view==='freeze'){var fp2=entity.param1*buf.duration;var gs2=.08;var src2=audioCtx.createBufferSource();src2.buffer=buf;src2.playbackRate.value=note2rate(entity.pitch);var env2=audioCtx.createGain();env2.gain.setValueAtTime(.0001,time);env2.gain.linearRampToValueAtTime(act,time+.01);env2.gain.linearRampToValueAtTime(.0001,time+gs2);src2.connect(env2);env2.connect(entity.filterNode);src2.start(time,clamp(fp2,0,buf.duration-gs2-.001),gs2);}scheduleFlash(entity.id,time);}
 function tickRhythm(entity,until){var eng=entity.rhy;if(!eng||eng.mode==='none'){return;}
   var _fireBefore=rtrace._fireCount||0;
   if(eng.mode==='grid'){tickGrid(entity,eng,until);}else if(eng.mode==='density'){tickDensity(entity,eng,until);}else if(eng.mode==='burst'){tickBurst(entity,eng,until);}else if(eng.mode==='probability'){tickProbability(entity,eng,until);}else if(eng.mode==='euclidean'){tickEuclidean(entity,eng,until);}
@@ -1402,12 +1402,64 @@ function dbgRenderRtrace(){
     out+=eid+': ticks='+pe.ticks+' fires='+pe.fires+(pe.silentLogged?' [SILENCIO]':'')+' tSinceFire='+pe.ticksSinceFire+'\n';
   });
   out+='\n--- eventos ('+rtrace.events.length+') ---\n';
-  var last=rtrace.events.slice(-10);
+  var last=rtrace.events.slice(-12);
   last.forEach(function(ev){
-    var s=ev.snap;
-    out+='['+ev.type+'] '+s.name+' act='+s.act+' anySolo='+s.anySolo+' solos=['+s.soloStates+'] focus='+s.focusTarget+'/'+s.focusAmount+' mode='+s.mode+' lag='+s.lag+'\n';
+    if(ev.type==='ACT_ZERO'){
+      out+='[ACT_ZERO t='+ev.t+'] culprit='+ev.culpritName+' why='+ev.why+' roles='+ev.rolesSoloMute+'\n';
+      ev.entities.forEach(function(en){out+='    '+en.name+' solo='+en.solo+' mute='+en.mute+' bank='+en.bank+' mode='+en.mode+'\n';});
+    }else if(ev.snap){
+      var s=ev.snap;
+      out+='['+ev.type+'] '+s.name+' act='+s.act+' anySolo='+s.anySolo+' mode='+s.mode+' lag='+s.lag+'\n';
+    }
   });
   el.textContent=out||'(sin datos aun — deja correr el transporte)';
+}
+
+
+// ============================================================
+// FALSACION act=0 — captura el estado global exacto cuando una
+// entidad ritmica obtiene act=0 (el momento en que dejaria de disparar).
+// Registra por que: mute propio, solo de otro, o rol. Sin tocar el motor.
+// ============================================================
+function rtraceWhyZero(entity){
+  // Reproduce la logica de activityMultiplier para explicar POR QUE da 0.
+  var reason='?';
+  if(entity.mute){reason='self.mute';}
+  else if(roles[entity.role]&&roles[entity.role].mute){reason='role.mute:'+entity.role;}
+  else{
+    var anyES=false,i=0,soloOwner=null;
+    while(i<entities.length){if(entities[i].solo){anyES=true;soloOwner=entities[i].id;break;}i++;}
+    var anyRS=false,rk,roleSoloOwner=null;
+    for(rk in roles){if(roles[rk].solo){anyRS=true;roleSoloOwner=rk;break;}}
+    if(anyES||anyRS){
+      var isSoloed=entity.solo||(roles[entity.role]&&roles[entity.role].solo);
+      if(!isSoloed){reason='soloElsewhere:'+(soloOwner||('role:'+roleSoloOwner));}
+    }
+  }
+  return reason;
+}
+function rtraceCaptureZero(entity){
+  if(!RTRACE_ON){return;}
+  // Solo capturar una vez por transicion (evitar spam): usar ticksSinceFire
+  var pe=rtrace.perEntity[entity.id];
+  if(pe&&pe.zeroLogged){return;}
+  if(pe){pe.zeroLogged=true;}
+  // Snapshot global: estado solo/mute de TODAS las entidades + roles
+  var all=[];var i=0;
+  while(i<entities.length){
+    var e=entities[i];
+    all.push({id:e.id,name:e.name,solo:!!e.solo,mute:!!e.mute,bank:e.activeBank,mode:(e.rhy?e.rhy.mode:'?'),view:e.view});
+    i++;
+  }
+  var roleStates=[];var rk;
+  for(rk in roles){if(roles[rk]&&(roles[rk].solo||roles[rk].mute)){roleStates.push(rk+(roles[rk].solo?'*S':'')+(roles[rk].mute?'*M':''));}}
+  rtrace.events.push({type:'ACT_ZERO',t:+(audioCtx?audioCtx.currentTime:0).toFixed(2),
+    culprit:entity.id,culpritName:entity.name,
+    why:rtraceWhyZero(entity),
+    entities:all,
+    rolesSoloMute:roleStates.join(',')||'none'});
+  if(rtrace.events.length>rtrace.maxEvents){rtrace.events.shift();}
+  if(typeof setStatus==='function'){setStatus('ACT_ZERO: '+entity.name+' → '+rtraceWhyZero(entity));}
 }
 
 function rtraceReport(){
@@ -1431,7 +1483,7 @@ function rtraceCopy(){
 }
 
 function schedulerTick(){if(!audioCtx){return;}if(audioCtx.state==='suspended'){audioCtx.resume();return;}if(audioCtx.state==='closed'){return;}var until=audioCtx.currentTime+lookahead,i=0;while(i<entities.length){var e=entities[i];if(e.mute){i++;continue;}var hasRhy=e.rhy&&e.rhy.mode!=='none';if(hasRhy){tickRhythm(e,until);}else if(!isContinuousView(e.view)){if(e.view==='grain'){tickGrain(e,until);}else if(e.view==='slice'){tickSlice(e,until);}else if(e.view==='drift'){tickDrift(e,until);}}i++;}}
-function tickGrain(entity,until){var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){playGrain(entity,entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}entity.nextTime+=randExp(Math.max(.12,grainRateFor(entity)*Math.max(act,.12)));}}
+function tickGrain(entity,until){var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){playGrain(entity,entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}else{if(typeof rtraceCaptureZero==='function'){rtraceCaptureZero(entity);}}entity.nextTime+=randExp(Math.max(.12,grainRateFor(entity)*Math.max(act,.12)));}}
 
 // ============================================================
 // DRIFT EXPLORER — recorre el buffer de forma continua.
@@ -1466,7 +1518,7 @@ function tickDrift(entity,until){
       pos=clamp(pos,0,Math.max(.001,dur-gsz-.001));
       _playDriftGrain(entity,entity.nextTime,act,pos,gsz);
       scheduleFlash(entity.id,entity.nextTime);
-    }
+    }else{if(typeof rtraceCaptureZero==='function'){rtraceCaptureZero(entity);}}
     // Avance del head
     var vel=driftVelocityFor(entity); // fraccion de buffer por segundo
     var stepDur=lerp(0.14,0.045,entity.param1); // mas rapido = granos mas seguidos
@@ -1501,7 +1553,7 @@ function _playDriftGrain(entity,time,act,pos,gsz){
 }
 
 function playGrain(entity,time,act){var buf=getBuffer(entity);if(!buf){return;}var gs=grainSizeFor(entity);var pos=grainPosFor(entity);if(pos<0){pos=Math.random()*Math.max(.01,buf.duration-gs);}var offs=clamp(pos,0,Math.max(.001,buf.duration-gs-.001));var src=audioCtx.createBufferSource();src.buffer=buf;src.playbackRate.value=note2rate(entity.pitch);var env=audioCtx.createGain();var fade=Math.min(gs*.35,.04);env.gain.setValueAtTime(.0001,time);env.gain.linearRampToValueAtTime(act,time+fade);env.gain.linearRampToValueAtTime(.0001,time+gs);src.connect(env);env.connect(entity.filterNode);src.start(time,offs,gs);src.stop(time+gs+.06);}
-function tickSlice(entity,until){var segs=entity._segments;if(!segs||!segs.length){entity.nextTime=until+1;return;}var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){var idx=nextSliceIndex(entity,segs);playSliceOf(entity,segs[idx],entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}entity.nextTime+=randExp(Math.max(.1,sliceRateFor(entity)*Math.max(act,.1)));}}
+function tickSlice(entity,until){var segs=entity._segments;if(!segs||!segs.length){entity.nextTime=until+1;return;}var buf=getBuffer(entity);if(!buf){entity.nextTime=until+1;return;}while(entity.nextTime<until){var act=activityMultiplier(entity);if(act>.02){var idx=nextSliceIndex(entity,segs);playSliceOf(entity,segs[idx],entity.nextTime,act);scheduleFlash(entity.id,entity.nextTime);}else{if(typeof rtraceCaptureZero==='function'){rtraceCaptureZero(entity);}}entity.nextTime+=randExp(Math.max(.1,sliceRateFor(entity)*Math.max(act,.1)));}}
 // param2 efectivo: base (gesto humano) + offset de automatizacion (ADR-AUTH: base intacta)
 function effParam2(e){
   var off=(e._off&&e._off.param2)?e._off.param2:0;
