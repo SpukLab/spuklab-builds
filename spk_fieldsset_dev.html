@@ -1549,9 +1549,21 @@ function rtraceReport(){
     var pe=rtrace.perEntity[eid];
     out+=eid+': ticks='+pe.ticks+' fires='+pe.fires+' silentNow='+pe.silentLogged+' ticksSinceFire='+pe.ticksSinceFire+'\n';
   });
-  out+='\n--- EVENTOS (sonando<->silencio) ---\n';
+  out+='\n--- EVENTOS ('+rtrace.events.length+') ---\n';
   rtrace.events.forEach(function(ev){
-    out+='['+ev.type+'] '+JSON.stringify(ev.snap)+'\n';
+    if(ev.type==='MODE_LOST'){
+      out+='[MODE_LOST t='+ev.t+'] '+ev.name+' '+ev.from+'->none | bank '+ev.bankFrom+'->'+ev.bankTo+(ev.bankChanged?' (CAMBIO BANCO)':'')+' view='+ev.view+'\n';
+    }else if(ev.type==='MUTED'){
+      out+='[MUTED t='+ev.t+'] '+ev.name+' | bank '+ev.bankFrom+'->'+ev.bankTo+(ev.bankChanged?' (CAMBIO BANCO)':'')+'\n';
+    }else if(ev.type==='ACT_ZERO'){
+      out+='[ACT_ZERO t='+ev.t+'] culprit='+ev.culpritName+' why='+ev.why+' roles='+ev.rolesSoloMute+'\n';
+      if(ev.entities){ev.entities.forEach(function(en){out+='    '+en.name+' solo='+en.solo+' mute='+en.mute+' bank='+en.bank+' mode='+en.mode+'\n';});}
+    }else if(ev.snap){
+      var s=ev.snap;
+      out+='['+ev.type+'] '+s.name+' act='+s.act+' anySolo='+s.anySolo+' mode='+s.mode+' lag='+s.lag+'\n';
+    }else{
+      out+='['+ev.type+'] '+JSON.stringify(ev)+'\n';
+    }
   });
   if(typeof console!=='undefined'){console.log(out);}
   return out;
