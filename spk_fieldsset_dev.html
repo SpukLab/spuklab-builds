@@ -685,6 +685,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
       <button id="btnRtraceShow">RTRACE</button>
       <button id="btnRtraceCopy">COPY RTRACE</button>
       <button id="btnRtraceClear">CLEAR RTRACE</button>
+      <button id="btnRtraceInspect" style="background:rgba(67,229,255,.2);border-color:rgba(67,229,255,.5);">INSPECT</button>
     </div>
     <div class="dbgBtns">
       <button id="btnDbgRefresh">REFRESH</button>
@@ -1496,6 +1497,50 @@ function rtraceWatchEntity(e){
     if(typeof setStatus==='function'){setStatus('MUTED: '+e.name+(pe.lastBank!==curBank?' (cambio banco)':''));}
   }
   pe.lastMode=curMode;pe.lastMute=curMute;pe.lastBank=curBank;
+}
+
+
+// Inspector de estado ritmico por entidad (diagnostico puntual).
+function rtraceInspect(){
+  var out='=== INSPECT '+(new Date()).toLocaleTimeString()+' ===\n';
+  var i=0;
+  while(i<entities.length){
+    var e=entities[i];
+    var eng=e.rhy;
+    var mode=(eng?eng.mode:'(sin rhy)');
+    var patLen=(eng&&eng.pattern?eng.pattern.length:'-');
+    var patSum=(eng&&eng.pattern?eng.pattern.reduce(function(a,b){return a+b;},0):'-');
+    var euLen=(eng&&eng.euclidPattern?eng.euclidPattern.length:'-');
+    var stepIdx=(eng?eng.stepIdx:'-');
+    // ¿El scheduler la considera ritmica? (misma condicion que schedulerTick)
+    var hasRhy=(eng&&eng.mode!=='none');
+    var schedEnters=(!e.mute&&hasRhy)?'SI':'NO';
+    var schedReason='';
+    if(e.mute){schedReason='(mute)';}
+    else if(!hasRhy){schedReason='(mode=none -> rama directa '+e.view+')';}
+    // ¿Llegaria a fireRhythmEvent? Necesita: scheduler entra + act>.02 + buffer + patron con hits
+    var act=-1;try{act=activityMultiplier(e);}catch(err){}
+    var buf=null;try{buf=getBuffer(e);}catch(err){}
+    var wouldFire='NO';
+    if(schedEnters==='SI'){
+      var hasHits=(mode==='euclidean')?(euLen!=='-'&&eng.euclidEdit?eng.euclidPattern.reduce(function(a,b){return a+b;},0)>0:true):(mode==='grid'?(patSum>0):true);
+      if(act>.02&&buf&&hasHits){wouldFire='SI';}
+      else{wouldFire='NO ('+(act<=.02?'act='+act.toFixed(2)+' ':'')+(!buf?'sin-buffer ':'')+(!hasHits?'sin-hits':'')+')';}
+    }
+    out+='\n'+e.name+' [bank='+e.activeBank+']\n';
+    out+='  view='+e.view+'  rhy.mode='+mode+'\n';
+    out+='  pattern.length='+patLen+' (hits='+patSum+')  euclidLen='+euLen+'\n';
+    out+='  stepIdx='+stepIdx+'\n';
+    out+='  scheduler entra = '+schedEnters+' '+schedReason+'\n';
+    out+='  fireRhythmEvent = '+wouldFire+'\n';
+    i++;
+  }
+  var el=document.getElementById('dbgRtrace');
+  if(el){el.textContent=out;}
+  if(navigator.clipboard){navigator.clipboard.writeText(out);}
+  if(typeof setStatus==='function'){setStatus('INSPECT capturado y copiado');}
+  if(typeof console!=='undefined'){console.log(out);}
+  return out;
 }
 
 function rtraceReport(){
@@ -4615,6 +4660,7 @@ window.onload=function(){
   var bRtS=document.getElementById("btnRtraceShow");if(bRtS){bRtS.addEventListener("click",dbgRenderRtrace);}
   var bRtC=document.getElementById("btnRtraceCopy");if(bRtC){bRtC.addEventListener("click",rtraceCopy);}
   var bRtX=document.getElementById("btnRtraceClear");if(bRtX){bRtX.addEventListener("click",function(){rtrace.perEntity={};rtrace.events=[];rtrace._fireCount=0;dbgRenderRtrace();setStatus("RTRACE limpiado");});}
+  var bRtI=document.getElementById("btnRtraceInspect");if(bRtI){bRtI.addEventListener("click",rtraceInspect);}
   if(typeof renderPerfPanel==="function"){renderPerfPanel();}
   DEBUG.mark("onloadComplete");
   document.addEventListener('visibilitychange',onVisibilityChange);
