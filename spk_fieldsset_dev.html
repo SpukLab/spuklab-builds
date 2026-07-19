@@ -1154,6 +1154,29 @@ function captureScene(){
   };
 }
 
+
+// Captura el estado ritmico/material de todas las entidades en un momento dado.
+function _sceneSnap(label){
+  var out='=== APPLY SCENE ['+label+'] ==='+'\n';
+  out+='state.bpm='+state.bpm+'  rhyStepDur='+(typeof rhyStepDur==='function'?rhyStepDur():'?')+'\n';
+  var i=0;
+  while(i<entities.length){
+    var e=entities[i];var eng=e.rhy;
+    var buf=null;try{buf=getBuffer(e);}catch(err){}
+    var patLen=(eng&&eng.pattern?eng.pattern.length:'-');
+    var patSum=(eng&&eng.pattern?eng.pattern.reduce(function(a,b){return a+b;},0):'-');
+    var bankExists=(e.banks&&e.banks[e.activeBank]!==undefined)?(e.banks[e.activeBank]===null?'null':'ok'):'MISSING';
+    out+=e.name+' bank='+e.activeBank+'('+bankExists+') view='+e.view+' matId='+e.materialId+' buf='+(buf?'ok':'NULL')+
+      ' rhy.mode='+(eng?eng.mode:'-')+' patLen='+patLen+'(h'+patSum+')'+
+      ' stepIdx='+(eng?eng.stepIdx:'-')+' nextTime='+(eng?(eng.nextTime||0).toFixed(2):'-')+
+      ' cont='+(e.contActive?'SI':'no')+' src='+(e.srcNode?'ok':'no')+'\n';
+    i++;
+  }
+  out+='ctxTime='+(audioCtx?audioCtx.currentTime.toFixed(2):'?')+' running='+running+'\n';
+  return out;
+}
+var _sceneDebugLog='';
+
 function _applySceneInternal(scene){
   if(!scene){return;}
   state.focusTarget=scene.focusTarget;state.focusAmount=scene.focusAmount;state.complexity=scene.complexity;state.bpm=scene.bpm;
@@ -1174,7 +1197,14 @@ function _applySceneInternal(scene){
     refreshEntityGain(e);if(viewChanged||wasCont){applyViewChange(e);}
     i++;
   }
+  var _snapBefore=_sceneSnap('ANTES DEL RENDER');
   refreshAllGains();renderEntityCards();buildCanvasGestures();entities.forEach(function(e){updateBankButtonsUI(e);});
+  var _snapAfter=_sceneSnap('DESPUES DEL RENDER');
+  _sceneDebugLog=_snapBefore+'\n'+_snapAfter;
+  if(typeof console!=='undefined'){console.log(_sceneDebugLog);}
+  var _el=document.getElementById('dbgRtrace');if(_el){_el.textContent=_sceneDebugLog;}
+  if(navigator.clipboard){navigator.clipboard.writeText(_sceneDebugLog);}
+  if(typeof setStatus==='function'){setStatus('SCENE SNAP capturado y copiado');}
 }
 
 function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);if(typeof renderPerfPanel==="function"){renderPerfPanel();}}
