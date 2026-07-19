@@ -1319,7 +1319,7 @@ function tickEuclidean(entity,eng,until){var pat=(eng.euclidEdit&&eng.euclidPatt
 // Activar/desactivar: window.RTRACE_ON=true/false (default true).
 // Ver reporte: rtraceReport() en consola, o boton en debug panel.
 // ============================================================
-var RTRACE_ON=true;
+var RTRACE_ON=false;// diagnostico: activar manualmente si hace falta
 var rtrace={
   perEntity:{},   // eid -> {lastFireT, ticksSinceFire, silentLogged, fires, ticks}
   events:[],      // log de transiciones sonando->silencio
@@ -2056,6 +2056,58 @@ function getCleanBankState(entity,letter){
   };
 }
 
+
+// ============================================================
+// FOUNDATION (Phase 2.0) — separacion Material / Performance / Runtime.
+// MATERIAL_KEYS: lo que define el CONTENIDO del banco. Solo esto viaja
+// al cambiar de slot. Performance (rhy, solo, mute, focus, weight...) y
+// Runtime (nextTime, stepIdx...) permanecen en la entidad.
+// Futuros "Locks" decidiran caso por caso; por ahora la regla es fija.
+// ============================================================
+var MATERIAL_KEYS=['materialId','view','param1','param2','loopIn','loopOut',
+  'level','pitch','pan','filterNorm','drive','reverbSendLevel','delaySendLevel',
+  'space','spaceAmount','dnaPreset','driveModel','auto','autoAmount','autoSpeed',
+  'focusResponse','transitionTime','weight','fieldLocked'];
+
+// Captura SOLO el material de la entidad (para guardar en un banco).
+// NO incluye rhy/solo/mute (Performance) ni nextTime/stepIdx (Runtime).
+function captureMaterialState(e){
+  var m={};var i=0;
+  while(i<MATERIAL_KEYS.length){var k=MATERIAL_KEYS[i];
+    if(e[k]!==undefined){m[k]=(typeof e[k]==='object'&&e[k]!==null)?JSON.parse(JSON.stringify(e[k])):e[k];}
+    i++;
+  }
+  return m;
+}
+// Aplica SOLO el material de un banco a la entidad. Deja Performance intacta.
+function applyMaterialState(entity,state){
+  if(!state){return;}
+  var prevView=entity.view;
+  var i=0;
+  while(i<MATERIAL_KEYS.length){var k=MATERIAL_KEYS[i];
+    if(state[k]!==undefined){entity[k]=(typeof state[k]==='object'&&state[k]!==null)?JSON.parse(JSON.stringify(state[k])):state[k];}
+    i++;
+  }
+  // Aplicar efectos colaterales de material (igual que applyEntityState, sin tocar rhy/solo/mute)
+  if(typeof applyDNAPreset==='function'){applyDNAPreset(entity,entity.dnaPreset);}
+  if(typeof applySpaceMode==='function'){applySpaceMode(entity);}
+  if(audioCtx&&entity.gainNode){refreshEntityGain(entity);}
+  if(entity.spacePanA){entity.spacePanA.pan.value=effPan(entity);}
+  if(entity.filterNode){entity.filterNode.frequency.value=filterNormToHz(entity.filterNorm);}
+  if(entity.view!==prevView){applyViewChange(entity,false);}
+  updateContinuousParams(entity);updateLoopSource(entity);syncEntitySliders(entity);
+}
+// Material limpio para un banco vacio (sin rhy: el ritmo ya no vive en el banco).
+function getCleanMaterialState(entity,letter){
+  return {
+    materialId:entity.id+'_'+(letter||'B'),
+    view:'grain', param1:0.3, param2:0.5,
+    loopIn:0, loopOut:1, level:0.82,
+    pitch:0, pan:0, filterNorm:1.0,
+    focusResponse:'none', transitionTime:0
+  };
+}
+
 function switchEntityBank(entity,letter){
   if(entity.activeBank===letter){return;}
 
@@ -2065,25 +2117,25 @@ function switchEntityBank(entity,letter){
     '| materialId actual:',entity.materialId,
     '| banco destino:',entity.banks[letter]?'guardado':'vacío');
 
-  // Guardar estado actual en banco que se deja
-  entity.banks[entity.activeBank]=captureEntityState(entity);
+  // Guardar SOLO el material actual en el banco que se deja (Performance permanece en la entidad).
+  entity.banks[entity.activeBank]=captureMaterialState(entity);
   console.log('[BANK] guardado estado en banco',entity.activeBank,
     '| view:',entity.banks[entity.activeBank].view,
     '| param1:',entity.banks[entity.activeBank].param1.toFixed(2));
 
   // Cargar banco destino
   if(entity.banks[letter]!==null){
-    // Banco con contenido guardado → cargarlo
-    applyEntityState(entity,entity.banks[letter]);
+    // Banco con material guardado → cargar SOLO material (rhy/solo/mute intactos).
+    applyMaterialState(entity,entity.banks[letter]);
     console.log('[BANK] cargado banco',letter,
     '| nuevo materialId:',entity.materialId,
     '| view:',entity.view,
     '| level:',entity.level,
     '| buffer:',getBuffer(entity)?'loaded':'null');
   } else {
-    // Banco vacío → inicializar con estado limpio y aplicar
-    entity.banks[letter]=getCleanBankState(entity,letter);
-    applyEntityState(entity,entity.banks[letter]);
+    // Banco vacío → material limpio (sin rhy: el ritmo pertenece a la entidad).
+    entity.banks[letter]=getCleanMaterialState(entity,letter);
+    applyMaterialState(entity,entity.banks[letter]);
     console.log('[BANK] banco',letter,'vacío → inicializado con estado limpio | view: grain');
   }
 
