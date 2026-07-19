@@ -1155,30 +1155,43 @@ function captureScene(){
 }
 
 
-// Captura el estado ritmico/material de todas las entidades en un momento dado.
-function _sceneSnap(label){
-  var out='=== APPLY SCENE ['+label+'] ==='+'\n';
-  out+='state.bpm='+state.bpm+'  rhyStepDur='+(typeof rhyStepDur==='function'?rhyStepDur():'?')+'\n';
-  var i=0;
-  while(i<entities.length){
-    var e=entities[i];var eng=e.rhy;
-    var buf=null;try{buf=getBuffer(e);}catch(err){}
-    var patLen=(eng&&eng.pattern?eng.pattern.length:'-');
-    var patSum=(eng&&eng.pattern?eng.pattern.reduce(function(a,b){return a+b;},0):'-');
-    var bankExists=(e.banks&&e.banks[e.activeBank]!==undefined)?(e.banks[e.activeBank]===null?'null':'ok'):'MISSING';
-    out+=e.name+' bank='+e.activeBank+'('+bankExists+') view='+e.view+' matId='+e.materialId+' buf='+(buf?'ok':'NULL')+
-      ' rhy.mode='+(eng?eng.mode:'-')+' patLen='+patLen+'(h'+patSum+')'+
-      ' stepIdx='+(eng?eng.stepIdx:'-')+' nextTime='+(eng?(eng.nextTime||0).toFixed(2):'-')+
-      ' cont='+(e.contActive?'SI':'no')+' src='+(e.srcNode?'ok':'no')+'\n';
-    i++;
+
+
+
+// ============================================================
+// SCENE PIPELINE — resolucion, validacion y normalizacion.
+// La UI entrega una referencia (key o objeto); el motor recibe siempre
+// un objeto valido. Una scene malformada NUNCA debe tumbar el motor.
+// ============================================================
+// Resuelve una entrada (key 'A'/'B'/'C'/'D' o objeto scene) al objeto scene.
+function resolveScene(sceneOrKey){
+  if(sceneOrKey==null){return null;}
+  if(typeof sceneOrKey==='string'){
+    return scenes[sceneOrKey]||null;
   }
-  out+='ctxTime='+(audioCtx?audioCtx.currentTime.toFixed(2):'?')+' running='+running+'\n';
-  return out;
+  return sceneOrKey; // ya es un objeto
 }
-var _sceneDebugLog='';
+// Valida que una scene tenga la forma minima aplicable.
+function validateScene(scene){
+  if(!scene||typeof scene!=='object'){return false;}
+  if(!Array.isArray(scene.entities)){return false;}
+  return true;
+}
+// Normaliza una scene: garantiza campos globales y estructura de entidades.
+// Soporta escenas antiguas, parcialmente corruptas y futuras versiones.
+function normalizeScene(scene){
+  if(!scene||typeof scene!=='object'){return null;}
+  var n={};
+  n.focusTarget=(scene.focusTarget!==undefined)?scene.focusTarget:null;
+  n.focusAmount=(typeof scene.focusAmount==='number')?scene.focusAmount:0;
+  n.complexity=(typeof scene.complexity==='number')?scene.complexity:40;
+  n.bpm=(typeof scene.bpm==='number'&&scene.bpm>0)?scene.bpm:state.bpm;
+  n.entities=Array.isArray(scene.entities)?scene.entities:[];
+  return n;
+}
 
 function _applySceneInternal(scene){
-  if(!scene){return;}
+  if(!scene||!Array.isArray(scene.entities)){if(typeof console!=='undefined'){console.warn('_applySceneInternal: scene sin entities');}return;}
   state.focusTarget=scene.focusTarget;state.focusAmount=scene.focusAmount;state.complexity=scene.complexity;state.bpm=scene.bpm;
   var ft=document.getElementById('focusTarget');var fa=document.getElementById('focusAmount');var cx=document.getElementById('complexity');var bp=document.getElementById('bpmInput');
   if(ft){ft.value=scene.focusTarget||'none';}if(fa){fa.value=scene.focusAmount;}if(cx){cx.value=scene.complexity;}if(bp){bp.value=scene.bpm;}
@@ -1197,17 +1210,21 @@ function _applySceneInternal(scene){
     refreshEntityGain(e);if(viewChanged||wasCont){applyViewChange(e);}
     i++;
   }
-  var _snapBefore=_sceneSnap('ANTES DEL RENDER');
   refreshAllGains();renderEntityCards();buildCanvasGestures();entities.forEach(function(e){updateBankButtonsUI(e);});
-  var _snapAfter=_sceneSnap('DESPUES DEL RENDER');
-  _sceneDebugLog=_snapBefore+'\n'+_snapAfter;
-  if(typeof console!=='undefined'){console.log(_sceneDebugLog);}
-  var _el=document.getElementById('dbgRtrace');if(_el){_el.textContent=_sceneDebugLog;}
-  if(navigator.clipboard){navigator.clipboard.writeText(_sceneDebugLog);}
-  if(typeof setStatus==='function'){setStatus('SCENE SNAP capturado y copiado');}
 }
 
-function applyScene(scene){if(!historyNavigating){pushHistory();}_applySceneInternal(scene);if(typeof renderPerfPanel==="function"){renderPerfPanel();}}
+function applyScene(sceneOrKey){
+  var scene=resolveScene(sceneOrKey);
+  if(!validateScene(scene)){
+    if(typeof setStatus==='function'){setStatus('scene invalida o vacia — no aplicada');}
+    if(typeof console!=='undefined'){console.warn('applyScene: entrada invalida',sceneOrKey);}
+    return;
+  }
+  scene=normalizeScene(scene);
+  if(!historyNavigating){pushHistory();}
+  _applySceneInternal(scene);
+  if(typeof renderPerfPanel==="function"){renderPerfPanel();}
+}
 
 function tickMorph(){
   if(!morph.active||sceneFrozen){return;}
@@ -3840,6 +3857,7 @@ function _commitProject(doc,newPool){
   buildCanvasGestures();
   if(typeof buildQueueList==='function'){buildQueueList();}
   refreshSceneButtons(); // sincronizar indicadores de escena ocupada
+  if(typeof renderPerfPanel==='function'){renderPerfPanel();} // sincronizar indicadores del Performance Panel (scenes/focus/energy) tras restaurar proyecto
 }
 // (esqueleto serializeSession descartado en Fase 4a — SESSION reutiliza serializeProject)
 
@@ -4543,7 +4561,9 @@ function renderPerfScenes(){
       clearTimeout(holdTimer);clearRing();
       if(!held){
         selScene=key;
-        if(typeof applyScene==='function'&&scenes[key]){applyScene(key);}
+        if(typeof applyScene==='function'&&scenes[key]){
+          try{applyScene(key);}catch(err){if(typeof DEBUG!=='undefined'&&DEBUG.logError){DEBUG.logError('applyScene fallo: '+err.message,'renderPerfScenes',0,0);}if(typeof console!=='undefined'){console.error('applyScene fallo',err);}if(typeof setStatus==='function'){setStatus('error aplicando scene (motor protegido)');}}
+        }
         renderPerfScenes();
       }
     },false);
