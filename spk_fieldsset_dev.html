@@ -248,6 +248,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .projItem{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;
   font-size:12px;color:rgba(255,255,255,.85);cursor:pointer;}
+.projItem.active{border-color:rgba(67,229,255,.55);background:rgba(67,229,255,.08);}
+.projItem.active .pName{color:#43E5FF;font-weight:600;}
+.projItem.active .pName::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#43E5FF;margin-right:7px;vertical-align:middle;box-shadow:0 0 5px rgba(67,229,255,.6);}
 .projItem:active{background:rgba(95,255,160,.1);}
 .projItem .pName{flex:1;}
 .projItem .pMeta{font-size:9px;color:rgba(255,255,255,.4);}
@@ -279,6 +282,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #btnDebug{font-size:10px;padding:3px 8px;letter-spacing:0.06em;
   color:rgba(67,229,255,.7);border-color:rgba(67,229,255,.25);flex-shrink:0;}
 #btnDebug.active{background:rgba(67,229,255,.15);color:#43E5FF;}
+#btnProject.active{background:rgba(67,229,255,.2);border-color:#43E5FF;color:#43E5FF;box-shadow:0 0 8px rgba(67,229,255,.45);}
 .dbgCheckpoint{font-size:10px;padding:1px 0;color:rgba(255,255,255,.5);}
 .dbgCheckpoint.reached{color:#5fffa0;}
 .scenesRow{display:flex;align-items:center;gap:4px;padding:6px 0 4px;flex-wrap:nowrap;}
@@ -4090,6 +4094,7 @@ function renameProject(oldName,newName,cb){
 var SESSION_KEY='session:last';
 var SESSION_VERSION=1;
 var _sessionSaving=false;  // anti-reentrada (solucion mas simple, no maquina de estados)
+var _activeProjectName=null; // proyecto activo: seteado al cargar/guardar; SAVE actualiza este
 var _loadingProject=false; // carga en curso (seteado por loadSession y projDoLoad)
 var _lastSessionSerMs=0;   // medicion: cuanto tardo el ultimo serializeProject
 var _lastAutosaveAt=0;     // timestamp del ultimo autosave exitoso
@@ -4427,7 +4432,7 @@ function refreshProjectList(){
     list.innerHTML='';
     names.sort();
     names.forEach(function(name){
-      var row=document.createElement('div');row.className='projItem';
+      var row=document.createElement('div');row.className='projItem'+(name===_activeProjectName?' active':'');
       var nm=document.createElement('span');nm.className='pName';nm.textContent=name;
       nm.onclick=function(){document.getElementById('projName').value=name;projDoLoad(name);};
       var del=document.createElement('span');del.className='pDel';del.textContent='\u00d7';
@@ -4465,9 +4470,13 @@ function _projImportFileChosen(ev){
 function projDoSave(){
   var name=document.getElementById('projName').value.trim();
   if(!name){projStatus('escribi un nombre primero',true);return;}
+  // Opcion A: si hay proyecto activo y el nombre coincide, SAVE actualiza ese proyecto
+  // (saveProject ya preserva createdAt si el proyecto existe). Si el nombre difiere,
+  // es un proyecto nuevo: se guarda con ese nombre y pasa a ser el activo.
   projStatus('guardando...');
   saveProject(name,function(err,stats){
     if(err){projStatus('error: '+err,true);return;}
+    _activeProjectName=name; // el proyecto guardado pasa a ser (o sigue siendo) el activo
     projStatus('guardado: '+stats.audioEntries+' audios, '+stats.audioSizeMB+'MB');
     refreshProjectList();
   });
@@ -4480,6 +4489,9 @@ function projDoLoad(name){
   loadProject(name,function(err,stats){
     _loadingProject=false;
     if(err){projStatus('error: '+err,true);return;}
+    _activeProjectName=name; // este proyecto pasa a ser el activo
+    var nmInput=document.getElementById('projName');if(nmInput){nmInput.value=name;} // el campo refleja el activo
+    if(typeof refreshProjectList==='function'){refreshProjectList();} // marca el activo en la lista
     projStatus('cargado: '+stats.audioEntries+' audios, '+stats.scenes+' escenas');
   });
 }
