@@ -1101,6 +1101,13 @@ function drawEntityCanvas(entity){
   var wantW=Math.round(cw*dpr),wantH=Math.round(chh*dpr);
   if(canvas.width!==wantW||canvas.height!==wantH){canvas.width=wantW;canvas.height=wantH;}
   var W=canvas.width,H=canvas.height;var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
+  // LIFE SPIKE (commit 2): solo la primera entidad respira, para validar la sensacion.
+  var _lifeCoef=null;
+  if(LIFE_SPIKE_ON&&entity.id==='e0'){
+    _lifeCoef=lifeSpike.coefficients();
+    ctx.globalAlpha=_lifeCoef.bodyOpacity;
+    ctx.shadowColor='rgba(67,229,255,0.5)';ctx.shadowBlur=_lifeCoef.glowRadius;
+  }
   var slot=getMaterial(entity);
   if(slot&&slot.waveformCache){ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(slot.waveformCache,0,0,W,H);ctx.save();ctx.globalCompositeOperation='source-atop';ctx.fillStyle=ENTITY_TINTS[entity.id]||'rgba(67,229,255,.7)';ctx.fillRect(0,0,W,H);ctx.restore();}
   else{ctx.fillStyle='rgba(6,8,12,.6)';ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(67,229,255,.05)';ctx.lineWidth=1;for(var gg=1;gg<4;gg++){ctx.beginPath();ctx.moveTo(0,gg*H/4);ctx.lineTo(W,gg*H/4);ctx.stroke();ctx.beginPath();ctx.moveTo(gg*W/4,0);ctx.lineTo(gg*W/4,H);ctx.stroke();}ctx.fillStyle='rgba(67,229,255,.18)';ctx.font=(10*dpr)+'px monospace';ctx.textAlign='center';ctx.fillText('LOAD / POOL',W/2,H/2+1);return;}
@@ -1120,6 +1127,8 @@ function drawEntityCanvas(entity){
   var eng=entity.rhy;
   if(eng&&eng.mode!=='none'){ctx.fillStyle='rgba(255,56,209,.7)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='right';ctx.fillText(eng.mode.toUpperCase(),W-6,H-5);}
   else{ctx.fillStyle='rgba(255,255,255,.18)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='left';ctx.fillText(entity.view.toUpperCase(),6,H-5);}
+
+  if(LIFE_SPIKE_ON&&entity.id==='e0'){ctx.globalAlpha=1;ctx.shadowBlur=0;}
 }
 
 function estimatePlayhead(entity){
@@ -1131,10 +1140,58 @@ function estimatePlayhead(entity){
   return null;
 }
 
+
+// ============================================================
+// LIFE SPIKE (experimental, DESECHABLE — no es el Life Engine).
+// Objeto minimo para validar si el paradigma "organismo" se siente vivo
+// en el iPad, sin costar rendimiento de audio. Si no convence, se borra
+// entero sin que nada dependa de esto. Ver RFC-LIFE-001 / RFC-000.
+// ============================================================
+var LIFE_SPIKE_ON=true; // master switch del experimento (off = comportamiento original exacto)
+var lifeSpike={
+  breath:0,      // fase de respiracion 0..1, avanza siempre
+  pressure:0,    // presion interna (pulso), decae
+  energy:0,      // 0..1, mapea desde Energy macro (commit 3)
+  // avanza la fisiologia. dt en segundos. El exterior solo informa el delta.
+  tick:function(dt){
+    // respiracion: metabolismo. energy acelera el ciclo (reposo ~10s, excitado ~3s).
+    var rate=0.1+this.energy*0.23;
+    this.breath=(this.breath+dt*rate)%1;
+    // presion decae hacia 0 (recovery)
+    if(this.pressure>0){this.pressure-=dt*2.2;if(this.pressure<0){this.pressure=0;}}
+  },
+  // un evento inyecta presion (commit 2+; disponible ya)
+  pulse:function(intensity){this.pressure=Math.min(1,this.pressure+(intensity||0.6));},
+  // coeficientes derivados que el renderer consume. El renderer NO calcula biologia.
+  coefficients:function(){
+    // curva de respiracion asimetrica: no un seno puro (evita sensacion mecanica)
+    var b=this.breath;
+    var breathCurve=b<0.35?(b/0.35):(1-((b-0.35)/0.65)); // sube en 35%, baja en 65%
+    var e=this.energy;
+    return {
+      // amplitud de vida: respiracion basal + un poco mas con energy
+      bodyOpacity:0.82+breathCurve*0.10+this.pressure*0.08,
+      glowRadius:2+breathCurve*3+this.pressure*6+e*4,
+      lineTension:1+this.pressure*0.5,        // el cuerpo se tensa con el pulso
+      microJitter:this.pressure*1.5+e*0.8     // vibracion con pulso/energia
+    };
+  }
+};
+// --- Medicion de rendimiento del spike (para responder "sin costar audio") ---
+var lifeSpikePerf={frames:0,totalMs:0,maxMs:0,lastReport:0};
+
 var rafId=null,lastStepHL={};
 function startAnimLoop(){
   if(rafId){return;}
-  function frame(){tickMorph();tickSpace();tickAutomation();applyAllEffective();var i=0;while(i<entities.length){drawEntityCanvas(entities[i]);highlightActiveStep(entities[i]);i++;}rafId=requestAnimationFrame(frame);}
+  function frame(){
+    var _t0=(LIFE_SPIKE_ON&&window.performance)?performance.now():0;
+    if(LIFE_SPIKE_ON){var _now=performance.now();var _dt=lifeSpikePerf._last?(_now-lifeSpikePerf._last)/1000:0.016;lifeSpikePerf._last=_now;if(_dt>0.1){_dt=0.1;}var _eEl=document.getElementById('perfEnergy');if(_eEl){lifeSpike.energy=(parseFloat(_eEl.value)||0)/100;}lifeSpike.tick(_dt);}
+    tickMorph();tickSpace();tickAutomation();applyAllEffective();
+    var i=0;while(i<entities.length){drawEntityCanvas(entities[i]);highlightActiveStep(entities[i]);i++;}
+    if(LIFE_SPIKE_ON&&_t0){var _el=performance.now()-_t0;lifeSpikePerf.frames++;lifeSpikePerf.totalMs+=_el;if(_el>lifeSpikePerf.maxMs){lifeSpikePerf.maxMs=_el;}
+      if(performance.now()-lifeSpikePerf.lastReport>3000){var avg=(lifeSpikePerf.totalMs/lifeSpikePerf.frames).toFixed(2);window.SPK_LIFE_PERF='avg '+avg+'ms max '+lifeSpikePerf.maxMs.toFixed(2)+'ms frames '+lifeSpikePerf.frames;lifeSpikePerf.frames=0;lifeSpikePerf.totalMs=0;lifeSpikePerf.maxMs=0;lifeSpikePerf.lastReport=performance.now();}}
+    rafId=requestAnimationFrame(frame);
+  }
   rafId=requestAnimationFrame(frame);
 }
 function highlightActiveStep(entity){var eng=entity.rhy;if(!eng||(eng.mode!=='grid'&&eng.mode!=='euclidean')){return;}var strip=document.getElementById('rs_'+entity.id);if(!strip){return;}var steps=strip.children;if(!steps.length){return;}var ai=(eng.stepIdx-1+steps.length)%steps.length;if(lastStepHL[entity.id]===ai){return;}lastStepHL[entity.id]=ai;var i=0;while(i<steps.length){steps[i].classList.toggle('active',i===ai&&running);i++;}}
