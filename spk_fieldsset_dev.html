@@ -1121,8 +1121,28 @@ function drawEntityCanvas(entity){
   var zC=["rgba(67,229,255,.04)","rgba(67,229,255,.025)","rgba(67,229,255,.025)","rgba(67,229,255,.04)"];var zA=entity._activeZone||-1;var zz=0;while(zz<4){ctx.fillStyle=zC[zz];ctx.fillRect(zz*W/4,0,W/4,H);if(zA===zz){ctx.fillStyle="rgba(255,255,255,.08)";ctx.fillRect(zz*W/4,0,W/4,H);}zz++;}ctx.strokeStyle="rgba(67,229,255,.12)";ctx.lineWidth=1;zz=1;while(zz<4){ctx.beginPath();ctx.moveTo(zz*W/4,0);ctx.lineTo(zz*W/4,H);ctx.stroke();zz++;}// Letras A/B/C/D solo si NO hay material cargado (reduce ruido visual)
   if(!slot||!slot.buffer){var zL=["A","B","C","D"];zz=0;while(zz<4){ctx.fillStyle="rgba(67,229,255,.25)";ctx.font=(10*dpr)+"px monospace";ctx.textAlign="center";ctx.fillText(zL[zz],zz*W/4+W/8,H-6);zz++;}}
   if(entity.view==='freeze'){var fp=entity.param1;var ls=freezeLoopSzFor(entity)/dur;ctx.fillStyle='rgba(67,229,255,.15)';ctx.fillRect(fp*W,0,clamp(ls*W,1,W),H);ctx.strokeStyle='#43E5FF';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(fp*W,0);ctx.lineTo(fp*W,H);ctx.stroke();}
-  else if(entity.view==='loop'){var inX=entity.loopIn*W,outX=entity.loopOut*W;ctx.fillStyle='rgba(67,229,255,.07)';ctx.fillRect(inX,0,outX-inX,H);ctx.strokeStyle='#43E5FF';ctx.lineWidth=2*dpr;ctx.beginPath();ctx.moveTo(inX,0);ctx.lineTo(inX,H);ctx.stroke();ctx.fillStyle='#43E5FF';ctx.beginPath();ctx.arc(inX,8*dpr,5*dpr,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(67,229,255,.85)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='left';ctx.fillText('IN',inX+3,11);ctx.strokeStyle='#FF38D1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(outX,0);ctx.lineTo(outX,H);ctx.stroke();ctx.fillStyle='#FF38D1';ctx.beginPath();ctx.arc(outX,8*dpr,5*dpr,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,56,209,.65)';ctx.textAlign='right';ctx.fillText('OUT',outX-3,H-5);}
-  else if(entity.view==='slice'){var segs=entity._segments||[];var ai=entity.phraseIdx;if(ai>=0&&ai<segs.length){ctx.fillStyle='rgba(255,56,209,.14)';ctx.fillRect((segs[ai].start/dur)*W,0,((segs[ai].end-segs[ai].start)/dur)*W,H);}ctx.strokeStyle='rgba(255,56,209,.4)';ctx.lineWidth=1;var si2=1;while(si2<segs.length){var sx=(segs[si2].start/dur)*W;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();si2++;}}
+  else if(entity.view==='loop'){var inX=entity.loopIn*W,outX=entity.loopOut*W;ctx.fillStyle='rgba(67,229,255,.07)';ctx.fillRect(inX,0,outX-inX,H);
+      // AFFORDANCE: cada borde es un OBJETO agarrable (barra + orejas), no una linea con texto.
+      // La zona tactil real (grab=0.12 en bindCanvasGesture) es aun mayor que el dibujo.
+      var _drawLoopHandle=function(x,color,side){
+        var hw=3*dpr; // ancho de la barra del handle
+        ctx.fillStyle=color;
+        ctx.fillRect(x-hw/2,0,hw,H); // barra vertical de agarre, toda la altura
+        // dos orejas (notches) que sobresalen hacia afuera: "esto se agarra"
+        var earW=4*dpr, earH=9*dpr, dir=(side==='in')?1:-1;
+        var midA=H*0.5-earH-2*dpr, midB=H*0.5+2*dpr;
+        ctx.fillRect(x-hw/2, midA, dir*earW, earH);
+        ctx.fillRect(x-hw/2, midB, dir*earW, earH);
+      };
+      _drawLoopHandle(inX,'#43E5FF','in');
+      _drawLoopHandle(outX,'#FF38D1','out');}
+  else if(entity.view==='slice'){var segs=entity._segments||[];
+      // AFFORDANCE: cada slice es una REGION con identidad (no una onda con lineas encima).
+      // Fondo alterno muy sutil -> se leen como zonas tocables separadas.
+      var si0=0;while(si0<segs.length){if(si0%2===1){var rx=(segs[si0].start/dur)*W,rw=((segs[si0].end-segs[si0].start)/dur)*W;ctx.fillStyle='rgba(255,255,255,.022)';ctx.fillRect(rx,0,rw,H);}si0++;}
+      var ai=entity.phraseIdx;if(ai>=0&&ai<segs.length){ctx.fillStyle='rgba(255,56,209,.14)';ctx.fillRect((segs[ai].start/dur)*W,0,((segs[ai].end-segs[ai].start)/dur)*W,H);}
+      // bordes apenas perceptibles entre regiones
+      ctx.strokeStyle='rgba(255,56,209,.28)';ctx.lineWidth=1;var si2=1;while(si2<segs.length){var sx=(segs[si2].start/dur)*W;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();si2++;}}
   else if(entity.view==='grain'&&entity.param1>=.04){ctx.strokeStyle='rgba(67,229,255,.4)';ctx.lineWidth=1;ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(entity.param1*W,0);ctx.lineTo(entity.param1*W,H);ctx.stroke();ctx.setLineDash([]);}
   if(entity.view==='grain'||entity.view==='drift'||entity.view==='freeze'){var cx2=entity.param1*W,cy2=(1-entity.param2)*H;ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.setLineDash([2,6]);ctx.beginPath();ctx.moveTo(cx2,0);ctx.lineTo(cx2,H);ctx.moveTo(0,cy2);ctx.lineTo(W,cy2);ctx.stroke();ctx.setLineDash([]);}
   if(running&&entity.startTime!==null){var ph=estimatePlayhead(entity);if(ph!==null){ctx.strokeStyle='rgba(245,247,250,.8)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(ph*W,0);ctx.lineTo(ph*W,H);ctx.stroke();}}
