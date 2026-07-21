@@ -1101,15 +1101,21 @@ function drawEntityCanvas(entity){
   var wantW=Math.round(cw*dpr),wantH=Math.round(chh*dpr);
   if(canvas.width!==wantW||canvas.height!==wantH){canvas.width=wantW;canvas.height=wantH;}
   var W=canvas.width,H=canvas.height;var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
-  // LIFE SPIKE (commit 2): solo la primera entidad respira, para validar la sensacion.
-  var _lifeCoef=null;
-  if(LIFE_SPIKE_ON&&entity.id==='e0'){
-    _lifeCoef=lifeSpike.coefficients();
-    ctx.globalAlpha=_lifeCoef.bodyOpacity;
-    ctx.shadowColor='rgba(67,229,255,0.5)';ctx.shadowBlur=_lifeCoef.glowRadius;
-  }
   var slot=getMaterial(entity);
-  if(slot&&slot.waveformCache){ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(slot.waveformCache,0,0,W,H);ctx.save();ctx.globalCompositeOperation='source-atop';ctx.fillStyle=ENTITY_TINTS[entity.id]||'rgba(67,229,255,.7)';ctx.fillRect(0,0,W,H);ctx.restore();}
+  if(slot&&slot.waveformCache){ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    if(LIFE_SPIKE_ON&&entity.id==='e0'){
+      // LIFE SPIKE GEOMETRICO: el cuerpo respira deformando su FORMA (scale/shift desde el centro).
+      var lc=lifeSpike.coefficients();
+      var sy=lc.scaleY, sx=lc.scaleX;
+      ctx.save();
+      ctx.translate(W/2,H/2);ctx.scale(sx,sy);ctx.translate(-W/2,-H/2+lc.shiftY);
+      ctx.drawImage(slot.waveformCache,0,0,W,H);
+      ctx.save();ctx.globalCompositeOperation='source-atop';ctx.fillStyle=ENTITY_TINTS[entity.id]||'rgba(67,229,255,.7)';ctx.fillRect(0,0,W,H);ctx.restore();
+      ctx.restore();
+    } else {
+      ctx.drawImage(slot.waveformCache,0,0,W,H);ctx.save();ctx.globalCompositeOperation='source-atop';ctx.fillStyle=ENTITY_TINTS[entity.id]||'rgba(67,229,255,.7)';ctx.fillRect(0,0,W,H);ctx.restore();
+    }
+  }
   else{ctx.fillStyle='rgba(6,8,12,.6)';ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(67,229,255,.05)';ctx.lineWidth=1;for(var gg=1;gg<4;gg++){ctx.beginPath();ctx.moveTo(0,gg*H/4);ctx.lineTo(W,gg*H/4);ctx.stroke();ctx.beginPath();ctx.moveTo(gg*W/4,0);ctx.lineTo(gg*W/4,H);ctx.stroke();}ctx.fillStyle='rgba(67,229,255,.18)';ctx.font=(10*dpr)+'px monospace';ctx.textAlign='center';ctx.fillText('LOAD / POOL',W/2,H/2+1);return;}
   var dur=(slot.buffer?slot.buffer.duration:1);
   var zC=["rgba(67,229,255,.04)","rgba(67,229,255,.025)","rgba(67,229,255,.025)","rgba(67,229,255,.04)"];var zA=entity._activeZone||-1;var zz=0;while(zz<4){ctx.fillStyle=zC[zz];ctx.fillRect(zz*W/4,0,W/4,H);if(zA===zz){ctx.fillStyle="rgba(255,255,255,.08)";ctx.fillRect(zz*W/4,0,W/4,H);}zz++;}ctx.strokeStyle="rgba(67,229,255,.12)";ctx.lineWidth=1;zz=1;while(zz<4){ctx.beginPath();ctx.moveTo(zz*W/4,0);ctx.lineTo(zz*W/4,H);ctx.stroke();zz++;}// Letras A/B/C/D solo si NO hay material cargado (reduce ruido visual)
@@ -1128,7 +1134,6 @@ function drawEntityCanvas(entity){
   if(eng&&eng.mode!=='none'){ctx.fillStyle='rgba(255,56,209,.7)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='right';ctx.fillText(eng.mode.toUpperCase(),W-6,H-5);}
   else{ctx.fillStyle='rgba(255,255,255,.18)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='left';ctx.fillText(entity.view.toUpperCase(),6,H-5);}
 
-  if(LIFE_SPIKE_ON&&entity.id==='e0'){ctx.globalAlpha=1;ctx.shadowBlur=0;}
 }
 
 function estimatePlayhead(entity){
@@ -1166,14 +1171,19 @@ var lifeSpike={
   coefficients:function(){
     // curva de respiracion asimetrica: no un seno puro (evita sensacion mecanica)
     var b=this.breath;
-    var breathCurve=b<0.35?(b/0.35):(1-((b-0.35)/0.65)); // sube en 35%, baja en 65%
+    var breathCurve=b<0.35?(b/0.35):(1-((b-0.35)/0.65)); // inhala 35%, exhala 65%, 0..1
     var e=this.energy;
+    // amplitud de respiracion: sutil en reposo, mas marcada con energy (metabolismo).
+    var amp=0.05+e*0.09;
     return {
-      // amplitud de vida: respiracion basal + un poco mas con energy
-      bodyOpacity:0.82+breathCurve*0.10+this.pressure*0.08,
-      glowRadius:2+breathCurve*3+this.pressure*6+e*4,
-      lineTension:1+this.pressure*0.5,        // el cuerpo se tensa con el pulso
-      microJitter:this.pressure*1.5+e*0.8     // vibracion con pulso/energia
+      // GEOMETRIA pura. La respiracion es CONTRACCION desde el reposo (nunca expande
+      // fuera del canvas -> sin recorte). El cuerpo se relaja hacia adentro y vuelve.
+      // breathCurve=1 (inhalado) -> scaleY=1 (lleno); breathCurve=0 (exhalado) -> scaleY=1-amp.
+      scaleY:1-(1-breathCurve)*amp - this.pressure*0.12, // pulso: contraccion brusca extra
+      // tension horizontal: energy contrae levemente el cuerpo (mas tenso, mas nervioso).
+      scaleX:1-e*0.025,
+      // micro deriva vertical, muy sutil, con la respiracion.
+      shiftY:(breathCurve-0.5)*(1+e*2)
     };
   }
 };
