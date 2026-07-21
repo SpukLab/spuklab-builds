@@ -1154,6 +1154,46 @@ function drawEntityCanvas(entity){
   if(eng&&eng.mode!=='none'){ctx.fillStyle='rgba(255,56,209,.7)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='right';ctx.fillText(eng.mode.toUpperCase(),W-6,H-5);}
   else{ctx.fillStyle='rgba(255,255,255,.18)';ctx.font=(9*dpr)+'px monospace';ctx.textAlign='left';ctx.fillText(entity.view.toUpperCase(),6,H-5);}
 
+  // ============================================================
+  // SPRINT 2 — MICROFEEDBACK. Confirmacion mientras el dedo esta presente.
+  // Funcion PURA de _pointers: sin estado propio, sin timers, sin animacion.
+  // Si no hay dedo, no dibuja nada (el feedback desaparece solo al soltar).
+  // ============================================================
+  var _ptrs=entity._pointers;
+  if(_ptrs){
+    var _ids=Object.keys(_ptrs), _k=0;
+    while(_k<_ids.length){
+      var _p=_ptrs[_ids[_k]]; _k++;
+      if(!_p||_p.isCap){continue;}
+      var _px=(_p.lastX!==undefined?_p.lastX:_p.startX);
+      if(_px===undefined){continue;}
+      var _dt=_p.dT;
+      if(_dt==='loopIn'||_dt==='loopOut'){
+        // LOOP: el handle agarrado gana contraste mientras se arrastra. "Me agarraste."
+        var _hx=(_dt==='loopIn'?entity.loopIn:entity.loopOut)*W;
+        ctx.fillStyle=(_dt==='loopIn'?'rgba(67,229,255,.9)':'rgba(255,56,209,.9)');
+        ctx.fillRect(_hx-3*dpr,0,6*dpr,H); // barra mas ancha y solida = confirmacion
+      } else if(entity.view==='slice'){
+        // SLICE: el segmento tocado se "hunde" (fondo mas marcado) mientras el dedo esta.
+        var _segs=entity._segments||[];
+        var _si=(_p.lSeg!==undefined&&_p.lSeg>=0)?_p.lSeg:posToSegment(_px,entity);
+        if(_si>=0&&_si<_segs.length&&typeof dur!=='undefined'){
+          var _sx=(_segs[_si].start/dur)*W,_sw=((_segs[_si].end-_segs[_si].start)/dur)*W;
+          ctx.fillStyle='rgba(255,56,209,.22)';ctx.fillRect(_sx,0,_sw,H); // hundimiento
+        }
+      } else if(entity.view==='grain'){
+        // GRAIN: actividad local bajo el dedo mientras se mantiene. "El tejido reacciona."
+        var _gx=_px*W;
+        ctx.fillStyle='rgba(67,229,255,.12)';ctx.fillRect(_gx-14*dpr,0,28*dpr,H); // zona de actividad
+        ctx.fillStyle='rgba(67,229,255,.5)';ctx.fillRect(_gx-1*dpr,0,2*dpr,H); // foco
+      } else if(entity.view==='freeze'||_dt==='freeze'){
+        // FREEZE: la region se rigidiza mientras se mantiene. No brillo: contorno duro + trama.
+        ctx.strokeStyle='rgba(150,200,255,.4)';ctx.lineWidth=1;
+        var _fx=0;while(_fx<W){ctx.beginPath();ctx.moveTo(_fx,0);ctx.lineTo(_fx,H);ctx.stroke();_fx+=6*dpr;} // trama rigida
+      }
+    }
+  }
+
 }
 
 function estimatePlayhead(entity){
