@@ -1095,7 +1095,10 @@ function buildWaveformCacheForSlot(slotId){
 }
 
 function drawEntityCanvas(entity){
-  var canvas=document.getElementById('wv_'+entity.id);if(!canvas){return;}
+  // PERF: cache de la referencia del canvas en la entidad (evita getElementById por frame).
+  // isConnected recupera el cache solo si la card se reconstruye. Sin invalidacion manual.
+  if(!entity.waveCanvas||!entity.waveCanvas.isConnected){entity.waveCanvas=document.getElementById('wv_'+entity.id);}
+  var canvas=entity.waveCanvas;if(!canvas){return;}
   var dpr=window.devicePixelRatio||1;
   var cw=canvas.clientWidth||600,chh=canvas.clientHeight||100;
   var wantW=Math.round(cw*dpr),wantH=Math.round(chh*dpr);
