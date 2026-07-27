@@ -236,6 +236,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .projBtnRow{display:flex;gap:8px;margin-bottom:14px;}
 .projBtn{flex:1;font-size:12px;padding:9px 0;border-radius:6px;cursor:pointer;
   touch-action:manipulation;letter-spacing:.05em;font-weight:500;}
+.projBtnNew{width:100%;background:rgba(67,229,255,.1);border-color:rgba(67,229,255,.45);color:#43E5FF;}
 .projBtnSave{background:rgba(95,255,160,.15);border:1px solid rgba(95,255,160,.4);color:#5fffa0;}
 .projBtnLoad{background:rgba(67,229,255,.12);border:1px solid rgba(67,229,255,.35);color:#43E5FF;}
 .projBtnExport{background:rgba(255,56,209,.1);border:1px solid rgba(255,56,209,.3);color:#FF38D1;}
@@ -705,6 +706,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
   <div id="projectPanel">
     <h3>PROJECT</h3>
+    <div class="projBtnRow"><button class="projBtn projBtnNew" id="projNewBtn">NUEVO</button></div>
     <label>NOMBRE DEL PROYECTO</label>
     <input id="projName" type="text" placeholder="Glass Forest" autocomplete="off" spellcheck="false">
     <div class="projBtnRow">
@@ -3767,6 +3769,100 @@ function serializePoolMeta(){
   return meta;
 }
 // Esqueleto PROJECT (Fase 3c)
+// --- NEW PROJECT ---------------------------------------------------------
+// Fuente unica de verdad del estado inicial. Reutiliza makeEntity() (los mismos
+// defaults que el boot) y serializeEntity(); no duplica valores ni hace resets dispersos.
+function createEmptyProjectDocument(){
+  var fresh=[makeEntity('e0','VOICE A','voice','loop',0),
+             makeEntity('e1','VOICE B','voice','loop',1),
+             makeEntity('e2','TEXTURE','texture','drift',2),
+             makeEntity('e3','RHYTHM','rhythm','loop',3)];
+  fresh[3].rhy.mode='grid';
+  fresh[3].rhy.p1=Math.round((16-4)/(32-4)*100);
+  var slotsDoc={};
+  ['e0_A','e0_B','e0_C','e0_D','e1_A','e1_B','e1_C','e1_D',
+   'e2_A','e2_B','e2_C','e2_D','e3_A','e3_B','e3_C','e3_D'].forEach(function(id){
+    slotsDoc[id]={audioId:null,name:null,duration:0};
+  });
+  var gs={bpm:120,complexity:40,focusTarget:null,focusAmount:0};
+  var now=new Date().toISOString();
+  return {
+    projectVersion:PROJECT_VERSION,
+    appVersion:APP_VERSION,
+    createdAt:now,
+    modifiedAt:now,
+    state:{bpm:gs.bpm,complexity:gs.complexity,focusTarget:gs.focusTarget,focusAmount:gs.focusAmount},
+    scene:{global:{bpm:gs.bpm,complexity:gs.complexity,focusTarget:gs.focusTarget,focusAmount:gs.focusAmount},
+           entities:fresh.map(function(e){return serializeEntity(e);}),
+           selScene:null},
+    scenes:{A:null,B:null,C:null,D:null},
+    selScene:null,
+    slots:slotsDoc,
+    audioPool:{},
+    scratch:[]
+  };
+}
+// La sesion tiene trabajo si hay material, escenas, queue o un proyecto activo.
+function sessionHasWork(){
+  if(typeof _activeProjectName!=='undefined'&&_activeProjectName){return true;}
+  if(audioPool&&Object.keys(audioPool).length>0){return true;}
+  if(scenes&&(scenes.A||scenes.B||scenes.C||scenes.D)){return true;}
+  if(audioQueue&&audioQueue.items&&audioQueue.items.length>0){return true;}
+  var has=false;
+  Object.keys(materialPool).forEach(function(id){
+    if(materialPool[id]&&materialPool[id].audioId){has=true;}
+  });
+  return has;
+}
+// Fuerza que session:last quede con el documento actual aunque haya un autosave
+// en vuelo (que serializo el estado anterior). Reintenta si fue saltado y repite
+// una escritura de confirmacion para quedar ultimo.
+function _forceSessionWrite(tries,cb){
+  cb=cb||function(){};
+  _sessionDirty=true;
+  saveSession(function(err,info){
+    if(err&&String(err).indexOf('skip')===0&&tries>0){
+      setTimeout(function(){_forceSessionWrite(tries-1,cb);},180);
+      return;
+    }
+    cb(err,info);
+  });
+}
+function projDoNew(){
+  if(sessionHasWork()){
+    if(!window.confirm('Se perderan los cambios no guardados de la sesion actual. Crear un proyecto nuevo?')){return;}
+  }
+  // 1. Detener transporte, captura/REC y fuentes continuas (mecanismos seguros existentes)
+  try{panicStop();}catch(ex){}
+  entities.forEach(function(e){try{stopContinuousView(e);}catch(ex2){}});
+  // 2. Proteger el autosave mientras se aplica el documento
+  _loadingProject=true;
+  var doc=createEmptyProjectDocument();
+  // 3. Aplicar por el pipeline normal y probado
+  deserializeProject(doc,function(err){
+    if(err){_loadingProject=false;projStatus('NUEVO fallo: '+err,true);return;}
+    // 4. Limpiar runtime que el documento no cubre
+    morph.active=false;morph.from=null;morph.to=null;morph.fromKey=null;morph.toKey=null;morph.startTime=0;
+    if(audioQueue.autoTimer){clearInterval(audioQueue.autoTimer);audioQueue.autoTimer=null;}
+    audioQueue.items=[];audioQueue.pos=0;audioQueue.playing=-1;audioQueue.auto=false;
+    if(historyTimer){clearTimeout(historyTimer);historyTimer=null;}
+    historyStack=[];historyIdx=-1;historyDirty=false;pendingLabel=null;
+    _activeProjectName=null;
+    var ni=document.getElementById('projName');if(ni){ni.value='';}
+    // 5. Refrescar UI (las cards/perf las refresca _commitProject)
+    if(typeof updateHistoryUI==='function'){updateHistoryUI();}
+    if(typeof buildQueueList==='function'){buildQueueList();}
+    if(typeof refreshProjectList==='function'){refreshProjectList();}
+    // 6. Sobrescribir session:last YA -> un reload no debe restaurar el proyecto anterior
+    _loadingProject=false;
+    _forceSessionWrite(4,function(){
+      setStatus('Proyecto nuevo - sin guardar.');
+      projStatus('proyecto nuevo - sin guardar');
+      // escritura de confirmacion: garantiza quedar ultimo ante un autosave en vuelo
+      setTimeout(function(){_forceSessionWrite(2,function(){});},600);
+    });
+  });
+}
 function serializeProject(opts){
   // Documento PROJECT puro. NO conoce IndexedDB.
   // opts.createdAt opcional (preservar fecha de creacion en re-save).
@@ -4847,6 +4943,7 @@ window.onload=function(){
   window.addEventListener("pagehide",_sessionOnHide,false);
   // checkRecovery arranca el autosave despues de la decision del usuario
   checkRecovery();
+  var pNew=document.getElementById("projNewBtn");if(pNew){pNew.addEventListener("click",projDoNew);}
   var pSave=document.getElementById("projSaveBtn");if(pSave){pSave.addEventListener("click",projDoSave);}
   var pLoad=document.getElementById("projLoadBtn");if(pLoad){pLoad.addEventListener("click",function(){projDoLoad();});}
   var pExp=document.getElementById("projExportBtn");if(pExp){pExp.addEventListener("click",projDoExport);}
