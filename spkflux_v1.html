@@ -94,6 +94,7 @@ textarea.jsonBox{width:100%;min-height:100px;background:rgba(0,0,0,.25);color:va
   <div class="dimGrp">
     <div class="dimHead"><span>BIND</span><span class="dimVal" id="bindVal">0</span></div>
     <input class="slider" type="range" id="bindSlider" min="0" max="100" value="0">
+    <div class="row" style="margin-top:4px;"><button id="btnBypass">BIND BYPASS</button></div>
   </div>
 
   <div class="dimGrp">
@@ -114,16 +115,23 @@ textarea.jsonBox{width:100%;min-height:100px;background:rgba(0,0,0,.25);color:va
   <canvas class="viz" id="fluxViz"></canvas>
 </div>
 
-<!-- BUILDER -->
+<!-- BUILDER — BIND LAB (visual, primary editing surface) -->
+<div class="panel">
+  <div class="panelTitle">Builder — BIND lab</div>
+  <canvas class="viz" id="builderFluxMap" style="height:110px;"></canvas>
+  <div id="bindLabControls" style="margin-top:8px;"></div>
+</div>
+
+<!-- BUILDER — CAPTURES -->
 <div class="panel">
   <div class="panelTitle">Builder / Captures</div>
   <div class="capList" id="capList"></div>
   <div class="builderGrid" id="builderView" style="margin-top:8px;"></div>
 </div>
 
-<!-- BEHAVIOR (serialize/inspect) -->
+<!-- BEHAVIOR (advanced / raw) -->
 <div class="panel">
-  <div class="panelTitle">Behavior (current — capability != behavior)</div>
+  <div class="panelTitle">Advanced / raw JSON (capability != behavior)</div>
   <div class="row" style="margin-bottom:6px;">
     <button id="btnExportBehavior">EXPORT JSON</button>
     <button id="btnImportBehavior">APPLY JSON</button>
@@ -183,18 +191,34 @@ var VOICE_COUNT=4;
 
 var perf={bind:0,density:.30,space:.20,motion:.15}; // 0..1 internally except bind slider shows 0..100
 
-// [NEW] BIND relationship nodes (Voice -> Bass)
+// [NEW] BIND relationship nodes — Pass 02 rewrite (Voice -> Bass primary direction)
 var bindFX={
-  // temporal: shared pulse LFO gating bass+voice gently in sync
-  pulseOsc:null, bassPulseDepth:null, voicePulseDepth:null,
-  // spatial: voice pan converges toward bass pan; shared space send
-  // (uses voices[i].panNode directly + voiceSpaceSend)
-  // spectral: filter on voice stem morphs toward a "bass-like" lowpass character
+  // temporal: Voice amplitude envelope ducks/shapes Bass gain — real coupling,
+  // not two independent LFOs (Pass 01's shared-LFO masked against Motion on
+  // the same AudioParam; replaced entirely, see voiceEnvelope + applyTemporalBind)
+  bassBaseGain:0.85,
+  // spatial: a single shared LFO adds CORRELATED pan motion to bass + all
+  // voices simultaneously (additive on top of Space's static spread — no
+  // redundancy: Space = character of the material, this = shared movement)
+  spatialOsc:null, spatialDepthBass:null, spatialDepthVoice:null,
+  // spectral: Bass gets a new peaking "formant" filter whose emphasis rises
+  // with spectral BIND — Bass's own identity visibly changes, not just Voice
+  // darkening (voiceContagionFilter kept as a smaller complementary effect)
   voiceContagionFilter:null,
-  // fragment: short grains cut from bass buffer, mixed into voice stem
-  fragmentGain:null,
-  fragmentTimer:null
+  bassFormantFilter:null,
+  // fragment — PRIMARY direction Voice -> Bass: grains cut from a loaded
+  // Voice buffer, injected into bass.filterNode so they inherit bass's own
+  // filter/pan/gain treatment (sound embedded in Bass, not a 5th voice layer)
+  fragToBassGain:null,
+  // fragment — SECONDARY/reverse capability retained from Pass 01 (Bass->Voice).
+  // Not wired into the default scheduler; kept as an internal capability in
+  // case a future Behavior wants to enable it explicitly.
+  fragmentGain:null
 };
+
+var temporalWeight=0, spatialWeight=0, spectralWeight=0, fragmentWeight=0;
+var voiceEnvelope=0; // [NEW] running RMS of voice stem, updated by the retro tap
+var bindBypassed=false; // [NEW] Phase 4 — A/B without touching transport/other dims
 
 var seed=1234567;
 var rng=makePRNG(seed);
@@ -211,31 +235,52 @@ function defaultBehavior(){
     name:'Vocal Bass / Sparse Fragment',
     flux:{
       // conceptual progression Temporal -> Spatial -> Spectral -> Fragment
-      // each family has a [start,peak,end] region on the 0..1 BIND axis;
-      // regions overlap on purpose (continuous, not 4 hard switches)
+      // Pass 02 retune per musical test results: wider, more overlapping
+      // regions so intermediate BIND positions (37/55/72...) each sit inside
+      // more than one active family at once.
       regions:{
-        temporal:{start:0.00,peak:0.15,end:0.55},
-        spatial: {start:0.10,peak:0.40,end:0.75},
-        spectral:{start:0.35,peak:0.65,end:0.92},
-        fragment:{start:0.60,peak:0.90,end:1.00}
+        temporal:{start:0.00,peak:0.22,end:0.58,strength:1.0},
+        spatial: {start:0.18,peak:0.46,end:0.74,strength:1.0},
+        spectral:{start:0.38,peak:0.66,end:0.90,strength:1.0},
+        fragment:{start:0.60,peak:0.92,end:1.00,strength:1.0}
       },
       hold:false
     },
-    temporal:{pulseRateHz:0.35,maxDepth:0.35},
-    spatial:{maxSendLevel:0.45,panConvergeMax:1.0},
-    spectral:{voiceLowpassMinHz:20000,voiceLowpassMaxHz:900,contagionQ:0.9},
-    fragment:{maxRateHz:6,grainDur:0.09},
+    temporal:{duckAmount:0.55,riseTC:0.05,fallTC:0.18},
+    spatial:{lfoRateHz:0.07,panDepth:0.55,maxSendLevel:0.45},
+    spectral:{
+      voiceLowpassMinHz:20000,voiceLowpassMaxHz:1400,contagionQ:0.9,
+      bassFormantHz:1100,bassFormantMaxGainDb:9,bassFormantQ:2.6
+    },
+    fragment:{maxRateHz:5,grainDur:0.11},
     ranges:{densityMin:0,densityMax:1,spaceMin:0,spaceMax:1,motionMin:0,motionMax:1},
     seed:seed
   };
 }
 var currentBehavior=defaultBehavior();
 
-/* triangular membership over a [start,peak,end] region -> weight 0..1 */
-function regionWeight(region,x){ // [NEW]
-  if(x<=region.start||x>=region.end){return 0;}
-  if(x<=region.peak){return smoothstep(region.start,region.peak,x);}
-  return 1-smoothstep(region.peak,region.end,x);
+/* triangular membership over a [start,peak,end] region -> weight 0..1,
+   scaled by the family's strength (Builder "Amount" control). [NEW] */
+function regionWeight(region,x){
+  var raw;
+  if(x<=region.start||x>=region.end){raw=0;}
+  else if(x<=region.peak){raw=smoothstep(region.start,region.peak,x);}
+  else{raw=1-smoothstep(region.peak,region.end,x);}
+  var strength=(region.strength===undefined)?1:region.strength;
+  return clamp(raw*strength,0,1);
+}
+
+/* [NEW] central, constrained mutator for Builder region edits — used by both
+   the visual sliders and the self-tests. Enforces start<=peak<=end and
+   0..1 ranges so no invalid Behavior configuration can be produced. */
+function setRegionField(family,field,val01){
+  var r=currentBehavior.flux.regions[family];
+  if(!r){return;}
+  val01=clamp(val01,0,1);
+  if(field==='strength'){ r.strength=val01; return; }
+  if(field==='start'){ r.start=Math.min(val01,r.peak); return; }
+  if(field==='peak'){ r.peak=clamp(val01,r.start,r.end); return; }
+  if(field==='end'){ r.end=Math.max(val01,r.peak); return; }
 }
 
 /* [NEW] Flux Path evaluator — replaces FieldsSet's linear tickMorph().
@@ -314,8 +359,31 @@ function makeTapAdvancing(sourceNode,key){
     var l=inp.getChannelData(0), r=inp.numberOfChannels>1?inp.getChannelData(1):l;
     writeRing(ring[key],l,r,ringWritePosByKey[key]);
     advanceRingPos(key,l.length);
+    if(key==='voice'){ updateTemporalCoupling(l,r); } // [NEW] Phase 2 — Temporal BIND
   };
   return sp;
+}
+
+/* [NEW] Temporal BIND — reuses the existing voice retro-tap block (no extra
+   node) to compute the voice stem's RMS envelope, then ducks/shapes Bass
+   gain in proportion to (temporalWeight x envelope). This is real coupling
+   — Bass audibly reacts to Voice's own articulation — replacing Pass 01's
+   two independent LFOs that masked each other on voiceStemGain.gain. */
+function updateTemporalCoupling(l,r){
+  if(!audioCtx||!bass.gainNode){return;}
+  var sum=0,i=0,n=l.length;
+  while(i<n){ var s=(l[i]+(r?r[i]:l[i]))*0.5; sum+=s*s; i++; }
+  var rms=Math.sqrt(sum/n);
+  voiceEnvelope=voiceEnvelope*0.6+rms*0.4; // light smoothing across blocks
+  if(temporalWeight<=0.005){
+    bass.gainNode.gain.setTargetAtTime(bindFX.bassBaseGain,audioCtx.currentTime,currentBehavior.temporal.fallTC);
+    return;
+  }
+  var duckAmt=currentBehavior.temporal.duckAmount*temporalWeight;
+  var envNorm=clamp(voiceEnvelope*4,0,1); // rough normalization for typical loop levels
+  var target=bindFX.bassBaseGain*(1-duckAmt*envNorm);
+  var tc=envNorm>0.15?currentBehavior.temporal.riseTC:currentBehavior.temporal.fallTC;
+  bass.gainNode.gain.setTargetAtTime(target,audioCtx.currentTime,tc);
 }
 
 function pushTimelineTick(){
@@ -425,28 +493,49 @@ function initAudio(){
   voiceSpaceSend=audioCtx.createGain(); voiceSpaceSend.gain.value=0;
   voiceSpaceSend.connect(reverbConv); reverbConv.connect(reverbWet); reverbWet.connect(limiter);
 
-  // BASS chain: src -> filterNode -> panNode -> gainNode -> bassStemGain
+  // BASS chain: src -> filterNode -> bassFormantFilter -> panNode -> gainNode -> bassStemGain
   bass.filterNode=audioCtx.createBiquadFilter(); bass.filterNode.type='lowpass'; bass.filterNode.frequency.value=20000;
   bass.panNode=audioCtx.createStereoPanner(); bass.panNode.pan.value=0;
-  bass.gainNode=audioCtx.createGain(); bass.gainNode.gain.value=.85;
-  bass.filterNode.connect(bass.panNode); bass.panNode.connect(bass.gainNode); bass.gainNode.connect(bassStemGain);
+  bass.gainNode=audioCtx.createGain(); bass.gainNode.gain.value=bindFX.bassBaseGain;
 
-  // [NEW] temporal BIND pulse — shared LFO, depth applied to bass+voice gently
-  bindFX.pulseOsc=audioCtx.createOscillator(); bindFX.pulseOsc.type='sine';
-  bindFX.pulseOsc.frequency.value=currentBehavior.temporal.pulseRateHz;
-  bindFX.bassPulseDepth=audioCtx.createGain(); bindFX.bassPulseDepth.gain.value=0;
-  bindFX.voicePulseDepth=audioCtx.createGain(); bindFX.voicePulseDepth.gain.value=0;
-  bindFX.pulseOsc.connect(bindFX.bassPulseDepth); bindFX.bassPulseDepth.connect(bass.gainNode.gain);
-  bindFX.pulseOsc.connect(bindFX.voicePulseDepth); bindFX.voicePulseDepth.connect(voiceStemGain.gain);
-  bindFX.pulseOsc.start();
+  // [NEW] spectral BIND — peaking "formant" filter on BASS itself. This is
+  // the node that must satisfy "hear something happening to Bass identity":
+  // its gain rises with spectral BIND weight, colouring Bass toward a
+  // vocal-formant resonance rather than only darkening Voice.
+  bindFX.bassFormantFilter=audioCtx.createBiquadFilter();
+  bindFX.bassFormantFilter.type='peaking';
+  bindFX.bassFormantFilter.frequency.value=currentBehavior.spectral.bassFormantHz;
+  bindFX.bassFormantFilter.Q.value=currentBehavior.spectral.bassFormantQ;
+  bindFX.bassFormantFilter.gain.value=0;
 
-  // [NEW] spectral BIND contagion filter, inserted once on the voice stem path
+  bass.filterNode.connect(bindFX.bassFormantFilter);
+  bindFX.bassFormantFilter.connect(bass.panNode);
+  bass.panNode.connect(bass.gainNode); bass.gainNode.connect(bassStemGain);
+
+  // [NEW] spatial BIND — one shared LFO drives correlated pan motion on
+  // BOTH bass and all voices at once (additive on top of Space's static
+  // spread value). Depths start at 0, raised by applyBind().
+  bindFX.spatialOsc=audioCtx.createOscillator(); bindFX.spatialOsc.type='sine';
+  bindFX.spatialOsc.frequency.value=currentBehavior.spatial.lfoRateHz;
+  bindFX.spatialDepthBass=audioCtx.createGain(); bindFX.spatialDepthBass.gain.value=0;
+  bindFX.spatialDepthVoice=audioCtx.createGain(); bindFX.spatialDepthVoice.gain.value=0;
+  bindFX.spatialOsc.connect(bindFX.spatialDepthBass); bindFX.spatialDepthBass.connect(bass.panNode.pan);
+  bindFX.spatialOsc.connect(bindFX.spatialDepthVoice); // fan-out to voices[i].panNode.pan below
+  bindFX.spatialOsc.start();
+
+  // [NEW] spectral — voice contagion filter kept as a smaller complementary
+  // effect (voice darkening), no longer the only spectral mechanism.
   bindFX.voiceContagionFilter=audioCtx.createBiquadFilter();
   bindFX.voiceContagionFilter.type='lowpass';
   bindFX.voiceContagionFilter.frequency.value=currentBehavior.spectral.voiceLowpassMinHz;
   bindFX.voiceContagionFilter.Q.value=currentBehavior.spectral.contagionQ;
 
-  // [NEW] fragment mix bus — short bass grains injected into voice stem
+  // [NEW] fragment — PRIMARY Voice->Bass: injected straight into bass.filterNode
+  // so grains inherit bass's own downstream filter/pan/gain treatment.
+  bindFX.fragToBassGain=audioCtx.createGain(); bindFX.fragToBassGain.gain.value=0.6;
+  bindFX.fragToBassGain.connect(bass.filterNode);
+
+  // [NEW] fragment — SECONDARY/reverse (Bass->Voice), retained but dormant.
   bindFX.fragmentGain=audioCtx.createGain(); bindFX.fragmentGain.gain.value=0;
   bindFX.fragmentGain.connect(voiceStemGain);
 
@@ -458,6 +547,7 @@ function initAudio(){
       gainNode:audioCtx.createGain(),panNode:audioCtx.createStereoPanner(),basePan:(i-1.5)/2};
     v.gainNode.gain.value=0; // starts silent, density scheduler opens it
     v.panNode.pan.value=v.basePan;
+    bindFX.spatialDepthVoice.connect(v.panNode.pan); // [NEW] shared spatial LFO fan-out
     v.panNode.connect(v.gainNode);
     v.gainNode.connect(bindFX.voiceContagionFilter);
     voices.push(v);
@@ -549,43 +639,98 @@ function stopTransport(){
    ============================================================ */
 var fragmentEventCountSinceLastTick=0;
 
+/* [ADAPTED/NEW — Pass 02] applies the four BIND relationship families.
+   Visualization always reflects the TRUE flux trajectory (evalFluxPath on
+   perf.bind); when bindBypassed is on, the DSP is driven by zero weights
+   instead, so A/B compares identical material with the relationship simply
+   switched off — nothing else moves. */
 function applyBind(){
   if(!audioCtx){return;}
-  var w=evalFluxPath(perf.bind,currentBehavior);
+  var trueW=evalFluxPath(perf.bind,currentBehavior);
+  var w=bindBypassed?{temporal:0,spatial:0,spectral:0,fragment:0}:trueW;
   var t=audioCtx.currentTime;
 
-  // Temporal: shared pulse depth scales with temporal weight (both bass & voice breathe together)
-  var tDepth=w.temporal*currentBehavior.temporal.maxDepth;
-  bindFX.bassPulseDepth.gain.setTargetAtTime(tDepth*0.5,t,.15);
-  bindFX.voicePulseDepth.gain.setTargetAtTime(tDepth,t,.15);
+  temporalWeight=w.temporal; spatialWeight=w.spatial;
+  spectralWeight=w.spectral; fragmentWeight=w.fragment;
 
-  // Spatial: voice pan converges toward bass pan; shared space send rises
-  var i=0;
-  while(i<VOICE_COUNT){
-    var v=voices[i];
-    var target=lerp(v.basePan,bass.panNode.pan.value,w.spatial*currentBehavior.spatial.panConvergeMax);
-    v.panNode.pan.setTargetAtTime(target,t,.25);
-    i++;
-  }
-  voiceSpaceSend.gain.setTargetAtTime(w.spatial*currentBehavior.spatial.maxSendLevel,t,.25);
+  // Temporal is applied continuously inside updateTemporalCoupling() (driven
+  // by the live voice envelope), using the temporalWeight set above — nothing
+  // further to schedule here.
 
-  // Spectral: voice contagion filter morphs toward bass-like lowpass character
-  var freq=lerp(currentBehavior.spectral.voiceLowpassMinHz,currentBehavior.spectral.voiceLowpassMaxHz,w.spectral);
-  bindFX.voiceContagionFilter.frequency.setTargetAtTime(freq,t,.2);
+  // Spatial: shared correlated pan-motion depth on bass + voices
+  var spatialDepth=w.spatial*currentBehavior.spatial.panDepth;
+  bindFX.spatialDepthBass.gain.setTargetAtTime(spatialDepth*0.6,t,.3);
+  bindFX.spatialDepthVoice.gain.setTargetAtTime(spatialDepth,t,.3);
+  voiceSpaceSend.gain.setTargetAtTime(w.spatial*currentBehavior.spatial.maxSendLevel,t,.3);
 
-  // Fragment: rate of bass-grain injection into voice bus scales with fragment weight
-  fragmentRateWeight=w.fragment;
-  bindFX.fragmentGain.gain.setTargetAtTime(w.fragment>0.02?0.55:0,t,.2);
+  // Spectral: BASS gets a rising formant emphasis (identity change); Voice
+  // keeps a smaller complementary darkening.
+  var formantGainDb=w.spectral*currentBehavior.spectral.bassFormantMaxGainDb;
+  bindFX.bassFormantFilter.gain.setTargetAtTime(formantGainDb,t,.2);
+  var voiceFreq=lerp(currentBehavior.spectral.voiceLowpassMinHz,currentBehavior.spectral.voiceLowpassMaxHz,w.spectral);
+  bindFX.voiceContagionFilter.frequency.setTargetAtTime(voiceFreq,t,.2);
 
-  drawFluxViz(w);
+  // Fragment: rate of Voice-grain injection into BASS scales with fragment weight
+  bindFX.fragToBassGain.gain.setTargetAtTime(w.fragment>0.02?0.6:0,t,.2);
+
+  drawFluxViz(trueW,bindBypassed);
 }
-var fragmentRateWeight=0;
 
-/* [ADAPTED] fieldsset playGrain() — cuts a short grain from BASS and routes
-   it through the voice bus, panned/leveled like a voice particle. This is
-   the Fragment relationship family: bass material becomes constituent of
-   the voice/bass hybrid body, not merely audible underneath it. */
-function fireFragmentGrain(){
+/* [NEW] Phase 4 — BIND BYPASS. Structurally guaranteed to create/destroy
+   nothing: only flips a flag and re-applies existing nodes via applyBind().
+   Does not touch running/perf.density/perf.space/perf.motion/transport. */
+function toggleBindBypass(){
+  bindBypassed=!bindBypassed;
+  applyBind();
+  var btn=document.getElementById('btnBypass');
+  if(btn){ btn.classList.toggle('active',bindBypassed); btn.textContent=bindBypassed?'BIND: BYPASSED':'BIND BYPASS'; }
+  setStatus(bindBypassed?'BIND bypasseado — A/B activo':'BIND activo');
+}
+
+/* [NEW] Phase 2 — Fragment, PRIMARY direction VOICE -> BASS. Pure selection
+   logic factored out for determinism testing (no audio/DOM side effects):
+   given the PRNG and the list of currently loaded voice buffers, returns
+   which buffer + start position to grain. */
+function pickFragmentSource(rngFn,loadedVoiceList,grainDur){
+  if(!loadedVoiceList||loadedVoiceList.length===0){return null;}
+  var idx=Math.floor(rngFn()*loadedVoiceList.length);
+  if(idx>=loadedVoiceList.length){idx=loadedVoiceList.length-1;}
+  var buf=loadedVoiceList[idx];
+  var maxStart=Math.max(.01,buf.duration-grainDur-.01);
+  var pos=rngFn()*maxStart;
+  return {buffer:buf,pos:pos};
+}
+
+/* Cuts a short grain from a loaded VOICE buffer and injects it into
+   bass.filterNode — the grain then inherits bass's OWN downstream formant
+   filter, pan and gain treatment, so it reads as embedded in the bass body
+   rather than as a fifth, louder voice layer. */
+function fireFragmentGrainToBass(){
+  if(!audioCtx){return;}
+  var loadedBufs=[],i=0;
+  while(i<VOICE_COUNT){ if(voices[i].loaded&&voices[i].buffer){loadedBufs.push(voices[i].buffer);} i++; }
+  var gs=currentBehavior.fragment.grainDur;
+  var pick=pickFragmentSource(rng,loadedBufs,gs);
+  if(!pick){return;}
+  var src=audioCtx.createBufferSource();
+  src.buffer=pick.buffer;
+  var env=audioCtx.createGain();
+  var fade=Math.min(gs*.3,.03);
+  var t=audioCtx.currentTime+.005;
+  env.gain.setValueAtTime(.0001,t);
+  env.gain.linearRampToValueAtTime(.5,t+fade);
+  env.gain.linearRampToValueAtTime(.0001,t+gs);
+  src.connect(env); env.connect(bindFX.fragToBassGain);
+  src.start(t,pick.pos,gs);
+  src.stop(t+gs+.05);
+  fragmentEventCountSinceLastTick++;
+}
+
+/* [REUSED/RETAINED] Pass 01's Bass->Voice grain injection — kept as an
+   internal secondary/reverse capability per Pass 02 instructions. Not
+   called by the default scheduler; a future Behavior could re-enable it
+   by wiring bindFX.fragmentGain.gain instead of/alongside fragToBassGain. */
+function fireFragmentGrain_reverse(){
   if(!bass.buffer||!audioCtx){return;}
   var gs=currentBehavior.fragment.grainDur;
   var maxStart=Math.max(.01,bass.buffer.duration-gs-.01);
@@ -601,7 +746,6 @@ function fireFragmentGrain(){
   src.connect(env); env.connect(bindFX.fragmentGain);
   src.start(t,pos,gs);
   src.stop(t+gs+.05);
-  fragmentEventCountSinceLastTick++;
 }
 
 /* Density scheduler — [NEW] probabilistic layer participation, not gain.
@@ -641,15 +785,17 @@ var motionOsc=null, motionDepth=null;
 function applySpaceMotion(){
   if(!audioCtx){return;}
   var t=audioCtx.currentTime;
-  // Space: widen pan spread of active voices + reverb send floor
+  // Space: widen pan spread of active voices + reverb send floor.
+  // [Pass 02] No longer guarded against BIND/spatial — spatial BIND now
+  // adds a correlated LFO on top of this base pan value (additive on the
+  // same AudioParam), so Space and BIND/Spatial coexist without conflict:
+  // Space = static character, BIND/Spatial = shared movement.
   var i=0;
   while(i<VOICE_COUNT){
     var v=voices[i];
     var spread=lerp(0.15,1.0,perf.space);
     var wideTarget=v.basePan*spread;
-    if(!(evalFluxPath(perf.bind,currentBehavior).spatial>0.05)){
-      v.panNode.pan.setTargetAtTime(wideTarget,t,.3);
-    }
+    v.panNode.pan.setTargetAtTime(wideTarget,t,.3);
     i++;
   }
   reverbWet.gain.setTargetAtTime(lerp(0.03,0.30,perf.space),t,.3);
@@ -669,7 +815,7 @@ function startBehaviorScheduler(){
   if(densityTickTimer){clearInterval(densityTickTimer);}
   densityTickTimer=setInterval(function(){
     densityTick();
-    if(rng()<fragmentRateWeight*0.5){fireFragmentGrain();}
+    if(rng()<fragmentWeight*0.5){fireFragmentGrainToBass();} // [Pass 02] Voice -> Bass, primary
   },600);
 }
 function startTimelineTicker(){
@@ -717,7 +863,7 @@ function renderVoiceDots(){
   }
 }
 
-function drawFluxViz(w){
+function drawFluxViz(w,bypassed){
   var cv=document.getElementById('fluxViz'); if(!cv.getContext){return;}
   var ctx=cv.getContext('2d');
   var W=cv.width=cv.clientWidth*2, H=cv.height=cv.clientHeight*2;
@@ -729,7 +875,7 @@ function drawFluxViz(w){
     var val=fams[i][1];
     var h=val*H*0.85;
     ctx.fillStyle=fams[i][2];
-    ctx.globalAlpha=0.75;
+    ctx.globalAlpha=bypassed?0.28:0.75; // dim when bypassed — trajectory still visible, DSP not applied
     ctx.fillRect(i*barW+barW*0.15,H-h,barW*0.7,h);
     ctx.globalAlpha=1;
     i++;
@@ -737,6 +883,103 @@ function drawFluxViz(w){
   // bind position marker
   ctx.strokeStyle='rgba(255,255,255,.5)';
   ctx.beginPath(); ctx.moveTo(perf.bind*W,0); ctx.lineTo(perf.bind*W,H); ctx.stroke();
+  if(bypassed){
+    ctx.fillStyle='#ff00ff'; ctx.font=(H*0.14)+'px monospace';
+    ctx.fillText('BYPASSED',6,H*0.22);
+  }
+}
+
+/* ============================================================
+   BUILDER — VISUAL BIND LAB  (Phase 5)
+   ============================================================ */
+var FAMILY_ORDER=['temporal','spatial','spectral','fragment'];
+var FAMILY_COLOR={temporal:'#00ffff',spatial:'#9944ff',spectral:'#ff00ff',fragment:'#ffffff'};
+var FAMILY_LABEL={temporal:'TEMPORAL',spatial:'SPATIAL',spectral:'SPECTRAL',fragment:'FRAGMENT'};
+
+function drawBuilderFluxMap(){
+  var cv=document.getElementById('builderFluxMap'); if(!cv||!cv.getContext){return;}
+  var ctx=cv.getContext('2d');
+  var W=cv.width=cv.clientWidth*2, H=cv.height=cv.clientHeight*2;
+  ctx.clearRect(0,0,W,H);
+  var rowH=H/FAMILY_ORDER.length;
+  var f=0;
+  while(f<FAMILY_ORDER.length){
+    var fam=FAMILY_ORDER[f];
+    var r=currentBehavior.flux.regions[fam];
+    var y=f*rowH;
+    ctx.fillStyle=FAMILY_COLOR[fam];
+    ctx.globalAlpha=0.20*(r.strength===undefined?1:r.strength);
+    ctx.fillRect(r.start*W,y+rowH*0.18,(r.end-r.start)*W,rowH*0.64);
+    ctx.globalAlpha=0.85;
+    ctx.fillRect(r.peak*W-2,y+rowH*0.1,4,rowH*0.8); // peak marker
+    ctx.globalAlpha=1;
+    ctx.font=(rowH*0.28)+'px monospace';
+    ctx.fillText(FAMILY_LABEL[fam],4,y+rowH*0.28);
+    f++;
+  }
+  ctx.strokeStyle='rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.moveTo(perf.bind*W,0); ctx.lineTo(perf.bind*W,H); ctx.stroke();
+}
+
+/* [NEW] Live-audition edit handler for one Builder slider. Structurally
+   never calls audioCtx.create* — only mutates the Behavior object and
+   re-applies existing nodes, so repeated edits cannot leak AudioNodes
+   (verified by self-test #10 via source inspection). */
+function onBuilderRegionInput(family,field,val01){
+  setRegionField(family,field,val01);
+  drawBuilderFluxMap();
+  syncBehaviorBox();
+  if(audioCtx){ applyBind(); }
+}
+
+function syncBehaviorBox(){
+  var box=document.getElementById('behaviorBox');
+  if(box){ box.value=JSON.stringify(currentBehavior,null,2); }
+}
+
+function renderBuilderControls(){
+  var host=document.getElementById('bindLabControls');
+  if(!host){return;}
+  host.innerHTML='';
+  var f=0;
+  while(f<FAMILY_ORDER.length){
+    (function(fam){
+      var block=document.createElement('div');
+      block.style.marginBottom='10px';
+      var title=document.createElement('div');
+      title.className='dimHead';
+      title.innerHTML='<span style="color:'+FAMILY_COLOR[fam]+';">'+FAMILY_LABEL[fam]+'</span>';
+      block.appendChild(title);
+      var fields=[['strength','amount'],['start','start'],['peak','peak'],['end','end']];
+      var fi=0;
+      while(fi<fields.length){
+        (function(fieldKey,label){
+          var row=document.createElement('div');
+          row.style.marginBottom='4px';
+          var head=document.createElement('div');
+          head.className='dimHead';
+          var out=document.createElement('span'); out.className='dimVal';
+          var initVal=currentBehavior.flux.regions[fam][fieldKey];
+          out.textContent=Math.round((initVal===undefined?1:initVal)*100);
+          head.innerHTML='<span>'+label+'</span>';
+          head.appendChild(out);
+          var sl=document.createElement('input'); sl.type='range'; sl.min=0; sl.max=100;
+          sl.value=Math.round((initVal===undefined?1:initVal)*100);
+          sl.className='slider';
+          sl.addEventListener('input',function(){
+            var v=parseInt(sl.value,10)/100;
+            onBuilderRegionInput(fam,fieldKey,v);
+            out.textContent=Math.round(currentBehavior.flux.regions[fam][fieldKey]*100);
+          });
+          row.appendChild(head); row.appendChild(sl);
+          block.appendChild(row);
+        })(fields[fi][0],fields[fi][1]);
+        fi++;
+      }
+      host.appendChild(block);
+    })(FAMILY_ORDER[f]);
+    f++;
+  }
 }
 
 function renderCapList(){
@@ -870,20 +1113,20 @@ function initUI(){
   document.getElementById('btnPlay').addEventListener('click',startTransport);
   document.getElementById('btnStop').addEventListener('click',stopTransport);
   document.getElementById('btnCapture').addEventListener('click',captureLast);
+  document.getElementById('btnBypass').addEventListener('click',toggleBindBypass);
 
-  wireSlider('bindSlider','bindVal',function(v){ perf.bind=v; applyBind(); });
+  wireSlider('bindSlider','bindVal',function(v){ perf.bind=v; applyBind(); drawBuilderFluxMap(); });
   wireSlider('densSlider','densVal',function(v){ perf.density=v; });
   wireSlider('spaceSlider','spaceVal',function(v){ perf.space=v; applySpaceMotion(); });
   wireSlider('motionSlider','motionVal',function(v){ perf.motion=v; applySpaceMotion(); });
 
-  document.getElementById('btnExportBehavior').addEventListener('click',function(){
-    document.getElementById('behaviorBox').value=JSON.stringify(currentBehavior,null,2);
-  });
+  document.getElementById('btnExportBehavior').addEventListener('click',syncBehaviorBox);
   document.getElementById('btnImportBehavior').addEventListener('click',function(){
     try{
       var parsed=JSON.parse(document.getElementById('behaviorBox').value);
       currentBehavior=parsed;
-      if(bindFX.voiceContagionFilter){ applyBind(); }
+      renderBuilderControls(); drawBuilderFluxMap();
+      if(audioCtx){ applyBind(); }
       setStatus('behavior aplicado: '+(parsed.name||parsed.id));
     }catch(e){ setStatus('JSON inválido: '+e.message); }
   });
@@ -891,7 +1134,9 @@ function initUI(){
   document.getElementById('btnRunTests').addEventListener('click',runSelfTests);
 
   renderCapList();
-  document.getElementById('behaviorBox').value=JSON.stringify(currentBehavior,null,2);
+  renderBuilderControls();
+  drawBuilderFluxMap();
+  syncBehaviorBox();
 }
 
 /* ============================================================
@@ -909,22 +1154,7 @@ function runSelfTests(){
   document.getElementById('testLog').innerHTML='';
   var allOk=true;
 
-  // 1. SpkFlux does not modify FieldsSet — structural: this file has zero
-  //    references to fieldsset globals/functions and is a standalone document.
-  allOk = logTest('1. no toca FieldsSet (aislamiento estructural)', true, 'archivo independiente, sin imports/fetch a spk_fieldsset_*') && allOk;
-
-  // 2. Bass and Voice routing does not duplicate signal paths
-  var dup = false;
-  if(audioCtx){
-    // bassStemGain and voiceStemGain each feed limiter exactly once by construction
-    dup = false;
-  }
-  allOk = logTest('2. bass/voice no duplican ruteo', !dup) && allOk;
-
-  // 3. Four Voice layers can coexist
-  allOk = logTest('3. 4 voice layers instanciadas', voices.length===VOICE_COUNT, 'count='+voices.length) && allOk;
-
-  // 4. BIND remains bounded 0..1
+  // 1. BIND remains bounded 0..1
   var boundOk=true, testBinds=[-0.5,0,0.37,1,1.8];
   var i=0;
   while(i<testBinds.length){
@@ -933,55 +1163,83 @@ function runSelfTests(){
     while(k<keys.length){ if(w[keys[k]]<0||w[keys[k]]>1){boundOk=false;} k++; }
     i++;
   }
-  allOk = logTest('4. BIND / pesos de flux acotados 0..1', boundOk) && allOk;
+  allOk = logTest('1. BIND / pesos de flux acotados 0..1', boundOk) && allOk;
 
-  // 5. Flux mapping deterministic for identical input/config
-  var w1=evalFluxPath(0.37,currentBehavior), w2=evalFluxPath(0.37,currentBehavior);
-  var sameFlux = (w1.temporal===w2.temporal)&&(w1.spatial===w2.spatial)&&(w1.spectral===w2.spectral)&&(w1.fragment===w2.fragment);
-  allOk = logTest('5. flux mapping determinista', sameFlux) && allOk;
+  // 2. start <= peak <= end for every Flux region
+  var orderOk=true, fams=FAMILY_ORDER, fi=0;
+  while(fi<fams.length){
+    var r=currentBehavior.flux.regions[fams[fi]];
+    if(!(r.start<=r.peak&&r.peak<=r.end)){orderOk=false;}
+    fi++;
+  }
+  allOk = logTest('2. start<=peak<=end en las 4 regiones', orderOk) && allOk;
 
-  // 6. Density does not directly map to master gain
-  //    (structural check: densityTick never writes masterGain.gain, only per-voice gainNode with 1/sqrt(n) compensation)
-  var densitySrc=densityTick.toString();
-  var touchesMaster=densitySrc.indexOf('masterGain.gain')!==-1;
-  allOk = logTest('6. density no mapea directo a master gain', !touchesMaster) && allOk;
+  // 3. visual Builder edits update the Behavior model
+  var before=currentBehavior.flux.regions.spectral.peak;
+  setRegionField('spectral','peak',clamp(before+0.05,0,1));
+  var afterEdit=currentBehavior.flux.regions.spectral.peak;
+  var editApplied = afterEdit!==before || before>=0.95; // tolerate ceiling
+  setRegionField('spectral','peak',before); // restore
+  allOk = logTest('3. edición del Builder actualiza el Behavior', editApplied) && allOk;
 
-  // 7. deterministic random seed produces repeatable fragment/random decisions
+  // 4. Behavior serialization still preserves edits
+  var beh=defaultBehavior();
+  beh.flux.regions.temporal.strength=0.42;
+  var restored=JSON.parse(JSON.stringify(beh));
+  var roundTripOk = restored.flux.regions.temporal.strength===0.42;
+  allOk = logTest('4. round-trip de Behavior preserva ediciones', roundTripOk) && allOk;
+
+  // 5. deterministic seed remains repeatable
   var rngA=makePRNG(999), rngB=makePRNG(999);
   var seqOk=true, j=0;
   while(j<20){ if(rngA()!==rngB()){seqOk=false;} j++; }
-  allOk = logTest('7. PRNG seedeada es reproducible', seqOk) && allOk;
+  allOk = logTest('5. PRNG seedeada es reproducible', seqOk) && allOk;
 
-  // 8. retrospective buffers remain bounded
+  // 6. Voice->Bass fragment decisions remain deterministic
+  var fakeBufs=[{duration:2},{duration:3},{duration:1.5}];
+  var rC=makePRNG(4242), rD=makePRNG(4242);
+  var pickA=pickFragmentSource(rC,fakeBufs,0.1), pickB=pickFragmentSource(rD,fakeBufs,0.1);
+  var fragDetOk = pickA&&pickB&&pickA.buffer===pickB.buffer&&pickA.pos===pickB.pos;
+  allOk = logTest('6. selección de fragmento Voice→Bass es determinista', !!fragDetOk) && allOk;
+
+  // 7. BIND bypass does not stop/restart playback
+  var runningBefore=running;
+  toggleBindBypass(); toggleBindBypass(); // two toggles = back to original state
+  allOk = logTest('7. BIND BYPASS no detiene/reinicia playback', running===runningBefore) && allOk;
+
+  // 8. bypass does not alter Density/Space/Motion state
+  var dB=perf.density,sB=perf.space,mB=perf.motion;
+  toggleBindBypass(); toggleBindBypass();
+  allOk = logTest('8. BIND BYPASS no altera Density/Space/Motion', perf.density===dB&&perf.space===sB&&perf.motion===mB) && allOk;
+
+  // 9. repeated bypass does not create duplicate audio routing
+  var bypassSrc=toggleBindBypass.toString();
+  var bypassCreatesNodes = /createGain|createBiquadFilter|createOscillator|createBufferSource|\.connect\(/.test(bypassSrc);
+  allOk = logTest('9. BIND BYPASS no crea/duplica ruteo', !bypassCreatesNodes) && allOk;
+
+  // 10. repeated Builder edits do not leak/recreate uncontrolled AudioNodes
+  var editSrc=onBuilderRegionInput.toString();
+  var editCreatesNodes = /createGain|createBiquadFilter|createOscillator|createBufferSource/.test(editSrc);
+  allOk = logTest('10. ediciones del Builder no crean AudioNodes', !editCreatesNodes) && allOk;
+
+  // 11. Capture Last remains bounded and functional
   var boundedRing = audioCtx ? (ring.master.length===ringLenSamples*2) : true;
   var boundedTimeline = timeline.length<=timelineMaxEntries;
-  allOk = logTest('8. ring buffers y timeline acotados', boundedRing&&boundedTimeline, 'timeline.len='+timeline.length+'/'+timelineMaxEntries) && allOk;
+  var windowOk = captures.length>0 ? captures[0].windowSeconds<=RETRO_SECONDS+0.5 : true;
+  allOk = logTest('11. Capture Last acotado y funcional', boundedRing&&boundedTimeline&&windowOk,
+    captures.length?('última ventana '+captures[0].windowSeconds.toFixed(2)+'s'):'sin capturas aún — probar CAPTURE LAST') && allOk;
 
-  // 9. CAPTURE LAST returns approximately the intended historical window
-  var windowOk=true;
-  if(captures.length>0){
-    windowOk = captures[0].windowSeconds<=RETRO_SECONDS+0.5;
-  }
-  allOk = logTest('9. CAPTURE LAST devuelve ventana ~30s', windowOk, captures.length?captures[0].windowSeconds.toFixed(2)+'s':'sin capturas aún — ejecutar CAPTURE LAST primero') && allOk;
+  // 12. WAV exports remain functional
+  var testArr=new Float32Array([0,0.5,-0.5,0.2]); // 2 stereo frames
+  var wavBlob=encodeWav(testArr,44100);
+  var expectedSize=44+(testArr.length/2)*4; // numFrames * blockAlign(4) + header(44)
+  var wavOk = (wavBlob instanceof Blob)&&wavBlob.type==='audio/wav'&&wavBlob.size===expectedSize;
+  allOk = logTest('12. exportación WAV funcional', wavOk, 'size='+wavBlob.size+' expected='+expectedSize) && allOk;
 
-  // 10. capture contains synchronized performance/state metadata
-  var metaOk = captures.length>0 ? (captures[0].timeline.length>=0 && typeof captures[0].timeline===typeof []) : true;
-  allOk = logTest('10. captura incluye metadata de performance', metaOk) && allOk;
-
-  // 11. serialization/deserialization preserves BIND Behavior configuration
-  var beh=defaultBehavior();
-  var json=JSON.stringify(beh);
-  var restored=JSON.parse(json);
-  var roundTripOk = JSON.stringify(restored.flux.regions)===JSON.stringify(beh.flux.regions);
-  allOk = logTest('11. round-trip de Behavior preserva config', roundTripOk) && allOk;
-
-  // 12. no obvious AudioNode/resource leak across repeated BIND/Capture ops
-  var leakOk=true;
-  try{
-    var n=0; while(n<5){ applyBind(); n++; } // repeated calls must not create new nodes (only setTargetAtTime)
-    leakOk=true;
-  }catch(e){ leakOk=false; }
-  allOk = logTest('12. operaciones repetidas de BIND no crean nodos nuevos', leakOk) && allOk;
+  // 13. Density behavior remains independent from direct master-gain increase
+  var densitySrc=densityTick.toString();
+  var touchesMaster=densitySrc.indexOf('masterGain.gain')!==-1;
+  allOk = logTest('13. Density no mapea directo a master gain', !touchesMaster) && allOk;
 
   var summary=document.createElement('div');
   summary.style.marginTop='6px';
