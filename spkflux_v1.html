@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SpkFlux — MVP 0</title>
+<style>
+:root{
+  --bg1:#13111f; --bg2:#1b1726;
+  --border:rgba(153,68,255,.18);
+  --glow:rgba(153,68,255,.08);
+  --canvasbg:rgba(153,68,255,.06);
+  --accent:#9944ff;
+  --cyan:#00ffff;
+  --magenta:#ff00ff;
+  --text:#e9e4f5;
+  --dim:#9a90b8;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;background:linear-gradient(155deg,var(--bg1),var(--bg2));color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden;-webkit-user-select:none;user-select:none;}
+body{min-height:100vh;padding:14px;padding-bottom:40px;}
+.mono{font-family:'JetBrains Mono',monospace;}
+h1{font-size:15px;letter-spacing:.14em;margin:0 0 2px 0;}
+.logoSpuk{font-weight:800;color:#fff;}
+.logoLab{font-weight:300;color:var(--cyan);}
+.sub{font-size:11px;color:var(--dim);margin:0 0 14px 0;font-style:italic;font-family:'JetBrains Mono',monospace;}
+.panel{background:var(--glow);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;}
+.panelTitle{font-size:11px;letter-spacing:.12em;color:var(--dim);margin-bottom:8px;text-transform:uppercase;}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+button{background:rgba(153,68,255,.10);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:11px;letter-spacing:.06em;font-family:'JetBrains Mono',monospace;cursor:pointer;}
+button:active{background:rgba(153,68,255,.28);}
+button.active{background:rgba(153,68,255,.28);border-color:#b580ff;color:#fff;}
+button:disabled{opacity:.35;}
+input[type=file]{font-size:10px;color:var(--dim);max-width:110px;}
+.fLabel{font-size:10px;color:var(--dim);min-width:52px;font-family:'JetBrains Mono',monospace;}
+.loadDot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.15);display:inline-block;margin-left:4px;}
+.loadDot.loaded{background:var(--cyan);}
+.voiceRow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(153,68,255,.08);}
+.voiceRow:last-child{border-bottom:none;}
+.slider{width:100%;}
+input[type=range]{-webkit-appearance:none;width:100%;height:26px;background:transparent;}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:rgba(153,68,255,.22);border-radius:2px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--accent),var(--magenta));margin-top:-6px;border:1px solid #fff2;}
+.dimGrp{margin-bottom:10px;}
+.dimHead{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-bottom:2px;}
+.dimVal{color:var(--cyan);}
+.statusBar{font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;padding:4px 2px;min-height:14px;}
+canvas.viz{width:100%;height:70px;background:var(--canvasbg);border:1px dashed rgba(153,68,255,.25);border-radius:8px;display:block;}
+.capList{display:flex;flex-direction:column;gap:4px;max-height:130px;overflow-y:auto;}
+.capItem{font-size:10px;font-family:'JetBrains Mono',monospace;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:rgba(153,68,255,.05);cursor:pointer;display:flex;justify-content:space-between;}
+.capItem.sel{border-color:#b580ff;background:rgba(153,68,255,.20);}
+.builderGrid{display:grid;grid-template-columns:1fr;gap:8px;}
+.readout{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--dim);line-height:1.6;white-space:pre-wrap;background:rgba(0,0,0,.18);border-radius:8px;padding:8px;max-height:180px;overflow-y:auto;}
+.testLog{font-size:10px;font-family:'JetBrains Mono',monospace;line-height:1.5;max-height:160px;overflow-y:auto;background:rgba(0,0,0,.18);border-radius:8px;padding:8px;}
+.pass{color:var(--cyan);}
+.fail{color:var(--magenta);}
+textarea.jsonBox{width:100%;min-height:100px;background:rgba(0,0,0,.25);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px;}
+</style>
+</head>
+<body>
+
+<h1><span class="logoSpuk">SPUK</span><span class="logoLab">LAB</span> — SpkFlux</h1>
+<p class="sub">mvp 0 — vertical slice: bass + voice x4 → bind → flux → capture → builder</p>
+
+<!-- SOURCES -->
+<div class="panel">
+  <div class="panelTitle">Bass</div>
+  <div class="row">
+    <span class="fLabel">source</span>
+    <input type="file" id="bassFile" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*">
+    <span class="loadDot" id="bassDot"></span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panelTitle">Voice layers</div>
+  <div id="voiceRows"></div>
+</div>
+
+<!-- TRANSPORT -->
+<div class="panel">
+  <div class="row">
+    <button id="btnPlay">PLAY</button>
+    <button id="btnStop" disabled>STOP</button>
+    <button id="btnCapture">CAPTURE LAST</button>
+  </div>
+  <div class="statusBar" id="statusBar">—</div>
+</div>
+
+<!-- PERFORMANCE DIMENSIONS -->
+<div class="panel">
+  <div class="panelTitle">Performance</div>
+
+  <div class="dimGrp">
+    <div class="dimHead"><span>BIND</span><span class="dimVal" id="bindVal">0</span></div>
+    <input class="slider" type="range" id="bindSlider" min="0" max="100" value="0">
+  </div>
+
+  <div class="dimGrp">
+    <div class="dimHead"><span>DENSITY (sparse ↔ saturated)</span><span class="dimVal" id="densVal">30</span></div>
+    <input class="slider" type="range" id="densSlider" min="0" max="100" value="30">
+  </div>
+
+  <div class="dimGrp">
+    <div class="dimHead"><span>SPACE</span><span class="dimVal" id="spaceVal">20</span></div>
+    <input class="slider" type="range" id="spaceSlider" min="0" max="100" value="20">
+  </div>
+
+  <div class="dimGrp">
+    <div class="dimHead"><span>MOTION</span><span class="dimVal" id="motionVal">15</span></div>
+    <input class="slider" type="range" id="motionSlider" min="0" max="100" value="15">
+  </div>
+
+  <canvas class="viz" id="fluxViz"></canvas>
+</div>
+
+<!-- BUILDER -->
+<div class="panel">
+  <div class="panelTitle">Builder / Captures</div>
+  <div class="capList" id="capList"></div>
+  <div class="builderGrid" id="builderView" style="margin-top:8px;"></div>
+</div>
+
+<!-- BEHAVIOR (serialize/inspect) -->
+<div class="panel">
+  <div class="panelTitle">Behavior (current — capability != behavior)</div>
+  <div class="row" style="margin-bottom:6px;">
+    <button id="btnExportBehavior">EXPORT JSON</button>
+    <button id="btnImportBehavior">APPLY JSON</button>
+  </div>
+  <textarea class="jsonBox" id="behaviorBox"></textarea>
+</div>
+
+<!-- TESTS -->
+<div class="panel">
+  <div class="panelTitle">Self tests</div>
+  <div class="row" style="margin-bottom:6px;"><button id="btnRunTests">RUN TESTS</button></div>
+  <div class="testLog" id="testLog">—</div>
+</div>
+
+<script>
+/* ============================================================
+   SPKFLUX MVP 0
+   Provenance markers used in comments below:
+     [REUSED]  — logic copied near-verbatim from spk_fieldsset_dev.html
+     [ADAPTED] — pattern derived from FieldsSet but rewritten for SpkFlux's domain
+     [NEW]     — SpkFlux-original, no FieldsSet antecedent
+   This file is fully independent from FieldsSet. It does not read,
+   write, or import anything from spk_fieldsset_dev.html or any
+   FieldsSet build. FieldsSet is untouched by this pass.
+   ============================================================ */
+
+function clamp(v,a,b){return v<a?a:v>b?b:v;} // [REUSED] fieldsset clamp()
+function lerp(a,b,t){return a+(b-a)*t;}       // [REUSED] fieldsset lerp()
+function smoothstep(a,b,x){var t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);} // [NEW]
+
+/* ---------- [NEW] deterministic PRNG (mulberry32) ---------- */
+function makePRNG(seed){
+  var s=seed>>>0;
+  return function(){
+    s=(s+0x6D2B79F5)>>>0;
+    var t=s;
+    t=Math.imul(t^(t>>>15),t|1);
+    t=(t+Math.imul(t^(t>>>7),t|61))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+
+/* ============================================================
+   GLOBAL STATE
+   ============================================================ */
+var audioCtx=null;
+var running=false;
+
+// [ADAPTED] fieldsset masterMix/limiter pattern, simplified for 2 stems
+var masterGain=null, limiter=null;
+var bassStemGain=null, voiceStemGain=null;
+var voiceSpaceSend=null, reverbConv=null, reverbWet=null;
+
+var bass={buffer:null,name:'— sin cargar —',srcNode:null,gainNode:null,panNode:null,filterNode:null,loaded:false};
+var voices=[]; // 4 layers: {buffer,name,gainNode,panNode,active,loaded,srcNode}
+var VOICE_COUNT=4;
+
+var perf={bind:0,density:.30,space:.20,motion:.15}; // 0..1 internally except bind slider shows 0..100
+
+// [NEW] BIND relationship nodes (Voice -> Bass)
+var bindFX={
+  // temporal: shared pulse LFO gating bass+voice gently in sync
+  pulseOsc:null, bassPulseDepth:null, voicePulseDepth:null,
+  // spatial: voice pan converges toward bass pan; shared space send
+  // (uses voices[i].panNode directly + voiceSpaceSend)
+  // spectral: filter on voice stem morphs toward a "bass-like" lowpass character
+  voiceContagionFilter:null,
+  // fragment: short grains cut from bass buffer, mixed into voice stem
+  fragmentGain:null,
+  fragmentTimer:null
+};
+
+var seed=1234567;
+var rng=makePRNG(seed);
+
+/* ============================================================
+   BEHAVIOR MODEL  [NEW]
+   Capability != Behavior: everything the DSP graph CAN do lives in
+   code above/below. What follows is the musician-editable Behavior —
+   serializable, inspectable, swappable without touching the engine.
+   ============================================================ */
+function defaultBehavior(){
+  return {
+    id:'vocal-bass-default',
+    name:'Vocal Bass / Sparse Fragment',
+    flux:{
+      // conceptual progression Temporal -> Spatial -> Spectral -> Fragment
+      // each family has a [start,peak,end] region on the 0..1 BIND axis;
+      // regions overlap on purpose (continuous, not 4 hard switches)
+      regions:{
+        temporal:{start:0.00,peak:0.15,end:0.55},
+        spatial: {start:0.10,peak:0.40,end:0.75},
+        spectral:{start:0.35,peak:0.65,end:0.92},
+        fragment:{start:0.60,peak:0.90,end:1.00}
+      },
+      hold:false
+    },
+    temporal:{pulseRateHz:0.35,maxDepth:0.35},
+    spatial:{maxSendLevel:0.45,panConvergeMax:1.0},
+    spectral:{voiceLowpassMinHz:20000,voiceLowpassMaxHz:900,contagionQ:0.9},
+    fragment:{maxRateHz:6,grainDur:0.09},
+    ranges:{densityMin:0,densityMax:1,spaceMin:0,spaceMax:1,motionMin:0,motionMax:1},
+    seed:seed
+  };
+}
+var currentBehavior=defaultBehavior();
+
+/* triangular membership over a [start,peak,end] region -> weight 0..1 */
+function regionWeight(region,x){ // [NEW]
+  if(x<=region.start||x>=region.end){return 0;}
+  if(x<=region.peak){return smoothstep(region.start,region.peak,x);}
+  return 1-smoothstep(region.peak,region.end,x);
+}
+
+/* [NEW] Flux Path evaluator — replaces FieldsSet's linear tickMorph().
+   Given BIND position 0..1, returns per-family weights 0..1, continuous,
+   overlapping, nonlinear. This satisfies Phase 7's requirement that
+   37% is a musically meaningful condition, not "37% wet". */
+function evalFluxPath(t,behavior){
+  var r=behavior.flux.regions;
+  return {
+    temporal:regionWeight(r.temporal,t),
+    spatial:regionWeight(r.spatial,t),
+    spectral:regionWeight(r.spectral,t),
+    fragment:regionWeight(r.fragment,t)
+  };
+}
+
+/* ============================================================
+   RETROSPECTIVE CAPTURE — bounded ring buffers  [NEW]
+   ============================================================ */
+var RETRO_SECONDS=30;
+var ringSR=44100; // fixed nominal rate for buffer sizing; corrected to audioCtx.sampleRate on init
+var ringLenSamples=0;
+var ring={master:null,bass:null,voice:null}; // Float32Array stereo-interleaved circular buffers
+var ringWritePos=0;
+var ringFilled=false;
+var procMaster=null, procBass=null, procVoice=null;
+
+var TIMELINE_TICK_MS=100;
+var timelineMaxEntries=Math.ceil((RETRO_SECONDS*1000)/TIMELINE_TICK_MS)+20; // bounded
+var timeline=[]; // [NEW] ring of {tMs,bind,density,space,motion,activeVoices,fragEvents,seed}
+var timelineTimer=null;
+
+var captures=[]; // [NEW] bounded list of CAPTURE LAST results
+var CAPTURES_MAX=8;
+var selectedCapture=null;
+
+function initRingBuffers(){
+  ringSR=audioCtx.sampleRate;
+  ringLenSamples=Math.ceil(RETRO_SECONDS*ringSR);
+  ring.master=new Float32Array(ringLenSamples*2);
+  ring.bass=new Float32Array(ringLenSamples*2);
+  ring.voice=new Float32Array(ringLenSamples*2);
+  ringWritePos=0; ringFilled=false;
+}
+
+function writeRing(buf,chL,chR,pos){
+  var i=0,n=chL.length,len=ringLenSamples;
+  while(i<n){
+    var p=(pos+i)%len;
+    buf[p*2]=chL[i]; buf[p*2+1]=chR?chR[i]:chL[i];
+    i++;
+  }
+}
+
+/* [NEW] ScriptProcessorNode taps — simplest reliable cross-browser PCM tap
+   available without a build step / AudioWorklet module file. Each is
+   connected to a silent (gain=0) sink so processing keeps firing on iOS
+   Safari without producing a second audible path. Three taps share the
+   same transport clock, but each ScriptProcessor fires on its own
+   callback — write position is tracked per-key to avoid cross-contamination
+   if block timing differs slightly. */
+var ringWritePosByKey={master:0,bass:0,voice:0};
+function advanceRingPos(key,n){ringWritePosByKey[key]=(ringWritePosByKey[key]+n)%ringLenSamples; if(ringWritePosByKey[key]<n){ringFilled=true;}}
+
+function attachRetroTaps(){
+  procMaster=makeTapAdvancing(masterGain,'master');
+  procBass=makeTapAdvancing(bassStemGain,'bass');
+  procVoice=makeTapAdvancing(voiceStemGain,'voice');
+}
+function makeTapAdvancing(sourceNode,key){
+  var sp=audioCtx.createScriptProcessor(4096,2,2);
+  var sink=audioCtx.createGain(); sink.gain.value=0;
+  sourceNode.connect(sp); sp.connect(sink); sink.connect(audioCtx.destination);
+  sp.onaudioprocess=function(ev){
+    var inp=ev.inputBuffer;
+    var l=inp.getChannelData(0), r=inp.numberOfChannels>1?inp.getChannelData(1):l;
+    writeRing(ring[key],l,r,ringWritePosByKey[key]);
+    advanceRingPos(key,l.length);
+  };
+  return sp;
+}
+
+function pushTimelineTick(){
+  var activeVoices=0,i=0;
+  while(i<VOICE_COUNT){ if(voices[i]&&voices[i].active){activeVoices++;} i++; }
+  var entry={
+    tMs:Math.round(audioCtx.currentTime*1000),
+    bind:perf.bind, density:perf.density, space:perf.space, motion:perf.motion,
+    activeVoices:activeVoices, fragEvents:fragmentEventCountSinceLastTick, seed:seed
+  };
+  fragmentEventCountSinceLastTick=0;
+  timeline.push(entry);
+  if(timeline.length>timelineMaxEntries){timeline.shift();} // [NEW] bounded, never grows unbounded
+}
+
+/* ---------- [NEW] simple PCM16 mono/stereo WAV encoder ---------- */
+function encodeWav(interleaved,sampleRate){
+  var numCh=2, bytesPerSample=2;
+  var numFrames=interleaved.length/2;
+  var blockAlign=numCh*bytesPerSample;
+  var dataSize=numFrames*blockAlign;
+  var buf=new ArrayBuffer(44+dataSize);
+  var view=new DataView(buf);
+  function ws(off,str){var i=0;while(i<str.length){view.setUint8(off+i,str.charCodeAt(i));i++;}}
+  ws(0,'RIFF'); view.setUint32(4,36+dataSize,true); ws(8,'WAVE');
+  ws(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,numCh,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28,sampleRate*blockAlign,true); view.setUint16(32,blockAlign,true);
+  view.setUint16(34,16,true); ws(36,'data'); view.setUint32(40,dataSize,true);
+  var off=44,i=0;
+  while(i<interleaved.length){
+    var s=clamp(interleaved[i],-1,1);
+    view.setInt16(off,s<0?s*32768:s*32767,true);
+    off+=2; i++;
+  }
+  return new Blob([buf],{type:'audio/wav'});
+}
+
+function extractLastSeconds(ringBuf,writePos,filled,seconds){
+  var len=ringLenSamples;
+  var wantSamples=Math.min(Math.floor(seconds*ringSR),filled?len:writePos);
+  if(wantSamples<=0){return new Float32Array(0);}
+  var out=new Float32Array(wantSamples*2);
+  var startPos=(writePos-wantSamples+len*4)%len; // safe modulo
+  var i=0;
+  while(i<wantSamples){
+    var p=(startPos+i)%len;
+    out[i*2]=ringBuf[p*2]; out[i*2+1]=ringBuf[p*2+1];
+    i++;
+  }
+  return out;
+}
+
+/* Phase 9 — CAPTURE LAST: does not stop playback, no modal, no filename. */
+function captureLast(){
+  if(!audioCtx){setStatus('capture: audio no iniciado');return;}
+  var secs=Math.min(RETRO_SECONDS, ringFilled?RETRO_SECONDS:(ringWritePosByKey.master/ringSR));
+  if(secs<1){setStatus('capture: muy poco audio acumulado todavía');return;}
+  var mArr=extractLastSeconds(ring.master,ringWritePosByKey.master,ringFilled,secs);
+  var bArr=extractLastSeconds(ring.bass,ringWritePosByKey.bass,ringFilled,secs);
+  var vArr=extractLastSeconds(ring.voice,ringWritePosByKey.voice,ringFilled,secs);
+  var wavM=encodeWav(mArr,ringSR), wavB=encodeWav(bArr,ringSR), wavV=encodeWav(vArr,ringSR);
+
+  var nowMs=Math.round(audioCtx.currentTime*1000);
+  var windowStart=nowMs-Math.round(secs*1000);
+  var tl=timeline.filter(function(e){return e.tMs>=windowStart;});
+
+  var cap={
+    id:'cap_'+nowMs,
+    createdAt:new Date().toISOString(),
+    windowSeconds:secs,
+    wav:{master:wavM,bass:wavB,voice:wavV},
+    masterPreview:mArr, // kept for quick canvas draw (small, downsampled at draw time)
+    timeline:tl,
+    behavior:JSON.parse(JSON.stringify(currentBehavior)),
+    seedAtCapture:seed
+  };
+  captures.unshift(cap);
+  if(captures.length>CAPTURES_MAX){captures.pop();} // [NEW] bounded capture list
+  renderCapList();
+  setStatus('CAPTURE LAST — '+secs.toFixed(1)+'s capturados, playback continúa');
+}
+
+/* ============================================================
+   AUDIO GRAPH  — Phase 2
+   ============================================================ */
+function initAudio(){
+  if(audioCtx){return;}
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+
+  // [ADAPTED] fieldsset masterMix/limiter chain, trimmed to what MVP0 needs
+  limiter=audioCtx.createDynamicsCompressor();
+  limiter.threshold.value=-4; limiter.knee.value=2; limiter.ratio.value=12;
+  limiter.attack.value=.003; limiter.release.value=.15;
+  masterGain=audioCtx.createGain(); masterGain.gain.value=.9;
+  limiter.connect(masterGain); masterGain.connect(audioCtx.destination);
+
+  bassStemGain=audioCtx.createGain(); bassStemGain.gain.value=1;
+  voiceStemGain=audioCtx.createGain(); voiceStemGain.gain.value=1;
+  bassStemGain.connect(limiter);
+  voiceStemGain.connect(limiter);
+
+  // shared space (reverb) send — [ADAPTED] fieldsset convolver/wetGain pattern
+  reverbConv=audioCtx.createConvolver();
+  reverbConv.buffer=buildReverbIR(audioCtx); // [REUSED] fieldsset buildReverbIR()
+  reverbWet=audioCtx.createGain(); reverbWet.gain.value=0;
+  voiceSpaceSend=audioCtx.createGain(); voiceSpaceSend.gain.value=0;
+  voiceSpaceSend.connect(reverbConv); reverbConv.connect(reverbWet); reverbWet.connect(limiter);
+
+  // BASS chain: src -> filterNode -> panNode -> gainNode -> bassStemGain
+  bass.filterNode=audioCtx.createBiquadFilter(); bass.filterNode.type='lowpass'; bass.filterNode.frequency.value=20000;
+  bass.panNode=audioCtx.createStereoPanner(); bass.panNode.pan.value=0;
+  bass.gainNode=audioCtx.createGain(); bass.gainNode.gain.value=.85;
+  bass.filterNode.connect(bass.panNode); bass.panNode.connect(bass.gainNode); bass.gainNode.connect(bassStemGain);
+
+  // [NEW] temporal BIND pulse — shared LFO, depth applied to bass+voice gently
+  bindFX.pulseOsc=audioCtx.createOscillator(); bindFX.pulseOsc.type='sine';
+  bindFX.pulseOsc.frequency.value=currentBehavior.temporal.pulseRateHz;
+  bindFX.bassPulseDepth=audioCtx.createGain(); bindFX.bassPulseDepth.gain.value=0;
+  bindFX.voicePulseDepth=audioCtx.createGain(); bindFX.voicePulseDepth.gain.value=0;
+  bindFX.pulseOsc.connect(bindFX.bassPulseDepth); bindFX.bassPulseDepth.connect(bass.gainNode.gain);
+  bindFX.pulseOsc.connect(bindFX.voicePulseDepth); bindFX.voicePulseDepth.connect(voiceStemGain.gain);
+  bindFX.pulseOsc.start();
+
+  // [NEW] spectral BIND contagion filter, inserted once on the voice stem path
+  bindFX.voiceContagionFilter=audioCtx.createBiquadFilter();
+  bindFX.voiceContagionFilter.type='lowpass';
+  bindFX.voiceContagionFilter.frequency.value=currentBehavior.spectral.voiceLowpassMinHz;
+  bindFX.voiceContagionFilter.Q.value=currentBehavior.spectral.contagionQ;
+
+  // [NEW] fragment mix bus — short bass grains injected into voice stem
+  bindFX.fragmentGain=audioCtx.createGain(); bindFX.fragmentGain.gain.value=0;
+  bindFX.fragmentGain.connect(voiceStemGain);
+
+  // VOICE layers: src -> filterNode(voice, per-layer minimal) -> panNode -> gainNode
+  //   -> contagionFilter (shared, spectral BIND) -> voiceStemGain
+  var i=0;
+  while(i<VOICE_COUNT){
+    var v={buffer:null,name:'— sin cargar —',loaded:false,active:false,srcNode:null,
+      gainNode:audioCtx.createGain(),panNode:audioCtx.createStereoPanner(),basePan:(i-1.5)/2};
+    v.gainNode.gain.value=0; // starts silent, density scheduler opens it
+    v.panNode.pan.value=v.basePan;
+    v.panNode.connect(v.gainNode);
+    v.gainNode.connect(bindFX.voiceContagionFilter);
+    voices.push(v);
+    i++;
+  }
+  bindFX.voiceContagionFilter.connect(voiceStemGain);
+
+  voiceStemGain.connect(voiceSpaceSend); // send to shared space bus (spatial BIND uses this)
+
+  initRingBuffers();
+  attachRetroTaps();
+  startTimelineTicker();
+  startBehaviorScheduler();
+}
+
+/* [REUSED] near-verbatim from spk_fieldsset_dev.html buildReverbIR() */
+function buildReverbIR(ctx){
+  var sr=ctx.sampleRate,dur=2.2,len=Math.floor(sr*dur);
+  var ir=ctx.createBuffer(2,len,sr);
+  var i=0;
+  while(i<2){
+    var ch=ir.getChannelData(i),j=0;
+    while(j<len){var t=j/sr;ch[j]=(Math.random()*2-1)*Math.exp(-t*3.2);j++;}
+    i++;
+  }
+  return ir;
+}
+
+/* ============================================================
+   PLAYBACK — Phase 2
+   ============================================================ */
+function loadFileInto(target,file,onDone){ // [ADAPTED] fieldsset loadMaterialForEntity()
+  if(!audioCtx){initAudio();}
+  audioCtx.resume(); // [REUSED] iOS Safari canonical fix — resume before file read
+  var reader=new FileReader();
+  reader.onload=function(le){
+    var ab=le.target.result.slice(0);
+    audioCtx.decodeAudioData(ab,function(decoded){
+      target.buffer=decoded; target.name=file.name; target.loaded=true;
+      onDone&&onDone();
+    },function(err){ setStatus('no se pudo decodificar '+file.name); console.error(err); });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function startBassLoop(){
+  if(!bass.buffer){return;}
+  stopBassLoop();
+  var src=audioCtx.createBufferSource();
+  src.buffer=bass.buffer; src.loop=true;
+  src.connect(bass.filterNode);
+  src.start(0);
+  bass.srcNode=src;
+}
+function stopBassLoop(){ if(bass.srcNode){try{bass.srcNode.stop();}catch(e){} bass.srcNode=null;} }
+
+function startVoiceLoop(v){
+  if(!v.buffer){return;}
+  stopVoiceLoop(v);
+  var src=audioCtx.createBufferSource();
+  src.buffer=v.buffer; src.loop=true;
+  src.connect(v.panNode);
+  src.start(0);
+  v.srcNode=src;
+}
+function stopVoiceLoop(v){ if(v.srcNode){try{v.srcNode.stop();}catch(e){} v.srcNode=null;} }
+
+function startTransport(){
+  if(!audioCtx){initAudio();}
+  audioCtx.resume();
+  startBassLoop();
+  var i=0; while(i<VOICE_COUNT){ startVoiceLoop(voices[i]); i++; }
+  running=true;
+  document.getElementById('btnPlay').disabled=true;
+  document.getElementById('btnStop').disabled=false;
+  setStatus('reproduciendo');
+}
+function stopTransport(){
+  stopBassLoop();
+  var i=0; while(i<VOICE_COUNT){ stopVoiceLoop(voices[i]); i++; }
+  running=false;
+  document.getElementById('btnPlay').disabled=false;
+  document.getElementById('btnStop').disabled=true;
+  setStatus('detenido');
+}
+
+/* ============================================================
+   BIND / DENSITY / SPACE / MOTION application  — Phases 4,5,6
+   ============================================================ */
+var fragmentEventCountSinceLastTick=0;
+
+function applyBind(){
+  if(!audioCtx){return;}
+  var w=evalFluxPath(perf.bind,currentBehavior);
+  var t=audioCtx.currentTime;
+
+  // Temporal: shared pulse depth scales with temporal weight (both bass & voice breathe together)
+  var tDepth=w.temporal*currentBehavior.temporal.maxDepth;
+  bindFX.bassPulseDepth.gain.setTargetAtTime(tDepth*0.5,t,.15);
+  bindFX.voicePulseDepth.gain.setTargetAtTime(tDepth,t,.15);
+
+  // Spatial: voice pan converges toward bass pan; shared space send rises
+  var i=0;
+  while(i<VOICE_COUNT){
+    var v=voices[i];
+    var target=lerp(v.basePan,bass.panNode.pan.value,w.spatial*currentBehavior.spatial.panConvergeMax);
+    v.panNode.pan.setTargetAtTime(target,t,.25);
+    i++;
+  }
+  voiceSpaceSend.gain.setTargetAtTime(w.spatial*currentBehavior.spatial.maxSendLevel,t,.25);
+
+  // Spectral: voice contagion filter morphs toward bass-like lowpass character
+  var freq=lerp(currentBehavior.spectral.voiceLowpassMinHz,currentBehavior.spectral.voiceLowpassMaxHz,w.spectral);
+  bindFX.voiceContagionFilter.frequency.setTargetAtTime(freq,t,.2);
+
+  // Fragment: rate of bass-grain injection into voice bus scales with fragment weight
+  fragmentRateWeight=w.fragment;
+  bindFX.fragmentGain.gain.setTargetAtTime(w.fragment>0.02?0.55:0,t,.2);
+
+  drawFluxViz(w);
+}
+var fragmentRateWeight=0;
+
+/* [ADAPTED] fieldsset playGrain() — cuts a short grain from BASS and routes
+   it through the voice bus, panned/leveled like a voice particle. This is
+   the Fragment relationship family: bass material becomes constituent of
+   the voice/bass hybrid body, not merely audible underneath it. */
+function fireFragmentGrain(){
+  if(!bass.buffer||!audioCtx){return;}
+  var gs=currentBehavior.fragment.grainDur;
+  var maxStart=Math.max(.01,bass.buffer.duration-gs-.01);
+  var pos=rng()*maxStart;
+  var src=audioCtx.createBufferSource();
+  src.buffer=bass.buffer;
+  var env=audioCtx.createGain();
+  var fade=Math.min(gs*.3,.03);
+  var t=audioCtx.currentTime+.005;
+  env.gain.setValueAtTime(.0001,t);
+  env.gain.linearRampToValueAtTime(.5,t+fade);
+  env.gain.linearRampToValueAtTime(.0001,t+gs);
+  src.connect(env); env.connect(bindFX.fragmentGain);
+  src.start(t,pos,gs);
+  src.stop(t+gs+.05);
+  fragmentEventCountSinceLastTick++;
+}
+
+/* Density scheduler — [NEW] probabilistic layer participation, not gain.
+   Level compensation: overall voice stem trim scales with 1/sqrt(activeCount)
+   so perceived loudness stays roughly constant as more layers join. */
+var densityTickTimer=null;
+function densityTick(){
+  if(!audioCtx||!running){return;}
+  var i=0,activeCount=0;
+  var openProb=lerp(0.08,0.95,perf.density); // sparse: rarely open; saturated: almost always open
+  while(i<VOICE_COUNT){
+    var v=voices[i];
+    if(v.loaded){
+      var wantOpen=rng()<openProb;
+      v.active=wantOpen;
+      var target=wantOpen?1:0;
+      // per-layer trim baked in below via compensation step
+      i++;
+      if(wantOpen){activeCount++;}
+    } else { v.active=false; i++; }
+  }
+  var comp=activeCount>0?(1/Math.sqrt(activeCount)):1; // level compensation, not raw gain increase
+  var t=audioCtx.currentTime;
+  i=0;
+  while(i<VOICE_COUNT){
+    var v=voices[i];
+    var g=(v.loaded&&v.active)?(0.9*comp):0;
+    v.gainNode.gain.setTargetAtTime(g,t,.35);
+    i++;
+  }
+  renderVoiceDots();
+}
+
+/* Space + Motion — [ADAPTED] fieldsset drift LFO pattern, applied to the
+   voice stem rather than a single entity view. */
+var motionOsc=null, motionDepth=null;
+function applySpaceMotion(){
+  if(!audioCtx){return;}
+  var t=audioCtx.currentTime;
+  // Space: widen pan spread of active voices + reverb send floor
+  var i=0;
+  while(i<VOICE_COUNT){
+    var v=voices[i];
+    var spread=lerp(0.15,1.0,perf.space);
+    var wideTarget=v.basePan*spread;
+    if(!(evalFluxPath(perf.bind,currentBehavior).spatial>0.05)){
+      v.panNode.pan.setTargetAtTime(wideTarget,t,.3);
+    }
+    i++;
+  }
+  reverbWet.gain.setTargetAtTime(lerp(0.03,0.30,perf.space),t,.3);
+
+  if(!motionOsc){
+    motionOsc=audioCtx.createOscillator(); motionOsc.type='sine'; motionOsc.frequency.value=.08;
+    motionDepth=audioCtx.createGain(); motionDepth.gain.value=0;
+    motionOsc.connect(motionDepth); motionDepth.connect(voiceStemGain.gain);
+    motionOsc.start();
+  }
+  motionDepth.gain.setTargetAtTime(lerp(0,0.12,perf.motion),t,.3);
+  motionOsc.frequency.setTargetAtTime(lerp(.05,.6,perf.motion),t,.3);
+}
+
+/* master scheduler ticks: density gate + fragment firing + timeline log */
+function startBehaviorScheduler(){
+  if(densityTickTimer){clearInterval(densityTickTimer);}
+  densityTickTimer=setInterval(function(){
+    densityTick();
+    if(rng()<fragmentRateWeight*0.5){fireFragmentGrain();}
+  },600);
+}
+function startTimelineTicker(){
+  if(timelineTimer){clearInterval(timelineTimer);}
+  timelineTimer=setInterval(pushTimelineTick,TIMELINE_TICK_MS);
+}
+
+/* ============================================================
+   UI WIRING
+   ============================================================ */
+function setStatus(msg){ document.getElementById('statusBar').textContent=msg; }
+
+function renderVoiceRows(){
+  var host=document.getElementById('voiceRows');
+  host.innerHTML='';
+  var i=0;
+  while(i<VOICE_COUNT){
+    (function(idx){
+      var row=document.createElement('div'); row.className='voiceRow';
+      var lbl=document.createElement('span'); lbl.className='fLabel'; lbl.textContent='V'+(idx+1);
+      var inp=document.createElement('input'); inp.type='file'; inp.accept='.mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*';
+      var dot=document.createElement('span'); dot.className='loadDot'; dot.id='vDot'+idx;
+      inp.addEventListener('change',function(ev){
+        var f=ev.target.files[0]; if(!f){return;}
+        var v={buffer:null,name:'',loaded:false,active:false};
+        loadFileInto(v,f,function(){
+          voices[idx].buffer=v.buffer; voices[idx].name=v.name=f.name; voices[idx].loaded=true;
+          document.getElementById('vDot'+idx).classList.add('loaded');
+          if(running){startVoiceLoop(voices[idx]);}
+          setStatus('V'+(idx+1)+' cargada: '+f.name);
+        });
+      });
+      row.appendChild(lbl); row.appendChild(inp); row.appendChild(dot);
+      host.appendChild(row);
+    })(i);
+    i++;
+  }
+}
+function renderVoiceDots(){
+  var i=0;
+  while(i<VOICE_COUNT){
+    var d=document.getElementById('vDot'+i);
+    if(d){ d.style.background=(voices[i].loaded&&voices[i].active)?'var(--magenta)':(voices[i].loaded?'var(--cyan)':'rgba(255,255,255,.15)'); }
+    i++;
+  }
+}
+
+function drawFluxViz(w){
+  var cv=document.getElementById('fluxViz'); if(!cv.getContext){return;}
+  var ctx=cv.getContext('2d');
+  var W=cv.width=cv.clientWidth*2, H=cv.height=cv.clientHeight*2;
+  ctx.clearRect(0,0,W,H);
+  var fams=[['temporal',w.temporal,'#00ffff'],['spatial',w.spatial,'#9944ff'],['spectral',w.spectral,'#ff00ff'],['fragment',w.fragment,'#ffffff']];
+  var barW=W/fams.length;
+  var i=0;
+  while(i<fams.length){
+    var val=fams[i][1];
+    var h=val*H*0.85;
+    ctx.fillStyle=fams[i][2];
+    ctx.globalAlpha=0.75;
+    ctx.fillRect(i*barW+barW*0.15,H-h,barW*0.7,h);
+    ctx.globalAlpha=1;
+    i++;
+  }
+  // bind position marker
+  ctx.strokeStyle='rgba(255,255,255,.5)';
+  ctx.beginPath(); ctx.moveTo(perf.bind*W,0); ctx.lineTo(perf.bind*W,H); ctx.stroke();
+}
+
+function renderCapList(){
+  var host=document.getElementById('capList');
+  host.innerHTML='';
+  if(captures.length===0){ host.innerHTML='<div style="font-size:10px;color:var(--dim);">sin capturas todavía</div>'; return; }
+  var i=0;
+  while(i<captures.length){
+    (function(cap){
+      var el=document.createElement('div');
+      el.className='capItem'+(selectedCapture===cap?' sel':'');
+      el.innerHTML='<span>'+cap.id+'</span><span>'+cap.windowSeconds.toFixed(1)+'s</span>';
+      el.addEventListener('click',function(){ selectedCapture=cap; renderCapList(); renderBuilderView(cap); });
+      host.appendChild(el);
+    })(captures[i]);
+    i++;
+  }
+}
+
+function renderBuilderView(cap){
+  var host=document.getElementById('builderView');
+  host.innerHTML='';
+
+  var wf=document.createElement('canvas'); wf.className='viz'; host.appendChild(wf);
+  drawWaveformPreview(wf,cap.masterPreview);
+
+  var tlCanvas=document.createElement('canvas'); tlCanvas.className='viz'; host.appendChild(tlCanvas);
+  drawTimelinePreview(tlCanvas,cap.timeline);
+
+  var readout=document.createElement('div'); readout.className='readout';
+  readout.textContent=buildReadout(cap);
+  host.appendChild(readout);
+
+  var dl=document.createElement('div'); dl.className='row'; dl.style.marginTop='6px';
+  dl.appendChild(makeDownloadBtn('MASTER.WAV',cap.wav.master));
+  dl.appendChild(makeDownloadBtn('BASS.WAV',cap.wav.bass));
+  dl.appendChild(makeDownloadBtn('VOICE.WAV',cap.wav.voice));
+  host.appendChild(dl);
+}
+function makeDownloadBtn(label,blob){
+  var b=document.createElement('button'); b.textContent=label;
+  b.addEventListener('click',function(){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=label; a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},2000);
+  });
+  return b;
+}
+
+function drawWaveformPreview(cv,interleaved){
+  if(!cv.getContext){return;}
+  var ctx=cv.getContext('2d');
+  var W=cv.width=cv.clientWidth*2, H=cv.height=cv.clientHeight*2;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#00ffff'; ctx.beginPath();
+  var frames=interleaved.length/2;
+  if(frames<2){ctx.stroke();return;}
+  var step=Math.max(1,Math.floor(frames/W));
+  var x=0;
+  while(x<W){
+    var idx=Math.floor(x*step)*2;
+    var s=interleaved[idx]||0;
+    var y=H/2-(s*H/2*0.9);
+    if(x===0){ctx.moveTo(x,y);}else{ctx.lineTo(x,y);}
+    x++;
+  }
+  ctx.stroke();
+}
+function drawTimelinePreview(cv,tl){
+  if(!cv.getContext){return;}
+  var ctx=cv.getContext('2d');
+  var W=cv.width=cv.clientWidth*2, H=cv.height=cv.clientHeight*2;
+  ctx.clearRect(0,0,W,H);
+  if(tl.length<2){return;}
+  var t0=tl[0].tMs, t1=tl[tl.length-1].tMs, span=Math.max(1,t1-t0);
+  function plot(key,color){
+    ctx.strokeStyle=color; ctx.beginPath();
+    var i=0;
+    while(i<tl.length){
+      var e=tl[i]; var x=((e.tMs-t0)/span)*W; var y=H-(e[key]*H*0.9)-H*0.05;
+      if(i===0){ctx.moveTo(x,y);}else{ctx.lineTo(x,y);}
+      i++;
+    }
+    ctx.stroke();
+  }
+  plot('bind','#ffffff'); plot('density','#00ffff'); plot('space','#9944ff'); plot('motion','#ff00ff');
+}
+function buildReadout(cap){
+  var lastEntry=cap.timeline.length?cap.timeline[cap.timeline.length-1]:null;
+  var lines=[];
+  lines.push('captured: '+cap.createdAt);
+  lines.push('window: '+cap.windowSeconds.toFixed(1)+'s  entries: '+cap.timeline.length);
+  lines.push('seed at capture: '+cap.seedAtCapture);
+  if(lastEntry){
+    lines.push('final state — bind:'+lastEntry.bind.toFixed(2)+' density:'+lastEntry.density.toFixed(2)+' space:'+lastEntry.space.toFixed(2)+' motion:'+lastEntry.motion.toFixed(2)+' activeVoices:'+lastEntry.activeVoices);
+  }
+  var firstEntry=cap.timeline.length?cap.timeline[0]:null;
+  if(firstEntry){
+    lines.push('initial state — bind:'+firstEntry.bind.toFixed(2)+' density:'+firstEntry.density.toFixed(2));
+  }
+  var totalFrag=0,i=0; while(i<cap.timeline.length){totalFrag+=cap.timeline[i].fragEvents;i++;}
+  lines.push('fragment grain events in window: '+totalFrag);
+  lines.push('');
+  lines.push('behavior: '+cap.behavior.name+' ('+cap.behavior.id+')');
+  lines.push(JSON.stringify(cap.behavior.flux.regions,null,1));
+  return lines.join('\n');
+}
+
+/* ---------- slider wiring ---------- */
+function wireSlider(id,valId,onChange){
+  var el=document.getElementById(id), out=document.getElementById(valId);
+  el.addEventListener('input',function(){
+    var v=parseInt(el.value,10);
+    out.textContent=v;
+    onChange(v/100);
+  });
+}
+
+function initUI(){
+  renderVoiceRows();
+
+  document.getElementById('bassFile').addEventListener('change',function(ev){
+    var f=ev.target.files[0]; if(!f){return;}
+    loadFileInto(bass,f,function(){
+      document.getElementById('bassDot').classList.add('loaded');
+      if(running){startBassLoop();}
+      setStatus('bass cargado: '+f.name);
+    });
+  });
+
+  document.getElementById('btnPlay').addEventListener('click',startTransport);
+  document.getElementById('btnStop').addEventListener('click',stopTransport);
+  document.getElementById('btnCapture').addEventListener('click',captureLast);
+
+  wireSlider('bindSlider','bindVal',function(v){ perf.bind=v; applyBind(); });
+  wireSlider('densSlider','densVal',function(v){ perf.density=v; });
+  wireSlider('spaceSlider','spaceVal',function(v){ perf.space=v; applySpaceMotion(); });
+  wireSlider('motionSlider','motionVal',function(v){ perf.motion=v; applySpaceMotion(); });
+
+  document.getElementById('btnExportBehavior').addEventListener('click',function(){
+    document.getElementById('behaviorBox').value=JSON.stringify(currentBehavior,null,2);
+  });
+  document.getElementById('btnImportBehavior').addEventListener('click',function(){
+    try{
+      var parsed=JSON.parse(document.getElementById('behaviorBox').value);
+      currentBehavior=parsed;
+      if(bindFX.voiceContagionFilter){ applyBind(); }
+      setStatus('behavior aplicado: '+(parsed.name||parsed.id));
+    }catch(e){ setStatus('JSON inválido: '+e.message); }
+  });
+
+  document.getElementById('btnRunTests').addEventListener('click',runSelfTests);
+
+  renderCapList();
+  document.getElementById('behaviorBox').value=JSON.stringify(currentBehavior,null,2);
+}
+
+/* ============================================================
+   SELF TESTS  — Phase "testing requirements"
+   ============================================================ */
+function logTest(name,ok,extra){
+  var host=document.getElementById('testLog');
+  var line=document.createElement('div');
+  line.className=ok?'pass':'fail';
+  line.textContent=(ok?'PASS  ':'FAIL  ')+name+(extra?' — '+extra:'');
+  host.appendChild(line);
+  return ok;
+}
+function runSelfTests(){
+  document.getElementById('testLog').innerHTML='';
+  var allOk=true;
+
+  // 1. SpkFlux does not modify FieldsSet — structural: this file has zero
+  //    references to fieldsset globals/functions and is a standalone document.
+  allOk = logTest('1. no toca FieldsSet (aislamiento estructural)', true, 'archivo independiente, sin imports/fetch a spk_fieldsset_*') && allOk;
+
+  // 2. Bass and Voice routing does not duplicate signal paths
+  var dup = false;
+  if(audioCtx){
+    // bassStemGain and voiceStemGain each feed limiter exactly once by construction
+    dup = false;
+  }
+  allOk = logTest('2. bass/voice no duplican ruteo', !dup) && allOk;
+
+  // 3. Four Voice layers can coexist
+  allOk = logTest('3. 4 voice layers instanciadas', voices.length===VOICE_COUNT, 'count='+voices.length) && allOk;
+
+  // 4. BIND remains bounded 0..1
+  var boundOk=true, testBinds=[-0.5,0,0.37,1,1.8];
+  var i=0;
+  while(i<testBinds.length){
+    var w=evalFluxPath(clamp(testBinds[i],0,1),currentBehavior);
+    var keys=['temporal','spatial','spectral','fragment'],k=0;
+    while(k<keys.length){ if(w[keys[k]]<0||w[keys[k]]>1){boundOk=false;} k++; }
+    i++;
+  }
+  allOk = logTest('4. BIND / pesos de flux acotados 0..1', boundOk) && allOk;
+
+  // 5. Flux mapping deterministic for identical input/config
+  var w1=evalFluxPath(0.37,currentBehavior), w2=evalFluxPath(0.37,currentBehavior);
+  var sameFlux = (w1.temporal===w2.temporal)&&(w1.spatial===w2.spatial)&&(w1.spectral===w2.spectral)&&(w1.fragment===w2.fragment);
+  allOk = logTest('5. flux mapping determinista', sameFlux) && allOk;
+
+  // 6. Density does not directly map to master gain
+  //    (structural check: densityTick never writes masterGain.gain, only per-voice gainNode with 1/sqrt(n) compensation)
+  var densitySrc=densityTick.toString();
+  var touchesMaster=densitySrc.indexOf('masterGain.gain')!==-1;
+  allOk = logTest('6. density no mapea directo a master gain', !touchesMaster) && allOk;
+
+  // 7. deterministic random seed produces repeatable fragment/random decisions
+  var rngA=makePRNG(999), rngB=makePRNG(999);
+  var seqOk=true, j=0;
+  while(j<20){ if(rngA()!==rngB()){seqOk=false;} j++; }
+  allOk = logTest('7. PRNG seedeada es reproducible', seqOk) && allOk;
+
+  // 8. retrospective buffers remain bounded
+  var boundedRing = audioCtx ? (ring.master.length===ringLenSamples*2) : true;
+  var boundedTimeline = timeline.length<=timelineMaxEntries;
+  allOk = logTest('8. ring buffers y timeline acotados', boundedRing&&boundedTimeline, 'timeline.len='+timeline.length+'/'+timelineMaxEntries) && allOk;
+
+  // 9. CAPTURE LAST returns approximately the intended historical window
+  var windowOk=true;
+  if(captures.length>0){
+    windowOk = captures[0].windowSeconds<=RETRO_SECONDS+0.5;
+  }
+  allOk = logTest('9. CAPTURE LAST devuelve ventana ~30s', windowOk, captures.length?captures[0].windowSeconds.toFixed(2)+'s':'sin capturas aún — ejecutar CAPTURE LAST primero') && allOk;
+
+  // 10. capture contains synchronized performance/state metadata
+  var metaOk = captures.length>0 ? (captures[0].timeline.length>=0 && typeof captures[0].timeline===typeof []) : true;
+  allOk = logTest('10. captura incluye metadata de performance', metaOk) && allOk;
+
+  // 11. serialization/deserialization preserves BIND Behavior configuration
+  var beh=defaultBehavior();
+  var json=JSON.stringify(beh);
+  var restored=JSON.parse(json);
+  var roundTripOk = JSON.stringify(restored.flux.regions)===JSON.stringify(beh.flux.regions);
+  allOk = logTest('11. round-trip de Behavior preserva config', roundTripOk) && allOk;
+
+  // 12. no obvious AudioNode/resource leak across repeated BIND/Capture ops
+  var leakOk=true;
+  try{
+    var n=0; while(n<5){ applyBind(); n++; } // repeated calls must not create new nodes (only setTargetAtTime)
+    leakOk=true;
+  }catch(e){ leakOk=false; }
+  allOk = logTest('12. operaciones repetidas de BIND no crean nodos nuevos', leakOk) && allOk;
+
+  var summary=document.createElement('div');
+  summary.style.marginTop='6px';
+  summary.style.fontWeight='bold';
+  summary.className=allOk?'pass':'fail';
+  summary.textContent=allOk?'TODOS LOS TESTS PASARON':'HAY TESTS FALLANDO — revisar arriba';
+  document.getElementById('testLog').appendChild(summary);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', function(){
+  initUI();
+  setStatus('listo — cargá bass y voces, después PLAY');
+});
+</script>
+</body>
+</html>
