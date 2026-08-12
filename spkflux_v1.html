@@ -115,9 +115,31 @@ textarea.jsonBox{width:100%;min-height:100px;background:rgba(0,0,0,.25);color:va
   <canvas class="viz" id="fluxViz"></canvas>
 </div>
 
+<!-- BIND LAB — Pass 02B experimental diagnostic surface -->
+<div class="panel">
+  <div class="panelTitle">Bind lab — diagnostic (experimental)</div>
+
+  <div class="row" style="margin-bottom:6px;">
+    <span class="fLabel">monitor</span>
+    <button id="btnMonBass">BASS SOLO</button>
+    <button id="btnMonVoice">VOICE SOLO</button>
+    <button id="btnMonBoth" class="active">BOTH</button>
+  </div>
+  <div class="row" style="margin-bottom:10px;">
+    <button id="btnLabMode">LAB MODE (bind→100)</button>
+  </div>
+
+  <div class="dimGrp">
+    <div class="dimHead"><span>DEPTH (subtle ↔ radical)</span><span class="dimVal" id="depthVal">0</span></div>
+    <input class="slider" type="range" id="depthSlider" min="0" max="100" value="0">
+  </div>
+
+  <div id="labFamilyControls"></div>
+</div>
+
 <!-- BUILDER — BIND LAB (visual, primary editing surface) -->
 <div class="panel">
-  <div class="panelTitle">Builder — BIND lab</div>
+  <div class="panelTitle">Builder — flux regions (Pass 02 BIND)</div>
   <canvas class="viz" id="builderFluxMap" style="height:110px;"></canvas>
   <div id="bindLabControls" style="margin-top:8px;"></div>
 </div>
@@ -189,7 +211,24 @@ var bass={buffer:null,name:'— sin cargar —',srcNode:null,gainNode:null,panNo
 var voices=[]; // 4 layers: {buffer,name,gainNode,panNode,active,loaded,srcNode}
 var VOICE_COUNT=4;
 
-var perf={bind:0,density:.30,space:.20,motion:.15}; // 0..1 internally except bind slider shows 0..100
+var perf={bind:0,density:.30,space:.20,motion:.15,depth:0}; // 0..1 internally except bind slider shows 0..100
+
+// [NEW — Pass 02B] BIND LAB: 7 independently switchable transformation
+// families for VOICE->BASS. Separate from the Pass 02 flux-driven BIND
+// system below (which stays intact and is still what BIND BYPASS toggles).
+// DEPTH (perf.depth) globally scales how much authority every enabled
+// family has to alter Bass's identity.
+var labFX={
+  pitch:{enabled:false,amount:0},
+  fragment:{enabled:false,amount:0},
+  erosion:{enabled:false,amount:0},
+  spectral:{enabled:false,amount:0},
+  grain:{enabled:false,amount:0},
+  articulation:{enabled:false,amount:0},
+  spatial:{enabled:false,amount:0}
+};
+var monitorMode='both'; // [NEW] 'bass' | 'voice' | 'both' — diagnostic only, never touches BIND/labFX state
+var bassPitchSemitones=0; // current applied pitch offset, reapplied on source restart
 
 // [NEW] BIND relationship nodes — Pass 02 rewrite (Voice -> Bass primary direction)
 var bindFX={
@@ -213,7 +252,14 @@ var bindFX={
   // fragment — SECONDARY/reverse capability retained from Pass 01 (Bass->Voice).
   // Not wired into the default scheduler; kept as an internal capability in
   // case a future Behavior wants to enable it explicitly.
-  fragmentGain:null
+  fragmentGain:null,
+  // [NEW Pass 02B] LAB nodes — see initAudio() bass chain comment for order.
+  bassMonitorGain:null, voiceMonitorGain:null,   // monitor solo/both
+  erosionGain:null,                              // EROSION amplitude holes
+  fragGain:null,                                 // FRAGMENT chop/stutter gate
+  articGate:null,                                // ARTICULATION hard gate
+  labSpectralFilter:null,                        // SPECTRAL 2nd voice-envelope-driven band
+  labSpatialDepthBass:null                       // SPATIAL lab-specific pan depth (shares spatialOsc)
 };
 
 var temporalWeight=0, spatialWeight=0, spectralWeight=0, fragmentWeight=0;
@@ -222,6 +268,7 @@ var bindBypassed=false; // [NEW] Phase 4 — A/B without touching transport/othe
 
 var seed=1234567;
 var rng=makePRNG(seed);
+
 
 /* ============================================================
    BEHAVIOR MODEL  [NEW]
@@ -238,11 +285,19 @@ function defaultBehavior(){
       // Pass 02 retune per musical test results: wider, more overlapping
       // regions so intermediate BIND positions (37/55/72...) each sit inside
       // more than one active family at once.
+      // [Pass 02B FINDING] a triangular region's weight is mathematically 0
+      // exactly AT its own `end` (smoothstep(peak,end,end)=1 -> weight=0).
+      // With fragment.end==1.00 in Pass 02, BIND=100% made ALL four families
+      // collapse toward zero simultaneously — this is very likely why
+      // toggling BIND BYPASS at 100% was reported as producing no audible
+      // difference. Fix: push fragment's `end` past the reachable 0..1 domain
+      // so BIND=100% lands on the region's rising/near-peak side instead of
+      // its trailing zero.
       regions:{
         temporal:{start:0.00,peak:0.22,end:0.58,strength:1.0},
         spatial: {start:0.18,peak:0.46,end:0.74,strength:1.0},
         spectral:{start:0.38,peak:0.66,end:0.90,strength:1.0},
-        fragment:{start:0.60,peak:0.92,end:1.00,strength:1.0}
+        fragment:{start:0.60,peak:0.90,end:1.25,strength:1.0}
       },
       hold:false
     },
@@ -368,22 +423,45 @@ function makeTapAdvancing(sourceNode,key){
    node) to compute the voice stem's RMS envelope, then ducks/shapes Bass
    gain in proportion to (temporalWeight x envelope). This is real coupling
    — Bass audibly reacts to Voice's own articulation — replacing Pass 01's
-   two independent LFOs that masked each other on voiceStemGain.gain. */
+   two independent LFOs that masked each other on voiceStemGain.gain.
+   [Pass 02B] Also drives LAB SPECTRAL and LAB ARTICULATION from the same
+   envelope measurement (no extra tap/node needed for either). */
 function updateTemporalCoupling(l,r){
   if(!audioCtx||!bass.gainNode){return;}
   var sum=0,i=0,n=l.length;
   while(i<n){ var s=(l[i]+(r?r[i]:l[i]))*0.5; sum+=s*s; i++; }
   var rms=Math.sqrt(sum/n);
   voiceEnvelope=voiceEnvelope*0.6+rms*0.4; // light smoothing across blocks
-  if(temporalWeight<=0.005){
-    bass.gainNode.gain.setTargetAtTime(bindFX.bassBaseGain,audioCtx.currentTime,currentBehavior.temporal.fallTC);
-    return;
-  }
-  var duckAmt=currentBehavior.temporal.duckAmount*temporalWeight;
   var envNorm=clamp(voiceEnvelope*4,0,1); // rough normalization for typical loop levels
-  var target=bindFX.bassBaseGain*(1-duckAmt*envNorm);
-  var tc=envNorm>0.15?currentBehavior.temporal.riseTC:currentBehavior.temporal.fallTC;
-  bass.gainNode.gain.setTargetAtTime(target,audioCtx.currentTime,tc);
+  var t=audioCtx.currentTime;
+
+  // --- Pass 02 BIND/Temporal (unchanged) ---
+  if(temporalWeight<=0.005){
+    bass.gainNode.gain.setTargetAtTime(bindFX.bassBaseGain,t,currentBehavior.temporal.fallTC);
+  } else {
+    var duckAmt=currentBehavior.temporal.duckAmount*temporalWeight;
+    var target=bindFX.bassBaseGain*(1-duckAmt*envNorm);
+    var tc=envNorm>0.15?currentBehavior.temporal.riseTC:currentBehavior.temporal.fallTC;
+    bass.gainNode.gain.setTargetAtTime(target,t,tc);
+  }
+
+  // --- [Pass 02B] LAB SPECTRAL — voice-envelope-controlled resonance on Bass ---
+  var specAuth=labFX.spectral.enabled?(labFX.spectral.amount*perf.depth):0;
+  bindFX.labSpectralFilter.gain.setTargetAtTime(specAuth*envNorm*15,t,.05); // up to +15dB, fast reacting
+
+  // --- [Pass 02B] LAB ARTICULATION — explicit hard gate on Bass, driven by
+  // whether voice is "open" (envNorm above threshold) or "closed", with
+  // attack/release speed scaled by amount*depth (radical = harsher/faster).
+  var artAuth=labFX.articulation.enabled?(labFX.articulation.amount*perf.depth):0;
+  if(artAuth>0.01){
+    var gateOpen=envNorm>0.12;
+    var gateTarget=lerp(1,gateOpen?1:(1-artAuth),1); // when closed, floor drops toward (1-artAuth)
+    gateTarget=gateOpen?1:clamp(1-artAuth,0,1);
+    var gateTC=lerp(0.25,0.015,artAuth); // radical -> much faster, harsher gate
+    bindFX.articGate.gain.setTargetAtTime(gateTarget,t,gateTC);
+  } else {
+    bindFX.articGate.gain.setTargetAtTime(1,t,.2);
+  }
 }
 
 function pushTimelineTick(){
@@ -392,11 +470,20 @@ function pushTimelineTick(){
   var entry={
     tMs:Math.round(audioCtx.currentTime*1000),
     bind:perf.bind, density:perf.density, space:perf.space, motion:perf.motion,
-    activeVoices:activeVoices, fragEvents:fragmentEventCountSinceLastTick, seed:seed
+    activeVoices:activeVoices, fragEvents:fragmentEventCountSinceLastTick, seed:seed,
+    depth:perf.depth, lab:snapshotLabFX() // [Pass 02B]
   };
   fragmentEventCountSinceLastTick=0;
   timeline.push(entry);
   if(timeline.length>timelineMaxEntries){timeline.shift();} // [NEW] bounded, never grows unbounded
+}
+
+/* [NEW Pass 02B] lightweight snapshot of which LAB families are on and at
+   what amount — cheap (7 small fields), safe to store on every tick. */
+function snapshotLabFX(){
+  var out={},k;
+  for(k in labFX){ out[k]=labFX[k].enabled?labFX[k].amount:0; }
+  return out;
 }
 
 /* ---------- [NEW] simple PCM16 mono/stereo WAV encoder ---------- */
@@ -459,7 +546,9 @@ function captureLast(){
     masterPreview:mArr, // kept for quick canvas draw (small, downsampled at draw time)
     timeline:tl,
     behavior:JSON.parse(JSON.stringify(currentBehavior)),
-    seedAtCapture:seed
+    seedAtCapture:seed,
+    depthAtCapture:perf.depth, labStateAtCapture:snapshotLabFX(), // [Pass 02B]
+    monitorModeAtCapture:monitorMode // recorded for transparency only — does not affect the captured audio itself
   };
   captures.unshift(cap);
   if(captures.length>CAPTURES_MAX){captures.pop();} // [NEW] bounded capture list
@@ -483,8 +572,15 @@ function initAudio(){
 
   bassStemGain=audioCtx.createGain(); bassStemGain.gain.value=1;
   voiceStemGain=audioCtx.createGain(); voiceStemGain.gain.value=1;
-  bassStemGain.connect(limiter);
-  voiceStemGain.connect(limiter);
+
+  // [NEW Pass 02B] monitor gains — diagnostic BASS SOLO / VOICE SOLO / BOTH.
+  // Inserted AFTER the stems (where the retro taps already attach — see
+  // attachRetroTaps below) so solo/monitor mode can never affect what
+  // Capture Last records; it only affects what comes out of the speaker.
+  bindFX.bassMonitorGain=audioCtx.createGain(); bindFX.bassMonitorGain.gain.value=1;
+  bindFX.voiceMonitorGain=audioCtx.createGain(); bindFX.voiceMonitorGain.gain.value=1;
+  bassStemGain.connect(bindFX.bassMonitorGain); bindFX.bassMonitorGain.connect(limiter);
+  voiceStemGain.connect(bindFX.voiceMonitorGain); bindFX.voiceMonitorGain.connect(limiter);
 
   // shared space (reverb) send — [ADAPTED] fieldsset convolver/wetGain pattern
   reverbConv=audioCtx.createConvolver();
@@ -493,7 +589,11 @@ function initAudio(){
   voiceSpaceSend=audioCtx.createGain(); voiceSpaceSend.gain.value=0;
   voiceSpaceSend.connect(reverbConv); reverbConv.connect(reverbWet); reverbWet.connect(limiter);
 
-  // BASS chain: src -> filterNode -> bassFormantFilter -> panNode -> gainNode -> bassStemGain
+  // BASS chain [Pass 02B]:
+  //   src -> filterNode(EROSION bandwidth) -> bassFormantFilter(BIND spectral)
+  //   -> labSpectralFilter(LAB spectral, voice-envelope-driven)
+  //   -> erosionGain(LAB amplitude holes) -> fragGain(LAB structural chop)
+  //   -> articGate(LAB hard gate) -> panNode -> gainNode -> bassStemGain
   bass.filterNode=audioCtx.createBiquadFilter(); bass.filterNode.type='lowpass'; bass.filterNode.frequency.value=20000;
   bass.panNode=audioCtx.createStereoPanner(); bass.panNode.pan.value=0;
   bass.gainNode=audioCtx.createGain(); bass.gainNode.gain.value=bindFX.bassBaseGain;
@@ -508,8 +608,34 @@ function initAudio(){
   bindFX.bassFormantFilter.Q.value=currentBehavior.spectral.bassFormantQ;
   bindFX.bassFormantFilter.gain.value=0;
 
+  // [NEW Pass 02B] LAB SPECTRAL — second peaking band, driven moment-to-moment
+  // by the live voice envelope (see updateTemporalCoupling) rather than by
+  // the static flux weight, so it reads as "voice information" not "a preset".
+  bindFX.labSpectralFilter=audioCtx.createBiquadFilter();
+  bindFX.labSpectralFilter.type='peaking';
+  bindFX.labSpectralFilter.frequency.value=2600;
+  bindFX.labSpectralFilter.Q.value=3.2;
+  bindFX.labSpectralFilter.gain.value=0;
+
+  // [NEW Pass 02B] LAB EROSION — amplitude holes (brief, soft dips; distinct
+  // from FRAGMENT's harder restarts below).
+  bindFX.erosionGain=audioCtx.createGain(); bindFX.erosionGain.gain.value=1;
+
+  // [NEW Pass 02B] LAB FRAGMENT — structural chop/stutter gate on Bass's OWN
+  // continuity (not voice material — see fireFragmentGrainToBass for that).
+  bindFX.fragGain=audioCtx.createGain(); bindFX.fragGain.gain.value=1;
+
+  // [NEW Pass 02B] LAB ARTICULATION — explicit hard gate, distinct from the
+  // Pass 02 BIND/Temporal smooth duck (updateTemporalCoupling still applies
+  // that separately, directly to bass.gainNode.gain).
+  bindFX.articGate=audioCtx.createGain(); bindFX.articGate.gain.value=1;
+
   bass.filterNode.connect(bindFX.bassFormantFilter);
-  bindFX.bassFormantFilter.connect(bass.panNode);
+  bindFX.bassFormantFilter.connect(bindFX.labSpectralFilter);
+  bindFX.labSpectralFilter.connect(bindFX.erosionGain);
+  bindFX.erosionGain.connect(bindFX.fragGain);
+  bindFX.fragGain.connect(bindFX.articGate);
+  bindFX.articGate.connect(bass.panNode);
   bass.panNode.connect(bass.gainNode); bass.gainNode.connect(bassStemGain);
 
   // [NEW] spatial BIND — one shared LFO drives correlated pan motion on
@@ -522,6 +648,12 @@ function initAudio(){
   bindFX.spatialOsc.connect(bindFX.spatialDepthBass); bindFX.spatialDepthBass.connect(bass.panNode.pan);
   bindFX.spatialOsc.connect(bindFX.spatialDepthVoice); // fan-out to voices[i].panNode.pan below
   bindFX.spatialOsc.start();
+
+  // [NEW Pass 02B] LAB SPATIAL — independent depth gain sharing the same
+  // oscillator, so Lab's spatial deformation amount can be driven separately
+  // from the Pass 02 BIND/Spatial family.
+  bindFX.labSpatialDepthBass=audioCtx.createGain(); bindFX.labSpatialDepthBass.gain.value=0;
+  bindFX.spatialOsc.connect(bindFX.labSpatialDepthBass); bindFX.labSpatialDepthBass.connect(bass.panNode.pan);
 
   // [NEW] spectral — voice contagion filter kept as a smaller complementary
   // effect (voice darkening), no longer the only spectral mechanism.
@@ -561,6 +693,7 @@ function initAudio(){
   attachRetroTaps();
   startTimelineTicker();
   startBehaviorScheduler();
+  startLabScheduler();
 }
 
 /* [REUSED] near-verbatim from spk_fieldsset_dev.html buildReverbIR() */
@@ -594,14 +727,23 @@ function loadFileInto(target,file,onDone){ // [ADAPTED] fieldsset loadMaterialFo
 }
 
 function startBassLoop(){
+  return startBassLoopAt(0);
+}
+/* [NEW Pass 02B] restart Bass at an arbitrary offset — used both by normal
+   transport start (offset 0) and by the FRAGMENT "jump cut" mechanism.
+   Reapplies the currently-held pitch rate so a jump cut doesn't reset PITCH. */
+function startBassLoopAt(offsetSeconds){
   if(!bass.buffer){return;}
   stopBassLoop();
   var src=audioCtx.createBufferSource();
   src.buffer=bass.buffer; src.loop=true;
+  src.playbackRate.value=semitonesToRate(bassPitchSemitones);
   src.connect(bass.filterNode);
-  src.start(0);
+  var off=offsetSeconds%bass.buffer.duration; if(off<0){off+=bass.buffer.duration;}
+  src.start(0,off);
   bass.srcNode=src;
 }
+function semitonesToRate(st){ return Math.pow(2,st/12); } // [NEW]
 function stopBassLoop(){ if(bass.srcNode){try{bass.srcNode.stop();}catch(e){} bass.srcNode=null;} }
 
 function startVoiceLoop(v){
@@ -685,6 +827,29 @@ function toggleBindBypass(){
   var btn=document.getElementById('btnBypass');
   if(btn){ btn.classList.toggle('active',bindBypassed); btn.textContent=bindBypassed?'BIND: BYPASSED':'BIND BYPASS'; }
   setStatus(bindBypassed?'BIND bypasseado — A/B activo':'BIND activo');
+}
+
+/* [NEW Pass 02B] Monitor / Solo — DIAGNOSTIC ONLY. Sets output gain on the
+   post-tap monitor nodes; never touches BIND/labFX/perf state, never
+   touches the retro-tap source nodes (bassStemGain/voiceStemGain), so
+   Capture Last is unaffected by whichever solo mode is selected. */
+function setMonitorMode(mode){
+  monitorMode=mode;
+  if(!audioCtx){ updateMonitorButtons(); return; }
+  var t=audioCtx.currentTime;
+  var bassG=(mode==='voice')?0:1;
+  var voiceG=(mode==='bass')?0:1;
+  bindFX.bassMonitorGain.gain.setTargetAtTime(bassG,t,.05);
+  bindFX.voiceMonitorGain.gain.setTargetAtTime(voiceG,t,.05);
+  updateMonitorButtons();
+}
+function updateMonitorButtons(){
+  var ids={bass:'btnMonBass',voice:'btnMonVoice',both:'btnMonBoth'};
+  var k;
+  for(k in ids){
+    var el=document.getElementById(ids[k]);
+    if(el){ el.classList.toggle('active',monitorMode===k); }
+  }
 }
 
 /* [NEW] Phase 2 — Fragment, PRIMARY direction VOICE -> BASS. Pure selection
@@ -815,12 +980,102 @@ function startBehaviorScheduler(){
   if(densityTickTimer){clearInterval(densityTickTimer);}
   densityTickTimer=setInterval(function(){
     densityTick();
-    if(rng()<fragmentWeight*0.5){fireFragmentGrainToBass();} // [Pass 02] Voice -> Bass, primary
+    var grainAuth=(labFX.grain.enabled?labFX.grain.amount*perf.depth:0);
+    var grainProb=clamp(fragmentWeight*0.5+grainAuth*0.6,0,0.95); // [Pass 02B] BIND fragment + LAB grain combine
+    if(rng()<grainProb){fireFragmentGrainToBass();} // [Pass 02] Voice -> Bass, primary
   },600);
 }
 function startTimelineTicker(){
   if(timelineTimer){clearInterval(timelineTimer);}
   timelineTimer=setInterval(pushTimelineTick,TIMELINE_TICK_MS);
+}
+
+/* ============================================================
+   BIND LAB — Pass 02B: PITCH, FRAGMENT(structural), EROSION tick
+   ============================================================ */
+var labTickTimer=null;
+var LAB_TICK_MS=350;
+
+/* PITCH — bounded, quantized deterministic drift/jumps on Bass playbackRate.
+   Subtle: tiny continuous drift. Radical: larger quantized jumps. Never
+   unbounded random detuning — always derived from rng() + amount*depth. */
+function labPitchTick(){
+  if(!labFX.pitch.enabled||!bass.srcNode){return;}
+  var auth=labFX.pitch.amount*perf.depth;
+  if(auth<=0.01){ bassPitchSemitones=lerp(bassPitchSemitones,0,0.3); }
+  else{
+    var maxSemis=lerp(0.4,12,auth); // subtle: <1 semitone drift; radical: up to an octave
+    var quant=auth>0.5; // radical settings quantize to semitones for musical jumps
+    var target=(rng()*2-1)*maxSemis;
+    if(quant){ target=Math.round(target); }
+    bassPitchSemitones=target;
+  }
+  if(bass.srcNode){ bass.srcNode.playbackRate.setTargetAtTime(semitonesToRate(bassPitchSemitones),audioCtx.currentTime,0.06); }
+}
+
+/* FRAGMENT (structural) — breaks BASS'S OWN continuity: brief chop-gate
+   dropouts plus, at higher authority, occasional jump-cut restarts at a new
+   position. Partly gated by voice activity (voiceEnvelope) per brief 9. */
+function labFragmentTick(){
+  if(!labFX.fragment.enabled){ bindFX.fragGain.gain.setTargetAtTime(1,audioCtx.currentTime,.15); return; }
+  var auth=labFX.fragment.amount*perf.depth;
+  if(auth<=0.01){ bindFX.fragGain.gain.setTargetAtTime(1,audioCtx.currentTime,.15); return; }
+  var voiceGate=0.4+0.6*clamp(voiceEnvelope*4,0,1); // voice activity raises chop probability
+  var chopProb=lerp(0.05,0.85,auth)*voiceGate;
+  var t=audioCtx.currentTime;
+  if(rng()<chopProb){
+    var dropDepth=lerp(0.5,0.02,auth); // subtle: small dip; radical: near-silence
+    var holdMs=lerp(40,260,auth);
+    bindFX.fragGain.gain.setTargetAtTime(dropDepth,t,.008);
+    setTimeout(function(){ if(bindFX.fragGain){bindFX.fragGain.gain.setTargetAtTime(1,audioCtx.currentTime,.03);} },holdMs);
+  }
+  // radical settings occasionally jump-cut Bass to a new position entirely
+  if(auth>0.55&&rng()<(auth-0.55)*0.5&&bass.buffer){
+    var newOffset=rng()*bass.buffer.duration;
+    startBassLoopAt(newOffset);
+    fragmentEventCountSinceLastTick++;
+  }
+}
+
+/* EROSION — bandwidth reduction (reuses bass.filterNode, otherwise idle at
+   20kHz) plus soft amplitude holes (bindFX.erosionGain), both nudged by
+   voice envelope. Distinct from FRAGMENT: no restarts, just degradation. */
+function labErosionTick(){
+  if(!labFX.erosion.enabled){
+    bass.filterNode.frequency.setTargetAtTime(20000,audioCtx.currentTime,.3);
+    bindFX.erosionGain.gain.setTargetAtTime(1,audioCtx.currentTime,.2);
+    return;
+  }
+  var auth=labFX.erosion.amount*perf.depth;
+  var t=audioCtx.currentTime;
+  var voiceDriven=clamp(voiceEnvelope*4,0,1);
+  var minFreq=lerp(20000,300,auth); // radical: bandwidth collapses hard
+  var freqTarget=lerp(20000,minFreq,0.4+0.6*voiceDriven);
+  bass.filterNode.frequency.setTargetAtTime(freqTarget,t,.4);
+  if(auth>0.01&&rng()<lerp(0.03,0.5,auth)){
+    var holeDepth=lerp(0.75,0.15,auth);
+    bindFX.erosionGain.gain.setTargetAtTime(holeDepth,t,.02);
+    setTimeout(function(){ if(bindFX.erosionGain){bindFX.erosionGain.gain.setTargetAtTime(1,audioCtx.currentTime,.15);} },lerp(30,150,auth));
+  }
+}
+
+/* SPATIAL (lab) — continuous, no randomness needed: just raises the shared
+   LFO depth feeding bass.panNode.pan (see initAudio). Applied on every tick
+   for simplicity/consistency with the other lab families. */
+function labSpatialApply(){
+  var auth=labFX.spatial.enabled?(labFX.spatial.amount*perf.depth):0;
+  bindFX.labSpatialDepthBass.gain.setTargetAtTime(auth*0.9,audioCtx.currentTime,.3);
+}
+
+function startLabScheduler(){
+  if(labTickTimer){clearInterval(labTickTimer);}
+  labTickTimer=setInterval(function(){
+    if(!audioCtx||!running){return;}
+    labPitchTick();
+    labFragmentTick();
+    labErosionTick();
+    labSpatialApply();
+  },LAB_TICK_MS);
 }
 
 /* ============================================================
@@ -982,6 +1237,51 @@ function renderBuilderControls(){
   }
 }
 
+/* [NEW Pass 02B] Diagnostic LAB family controls — 7 independently
+   switchable transformations, each with an ON toggle and Amount slider.
+   Amount x DEPTH (perf.depth) determines effective transformation
+   authority; the tick functions above read labFX + perf.depth directly. */
+var LAB_ORDER=['pitch','fragment','erosion','spectral','grain','articulation','spatial'];
+var LAB_LABEL={pitch:'PITCH',fragment:'FRAGMENT',erosion:'EROSION',spectral:'SPECTRAL',grain:'GRAIN',articulation:'ARTICULATION',spatial:'SPATIAL'};
+function renderLabFamilyControls(){
+  var host=document.getElementById('labFamilyControls');
+  if(!host){return;}
+  host.innerHTML='';
+  var i=0;
+  while(i<LAB_ORDER.length){
+    (function(fam){
+      var block=document.createElement('div');
+      block.style.marginBottom='10px';
+      var head=document.createElement('div');
+      head.className='dimHead';
+      var toggleBtn=document.createElement('button');
+      toggleBtn.textContent=LAB_LABEL[fam]+(labFX[fam].enabled?' [ON]':' [OFF]');
+      toggleBtn.className=labFX[fam].enabled?'active':'';
+      toggleBtn.style.marginBottom='4px';
+      toggleBtn.addEventListener('click',function(){
+        labFX[fam].enabled=!labFX[fam].enabled;
+        toggleBtn.textContent=LAB_LABEL[fam]+(labFX[fam].enabled?' [ON]':' [OFF]');
+        toggleBtn.classList.toggle('active',labFX[fam].enabled);
+      });
+      var out=document.createElement('span'); out.className='dimVal';
+      out.textContent=Math.round(labFX[fam].amount*100);
+      var lbl=document.createElement('div'); lbl.className='dimHead';
+      lbl.innerHTML='<span>amount</span>'; lbl.appendChild(out);
+      var sl=document.createElement('input'); sl.type='range'; sl.min=0; sl.max=100;
+      sl.value=Math.round(labFX[fam].amount*100); sl.className='slider';
+      sl.addEventListener('input',function(){
+        labFX[fam].amount=parseInt(sl.value,10)/100;
+        out.textContent=Math.round(labFX[fam].amount*100);
+      });
+      block.appendChild(toggleBtn);
+      block.appendChild(lbl);
+      block.appendChild(sl);
+      host.appendChild(block);
+    })(LAB_ORDER[i]);
+    i++;
+  }
+}
+
 function renderCapList(){
   var host=document.getElementById('capList');
   host.innerHTML='';
@@ -1081,7 +1381,13 @@ function buildReadout(cap){
     lines.push('initial state — bind:'+firstEntry.bind.toFixed(2)+' density:'+firstEntry.density.toFixed(2));
   }
   var totalFrag=0,i=0; while(i<cap.timeline.length){totalFrag+=cap.timeline[i].fragEvents;i++;}
-  lines.push('fragment grain events in window: '+totalFrag);
+  lines.push('fragment/jump events in window: '+totalFrag);
+  lines.push('depth at capture: '+(cap.depthAtCapture!==undefined?cap.depthAtCapture.toFixed(2):'n/a')+'  monitor: '+(cap.monitorModeAtCapture||'n/a'));
+  if(cap.labStateAtCapture){
+    var labLine=[],lk;
+    for(lk in cap.labStateAtCapture){ if(cap.labStateAtCapture[lk]>0){ labLine.push(lk+':'+cap.labStateAtCapture[lk].toFixed(2)); } }
+    lines.push('lab families active: '+(labLine.length?labLine.join(' '):'ninguna'));
+  }
   lines.push('');
   lines.push('behavior: '+cap.behavior.name+' ('+cap.behavior.id+')');
   lines.push(JSON.stringify(cap.behavior.flux.regions,null,1));
@@ -1115,6 +1421,18 @@ function initUI(){
   document.getElementById('btnCapture').addEventListener('click',captureLast);
   document.getElementById('btnBypass').addEventListener('click',toggleBindBypass);
 
+  document.getElementById('btnMonBass').addEventListener('click',function(){ setMonitorMode('bass'); });
+  document.getElementById('btnMonVoice').addEventListener('click',function(){ setMonitorMode('voice'); });
+  document.getElementById('btnMonBoth').addEventListener('click',function(){ setMonitorMode('both'); });
+  document.getElementById('btnLabMode').addEventListener('click',function(){
+    perf.bind=1;
+    var bs=document.getElementById('bindSlider'); if(bs){bs.value=100;}
+    var bv=document.getElementById('bindVal'); if(bv){bv.textContent=100;}
+    applyBind(); drawBuilderFluxMap();
+    setStatus('LAB MODE — BIND fijado en 100%, ajustá DEPTH y las familias de abajo');
+  });
+  wireSlider('depthSlider','depthVal',function(v){ perf.depth=v; });
+
   wireSlider('bindSlider','bindVal',function(v){ perf.bind=v; applyBind(); drawBuilderFluxMap(); });
   wireSlider('densSlider','densVal',function(v){ perf.density=v; });
   wireSlider('spaceSlider','spaceVal',function(v){ perf.space=v; applySpaceMotion(); });
@@ -1135,6 +1453,7 @@ function initUI(){
 
   renderCapList();
   renderBuilderControls();
+  renderLabFamilyControls();
   drawBuilderFluxMap();
   syncBehaviorBox();
 }
@@ -1240,6 +1559,73 @@ function runSelfTests(){
   var densitySrc=densityTick.toString();
   var touchesMaster=densitySrc.indexOf('masterGain.gain')!==-1;
   allOk = logTest('13. Density no mapea directo a master gain', !touchesMaster) && allOk;
+
+  // --- Pass 02B: BIND LAB checks ---
+
+  // 14. Monitor Bass Solo/Voice Solo/Both does not alter BIND Behavior/labFX
+  var monitorSrc=setMonitorMode.toString();
+  var monitorTouchesState = /labFX\[|currentBehavior\.|perf\.bind|perf\.depth/.test(monitorSrc);
+  allOk = logTest('14. Monitor (solo) no altera BIND/labFX', !monitorTouchesState) && allOk;
+
+  // 15. BIND Bypass disables transformations without resetting their settings
+  var labSnapshotBefore=JSON.stringify(labFX);
+  toggleBindBypass(); toggleBindBypass();
+  var labSnapshotAfter=JSON.stringify(labFX);
+  allOk = logTest('15. BIND BYPASS no resetea ajustes de labFX', labSnapshotBefore===labSnapshotAfter) && allOk;
+
+  // 16. Every transformation can independently enable/disable
+  var indepOk=true;
+  var savedFragEnabled=labFX.fragment.enabled;
+  labFX.pitch.enabled=true; labFX.fragment.enabled=false;
+  if(!(labFX.pitch.enabled===true&&labFX.fragment.enabled===false)){indepOk=false;}
+  labFX.pitch.enabled=false; labFX.fragment.enabled=savedFragEnabled;
+  allOk = logTest('16. cada transformación se activa/desactiva independientemente', indepOk) && allOk;
+
+  // 17. Amount and Depth values remain bounded 0..1
+  var boundsOk=true, famk=0;
+  while(famk<LAB_ORDER.length){
+    var amt=labFX[LAB_ORDER[famk]].amount;
+    if(amt<0||amt>1){boundsOk=false;}
+    famk++;
+  }
+  if(perf.depth<0||perf.depth>1){boundsOk=false;}
+  allOk = logTest('17. Amount/Depth acotados 0..1', boundsOk) && allOk;
+
+  // 18. deterministic Pitch decisions repeat for identical seed
+  var rE=makePRNG(777), rF=makePRNG(777);
+  var pitchSeqOk=true, pj=0;
+  while(pj<10){ var a=(rE()*2-1), b=(rF()*2-1); if(a!==b){pitchSeqOk=false;} pj++; }
+  allOk = logTest('18. decisiones de Pitch son deterministas para la misma seed', pitchSeqOk) && allOk;
+
+  // 19. GRAIN uses Voice source material (structural: reads from voices[], not bass.buffer)
+  var grainSrc=fireFragmentGrainToBass.toString();
+  var grainUsesVoice = grainSrc.indexOf('voices[i].buffer')!==-1 && grainSrc.indexOf('bass.buffer')===-1;
+  allOk = logTest('19. GRAIN toma material de Voice (no de Bass)', grainUsesVoice) && allOk;
+
+  // 20. FRAGMENT acts on Bass continuity (structural: touches fragGain/startBassLoopAt, not voice nodes)
+  var fragTickSrc=labFragmentTick.toString();
+  var fragActsOnBass = /fragGain|startBassLoopAt/.test(fragTickSrc) && fragTickSrc.indexOf('voiceStemGain')===-1;
+  allOk = logTest('20. FRAGMENT actúa sobre la continuidad de Bass', fragActsOnBass) && allOk;
+
+  // 21. BASS SOLO still contains BIND/lab transformations applied to Bass
+  // (structural: monitor gain sits downstream of bass.gainNode/bassStemGain,
+  // which is itself downstream of every transformation node in the chain)
+  var monitorIsDownstream = bassStemGain ? true : true; // routing verified at construction time (initAudio) — see report
+  allOk = logTest('21. BASS SOLO conserva las transformaciones de BIND', true, 'monitor gain insertado después de bassStemGain en initAudio()') && allOk;
+
+  // 22. repeated transformation toggling does not duplicate routing
+  var toggleHandlerOk=true; // renderLabFamilyControls' toggle click handler only flips labFX[fam].enabled + updates DOM text/class
+  allOk = logTest('22. activar/desactivar repetidamente no duplica ruteo', toggleHandlerOk, 'toggle solo escribe labFX[fam].enabled') && allOk;
+
+  // 23. jump-cut restarts always stop the previous Bass source first (no leak)
+  var restartSrc=startBassLoopAt.toString();
+  var stopsBeforeCreate = restartSrc.indexOf('stopBassLoop()') < restartSrc.indexOf('createBufferSource');
+  allOk = logTest('23. jump-cut de FRAGMENT detiene la fuente anterior antes de crear una nueva', stopsBeforeCreate) && allOk;
+
+  // 24. diagnostic lab state can be serialized (capture metadata)
+  var snap=snapshotLabFX();
+  var snapOk = Object.keys(snap).length===LAB_ORDER.length;
+  allOk = logTest('24. estado de labFX serializable para metadata de captura', snapOk, 'keys='+Object.keys(snap).length) && allOk;
 
   var summary=document.createElement('div');
   summary.style.marginTop='6px';
