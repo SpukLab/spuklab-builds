@@ -279,17 +279,10 @@ function initAC(){
   const spl=AC.createChannelSplitter(2);
   analyserL=AC.createAnalyser(); analyserL.fftSize=512; analyserL.smoothingTimeConstant=0.9;
   analyserR=AC.createAnalyser(); analyserR.fftSize=512; analyserR.smoothingTimeConstant=0.9;
-  recorderNode=AC.createScriptProcessor(4096,2,2);
-  recorderNode.onaudioprocess=e=>{
-    if(!recIsRunning)return;
-    recorderChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-    recorderChunksR.push(new Float32Array(e.inputBuffer.getChannelData(1)));
-  };
   dryGain.connect(dryPanner); dryPanner.connect(masterGain);
   wetGain.connect(masterGain);
   masterGain.connect(hiCutFilter); hiCutFilter.connect(outputGain); outputGain.connect(limiter);
   limiter.connect(safetyShaperNode); safetyShaperNode.connect(analyserOut);
-  analyserOut.connect(recorderNode); recorderNode.connect(AC.destination);
   analyserOut.connect(AC.destination);
   safetyShaperNode.connect(spl); spl.connect(analyserL,0); spl.connect(analyserR,1);
 }
