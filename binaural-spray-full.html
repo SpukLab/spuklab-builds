@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>BinauralSpray · Spuklab</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;600&family=JetBrains+Mono:ital,wght@1,300;1,400;1,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root { --cyan:#00ffff; --mag:#ff00ff; --vio:#9944ff; --border:rgba(153,68,255,0.18); --warn:#ff5500; }
@@ -127,6 +128,11 @@ input[type=file] { display:none; }
 .sheet-title { font-family:'JetBrains Mono',monospace; font-style:italic; font-weight:800; font-size:13px; color:rgba(255,255,255,0.85); }
 .sheet-count { font-family:'JetBrains Mono',monospace; font-style:italic; font-weight:300; font-size:11px; color:rgba(153,68,255,0.7); }
 .sheet-close { font-family:'JetBrains Mono',monospace; font-style:italic; font-size:11px; color:rgba(255,255,255,0.35); background:none; border:none; cursor:pointer; padding:4px 8px; }
+#export-zip-btn { font-family:'JetBrains Mono',monospace; font-style:italic; font-weight:300; font-size:8.5px; letter-spacing:1px;
+  color:rgba(153,68,255,0.80); background:rgba(153,68,255,0.08); border:1px solid rgba(153,68,255,0.28);
+  border-radius:8px; padding:5px 8px; cursor:pointer; text-transform:uppercase; white-space:nowrap; transition:all .15s; }
+#export-zip-btn:active { background:rgba(153,68,255,0.18); }
+#export-zip-btn:disabled { opacity:0.35; cursor:default; }
 #takes-list { overflow-y:auto; flex:1; padding:0 12px 16px; -webkit-overflow-scrolling:touch; }
 #takes-list:empty::after { content:'NO TAKES YET'; display:block; text-align:center; margin-top:32px;
   font-family:'JetBrains Mono',monospace; font-style:italic; font-size:11px; letter-spacing:.2em; color:rgba(255,255,255,0.15); }
@@ -220,6 +226,7 @@ input[type=file] { display:none; }
   <div class="sheet-header">
     <span class="sheet-title">LIBRARY</span>
     <span class="sheet-count" id="take-count">0 takes</span>
+    <button id="export-zip-btn">Export Zip</button>
     <button class="sheet-close" id="lib-close">X</button>
   </div>
   <div id="takes-list"></div>
@@ -550,6 +557,8 @@ async function renderTakes(){
   const takes=await dbGetAll();
   takes.sort((a,b)=>b.ts-a.ts);
   document.getElementById('take-count').textContent=takes.length+' take'+(takes.length!==1?'s':'');
+  const zipBtn=document.getElementById('export-zip-btn');
+  if(!zipExporting)zipBtn.disabled=!takes.length;
   takes.forEach(t=>{
     const el=document.createElement('div'); el.className='take-item';
     const dur=t.duration?t.duration.toFixed(1)+'s':'—';
@@ -582,6 +591,65 @@ async function renderTakes(){
 }
 function stopPreview(){if(previewSource){try{previewSource.stop();}catch(e){}previewSource=null;}previewingId=null;document.querySelectorAll('.take-item.playing').forEach(el=>el.classList.remove('playing'));}
 function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('es',{day:'2-digit',month:'2-digit'})+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+// Sanea un nombre de take para usarlo como filename dentro del ZIP —
+// solo reemplaza caracteres incompatibles, no toca el resto.
+function sanitizeFilename(name){
+  return String(name||'take').replace(/[\/\\:*?"<>|]/g,'_').trim()||'take';
+}
+let zipExporting=false;
+async function exportAllZip(){
+  if(zipExporting)return;
+  const btn=document.getElementById('export-zip-btn');
+  let takes;
+  try{takes=await dbGetAll();}catch(e){setInfo('LIBRARY ERROR');return;}
+  if(!takes||!takes.length){
+    const prevText=btn.textContent;
+    btn.textContent='No Takes';
+    setTimeout(()=>{btn.textContent=prevText;},1200);
+    return;
+  }
+  zipExporting=true;
+  const prevText=btn.textContent;
+  btn.disabled=true; btn.textContent='Zipping…';
+  try{
+    const zip=new JSZip();
+    const usedNames=new Set();
+    let added=0, skipped=0;
+    for(const t of takes){
+      // Valida que wav sea un ArrayBuffer real con contenido antes de meterlo al zip —
+      // entradas corruptas se ignoran individualmente sin abortar el resto.
+      const isValidWav = t && t.wav && (t.wav instanceof ArrayBuffer) && t.wav.byteLength>44;
+      if(!isValidWav){skipped++;continue;}
+      let base=sanitizeFilename(t.name);
+      let filename=base+'.wav', n=2;
+      while(usedNames.has(filename)){filename=base+'_'+String(n).padStart(2,'0')+'.wav';n++;}
+      usedNames.add(filename);
+      zip.file(filename,t.wav.slice(0));
+      added++;
+    }
+    if(!added){
+      btn.textContent='No Takes';
+      setTimeout(()=>{btn.textContent=prevText;},1200);
+      return;
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const now=new Date();
+    const stamp=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')
+      +'_'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
+    const zipName='BinauralSpray_Takes_'+stamp+'.zip';
+    // Un único camino de entrega: Blob URL + <a download> + click(). Nunca junto a navigator.share().
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download=zipName; document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},2000);
+    setInfo(skipped?('ZIP · '+added+' takes ('+skipped+' omitidos)'):('ZIP · '+added+' takes'));
+  }catch(e){
+    console.error(e); setInfo('ZIP EXPORT ERROR');
+  }finally{
+    zipExporting=false; btn.disabled=false; btn.textContent=prevText;
+  }
+}
+document.getElementById('export-zip-btn').addEventListener('click',exportAllZip);
 
 function startRec(){
   if(!AC||recIsRunning)return;
