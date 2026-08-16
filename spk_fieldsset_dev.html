@@ -668,6 +668,8 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   <div id="debugPanel">
     <h3>RUNTIME</h3>
     <div id="dbgRuntime"></div>
+    <h3>EXPORT TRACE</h3>
+    <div id="dbgExportTrace" style="font-size:10px;white-space:pre-wrap;"></div>
     <h3>TRANSPORT CLICKS</h3>
     <div id="dbgClicks"></div>
     <h3>TOPBAR HIT-TEST</h3>
@@ -2784,37 +2786,67 @@ function encodeWAVBlob(lData,rData,sampleRate){
 // WAV CAPTURE (ScriptProcessorNode, solo durante RENDER)
 // ====================================================
 var wavCap={};
+var _exportTrace=null; // DIAGNOSTICO TEMPORAL — trace de la ultima exportacion
 var RENDER_WITH_WAV=true; // siempre WAV en render
 
 function startWAVCapture(){
   if(!audioCtx){return;}wavCap={};
   var bufSz=4096;
+  // DIAGNOSTICO TEMPORAL: snapshot de contexto por entidad al iniciar captura.
+  _exportTrace={ts:new Date().toISOString(),perEntity:[],master:null};
   entities.forEach(function(e){
     var node=audioCtx.createScriptProcessor(bufSz,2,2);
     var chunks=[];
+    var tr={frames:0,peak:0,sumSq:0};
     node.onaudioprocess=function(ev){
-      chunks.push({l:new Float32Array(ev.inputBuffer.getChannelData(0)),
-                   r:new Float32Array(ev.inputBuffer.getChannelData(1))});
+      var lc=new Float32Array(ev.inputBuffer.getChannelData(0));
+      var rc=new Float32Array(ev.inputBuffer.getChannelData(1));
+      chunks.push({l:lc,r:rc});
+      var i=0;while(i<lc.length){
+        var al=Math.abs(lc[i]),ar=Math.abs(rc[i]);
+        if(al>tr.peak){tr.peak=al;}if(ar>tr.peak){tr.peak=ar;}
+        tr.sumSq+=lc[i]*lc[i]+rc[i]*rc[i];
+        i++;
+      }
+      tr.frames+=lc.length;
     };
     e.gainNode.connect(node);
     // Silenciar output del nodo de captura (no queremos duplicar al master)
     var sink=audioCtx.createGain();sink.gain.value=0;
     node.connect(sink);sink.connect(audioCtx.destination);
-    wavCap[e.id]={chunks:chunks,node:node,sink:sink};
+    wavCap[e.id]={chunks:chunks,node:node,sink:sink,trace:tr};
+    _exportTrace.perEntity.push({
+      id:e.id,name:e.name,view:e.view,materialId:e.materialId,
+      mute:e.mute,solo:e.solo,contActive:e.contActive,
+      hasBuffer:!!getBuffer(e),
+      gainAtStart:e.gainNode?e.gainNode.gain.value:null,
+      trace:tr
+    });
   });
   // Master capture desde limiter
   if(typeof limiter!=='undefined'){
     var mNode=audioCtx.createScriptProcessor(bufSz,2,2);
     var mChunks=[];
+    var mtr={frames:0,peak:0,sumSq:0};
     mNode.onaudioprocess=function(ev){
-      mChunks.push({l:new Float32Array(ev.inputBuffer.getChannelData(0)),
-                    r:new Float32Array(ev.inputBuffer.getChannelData(1))});
+      var lc=new Float32Array(ev.inputBuffer.getChannelData(0));
+      var rc=new Float32Array(ev.inputBuffer.getChannelData(1));
+      mChunks.push({l:lc,r:rc});
+      var i=0;while(i<lc.length){
+        var al=Math.abs(lc[i]),ar=Math.abs(rc[i]);
+        if(al>mtr.peak){mtr.peak=al;}if(ar>mtr.peak){mtr.peak=ar;}
+        mtr.sumSq+=lc[i]*lc[i]+rc[i]*rc[i];
+        i++;
+      }
+      mtr.frames+=lc.length;
     };
     limiter.connect(mNode);
     var mSink=audioCtx.createGain();mSink.gain.value=0;
     mNode.connect(mSink);mSink.connect(audioCtx.destination);
-    wavCap.master={chunks:mChunks,node:mNode,sink:mSink};
+    wavCap.master={chunks:mChunks,node:mNode,sink:mSink,trace:mtr};
+    _exportTrace.master=mtr;
   }
+  if(typeof dbgRenderExportTrace==='function'){dbgRenderExportTrace();}
 }
 
 // ====================================================
@@ -2903,22 +2935,45 @@ function stopAndDownloadWAV(){
   var names={e0:'voiceA',e1:'voiceB',e2:'texture',e3:'rhythm',master:'master'};
   var order=['e0','e1','e2','e3','master'];
   var zipFiles=[];
+  // DIAGNOSTICO TEMPORAL: cerrar el trace con frames/peak/rms/duracion finales
+  // e indicar si cada stem quedo incluido en el ZIP o fue descartado, y por que.
   order.forEach(function(key){
     var cap=wavCap[key];
-    if(!cap){return;}
-    if(cap.node){try{cap.node.disconnect();}catch(ex){}}
-    if(cap.sink){try{cap.sink.disconnect();}catch(ex){}}
-    if(!cap.chunks||!cap.chunks.length){return;}
-    var total=cap.chunks.reduce(function(a,c){return a+c.l.length;},0);
-    if(total===0){return;}
-    var lAll=new Float32Array(total),rAll=new Float32Array(total);
-    var off=0;
-    cap.chunks.forEach(function(c){lAll.set(c.l,off);rAll.set(c.r,off);off+=c.l.length;});
-    var ab=encodeWAV(lAll,rAll,sr);
-    var suffix=(key==='master')?'master':(names[key]||key)+'_dry';
-    zipFiles.push({name:'spkfields_'+suffix+'_'+ts+'.wav',data:ab});
+    var tr=cap&&cap.trace?cap.trace:null;
+    var included=false,reason='';
+    if(!cap){reason='sin capturador (no existia wavCap['+key+'])';}
+    else{
+      if(cap.node){try{cap.node.disconnect();}catch(ex){}}
+      if(cap.sink){try{cap.sink.disconnect();}catch(ex){}}
+      if(!cap.chunks||!cap.chunks.length){reason='onaudioprocess nunca disparo (0 chunks)';}
+      else{
+        var total=cap.chunks.reduce(function(a,c){return a+c.l.length;},0);
+        if(total===0){reason='chunks vacios (total=0 frames)';}
+        else{
+          var lAll=new Float32Array(total),rAll=new Float32Array(total);
+          var off=0;
+          cap.chunks.forEach(function(c){lAll.set(c.l,off);rAll.set(c.r,off);off+=c.l.length;});
+          var ab=encodeWAV(lAll,rAll,sr);
+          var suffix=(key==='master')?'master':(names[key]||key)+'_dry';
+          zipFiles.push({name:'spkfields_'+suffix+'_'+ts+'.wav',data:ab});
+          included=true;
+        }
+      }
+    }
+    if(_exportTrace){
+      var rms=tr&&tr.frames>0?Math.sqrt(tr.sumSq/(tr.frames*2)):0;
+      var dur=tr?(tr.frames/sr):0;
+      var entry={key:key,frames:tr?tr.frames:0,peak:tr?tr.peak:0,rms:rms,
+                 durationSec:dur,included:included,reason:reason};
+      if(key==='master'){_exportTrace.masterResult=entry;}
+      else{
+        var pe=_exportTrace.perEntity.filter(function(p){return p.id===key;})[0];
+        if(pe){pe.result=entry;}
+      }
+    }
   });
   wavCap={};
+  if(typeof dbgRenderExportTrace==='function'){dbgRenderExportTrace();}
   if(!zipFiles.length){setStatus('WAV: nada capturado');return;}
   // Descarga única: ZIP (iOS bloquea descargas multiples)
   var zipBlob=buildZip(zipFiles);
@@ -2927,7 +2982,7 @@ function stopAndDownloadWAV(){
   a.download='spkfields_stems_'+ts+'.zip';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},5000);
-  setStatus(zipFiles.length+' stems (dry + master) en ZIP descargado');
+  setStatus(zipFiles.length+' stems (dry + master) en ZIP descargado — ver DEBUG > EXPORT TRACE');
 }
 
 // ========================================
@@ -3082,6 +3137,29 @@ function dbgRow(k,v,cls){
 }
 function dbgGet(id){return document.getElementById(id);}
 
+function dbgRenderExportTrace(){
+  var el=dbgGet('dbgExportTrace');if(!el){return;}
+  if(!_exportTrace){el.innerHTML='(sin exportacion todavia)';return;}
+  var h='<div style="opacity:.6;margin-bottom:4px;">'+_exportTrace.ts+'</div>';
+  _exportTrace.perEntity.forEach(function(p){
+    var r=p.result;
+    var label=p.id+' ('+p.name+') view='+p.view+' mat='+p.materialId+
+      ' mute='+p.mute+' solo='+p.solo+' contActive='+p.contActive+
+      ' hasBuf='+p.hasBuffer+' gain0='+(p.gainAtStart!=null?p.gainAtStart.toFixed(3):'?');
+    var res=r?(' -> frames='+r.frames+' peak='+r.peak.toFixed(4)+' rms='+r.rms.toFixed(4)+
+      ' dur='+r.durationSec.toFixed(2)+'s incluido='+r.included+(r.reason?(' ('+r.reason+')'):'')):
+      ' -> (sin resultado, exportacion no finalizada)';
+    var cls=(r&&r.included&&r.peak>0.0005)?'ok':'bad';
+    h+=dbgRow(p.id,label+res,cls);
+  });
+  if(_exportTrace.masterResult){
+    var m=_exportTrace.masterResult;
+    h+=dbgRow('master','frames='+m.frames+' peak='+m.peak.toFixed(4)+' rms='+m.rms.toFixed(4)+
+      ' dur='+m.durationSec.toFixed(2)+'s incluido='+m.included+(m.reason?(' ('+m.reason+')'):''),
+      (m.included&&m.peak>0.0005)?'ok':'bad');
+  }
+  el.innerHTML=h;
+}
 function dbgRenderRuntime(){
   var el=dbgGet('dbgRuntime');if(!el){return;}
   var loaded=0;
@@ -3181,7 +3259,7 @@ function dbgRenderErrors(){
 }
 
 function dbgRefreshAll(){
-  var fns=[dbgRenderRuntime,dbgRenderClicks,dbgRenderTopbar,dbgRenderCheckpoints,dbgRenderErrors];
+  var fns=[dbgRenderRuntime,dbgRenderExportTrace,dbgRenderClicks,dbgRenderTopbar,dbgRenderCheckpoints,dbgRenderErrors];
   fns.forEach(function(fn){
     try{fn();}catch(e_){DEBUG.logError("dbg render fail: "+e_.message,"debug",0,0);}
   });
@@ -3216,6 +3294,28 @@ function dbgBuildReport(){
   lines.push('currentScene: '+(selScene||'none'));
   lines.push('historyLength: '+historyStack.length);
   lines.push('queueLength: '+audioQueue.items.length);
+  lines.push('');
+  lines.push('[EXPORT TRACE]');
+  if(!_exportTrace){lines.push('(sin exportacion todavia)');}
+  else{
+    lines.push('ts: '+_exportTrace.ts);
+    _exportTrace.perEntity.forEach(function(p){
+      var r=p.result;
+      lines.push(p.id+' name='+p.name+' view='+p.view+' materialId='+p.materialId+
+        ' mute='+p.mute+' solo='+p.solo+' contActive='+p.contActive+
+        ' hasBuffer='+p.hasBuffer+' gainAtStart='+(p.gainAtStart!=null?p.gainAtStart.toFixed(4):'?'));
+      if(r){lines.push('  -> frames='+r.frames+' peak='+r.peak.toFixed(5)+' rms='+r.rms.toFixed(5)+
+        ' durationSec='+r.durationSec.toFixed(3)+' included='+r.included+
+        (r.reason?(' reason='+r.reason):''));}
+      else{lines.push('  -> (sin resultado)');}
+    });
+    if(_exportTrace.masterResult){
+      var m=_exportTrace.masterResult;
+      lines.push('master -> frames='+m.frames+' peak='+m.peak.toFixed(5)+' rms='+m.rms.toFixed(5)+
+        ' durationSec='+m.durationSec.toFixed(3)+' included='+m.included+
+        (m.reason?(' reason='+m.reason):''));
+    }
+  }
   lines.push('');
   lines.push('[TRANSPORT CLICKS]');
   lines.push('play: '+c.play+'  stop: '+c.stop+'  panic: '+c.panic);
