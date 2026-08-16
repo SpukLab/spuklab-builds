@@ -256,7 +256,7 @@ let fbDelay=null, fbGain=null, hiCutFilter=null, outputGain=null;
 let limiter=null, safetyShaperNode=null;
 let analyserOut=null, analyserL=null, analyserR=null, drySource=null;
 let nextGrainT=0, grainTimer=null, grainCount=0, grainCountReset=0;
-let recorderNode=null, recorderChunks=[], recorderChunksR=[];
+let recorderNode=null, recorderChunks=[], recorderChunksR=[], recSilentSink=null;
 let recIsRunning=false, recStartTime=0, recSampleRate=44100, recTimerID=null;
 let sourceFileName='DEMO';
 let sprayActive=false, sprayX=0.5, sprayY=0.5, sprayForce=0, clipHoldFrames=0;
@@ -293,6 +293,13 @@ function initAC(){
   limiter.connect(safetyShaperNode); safetyShaperNode.connect(analyserOut);
   analyserOut.connect(AC.destination);
   safetyShaperNode.connect(spl); spl.connect(analyserL,0); spl.connect(analyserR,1);
+  // Sink mudo y ÚNICO para el ScriptProcessor de grabación — conectado a destination con gain 0.
+  // ScriptProcessorNode (legacy) solo garantiza que onaudioprocess dispare si su salida
+  // llega, directa o indirectamente, hasta AudioDestinationNode; Safari/WebKit es estricto
+  // con esto. Antes se conectaba a un GainNode nuevo y "colgado" (sin destino) en cada REC,
+  // lo que podía dejar el callback sin disparar nunca en iPad → 0 samples capturados → nada
+  // que guardar, en silencio.
+  recSilentSink=AC.createGain(); recSilentSink.gain.value=0; recSilentSink.connect(AC.destination);
 }
 
 function decodeAudio(ab){return new Promise((res,rej)=>{try{AC.decodeAudioData(ab.slice(0),buf=>res(buf),err=>rej(err||new Error('decode')));}catch(e){rej(e);}});}
@@ -430,6 +437,7 @@ function stopMic(){
 }
 
 async function saveMicChunks(){
+  console.log('MIC STOP · L chunks:',micChunksL.length,'R chunks:',micChunksR.length,'samples:',micChunksL.reduce((a,c)=>a+c.length,0));
   if(!micChunksL.length){setInfo('MIC · SIN DATOS');return;}
   const total=micChunksL.reduce((a,c)=>a+c.length,0);
   const L=new Float32Array(total), R=new Float32Array(total);
@@ -447,7 +455,13 @@ async function saveMicChunks(){
   const ts=Date.now(), now=new Date();
   const hhmm=String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
   const name='MIC_'+hhmm;
-  await dbSave({id:ts,name,ts,wav,duration:buf.duration});
+  console.log('MIC · calling dbSave', {name,total,bytes:wav.byteLength});
+  try{
+    await dbSave({id:ts,name,ts,wav,duration:buf.duration});
+    console.log('MIC · dbSave OK', name);
+  }catch(e){
+    console.error('MIC · dbSave ERROR', e); setInfo('SAVE ERROR'); return;
+  }
   audioBuf=buf; sourceFileName=name;
   document.getElementById('ov').classList.add('gone');
   setInfo(name+' · '+buf.duration.toFixed(1)+'s — READY');
@@ -660,7 +674,7 @@ function startRec(){
     recorderChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
     recorderChunksR.push(new Float32Array(e.inputBuffer.getChannelData(1)));
   };
-  safetyShaperNode.connect(recorderNode); recorderNode.connect(AC.createGain());
+  safetyShaperNode.connect(recorderNode); recorderNode.connect(recSilentSink);
   document.getElementById('rec-btn').textContent='● REC';
   document.getElementById('rec-btn').classList.add('rec');
   updateRecTimer();
@@ -677,6 +691,8 @@ function stopRec(){
   // pisar ni mezclarse con estos datos (arrays distintos en memoria).
   const sessionL=recorderChunks, sessionR=recorderChunksR, sessionSR=recSampleRate;
   recorderChunks=[]; recorderChunksR=[];
+  console.log('REC STOP · L chunks:',sessionL.length,'R chunks:',sessionR.length,'samples:',sessionL.reduce((a,c)=>a+c.length,0));
+  if(!sessionL.length)setInfo('REC · SIN DATOS');
   setTimeout(()=>saveToLibrary(sessionL,sessionR,sessionSR),120);
 }
 async function saveToLibrary(chunksL,chunksR,sampleRate){
@@ -696,7 +712,13 @@ async function saveToLibrary(chunksL,chunksR,sampleRate){
   let pos=44; for(let i=0;i<interleaved.length;i++){view.setFloat32(pos,interleaved[i],true);pos+=4;}
   const ts=Date.now(), now=new Date(), hhmm=String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
   const name='BS_'+sourceFileName+'_'+hhmm;
-  await dbSave({id:ts,name,ts,wav:ab,duration:total/sampleRate});
+  console.log('REC · calling dbSave', {name,total,bytes:ab.byteLength});
+  try{
+    await dbSave({id:ts,name,ts,wav:ab,duration:total/sampleRate});
+    console.log('REC · dbSave OK', name);
+  }catch(e){
+    console.error('REC · dbSave ERROR', e); setInfo('SAVE ERROR'); return;
+  }
   flashLib();
 }
 function toggleRec(){
