@@ -670,6 +670,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div id="dbgRuntime"></div>
     <h3>EXPORT TRACE</h3>
     <div id="dbgExportTrace" style="font-size:10px;white-space:pre-wrap;"></div>
+    <h3>SLICE TEST (GRID + Offline, experimental)</h3>
+    <button id="btnSliceTest" data-btn="sliceruntest" style="font-size:10px;padding:4px 10px;margin-bottom:6px;">RUN SLICE TEST</button>
+    <div id="dbgSliceTest" style="font-size:10px;white-space:pre-wrap;">(sin correr todavia)</div>
     <h3>TRANSPORT CLICKS</h3>
     <div id="dbgClicks"></div>
     <h3>TOPBAR HIT-TEST</h3>
@@ -1950,6 +1953,7 @@ function bindEntityGrid(){
     
     if(btn==='capture'){if(e){poolCapture(e);}return;}
     if(btn==='toggleresp'){var cardEl=document.getElementById('card_'+eid);if(cardEl&&e){var op=cardEl.classList.toggle('cfgOpen');e._cfgOpen=op;t.classList.toggle('open',op);}}
+    if(btn==='sliceruntest'){_sliceRunTest();return;}
     if(btn==='drivemodel'){var models=['soft','tape','tube','crush'];var mi=models.indexOf(e.driveModel||'soft');e.driveModel=models[(mi+1)%models.length];t.textContent=e.driveModel.toUpperCase();if(e.driveNode){e.driveNode.curve=makeDriveCurveForModel(e.drive,e.driveModel);}setStatus(e.name+' — DRIVE '+e.driveModel);}
     if(btn==='lplay'){toggleLocalPlay(e);}
     if(btn==='lstop'){stopLocalPlay(e);}
@@ -2611,6 +2615,197 @@ var masterGain=null;
 // ====================================================
 // RENDER TAKE
 // ====================================================
+
+// ===== VERTICAL SLICE EXPERIMENTAL: GRID + reloj virtual + OfflineAudioContext =====
+// No reemplaza el export actual. Codigo aditivo y reversible.
+
+// PRNG determinista (mulberry32) para que realtime y offline usen el MISMO contenido de audio.
+function _sliceMulberry32(seed){
+  return function(){
+    seed|=0;seed=(seed+0x6D2B79F5)|0;
+    var t=Math.imul(seed^(seed>>>15),1|seed);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+// Genera un burst de ruido percusivo con decay (~120ms), silencio despues. Contenido
+// determinista (misma semilla) para que realtime y offline partan del mismo material.
+function _sliceGenTestSamples(sr,durSec){
+  var len=Math.round(sr*durSec);
+  var rnd=_sliceMulberry32(90125);
+  var l=new Float32Array(len),r=new Float32Array(len);
+  var burstLen=Math.round(sr*0.12);
+  var i=0;
+  while(i<len){
+    if(i<burstLen){
+      var env=Math.pow(1-(i/burstLen),2);
+      var n=(rnd()*2-1)*env;
+      l[i]=n;r[i]=n*0.9;
+    }
+    i++;
+  }
+  return {sr:sr,len:len,l:l,r:r};
+}
+// Construye el plan de eventos SIN reloj: reutiliza rhyStepDur/rhyGridSteps/rhyGridSwing
+// (las mismas funciones que usa tickGrid en vivo), recorridas de forma eager hasta
+// durationSec en vez de incremental contra un horizonte rodante. Mismo algoritmo,
+// separando "que debe pasar y cuando" de "que reloj lo ejecuta".
+function _sliceBuildEventPlan(entity,durationSec){
+  var sd=rhyStepDur(),steps=rhyGridSteps(entity.rhy),swing=rhyGridSwing(entity.rhy);
+  var plan=[],stepIdx=0,tCursor=0;
+  while(tCursor<durationSec){
+    var si=stepIdx%steps;
+    if(si<entity.rhy.pattern.length&&entity.rhy.pattern[si]===1){
+      var swOff=(si%2===1)?swing*sd*.5:0;
+      var ft=tCursor+swOff;
+      if(ft>=0&&ft<durationSec){plan.push({t:ft,step:si});}
+    }
+    stepIdx++;tCursor+=sd;
+  }
+  return plan;
+}
+function _sliceMeasure(l,r){
+  var peak=0,sumSq=0,i=0,len=l.length;
+  while(i<len){
+    var al=Math.abs(l[i]),ar=Math.abs(r[i]);
+    if(al>peak){peak=al;}if(ar>peak){peak=ar;}
+    sumSq+=l[i]*l[i]+r[i]*r[i];
+    i++;
+  }
+  return {peak:peak,rms:Math.sqrt(sumSq/(len*2))};
+}
+// EJECUCION REALTIME: mismo plan de eventos, disparado vía setTimeout contra el
+// AudioContext EN VIVO (asi es como corre el export hoy). Sirve de referencia/baseline.
+function _sliceRenderRealtime(entity,plan,durationSec,samplesData,cb){
+  var ctx=audioCtx;
+  var liveBuf=ctx.createBuffer(2,samplesData.len,samplesData.sr);
+  liveBuf.getChannelData(0).set(samplesData.l);
+  liveBuf.getChannelData(1).set(samplesData.r);
+  materialPool['_sliceTestMat']={audioId:null,buffer:liveBuf,duration:liveBuf.duration,name:'slice-test',waveformCache:null};
+  entity.materialId='_sliceTestMat';
+  buildEntityGraph(entity); // funcion real, SIN modificar, contra el audioCtx en vivo
+  var bufSz=4096;
+  var node=ctx.createScriptProcessor(bufSz,2,2);
+  var chunks=[];
+  node.onaudioprocess=function(ev){
+    chunks.push({l:new Float32Array(ev.inputBuffer.getChannelData(0)),
+                 r:new Float32Array(ev.inputBuffer.getChannelData(1))});
+  };
+  entity.gainNode.connect(node);
+  var sink=ctx.createGain();sink.gain.value=0;node.connect(sink);sink.connect(ctx.destination);
+  var t0wall=performance.now();
+  var fired=0;
+  plan.forEach(function(ev){
+    setTimeout(function(){fired++;fireRhythmEvent(entity,ctx.currentTime+0.001);},ev.t*1000);
+  });
+  var tailMs=500;
+  setTimeout(function(){
+    var wallMs=performance.now()-t0wall;
+    try{entity.gainNode.disconnect(node);}catch(e){}
+    try{node.disconnect();}catch(e){}
+    try{sink.disconnect();}catch(e){}
+    var total=chunks.reduce(function(a,c){return a+c.l.length;},0);
+    var lAll=new Float32Array(total),rAll=new Float32Array(total),off=0;
+    chunks.forEach(function(c){lAll.set(c.l,off);rAll.set(c.r,off);off+=c.l.length;});
+    var m=_sliceMeasure(lAll,rAll);
+    cb({frames:total,peak:m.peak,rms:m.rms,durationSec:total/ctx.sampleRate,wallMs:wallMs,eventsFired:fired});
+  },durationSec*1000+tailMs);
+}
+// EJECUCION OFFLINE: el MISMO plan, agendado de forma sincrona (sin esperar) contra
+// un OfflineAudioContext. audioCtx/masterMix/convolver/glbDelay se redirigen
+// TEMPORALMENTE para poder reutilizar buildEntityGraph/fireRhythmEvent sin tocarlas;
+// se restauran ANTES de startRendering() (async) para no afectar la app en vivo.
+function _sliceRenderOffline(entity,plan,durationSec,samplesData,cb){
+  var tail=0.5,sr=samplesData.sr;
+  var frames=Math.ceil((durationSec+tail)*sr);
+  var offlineCtx;
+  try{
+    offlineCtx=new OfflineAudioContext(2,frames,sr);
+  }catch(ex){cb({error:'OfflineAudioContext no disponible: '+ex.message});return;}
+  var offBuf=offlineCtx.createBuffer(2,samplesData.len,sr);
+  offBuf.getChannelData(0).set(samplesData.l);
+  offBuf.getChannelData(1).set(samplesData.r);
+  materialPool['_sliceTestMatOff']={audioId:null,buffer:offBuf,duration:offBuf.duration,name:'slice-test-off',waveformCache:null};
+
+  var _liveCtx=audioCtx,_liveMM=masterMix,_liveCV=convolver,_liveGD=glbDelay;
+  var offMasterMix=offlineCtx.createGain();offMasterMix.connect(offlineCtx.destination);
+  var offConvolver=offlineCtx.createGain(); // sink dummy, sin conectar (reverb no forma parte de este slice)
+  var offGlbDelay=offlineCtx.createGain();  // idem delay global
+  audioCtx=offlineCtx;masterMix=offMasterMix;convolver=offConvolver;glbDelay=offGlbDelay;
+
+  var offEntity=makeEntity('_sliceOff','SLICE-OFFLINE',entity.role,entity.view,0);
+  offEntity.rhy=entity.rhy;offEntity.level=entity.level;offEntity.pitch=entity.pitch;
+  offEntity.loopIn=entity.loopIn;offEntity.loopOut=entity.loopOut;
+  offEntity.materialId='_sliceTestMatOff';
+  buildEntityGraph(offEntity); // funcion real, SIN modificar, ahora contra offlineCtx
+
+  var t0wall=performance.now();
+  var fired=0;
+  plan.forEach(function(ev){
+    fired++;
+    fireRhythmEvent(offEntity,ev.t); // agendado sincrono, tiempo absoluto de la linea offline
+  });
+
+  // Restaurar ANTES de esperar startRendering (async) para no afectar timers/UI en vivo.
+  audioCtx=_liveCtx;masterMix=_liveMM;convolver=_liveCV;glbDelay=_liveGD;
+
+  offlineCtx.startRendering().then(function(renderedBuffer){
+    var wallMs=performance.now()-t0wall;
+    var l=renderedBuffer.getChannelData(0),r=renderedBuffer.getChannelData(1);
+    var m=_sliceMeasure(l,r);
+    cb({frames:renderedBuffer.length,peak:m.peak,rms:m.rms,
+        durationSec:renderedBuffer.duration,wallMs:wallMs,eventsFired:fired});
+  }).catch(function(err){
+    cb({error:String(err&&err.message||err)});
+  });
+}
+var _sliceLastResult=null;
+function _sliceReport(plan,durationSec,rt,off){
+  _sliceLastResult={ts:new Date().toISOString(),durationSec:durationSec,planLength:plan.length,rt:rt,off:off};
+  var el=dbgGet('dbgSliceTest');
+  if(el){
+    var h='<div style="opacity:.6;margin-bottom:4px;">'+_sliceLastResult.ts+'</div>';
+    h+=dbgRow('musical duration',durationSec.toFixed(3)+'s');
+    h+=dbgRow('events planned',plan.length);
+    if(rt.error){h+=dbgRow('realtime','ERROR: '+rt.error,'bad');}
+    else{h+=dbgRow('realtime','frames='+rt.frames+' peak='+rt.peak.toFixed(4)+' rms='+rt.rms.toFixed(4)+
+      ' dur='+rt.durationSec.toFixed(3)+'s wall='+rt.wallMs.toFixed(0)+'ms fired='+rt.eventsFired);}
+    if(off.error){h+=dbgRow('offline','ERROR: '+off.error,'bad');}
+    else{h+=dbgRow('offline','frames='+off.frames+' peak='+off.peak.toFixed(4)+' rms='+off.rms.toFixed(4)+
+      ' dur='+off.durationSec.toFixed(3)+'s wall='+off.wallMs.toFixed(0)+'ms fired='+off.eventsFired);}
+    if(!rt.error&&!off.error){
+      var speed=off.wallMs>0?(rt.wallMs/off.wallMs):0;
+      var evMismatch=Math.abs(rt.eventsFired-off.eventsFired);
+      var durMismatch=Math.abs(rt.durationSec-off.durationSec);
+      var peakDiff=Math.abs(rt.peak-off.peak);
+      h+=dbgRow('speed ratio',speed.toFixed(1)+'x',speed>1?'ok':'bad');
+      h+=dbgRow('event count mismatch',evMismatch,evMismatch===0?'ok':'bad');
+      h+=dbgRow('duration mismatch',durMismatch.toFixed(3)+'s',durMismatch<0.05?'ok':'bad');
+      h+=dbgRow('peak diff',peakDiff.toFixed(4),peakDiff<0.01?'ok':'bad');
+    }
+    el.innerHTML=h;
+  }
+  console.log('[SLICE TEST]',_sliceLastResult);
+}
+function _sliceRunTest(){
+  if(!audioCtx&&typeof initAudio==='function'){initAudio();}
+  if(!audioCtx){setStatus('SLICE: audioCtx no disponible');return;}
+  audioCtx.resume();
+  var el=dbgGet('dbgSliceTest');if(el){el.innerHTML='(corriendo...)';}
+  var testEntity=makeEntity('_sliceRT','SLICE-RT','rhythm','loop',0);
+  testEntity.rhy.mode='grid';testEntity.rhy.p1=50;testEntity.rhy.p2=0; // 18 steps, swing 0 (deterministico)
+  testEntity.level=0.9;
+  var durationSec=4.0;
+  var plan=_sliceBuildEventPlan(testEntity,durationSec);
+  var samplesData=_sliceGenTestSamples(audioCtx.sampleRate,1.0);
+  _sliceRenderRealtime(testEntity,plan,durationSec,samplesData,function(rtResult){
+    _sliceRenderOffline(testEntity,plan,durationSec,samplesData,function(offResult){
+      _sliceReport(plan,durationSec,rtResult,offResult);
+      setStatus('SLICE TEST completo — ver DEBUG > SLICE TEST');
+    });
+  });
+}
+
 function renderTake(take){
   if(!take){return;}
   if(!audioCtx){initAudio();}
@@ -3314,6 +3509,26 @@ function dbgBuildReport(){
       lines.push('master -> frames='+m.frames+' peak='+m.peak.toFixed(5)+' rms='+m.rms.toFixed(5)+
         ' durationSec='+m.durationSec.toFixed(3)+' included='+m.included+
         (m.reason?(' reason='+m.reason):''));
+    }
+  }
+  lines.push('');
+  lines.push('[SLICE TEST — GRID + Offline]');
+  if(!_sliceLastResult){lines.push('(sin correr todavia)');}
+  else{
+    var S=_sliceLastResult;
+    lines.push('ts: '+S.ts);
+    lines.push('musical duration: '+S.durationSec.toFixed(3)+'s  events planned: '+S.planLength);
+    if(S.rt.error){lines.push('realtime ERROR: '+S.rt.error);}
+    else{lines.push('realtime -> frames='+S.rt.frames+' peak='+S.rt.peak.toFixed(5)+' rms='+S.rt.rms.toFixed(5)+
+      ' durationSec='+S.rt.durationSec.toFixed(3)+' wallMs='+S.rt.wallMs.toFixed(1)+' eventsFired='+S.rt.eventsFired);}
+    if(S.off.error){lines.push('offline ERROR: '+S.off.error);}
+    else{lines.push('offline -> frames='+S.off.frames+' peak='+S.off.peak.toFixed(5)+' rms='+S.off.rms.toFixed(5)+
+      ' durationSec='+S.off.durationSec.toFixed(3)+' wallMs='+S.off.wallMs.toFixed(1)+' eventsFired='+S.off.eventsFired);}
+    if(!S.rt.error&&!S.off.error){
+      lines.push('speed ratio: '+(S.off.wallMs>0?(S.rt.wallMs/S.off.wallMs).toFixed(2):'?')+'x');
+      lines.push('event count mismatch: '+Math.abs(S.rt.eventsFired-S.off.eventsFired));
+      lines.push('duration mismatch: '+Math.abs(S.rt.durationSec-S.off.durationSec).toFixed(4)+'s');
+      lines.push('peak diff: '+Math.abs(S.rt.peak-S.off.peak).toFixed(5));
     }
   }
   lines.push('');
