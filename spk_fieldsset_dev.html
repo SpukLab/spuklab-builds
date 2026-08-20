@@ -1953,7 +1953,6 @@ function bindEntityGrid(){
     
     if(btn==='capture'){if(e){poolCapture(e);}return;}
     if(btn==='toggleresp'){var cardEl=document.getElementById('card_'+eid);if(cardEl&&e){var op=cardEl.classList.toggle('cfgOpen');e._cfgOpen=op;t.classList.toggle('open',op);}}
-    if(btn==='sliceruntest'){_sliceRunTest();return;}
     if(btn==='drivemodel'){var models=['soft','tape','tube','crush'];var mi=models.indexOf(e.driveModel||'soft');e.driveModel=models[(mi+1)%models.length];t.textContent=e.driveModel.toUpperCase();if(e.driveNode){e.driveNode.curve=makeDriveCurveForModel(e.drive,e.driveModel);}setStatus(e.name+' — DRIVE '+e.driveModel);}
     if(btn==='lplay'){toggleLocalPlay(e);}
     if(btn==='lstop'){stopLocalPlay(e);}
@@ -2721,7 +2720,8 @@ function _sliceRenderOffline(entity,plan,durationSec,samplesData,cb){
   var offlineCtx;
   try{
     offlineCtx=new OfflineAudioContext(2,frames,sr);
-  }catch(ex){cb({error:'OfflineAudioContext no disponible: '+ex.message});return;}
+    _sliceMark('offlineContextCreated');
+  }catch(ex){_sliceMark('offlineContextCreated FALLO: '+ex.message);cb({error:'OfflineAudioContext no disponible: '+ex.message});return;}
   var offBuf=offlineCtx.createBuffer(2,samplesData.len,sr);
   offBuf.getChannelData(0).set(samplesData.l);
   offBuf.getChannelData(1).set(samplesData.r);
@@ -2749,7 +2749,9 @@ function _sliceRenderOffline(entity,plan,durationSec,samplesData,cb){
   // Restaurar ANTES de esperar startRendering (async) para no afectar timers/UI en vivo.
   audioCtx=_liveCtx;masterMix=_liveMM;convolver=_liveCV;glbDelay=_liveGD;
 
+  _sliceMark('offlineRenderStarted');
   offlineCtx.startRendering().then(function(renderedBuffer){
+    _sliceMark('offlineRenderCompleted');
     var wallMs=performance.now()-t0wall;
     var l=renderedBuffer.getChannelData(0),r=renderedBuffer.getChannelData(1);
     var m=_sliceMeasure(l,r);
@@ -2760,6 +2762,29 @@ function _sliceRenderOffline(entity,plan,durationSec,samplesData,cb){
   });
 }
 var _sliceLastResult=null;
+var _sliceCheckpoints=[];
+function _sliceMark(cp){
+  _sliceCheckpoints.push({cp:cp,ts:performance.now()});
+  var el=dbgGet('dbgSliceTest');
+  if(el){
+    var h='<div style="opacity:.6;">running... (ultimo checkpoint: '+cp+')</div>';
+    _sliceCheckpoints.forEach(function(c){h+=dbgRow(c.cp,c.ts.toFixed(1)+'ms','ok');});
+    el.innerHTML=h;
+  }
+  console.log('[SLICE CHECKPOINT]',cp);
+}
+function _sliceReportError(ex){
+  var msg=(ex&&ex.message)?ex.message:String(ex);
+  var el=dbgGet('dbgSliceTest');
+  if(el){
+    var h='<div style="opacity:.6;">detenido por excepcion</div>';
+    _sliceCheckpoints.forEach(function(c){h+=dbgRow(c.cp,c.ts.toFixed(1)+'ms','ok');});
+    h+=dbgRow('EXCEPTION',msg,'bad');
+    el.innerHTML=h;
+  }
+  console.error('[SLICE TEST ERROR]',ex);
+  setStatus('SLICE TEST: excepcion — ver DEBUG > SLICE TEST');
+}
 function _sliceReport(plan,durationSec,rt,off){
   _sliceLastResult={ts:new Date().toISOString(),durationSec:durationSec,planLength:plan.length,rt:rt,off:off};
   var el=dbgGet('dbgSliceTest');
@@ -2788,6 +2813,8 @@ function _sliceReport(plan,durationSec,rt,off){
   console.log('[SLICE TEST]',_sliceLastResult);
 }
 function _sliceRunTest(){
+  _sliceCheckpoints=[];
+  _sliceMark('sliceTestStarted');
   if(!audioCtx&&typeof initAudio==='function'){initAudio();}
   if(!audioCtx){setStatus('SLICE: audioCtx no disponible');return;}
   audioCtx.resume();
@@ -2797,6 +2824,7 @@ function _sliceRunTest(){
   testEntity.level=0.9;
   var durationSec=4.0;
   var plan=_sliceBuildEventPlan(testEntity,durationSec);
+  _sliceMark('slicePlanBuilt ('+plan.length+' eventos)');
   var samplesData=_sliceGenTestSamples(audioCtx.sampleRate,1.0);
   _sliceRenderRealtime(testEntity,plan,durationSec,samplesData,function(rtResult){
     _sliceRenderOffline(testEntity,plan,durationSec,samplesData,function(offResult){
@@ -3513,6 +3541,10 @@ function dbgBuildReport(){
   }
   lines.push('');
   lines.push('[SLICE TEST — GRID + Offline]');
+  if(_sliceCheckpoints&&_sliceCheckpoints.length){
+    lines.push('checkpoints:');
+    _sliceCheckpoints.forEach(function(c){lines.push('  '+c.cp+' @ '+c.ts.toFixed(1)+'ms');});
+  }
   if(!_sliceLastResult){lines.push('(sin correr todavia)');}
   else{
     var S=_sliceLastResult;
@@ -5251,7 +5283,7 @@ window.onload=function(){
   var btnUn=document.getElementById('btnUndo');if(btnUn){btnUn.addEventListener('click',function(){if(historyIdx<=0){return;}historyIdx--;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Deshacer → '+(historyStack[historyIdx]._label||'estado'));});}
   var btnRd=document.getElementById('btnRedo');if(btnRd){btnRd.addEventListener('click',function(){if(historyIdx>=historyStack.length-1){return;}historyIdx++;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Rehacer → '+(historyStack[historyIdx]._label||'estado'));});}
   // btnDebug: instalado en critical block
-  var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);}
+  var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);} var btnSliceT=document.getElementById('btnSliceTest');if(btnSliceT){btnSliceT.addEventListener('click',function(){_sliceMark('sliceButtonPressed');try{_sliceRunTest();}catch(ex){_sliceReportError(ex);}});}
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
   var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
