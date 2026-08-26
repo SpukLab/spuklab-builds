@@ -673,6 +673,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <h3>FIRE TRACE (Voice B — planned/fired por entidad)</h3>
     <button id="btnFireTraceReset" style="font-size:10px;padding:4px 10px;margin-bottom:6px;">RESET FIRE TRACE</button>
     <div id="dbgFireTrace" style="font-size:10px;white-space:pre-wrap;">(sin resetear todavia)</div>
+    <h3>V2 DRIVER (Stage 2 — GRID/Euclid/Loop/Freeze, experimental)</h3>
+    <button id="btnV2Driver" style="font-size:10px;padding:4px 10px;margin-bottom:6px;">RUN V2 DRIVER TEST</button>
+    <div id="dbgV2Driver" style="font-size:10px;white-space:pre-wrap;">(sin correr todavia)</div>
     <h3>SLICE TEST (GRID + Offline, experimental)</h3>
     <button id="btnSliceTest" data-btn="sliceruntest" style="font-size:10px;padding:4px 10px;margin-bottom:6px;">RUN SLICE TEST</button>
     <div id="dbgSliceTest" style="font-size:10px;white-space:pre-wrap;">(sin correr todavia)</div>
@@ -2890,6 +2893,197 @@ function _fireTraceReport(){
   el.innerHTML=h;
 }
 
+
+// ===== STAGE 2 — VIRTUAL TIME DRIVER (experimental, aislado, reversible) =====
+// Prueba la hipotesis minima: el motor existente (tickRhythm/startContinuousView/
+// buildEntityGraph) puede correr offline si recibe un reloj virtual explicito,
+// SIN duplicar su logica. Cubre unicamente: GRID, Euclidean, Loop, Freeze, DSP
+// por voz. NO incluye Morph/Automation/Space/MIX global/las 4 entidades reales.
+// El export actual (renderTake/stopAndDownloadWAV) permanece intacto.
+
+function _v2ShadowEntity(kind){
+  var e;
+  if(kind==='grid'){
+    e=makeEntity('_v2Grid','V2-GRID','rhythm','loop',0);
+    e.rhy.mode='grid';e.rhy.p1=50;e.rhy.p2=0;
+    e.rhy.pattern=DEFAULT_PATTERNS[3].slice(); // patron conocido (4 golpes), mismo fix que Stage 1
+  }else if(kind==='euclid'){
+    e=makeEntity('_v2Euclid','V2-EUCLID','rhythm','loop',0);
+    e.rhy.mode='euclidean';e.rhy.p1=40;e.rhy.p2=40;e.rhy.p3=0; // 7 hits / 15 steps / sin rotacion
+  }else if(kind==='loop'){
+    e=makeEntity('_v2Loop','V2-LOOP','voice','loop',0);
+  }else{ // freeze
+    e=makeEntity('_v2Freeze','V2-FREEZE','voice','freeze',0);
+    e.param1=.3; // punto de freeze, no en el extremo (evita el caso limite ya corregido)
+  }
+  e.level=0.9;
+  return e;
+}
+
+// Ejecucion REALTIME de una entidad de prueba: mismo dispatch que el motor en vivo
+// (tickRhythm para hasRhy, startContinuousView una vez para vistas continuas),
+// avanzado por setInterval real (25ms), contra el AudioContext EN VIVO.
+function _v2RunRealtimeOne(kind,durationSec,samplesData,cb){
+  var e=_v2ShadowEntity(kind);
+  var liveBuf=audioCtx.createBuffer(2,samplesData.len,samplesData.sr);
+  liveBuf.getChannelData(0).set(samplesData.l);liveBuf.getChannelData(1).set(samplesData.r);
+  materialPool['_v2Mat_'+kind]={audioId:null,buffer:liveBuf,duration:liveBuf.duration,name:'v2-test',waveformCache:null};
+  e.materialId='_v2Mat_'+kind;
+  buildEntityGraph(e); // funcion real, sin modificar
+  var bufSz=4096;
+  var node=audioCtx.createScriptProcessor(bufSz,2,2);
+  var chunks=[];
+  node.onaudioprocess=function(ev){
+    chunks.push({l:new Float32Array(ev.inputBuffer.getChannelData(0)),
+                 r:new Float32Array(ev.inputBuffer.getChannelData(1))});
+  };
+  e.gainNode.connect(node);
+  var sink=audioCtx.createGain();sink.gain.value=0;node.connect(sink);sink.connect(audioCtx.destination);
+  var hasRhy=e.rhy&&e.rhy.mode!=='none';
+  var t0wall=performance.now();
+  var iv=null;
+  var fireCountBefore=(typeof rtrace!=='undefined'?(rtrace._fireCount||0):0);
+  if(isContinuousView(e.view)){
+    startContinuousView(e); // funcion real, sin modificar — arranca una vez
+  }
+  if(hasRhy){
+    iv=setInterval(function(){
+      var until=audioCtx.currentTime+lookahead;
+      tickRhythm(e,until); // funcion real, sin modificar
+    },25);
+  }
+  setTimeout(function(){
+    if(iv){clearInterval(iv);}
+    var wallMs=performance.now()-t0wall;
+    try{stopContinuousView(e);}catch(ex){}
+    try{e.gainNode.disconnect(node);}catch(ex){}
+    try{node.disconnect();}catch(ex){}
+    try{sink.disconnect();}catch(ex){}
+    var total=chunks.reduce(function(a,c){return a+c.l.length;},0);
+    var lAll=new Float32Array(total),rAll=new Float32Array(total),off=0;
+    chunks.forEach(function(c){lAll.set(c.l,off);rAll.set(c.r,off);off+=c.l.length;});
+    var m=_sliceMeasure(lAll,rAll);
+    var fireCountAfter=(typeof rtrace!=='undefined'?(rtrace._fireCount||0):0);
+    var fires=hasRhy?(fireCountAfter-fireCountBefore):null; // diff directo, independiente de RTRACE_ON
+    cb({frames:total,peak:m.peak,rms:m.rms,durationSec:total/audioCtx.sampleRate,wallMs:wallMs,fires:fires});
+  },durationSec*1000+500);
+}
+
+// Ejecucion OFFLINE de la MISMA entidad: el driver de reloj virtual. Avanza
+// virtualNow en pasos fijos (=lookahead), llamando a tickRhythm/startContinuousView
+// SIN CAMBIOS — el motor sigue decidiendo que ocurre, el driver solo aporta el
+// contexto temporal. audioCtx/masterMix/convolver/glbDelay se redirigen
+// TEMPORALMENTE (adapter local, reversible) para reusar buildEntityGraph/
+// tickRhythm/startContinuousView contra el OfflineAudioContext; se restauran
+// ANTES de startRendering() (async) para no afectar el motor en vivo.
+function _v2RunOfflineOne(kind,durationSec,samplesData,cb){
+  var tail=0.5,sr=samplesData.sr;
+  var frames=Math.ceil((durationSec+tail)*sr);
+  var offlineCtx;
+  try{offlineCtx=new OfflineAudioContext(2,frames,sr);}
+  catch(ex){cb({error:'OfflineAudioContext no disponible: '+ex.message});return;}
+  var offBuf=offlineCtx.createBuffer(2,samplesData.len,sr);
+  offBuf.getChannelData(0).set(samplesData.l);offBuf.getChannelData(1).set(samplesData.r);
+  materialPool['_v2MatOff_'+kind]={audioId:null,buffer:offBuf,duration:offBuf.duration,name:'v2-test-off',waveformCache:null};
+
+  var _liveCtx=audioCtx,_liveMM=masterMix,_liveCV=convolver,_liveGD=glbDelay;
+  var offMasterMix=offlineCtx.createGain();offMasterMix.connect(offlineCtx.destination);
+  var offConvolver=offlineCtx.createGain(); // dummy sink (reverb fuera de alcance de este slice)
+  var offGlbDelay=offlineCtx.createGain();  // dummy sink (delay global fuera de alcance)
+  audioCtx=offlineCtx;masterMix=offMasterMix;convolver=offConvolver;glbDelay=offGlbDelay;
+
+  var e=_v2ShadowEntity(kind);
+  e.materialId='_v2MatOff_'+kind;
+  buildEntityGraph(e); // funcion real, sin modificar, ahora contra offlineCtx
+
+  var hasRhy=e.rhy&&e.rhy.mode!=='none';
+  var t0wall=performance.now();
+  var virtualNow=0,fires=0;
+
+  if(isContinuousView(e.view)){
+    startContinuousView(e); // funcion real, sin modificar — arranca una vez en t virtual=0
+  }
+  var fireCountBefore=(typeof rtrace!=='undefined'?(rtrace._fireCount||0):0);
+  if(hasRhy){
+    // reloj virtual explicito: NO se lee audioCtx.currentTime para el limite 'until'
+    // (en OfflineAudioContext currentTime permanece en 0 durante el agendado sincrono).
+    while(virtualNow<durationSec){
+      var until=virtualNow+lookahead;
+      tickRhythm(e,until); // funcion real, sin modificar
+      virtualNow+=lookahead;
+    }
+    fires=(typeof rtrace!=='undefined'?(rtrace._fireCount||0):0)-fireCountBefore; // diff directo
+  }else{
+    virtualNow=durationSec; // continuas: no hay loop de ticks, solo el arranque unico
+  }
+
+  // Restaurar ANTES de esperar startRendering (async) — no afecta el motor en vivo.
+  audioCtx=_liveCtx;masterMix=_liveMM;convolver=_liveCV;glbDelay=_liveGD;
+
+  offlineCtx.startRendering().then(function(renderedBuffer){
+    var wallMs=performance.now()-t0wall;
+    var l=renderedBuffer.getChannelData(0),r=renderedBuffer.getChannelData(1);
+    var m=_sliceMeasure(l,r);
+    cb({frames:renderedBuffer.length,peak:m.peak,rms:m.rms,
+        durationSec:renderedBuffer.duration,wallMs:wallMs,fires:hasRhy?fires:null});
+  }).catch(function(err){
+    cb({error:String(err&&err.message||err)});
+  });
+}
+
+var _v2LastResult=null;
+function _v2Report(){
+  var el=dbgGet('dbgV2Driver');if(!el){return;}
+  var h='<div style="opacity:.6;margin-bottom:4px;">'+_v2LastResult.ts+'</div>';
+  ['grid','euclid','loop','freeze'].forEach(function(kind){
+    var r=_v2LastResult[kind];if(!r){return;}
+    var rt=r.rt,off=r.off;
+    var line=kind.toUpperCase()+': ';
+    if(rt.error){line+='RT ERROR: '+rt.error;}
+    else{line+='RT frames='+rt.frames+' peak='+rt.peak.toFixed(4)+' rms='+rt.rms.toFixed(4)+
+      ' dur='+rt.durationSec.toFixed(3)+'s wall='+rt.wallMs.toFixed(0)+'ms'+
+      (rt.fires!=null?' fires='+rt.fires:'');}
+    line+=' | ';
+    if(off.error){line+='OFF ERROR: '+off.error;}
+    else{line+='OFF frames='+off.frames+' peak='+off.peak.toFixed(4)+' rms='+off.rms.toFixed(4)+
+      ' dur='+off.durationSec.toFixed(3)+'s wall='+off.wallMs.toFixed(0)+'ms'+
+      (off.fires!=null?' fires='+off.fires:'');}
+    var cls='';
+    if(!rt.error&&!off.error){
+      var speed=off.wallMs>0?(rt.wallMs/off.wallMs):0;
+      var peakOk=rt.peak>0.0005&&off.peak>0.0005;
+      var firesMatch=(rt.fires==null||off.fires==null)?true:(rt.fires===off.fires);
+      line+=' | speed='+speed.toFixed(1)+'x peakOk='+peakOk+' firesMatch='+firesMatch;
+      cls=(peakOk&&firesMatch)?'ok':'bad';
+    }else{cls='bad';}
+    h+=dbgRow(kind,line,cls);
+  });
+  el.innerHTML=h;
+  console.log('[V2 DRIVER TEST]',_v2LastResult);
+}
+function _v2RunAll(){
+  var el=dbgGet('dbgV2Driver');if(el){el.innerHTML='(corriendo... esto tarda varios segundos por el baseline realtime)';}
+  if(!audioCtx&&typeof initAudio==='function'){initAudio();}
+  if(!audioCtx){setStatus('V2: audioCtx no disponible');return;}
+  audioCtx.resume();
+  var durations={grid:3.0,euclid:3.0,loop:2.0,freeze:2.0};
+  var kinds=['grid','euclid','loop','freeze'];
+  var result={ts:new Date().toISOString()};
+  var idx=0;
+  function next(){
+    if(idx>=kinds.length){_v2LastResult=result;_v2Report();setStatus('V2 DRIVER TEST completo — ver DEBUG > V2 DRIVER');return;}
+    var kind=kinds[idx];var dur=durations[kind];
+    var samplesData=_sliceGenTestSamples(audioCtx.sampleRate,1.0);
+    _v2RunRealtimeOne(kind,dur,samplesData,function(rtResult){
+      _v2RunOfflineOne(kind,dur,samplesData,function(offResult){
+        result[kind]={rt:rtResult,off:offResult};
+        idx++;next();
+      });
+    });
+  }
+  next();
+}
+
 function renderTake(take){
   if(!take){return;}
   if(!audioCtx){initAudio();}
@@ -3618,6 +3812,24 @@ function dbgBuildReport(){
       }
     }
   });
+  lines.push('');
+  lines.push('[V2 DRIVER — Stage 2, GRID/Euclid/Loop/Freeze]');
+  if(!_v2LastResult){lines.push('(sin correr todavia)');}
+  else{
+    lines.push('ts: '+_v2LastResult.ts);
+    ['grid','euclid','loop','freeze'].forEach(function(kind){
+      var r=_v2LastResult[kind];if(!r){return;}
+      var rt=r.rt,off=r.off;
+      lines.push(kind+':');
+      if(rt.error){lines.push('  RT ERROR: '+rt.error);}
+      else{lines.push('  RT  frames='+rt.frames+' peak='+rt.peak.toFixed(5)+' rms='+rt.rms.toFixed(5)+' durationSec='+rt.durationSec.toFixed(3)+' wallMs='+rt.wallMs.toFixed(1)+' fires='+rt.fires);}
+      if(off.error){lines.push('  OFF ERROR: '+off.error);}
+      else{lines.push('  OFF frames='+off.frames+' peak='+off.peak.toFixed(5)+' rms='+off.rms.toFixed(5)+' durationSec='+off.durationSec.toFixed(3)+' wallMs='+off.wallMs.toFixed(1)+' fires='+off.fires);}
+      if(!rt.error&&!off.error){
+        lines.push('  speed ratio: '+(off.wallMs>0?(rt.wallMs/off.wallMs).toFixed(2):'?')+'x');
+      }
+    });
+  }
   lines.push('');
   lines.push('[SLICE TEST — GRID + Offline]');
   if(_sliceCheckpoints&&_sliceCheckpoints.length){
@@ -5362,7 +5574,7 @@ window.onload=function(){
   var btnUn=document.getElementById('btnUndo');if(btnUn){btnUn.addEventListener('click',function(){if(historyIdx<=0){return;}historyIdx--;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Deshacer → '+(historyStack[historyIdx]._label||'estado'));});}
   var btnRd=document.getElementById('btnRedo');if(btnRd){btnRd.addEventListener('click',function(){if(historyIdx>=historyStack.length-1){return;}historyIdx++;historyNavigating=true;_applySceneInternal(historyStack[historyIdx]);historyNavigating=false;updateHistoryUI();rebuildHistPanel();setStatus('Rehacer → '+(historyStack[historyIdx]._label||'estado'));});}
   // btnDebug: instalado en critical block
-  var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);} var btnFTR=document.getElementById('btnFireTraceReset');if(btnFTR){btnFTR.addEventListener('click',_fireTraceResetAll);} var btnSliceT=document.getElementById('btnSliceTest');if(btnSliceT){btnSliceT.addEventListener('click',function(){_sliceMark('sliceButtonPressed');try{_sliceRunTest();}catch(ex){_sliceReportError(ex);}});}
+  var btnDbgR=document.getElementById('btnDbgRefresh');if(btnDbgR){btnDbgR.addEventListener('click',dbgRefreshAll);} var btnFTR=document.getElementById('btnFireTraceReset');if(btnFTR){btnFTR.addEventListener('click',_fireTraceResetAll);} var btnV2=document.getElementById('btnV2Driver');if(btnV2){btnV2.addEventListener('click',function(){try{_v2RunAll();}catch(ex){var el=dbgGet('dbgV2Driver');if(el){el.innerHTML='EXCEPTION: '+(ex&&ex.message?ex.message:String(ex));}console.error('[V2 DRIVER ERROR]',ex);}});} var btnSliceT=document.getElementById('btnSliceTest');if(btnSliceT){btnSliceT.addEventListener('click',function(){_sliceMark('sliceButtonPressed');try{_sliceRunTest();}catch(ex){_sliceReportError(ex);}});}
   var btnDbgC=document.getElementById('btnDbgCopy');if(btnDbgC){btnDbgC.addEventListener('click',dbgCopyReport);}
   var btnDbgX=document.getElementById('btnDbgClose');if(btnDbgX){btnDbgX.addEventListener('click',toggleDebugPanel);}
   var bProj=document.getElementById("btnProject");if(bProj){bProj.addEventListener("click",toggleProjectPanel);}
