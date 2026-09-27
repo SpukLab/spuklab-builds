@@ -220,8 +220,8 @@ textarea.inp{resize:vertical;min-height:72px;}
 <div id="screen-login" class="screen active">
   <div class="login-inner">
     <div class="login-mark">🦷</div>
-    <h1 class="serif">Consultorio<br>Odontológico</h1>
-    <p class="address">Dr. José A. López<br>Boulevar Hipólito Yrigoyen 69, local 8<br>Edificio Gacela</p>
+    <h1 class="serif" id="login-brand">Turnos</h1>
+    <p class="address" id="login-meta">Consultorio Odontológico</p>
     <div class="seg">
       <button class="seg-btn on" id="rb-med" onclick="setRole('medico');return false;">Profesional</button>
       <button class="seg-btn" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
@@ -266,6 +266,10 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
     <div class="cal" id="cal-med"></div>
     <div class="stats" id="stats"></div>
+    <div id="ops-queue-wrap" style="display:none;">
+      <p class="sh">Pendientes próximos</p>
+      <div id="ops-queue"></div>
+    </div>
     <p class="sh">Turnos del día</p>
     <div id="agenda-list"></div>
   </div>
@@ -494,15 +498,25 @@ function applyBranding(){
   document.title=c.brand;
   document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=c.brand);
   document.querySelectorAll('.js-app-sub').forEach(el=>el.textContent=c.consultorio);
+  const lb=$('login-brand'),lm=$('login-meta');
+  if(lb)lb.textContent=c.brand;
+  if(lm)lm.innerHTML=escHtml(c.consultorio)+'<br>'+escHtml(c.nombre)+'<br>'+escHtml(c.dir);
 }
 function dayDistance(fecha){
   const a=dp(today()),b=dp(fecha);
   return Math.round((b-a)/86400000);
 }
 function reminderNeeded(t){
-  if(!t||t.estado!=='pendiente'||t.waOpenedAt)return false;
+  if(!t||t.estado!=='pendiente'||t.recordatorioAt)return false;
   const d=dayDistance(t.fecha);
   return d>=0&&d<=1;
+}
+function markReminderSent(id){
+  const t=turnoById(id);if(!t||t.estado!=='pendiente')return;
+  const now=new Date().toISOString();
+  DB.st(DB.t().map(x=>x.id===id?{...x,recordatorioAt:now,recordatorioPor:'operator'}:x));
+  recordEvent('reminder_marked_sent',{turnoId:id});
+  renderAgenda();toast('Recordatorio marcado como enviado ✓');
 }
 function openWhatsApp(turnoId){
   const t=turnoById(turnoId);if(!t)return;
@@ -592,7 +606,35 @@ function renderStats(){
     <div class="sc"><div class="sv">${p}</div><div class="sl">Pendientes</div></div>`;
 }
 
+function renderOpsQueue(){
+  const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
+  const pacs=DB.p();
+  const items=DB.t()
+    .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=1)
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+  wrap.style.display=items.length?'block':'none';
+  if(!items.length){el.innerHTML='';return;}
+  el.innerHTML=items.map(t=>{
+    const p=pacs.find(x=>x.id===t.pacienteId)||{nombre:'—',tel:''};
+    const d=dayDistance(t.fecha);
+    const when=d===0?'Hoy':'Mañana';
+    const state=t.recordatorioAt?'Recordado · esperando confirmación':'Recordatorio pendiente';
+    const waN=(p.tel||'').replace(/\D/g,'');
+    return`<div class="aitem" style="padding:13px 15px;">
+      <div class="aitem-time">${when} · ${t.hora} hs</div>
+      <div class="aitem-name">${escHtml(p.nombre)}</div>
+      <div class="${t.recordatorioAt?'contact-note':'ops-note'}">${state}</div>
+      <div class="aitem-actions" style="margin-top:9px;">
+        ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Abrir WhatsApp</button>`:''}
+        ${!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Marcar recordado</button>`:''}
+        <button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">Confirmar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderAgenda(){
+  renderOpsQueue();
   const key=selDate||today();
   const pacs=DB.p();
   const ts=DB.t().filter(t=>t.fecha===key).sort((a,b)=>a.hora.localeCompare(b.hora));
@@ -608,13 +650,15 @@ function renderAgenda(){
       <div class="aitem-name">${pac.nombre}</div>
       ${t.motivo?`<div class="aitem-motivo">${t.motivo}</div>`:''}
       ${reminderNeeded(t)?`<div class="ops-note">Recordatorio pendiente</div>`:''}
-      ${t.waOpenedAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
+      ${t.recordatorioAt?`<div class="contact-note">Recordatorio marcado como enviado ${new Date(t.recordatorioAt).toLocaleString()} · esperando confirmación.</div>`:''}
+      ${t.waOpenedAt&&!t.recordatorioAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
         <span class="tag ${tc}">${tl}</span>
         <div class="aitem-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
           ${t.estado!=='cancelado'?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
           ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+          ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
           ${t.estado!=='cancelado'?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
         </div>
       </div>
@@ -1011,6 +1055,7 @@ DB.st([
 {id:'T003',pacienteId:1003,fecha:man,hora:'09:00',motivo:'Ortodoncia — seguimiento',estado:'pendiente',creado:new Date().toISOString()},
 ]);
 })();
+applyBranding();
 </script>
 
 </body>
