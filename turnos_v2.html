@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Consultorio López</title>
+<title>Turnos</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -203,6 +203,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;}
 .slot-note{font-size:.7rem;color:var(--ink3);margin:-4px 0 10px;}
 .contact-note{font-size:.66rem;color:var(--ink3);margin-top:8px;line-height:1.4;}
+.ops-note{font-size:.66rem;font-weight:700;margin-top:8px;color:var(--teal2);}
 .block-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:var(--line);}
 .block-row:last-child{border-bottom:none;}
 .block-main{flex:1;min-width:0;}
@@ -245,7 +246,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 
 <div id="screen-medico" class="screen">
   <nav>
-    <div class="nav-brand"><span class="nb1">Cons. López</span><span class="nb2">Odontología</span></div>
+    <div class="nav-brand"><span class="nb1 js-app-brand">Turnos</span><span class="nb2 js-app-sub">Odontología</span></div>
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
@@ -314,6 +315,9 @@ textarea.inp{resize:vertical;min-height:72px;}
   <div id="p-medico-config" class="pane">
     <p class="sh">Datos del consultorio</p>
     <div class="form-card" style="margin-bottom:14px;">
+      <label class="lbl">Nombre de la app / marca</label>
+      <input class="inp" id="cfg-brand" placeholder="Turnos">
+      <p class="hint" style="margin-top:-8px;">Podés cambiarlo más adelante sin modificar el módulo de turnos.</p>
       <label class="lbl">Nombre del profesional</label>
       <input class="inp" id="cfg-nombre" placeholder="Dr. José A. López">
       <label class="lbl">Nombre del consultorio</label>
@@ -366,7 +370,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 
 <div id="screen-paciente" class="screen">
   <nav>
-    <div class="nav-brand"><span class="nb1">Cons. López</span><span class="nb2">Odontología</span></div>
+    <div class="nav-brand"><span class="nb1 js-app-brand">Turnos</span><span class="nb2 js-app-sub">Odontología</span></div>
     <span class="pill" id="pac-pill">Paciente</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
@@ -479,10 +483,26 @@ function isSlotAvailable(fecha,hora,excludeId=null){return availableSlots(fecha,
 function consultorioInfo(){
   const c=getCfg();
   return {
+    brand:c.brand||'Turnos',
     nombre:c.nombre||'Dr. José A. López',
     consultorio:c.consultorio||'Consultorio Odontológico',
     dir:c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela'
   };
+}
+function applyBranding(){
+  const c=consultorioInfo();
+  document.title=c.brand;
+  document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=c.brand);
+  document.querySelectorAll('.js-app-sub').forEach(el=>el.textContent=c.consultorio);
+}
+function dayDistance(fecha){
+  const a=dp(today()),b=dp(fecha);
+  return Math.round((b-a)/86400000);
+}
+function reminderNeeded(t){
+  if(!t||t.estado!=='pendiente'||t.waOpenedAt)return false;
+  const d=dayDistance(t.fecha);
+  return d>=0&&d<=1;
 }
 function openWhatsApp(turnoId){
   const t=turnoById(turnoId);if(!t)return;
@@ -526,8 +546,8 @@ function doLogin(){
 
 function logout(){me={};scr('login');}
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
-function goMed(){scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
-function goPac(){scr('paciente');renderMT();renderCalPac();renderHist();}
+function goMed(){applyBranding();scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
+function goPac(){applyBranding();scr('paciente');renderMT();renderCalPac();renderHist();}
 
 function tab(sc,id,btn){
   const pfx=`p-${sc}-`;
@@ -587,6 +607,7 @@ function renderAgenda(){
       <div class="aitem-time">${t.hora} hs</div>
       <div class="aitem-name">${pac.nombre}</div>
       ${t.motivo?`<div class="aitem-motivo">${t.motivo}</div>`:''}
+      ${reminderNeeded(t)?`<div class="ops-note">Recordatorio pendiente</div>`:''}
       ${t.waOpenedAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
         <span class="tag ${tc}">${tl}</span>
@@ -806,6 +827,7 @@ function saveCfg(v){localStorage.setItem('cl_cfg',JSON.stringify(v));}
 
 function cargarConfig(){
 const c=getCfg();
+$('cfg-brand').value=c.brand||'Turnos';
 $('cfg-nombre').value=c.nombre||'Dr. José A. López';
 $('cfg-consultorio').value=c.consultorio||'Consultorio Odontológico';
 $('cfg-dir').value=c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela';
@@ -850,11 +872,12 @@ renderAvailabilityBlocks();renderCal('med');renderAgenda();toast('Bloqueo quitad
 
 function guardarConfig(){
 const c=getCfg();
+c.brand=$('cfg-brand').value.trim()||'Turnos';
 c.nombre=$('cfg-nombre').value.trim()||c.nombre;
 c.consultorio=$('cfg-consultorio').value.trim()||c.consultorio;
 c.dir=$('cfg-dir').value.trim()||c.dir;
 c.tel=$('cfg-tel').value.trim();
-saveCfg(c);
+saveCfg(c);applyBranding();
 toast('Datos guardados ✓');
 }
 
@@ -911,8 +934,14 @@ const hoy=today();
 const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&t.estado!=='cancelado').sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
 const el=$('mt-view');
 if(!prox.length){el.innerHTML=`<div class="empty"><div class="ei">🦷</div><p>Sin turnos próximos</p><small>Sacá un turno desde "Sacar turno"</small></div>`;return;}
-const t=prox[0];const d=dp(t.fecha);
-el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">Boulevar Hipólito Yrigoyen 69</p> <p style="font-size:.8rem;color:var(--ink3);">Local 8 — Edificio Gacela</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} <div class="modal-actions"><button class="btn-main" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
+const t=prox[0];const d=dp(t.fecha);const c=consultorioInfo();
+el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">${escHtml(c.dir)}</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} ${t.estado==='pendiente'?`<button class="btn-main" style="margin-bottom:8px;" onclick="confirmarPropioT('${t.id}')">Confirmar asistencia</button>`:''} <div class="modal-actions"><button class="btn-main soft" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
+}
+function confirmarPropioT(id){
+  const prev=turnoById(id);if(!prev||prev.estado!=='pendiente')return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'confirmado',confirmadoPor:'paciente',confirmadoAt:new Date().toISOString()}:t));
+  recordEvent('appointment_confirmed',{turnoId:id,source:'patient'});
+  renderMT();toast('Asistencia confirmada ✓');
 }
 function cancelarPropioT(id){
   if(!confirm('¿Cancelar?'))return;
