@@ -488,6 +488,9 @@ function toast(msg,d=2400){const t=$('toast');t.textContent=msg;t.classList.add(
 function dk(d){return d.toISOString().slice(0,10);}
 function today(){return dk(new Date());}
 function dp(s){return new Date(s+'T12:00:00');}
+function nowHM(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function normalizePhone(v){return String(v||'').replace(/\D/g,'');}
+function validPhone(v){const n=normalizePhone(v);return n.length>=8&&n.length<=16;}
 const DN=['L','M','M','J','V','S','D'];
 const MO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const ML=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -502,10 +505,11 @@ function turnoById(id){return DB.t().find(t=>t.id===id);}
 function blocksFor(fecha){return DB.b().filter(b=>b.fecha===fecha);}
 function isDayBlocked(fecha){return blocksFor(fecha).some(b=>!b.hora);}
 function availableSlots(fecha,excludeId=null){
-  if(isDayBlocked(fecha))return[];
+  if(!fecha||fecha<today()||isDayBlocked(fecha))return[];
   const used=new Set(DB.t().filter(t=>t.fecha===fecha&&t.estado!=='cancelado'&&t.id!==excludeId).map(t=>t.hora));
   const blocked=new Set(blocksFor(fecha).filter(b=>b.hora).map(b=>b.hora));
-  return HORAS.filter(h=>!used.has(h)&&!blocked.has(h));
+  const current=fecha===today()?nowHM():null;
+  return HORAS.filter(h=>!used.has(h)&&!blocked.has(h)&&(!current||h>current));
 }
 function isSlotAvailable(fecha,hora,excludeId=null){return availableSlots(fecha,excludeId).includes(hora);}
 function consultorioInfo(){
@@ -577,7 +581,7 @@ function openWhatsApp(turnoId){
 
 function openPatientWhatsApp(patientId){
   const p=DB.p().find(x=>x.id===patientId);if(!p||!p.tel){toast('Paciente sin WhatsApp');return;}
-  const n=p.tel.replace(/\D/g,'');if(!n){toast('Teléfono inválido');return;}
+  const n=normalizePhone(p.tel);if(!n){toast('Teléfono inválido');return;}
   const c=consultorioInfo();
   const msg=encodeURIComponent(`Hola ${p.nombre}, le contactamos desde *${c.consultorio}* (${c.nombre}).`);
   recordEvent('whatsapp_general_opened',{pacienteId:p.id});
@@ -602,9 +606,11 @@ function doLogin(){
   } else {
     const tel=$('l-tel').value.trim();
     if(!tel){toast('Ingresá tu teléfono');return;}
-    let ps=DB.p();let p=ps.find(x=>x.tel===tel);
+    if(!validPhone(tel)){toast('Ingresá un teléfono válido');return;}
+    const telKey=normalizePhone(tel);
+    let ps=DB.p();let p=ps.find(x=>normalizePhone(x.tel)===telKey);
     if(!p){p={id:Date.now(),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
-    else{p.nombre=nom;}
+    else{p.nombre=nom;p.tel=tel;}
     DB.sp(ps);me={role:'paciente',...p};
     $('pac-pill').textContent=nom.split(' ')[0];
     goPac();
@@ -672,7 +678,7 @@ function renderOpsQueue(){
     const d=dayDistance(t.fecha);
     const when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
     const state=t.recordatorioAt?'Recordado · esperando confirmación':'Recordatorio pendiente';
-    const waN=(p.tel||'').replace(/\D/g,'');
+    const waN=normalizePhone(p.tel);
     return`<div class="aitem" style="padding:13px 15px;">
       <div class="aitem-time">${when} · ${t.hora} hs</div>
       <div class="aitem-name">${escHtml(p.nombre)}</div>
@@ -697,7 +703,7 @@ function renderAgenda(){
     const pac=pacs.find(p=>p.id===t.pacienteId)||{nombre:'—',tel:''};
     const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
     const tl={c:'Confirmado',p:'Pendiente',x:'Cancelado'}[tc];
-    const waN=(pac.tel||'').replace(/\D/g,'');
+    const waN=normalizePhone(pac.tel);
     return`<div class="aitem">
       <div class="aitem-time">${t.hora} hs</div>
       <div class="aitem-name">${pac.nombre}</div>
@@ -756,7 +762,7 @@ function confirmReprogram(){
   const fecha=$('reprog-fecha').value;
   if(!fecha||fecha<today()){toast('Elegí una fecha válida');return;}
   if(!reprogHora){toast('Elegí un horario');return;}
-  if(!isSlotAvailable(fecha,reprogHora,t.id)){toast('Ese horario acaba de ocuparse');renderReprogSlots();return;}
+  if(!isSlotAvailable(fecha,reprogHora,t.id)){toast('Ese horario ya no está disponible');renderReprogSlots();return;}
   const from={fecha:t.fecha,hora:t.hora,estado:t.estado};
   DB.st(DB.t().map(x=>x.id===t.id?{...x,fecha,hora:reprogHora,estado:'pendiente',reprogramado:new Date().toISOString()}:x));
   recordEvent('appointment_rescheduled',{turnoId:t.id,from,to:{fecha,hora:reprogHora,estado:'pendiente'}});
@@ -786,7 +792,7 @@ function renderPacs(){
 function verFicha(id){
   const p=DB.p().find(x=>x.id===id);if(!p)return;
   const ts=DB.t().filter(t=>t.pacienteId===id).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const waN=(p.tel||'').replace(/\D/g,'');
+  const waN=normalizePhone(p.tel);
   const archivos=p.archivos||[];
 
   $('m-ficha-body').innerHTML=`
@@ -892,7 +898,8 @@ refreshFileList(id,ps[i].archivos);toast('Archivo eliminado');
 // ── NUEVO TURNO MED ──
 function fillNT(){
 $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-if(!$('nt-fecha').value)$('nt-fecha').value=today();
+$('nt-fecha').min=today();
+if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
 fillNTHoras();
 }
 function fillNTHoras(){
@@ -904,6 +911,7 @@ const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
 const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();
 if(!pacId){toast('Seleccioná un paciente');return;}
 if(!fecha){toast('Elegí una fecha');return;}
+if(fecha<today()){toast('No se pueden crear turnos en una fecha pasada');return;}
 if(!hora){toast('No hay horarios disponibles');return;}
 if(!isSlotAvailable(fecha,hora)){toast('Horario ya ocupado o bloqueado');fillNTHoras();return;}
 const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,estado:'pendiente',creado:new Date().toISOString()};
@@ -1111,8 +1119,13 @@ function renderCalPac(){renderCal('pac');renderSlots();}
 function renderSlots(){
 const key=selDate||today();
 const avail=new Set(availableSlots(key));
-if(!avail.size&&isDayBlocked(key)){
-  $('slots').innerHTML='<div class="empty" style="grid-column:1/-1;padding:28px 10px;"><p>Consultorio no disponible este día</p><small>Elegí otra fecha</small></div>';
+if(!avail.size){
+  const past=key<today();
+  const closed=isDayBlocked(key);
+  const msg=past?'La fecha ya pasó':closed?'Consultorio no disponible este día':'No quedan horarios disponibles';
+  const sub=past?'Elegí una fecha futura':closed?'Elegí otra fecha':'Probá con otro día';
+  $('slots').innerHTML=`<div class="empty" style="grid-column:1/-1;padding:28px 10px;"><p>${msg}</p><small>${sub}</small></div>`;
+  $('confirm-wrap').style.display='none';selSlot=null;
   return;
 }
 $('slots').innerHTML=HORAS.map(h=>{
@@ -1128,6 +1141,7 @@ $('confirm-wrap').style.display='block';
 }
 function confirmarPac(){
 const key=selDate||today();
+if(key<today()){toast('Elegí una fecha futura');return;}
 if(!selSlot){toast('Elegí un horario');return;}
 if(!isSlotAvailable(key,selSlot)){toast('Ese horario acaba de ocuparse');renderSlots();return;}
 const nuevo={id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),estado:'pendiente',creado:new Date().toISOString()};
