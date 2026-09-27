@@ -18,8 +18,9 @@ La palabra **Turnos** es un nombre funcional interno. La marca visible es config
 6. Abrir WhatsApp no significa que el mensaje fue enviado, recibido o leído.
 7. El estado `recordatorioAt` solo se establece por una acción explícita del operador.
 8. Reprogramar devuelve el turno a `pendiente`.
-9. La marca/UI no forma parte de la identidad del dominio.
-10. DAHZEA no es una dependencia de ejecución.
+9. `atendido` y `ausente` son estados terminales operativos; no deben volver a recordatorios ni a la vista de próximo turno.
+10. La marca/UI no forma parte de la identidad del dominio.
+11. DAHZEA no es una dependencia de ejecución.
 
 ## Entidades actuales
 
@@ -42,7 +43,7 @@ Campos principales:
 - `fecha` (`YYYY-MM-DD`)
 - `hora` (`HH:MM`)
 - `motivo`
-- `estado`: `pendiente | confirmado | cancelado`
+- `estado`: `pendiente | confirmado | cancelado | atendido | ausente`
 - `creado`
 
 Metadatos operativos opcionales:
@@ -77,6 +78,7 @@ Se conservan los últimos 300 eventos en el prototipo local.
 - Confirmar turno.
 - Cancelar turno.
 - Reprogramar turno.
+- Cerrar atención como `atendido` o `ausente`.
 - Agregar/quitar bloqueo de disponibilidad.
 - Construir recordatorio WhatsApp.
 - Marcar recordatorio como enviado por el operador.
