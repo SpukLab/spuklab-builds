@@ -107,6 +107,8 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .tag.p{background:var(--s-wait-bg);color:var(--s-wait);}
 .tag.c{background:var(--s-ok-bg);color:var(--s-ok);}
 .tag.x{background:var(--s-off-bg);color:var(--s-off);}
+.tag.a{background:var(--teal-light);color:var(--teal2);}
+.tag.n{background:var(--s-off-bg);color:var(--ink2);}
 
 /* MICRO BTN */
 .mb{padding:6px 13px;font-size:.71rem;font-weight:600;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid;transition:opacity .15s;}
@@ -515,6 +517,16 @@ function openM(id){$(id).classList.add('on');}
 function closeM(id){$(id).classList.remove('on');}
 
 function turnoById(id){return DB.t().find(t=>t.id===id);}
+function isOpenAppointment(t){return !!t&&['pendiente','confirmado'].includes(t.estado);}
+function statusMeta(estado){
+  return {
+    pendiente:{cls:'p',label:'Pendiente'},
+    confirmado:{cls:'c',label:'Confirmado'},
+    cancelado:{cls:'x',label:'Cancelado'},
+    atendido:{cls:'a',label:'Atendido'},
+    ausente:{cls:'n',label:'No asistió'}
+  }[estado]||{cls:'p',label:estado||'Pendiente'};
+}
 function blocksFor(fecha){return DB.b().filter(b=>b.fecha===fecha);}
 function isDayBlocked(fecha){return blocksFor(fecha).some(b=>!b.hora);}
 function availableSlots(fecha,excludeId=null){
@@ -714,8 +726,7 @@ function renderAgenda(){
   if(!ts.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div><p>Sin turnos este día</p><small>Seleccioná otro día o creá un turno</small></div>`;return;}
   el.innerHTML=ts.map(t=>{
     const pac=pacs.find(p=>p.id===t.pacienteId)||{nombre:'—',tel:''};
-    const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
-    const tl={c:'Confirmado',p:'Pendiente',x:'Cancelado'}[tc];
+    const sm=statusMeta(t.estado),tc=sm.cls,tl=sm.label;
     const waN=normalizePhone(pac.tel);
     return`<div class="aitem">
       <div class="aitem-time">${t.hora} hs</div>
@@ -728,10 +739,11 @@ function renderAgenda(){
         <span class="tag ${tc}">${tl}</span>
         <div class="aitem-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
-          ${t.estado!=='cancelado'?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
-          ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+          ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
+          ${isOpenAppointment(t)?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
+          ${isOpenAppointment(t)&&waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
           ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
-          ${t.estado!=='cancelado'?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
+          ${isOpenAppointment(t)?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
         </div>
       </div>
     </div>`;
@@ -745,13 +757,22 @@ function setEstado(id,e){
   renderAgenda();renderStats();toast('Actualizado');
 }
 function cancelTurno(id){
-  const prev=turnoById(id);if(!prev)return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));
+  const prev=turnoById(id);if(!isOpenAppointment(prev))return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado',cerradoAt:new Date().toISOString()}:t));
   recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado});
   renderAgenda();renderStats();renderCal('med');toast('Cancelado');
 }
+function closeAppointment(id,outcome){
+  if(!['atendido','ausente'].includes(outcome))return;
+  const prev=turnoById(id);if(!isOpenAppointment(prev))return;
+  const now=new Date().toISOString();
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:outcome,cerradoAt:now}:t));
+  recordEvent('appointment_closed',{turnoId:id,from:prev.estado,outcome});
+  renderAgenda();renderStats();renderCal('med');
+  toast(outcome==='atendido'?'Marcado como atendido ✓':'Marcado como no asistió');
+}
 function openReprogram(id){
-  const t=turnoById(id);if(!t||t.estado==='cancelado')return;
+  const t=turnoById(id);if(!isOpenAppointment(t))return;
   reprogTurnoId=id;reprogHora=t.hora;
   $('reprog-current').textContent=`Actual: ${fmtL(dp(t.fecha))} · ${t.hora} hs`;
   $('reprog-fecha').min=today();
@@ -847,10 +868,10 @@ function verFicha(id){
 <hr class="divider">
 <p class="sh">Turnos (${ts.length})</p>
 ${ts.length?ts.slice(0,6).map(t=>{
-  const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
+  const sm=statusMeta(t.estado);
   return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:var(--line);font-size:.79rem;">
     <span style="color:var(--ink2);">${t.fecha} · ${t.hora}${t.motivo?' — '+t.motivo:''}</span>
-    <span class="tag ${tc}">${t.estado}</span>
+    <span class="tag ${sm.cls}">${sm.label}</span>
   </div>`;
 }).join(''):`<p style="font-size:.79rem;color:var(--ink3);">Sin turnos aún.</p>`}
 <button class="btn-main soft" style="margin-top:20px;" onclick="closeM('m-ficha')">Cerrar</button>`;
@@ -1157,7 +1178,7 @@ toast('Descarga iniciada ✓');
 // ── PACIENTE: MI TURNO ──
 function renderMT(){
 const hoy=today();
-const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&t.estado!=='cancelado').sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&isOpenAppointment(t)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
 const el=$('mt-view');
 if(!prox.length){el.innerHTML=`<div class="empty"><div class="ei">🦷</div><p>Sin turnos próximos</p><small>Sacá un turno desde "Sacar turno"</small></div>`;return;}
 const t=prox[0];const d=dp(t.fecha);const c=consultorioInfo();
@@ -1171,8 +1192,8 @@ function confirmarPropioT(id){
 }
 function cancelarPropioT(id){
   if(!confirm('¿Cancelar?'))return;
-  const prev=turnoById(id);if(!prev)return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));
+  const prev=turnoById(id);if(!isOpenAppointment(prev))return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado',cerradoAt:new Date().toISOString()}:t));
   recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado,source:'patient'});
   renderMT();renderHist();renderCalPac();toast('Turno cancelado');
 }
@@ -1219,12 +1240,12 @@ document.querySelector('#screen-paciente .tab').classList.add('on');
 
 function renderHist(){
 const hoy=today();
-const ps=DB.t().filter(t=>t.pacienteId===me.id&&(t.fecha<hoy||t.estado==='cancelado')).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+const ps=DB.t().filter(t=>t.pacienteId===me.id&&(t.fecha<hoy||['cancelado','atendido','ausente'].includes(t.estado))).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
 const el=$('hist-list');
 if(!ps.length){el.innerHTML=`<div class="empty"><div class="ei">📂</div><p>Sin historial aún</p></div>`;return;}
 el.innerHTML=ps.map(t=>{
-const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
-return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora}</div>${t.motivo?`<div class="hm">${t.motivo}</div>`:''}</div> <span class="tag ${tc}">${t.estado}</span> </div>`;
+const sm=statusMeta(t.estado);
+return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora}</div>${t.motivo?`<div class="hm">${t.motivo}</div>`:''}</div> <span class="tag ${sm.cls}">${sm.label}</span> </div>`;
 }).join('');
 }
 
