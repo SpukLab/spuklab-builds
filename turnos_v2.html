@@ -197,6 +197,11 @@ textarea.inp{resize:vertical;min-height:72px;}
 
 /* EXCEL BTN */
 .excel-row{display:flex;justify-content:flex-end;margin-bottom:14px;}
+
+/* REPROGRAM */
+.reprog-current{background:var(--teal-light);border:var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;font-size:.8rem;color:var(--ink2);line-height:1.5;}
+.modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;}
+.slot-note{font-size:.7rem;color:var(--ink3);margin:-4px 0 10px;}
 </style>
 
 </head>
@@ -374,11 +379,28 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 </div>
 
+<div class="overlay" id="m-reprogram" onclick="closeM('m-reprogram')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <h3>Reprogramar turno</h3>
+    <div class="reprog-current" id="reprog-current"></div>
+    <label class="lbl">Nueva fecha</label>
+    <input class="inp" type="date" id="reprog-fecha" onchange="renderReprogSlots()">
+    <p class="sh">Horario disponible</p>
+    <p class="slot-note">El horario actual queda disponible durante esta edición.</p>
+    <div class="slots-grid" id="reprog-slots"></div>
+    <div class="modal-actions">
+      <button class="btn-main soft" onclick="closeM('m-reprogram')">Cancelar</button>
+      <button class="btn-main" onclick="confirmReprogram()">Guardar cambio</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 // TURNOS SATELLITE BOUNDARY: standalone prototype. No DAHZEA runtime dependency; WhatsApp remains an external channel adapter.
-let role='medico', me={}, wkOff=0, selDate=null, selSlot=null;
+let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
 const PASS='1234';
 const HORAS=['08:30','09:00','09:30','10:00','10:30','11:00','11:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
 const CONSULT='Consultorio Odontológico Dr. José A. López\nBv. H. Yrigoyen 69, local 8 — Edif. Gacela';
@@ -388,7 +410,15 @@ const DB={
   p:()=>{try{return JSON.parse(localStorage.getItem('cl_p'))||[]}catch{return[]}},
   st:v=>localStorage.setItem('cl_t',JSON.stringify(v)),
   sp:v=>localStorage.setItem('cl_p',JSON.stringify(v)),
+  e:()=>{try{return JSON.parse(localStorage.getItem('cl_events'))||[]}catch{return[]}},
+  se:v=>localStorage.setItem('cl_events',JSON.stringify(v)),
 };
+
+function recordEvent(type,payload={}){
+  const events=DB.e();
+  events.push({id:'E'+Date.now()+'-'+Math.random().toString(36).slice(2,7),type,at:new Date().toISOString(),actor:role,payload});
+  DB.se(events.slice(-300));
+}
 
 const $=id=>document.getElementById(id);
 function toast(msg,d=2400){const t=$('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),d);}
@@ -404,6 +434,30 @@ function ini(n){return n.split(' ').slice(0,2).map(w=>w[0]?.toUpperCase()||'').j
 function weekDays(off=0){const t=new Date();const dow=t.getDay();const mon=new Date(t);mon.setDate(t.getDate()-(dow===0?6:dow-1)+off*7);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});}
 function openM(id){$(id).classList.add('on');}
 function closeM(id){$(id).classList.remove('on');}
+
+function turnoById(id){return DB.t().find(t=>t.id===id);}
+function availableSlots(fecha,excludeId=null){
+  const used=new Set(DB.t().filter(t=>t.fecha===fecha&&t.estado!=='cancelado'&&t.id!==excludeId).map(t=>t.hora));
+  return HORAS.filter(h=>!used.has(h));
+}
+function isSlotAvailable(fecha,hora,excludeId=null){return availableSlots(fecha,excludeId).includes(hora);}
+function consultorioInfo(){
+  const c=getCfg();
+  return {
+    nombre:c.nombre||'Dr. José A. López',
+    consultorio:c.consultorio||'Consultorio Odontológico',
+    dir:c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela'
+  };
+}
+function openWhatsApp(turnoId){
+  const t=turnoById(turnoId);if(!t)return;
+  const pac=DB.p().find(p=>p.id===t.pacienteId);if(!pac||!pac.tel){toast('Paciente sin WhatsApp');return;}
+  const n=pac.tel.replace(/\D/g,'');if(!n){toast('Teléfono inválido');return;}
+  const c=consultorioInfo();
+  const msg=encodeURIComponent(`Hola ${pac.nombre} 👋\n\nLe recordamos su turno en:\n*${c.consultorio}*\n${c.nombre}\n\n📅 ${fmtL(dp(t.fecha))}\n🕐 ${t.hora} hs${t.motivo?'\n📋 '+t.motivo:''}\n📍 ${c.dir}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!`);
+  recordEvent('whatsapp_opened',{turnoId:t.id,pacienteId:pac.id});
+  window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
+}
 
 function setRole(r){
   role=r;
@@ -490,7 +544,6 @@ function renderAgenda(){
     const tc=t.estado==='confirmado'?'c':t.estado==='cancelado'?'x':'p';
     const tl={c:'Confirmado',p:'Pendiente',x:'Cancelado'}[tc];
     const waN=(pac.tel||'').replace(/\D/g,'');
-    const waM=encodeURIComponent(`Hola ${pac.nombre} 👋\n\nLe recordamos su turno en:\n*${CONSULT}*\n\n📅 ${fmtL(dp(t.fecha))}\n🕐 ${t.hora} hs${t.motivo?'\n📋 '+t.motivo:''}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!`);
     return`<div class="aitem">
       <div class="aitem-time">${t.hora} hs</div>
       <div class="aitem-name">${pac.nombre}</div>
@@ -499,7 +552,8 @@ function renderAgenda(){
         <span class="tag ${tc}">${tl}</span>
         <div class="aitem-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
-          ${waN?`<button class="mb wa" onclick="window.open('https://wa.me/${waN}?text=${waM}','_blank')">📲 WA</button>`:''}
+          ${t.estado!=='cancelado'?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
+          ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 WA</button>`:''}
           ${t.estado!=='cancelado'?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
         </div>
       </div>
@@ -507,8 +561,52 @@ function renderAgenda(){
   }).join('');
 }
 
-function setEstado(id,e){DB.st(DB.t().map(t=>t.id===id?{...t,estado:e}:t));renderAgenda();renderStats();toast('Actualizado');}
-function cancelTurno(id){DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));renderAgenda();renderStats();renderCal('med');toast('Cancelado');}
+function setEstado(id,e){
+  const prev=turnoById(id);if(!prev)return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:e}:t));
+  recordEvent('appointment_status_changed',{turnoId:id,from:prev.estado,to:e});
+  renderAgenda();renderStats();toast('Actualizado');
+}
+function cancelTurno(id){
+  const prev=turnoById(id);if(!prev)return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));
+  recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado});
+  renderAgenda();renderStats();renderCal('med');toast('Cancelado');
+}
+function openReprogram(id){
+  const t=turnoById(id);if(!t||t.estado==='cancelado')return;
+  reprogTurnoId=id;reprogHora=t.hora;
+  $('reprog-current').textContent=`Actual: ${fmtL(dp(t.fecha))} · ${t.hora} hs`;
+  $('reprog-fecha').min=today();
+  $('reprog-fecha').value=t.fecha<today()?today():t.fecha;
+  renderReprogSlots();
+  openM('m-reprogram');
+}
+function renderReprogSlots(){
+  const t=turnoById(reprogTurnoId);if(!t)return;
+  const fecha=$('reprog-fecha').value||t.fecha;
+  const avail=availableSlots(fecha,t.id);
+  if(!avail.includes(reprogHora))reprogHora=null;
+  $('reprog-slots').innerHTML=HORAS.map(h=>{
+    const free=avail.includes(h),sel=reprogHora===h;
+    return`<div class="spill${free?'':' taken'}${sel?' sel':''}" onclick="${free?`pickReprogSlot('${h}')`:''}">${h}</div>`;
+  }).join('');
+}
+function pickReprogSlot(h){reprogHora=h;renderReprogSlots();}
+function confirmReprogram(){
+  const t=turnoById(reprogTurnoId);if(!t)return;
+  const fecha=$('reprog-fecha').value;
+  if(!fecha||fecha<today()){toast('Elegí una fecha válida');return;}
+  if(!reprogHora){toast('Elegí un horario');return;}
+  if(!isSlotAvailable(fecha,reprogHora,t.id)){toast('Ese horario acaba de ocuparse');renderReprogSlots();return;}
+  const from={fecha:t.fecha,hora:t.hora,estado:t.estado};
+  DB.st(DB.t().map(x=>x.id===t.id?{...x,fecha,hora:reprogHora,estado:'pendiente',reprogramado:new Date().toISOString()}:x));
+  recordEvent('appointment_rescheduled',{turnoId:t.id,from,to:{fecha,hora:reprogHora,estado:'pendiente'}});
+  closeM('m-reprogram');reprogTurnoId=null;reprogHora=null;
+  if(me.role==='paciente'){renderMT();renderHist();renderCalPac();}
+  else{selDate=fecha;renderCal('med');renderStats();renderAgenda();}
+  toast('Turno reprogramado ✓');
+}
 
 // ── PACIENTES ──
 function renderPacs(){
@@ -645,8 +743,10 @@ const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
 const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();
 if(!pacId){toast('Seleccioná un paciente');return;}
 if(!fecha){toast('Elegí una fecha');return;}
-if(DB.t().find(t=>t.fecha===fecha&&t.hora===hora&&t.estado!=='cancelado')){toast('Horario ya ocupado');return;}
-DB.st([...DB.t(),{id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,estado:'pendiente',creado:new Date().toISOString()}]);
+if(!isSlotAvailable(fecha,hora)){toast('Horario ya ocupado');return;}
+const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,estado:'pendiente',creado:new Date().toISOString()};
+DB.st([...DB.t(),nuevo]);
+recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:pacId,fecha,hora,source:'professional'});
 toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
 document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
 document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
@@ -731,16 +831,22 @@ const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&t.estado!=='canc
 const el=$('mt-view');
 if(!prox.length){el.innerHTML=`<div class="empty"><div class="ei">🦷</div><p>Sin turnos próximos</p><small>Sacá un turno desde "Sacar turno"</small></div>`;return;}
 const t=prox[0];const d=dp(t.fecha);
-el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">Boulevar Hipólito Yrigoyen 69</p> <p style="font-size:.8rem;color:var(--ink3);">Local 8 — Edificio Gacela</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} <button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar este turno</button>`;
+el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">Boulevar Hipólito Yrigoyen 69</p> <p style="font-size:.8rem;color:var(--ink3);">Local 8 — Edificio Gacela</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} <div class="modal-actions"><button class="btn-main" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
 }
-function cancelarPropioT(id){if(!confirm('¿Cancelar?'))return;DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));renderMT();toast('Turno cancelado');}
+function cancelarPropioT(id){
+  if(!confirm('¿Cancelar?'))return;
+  const prev=turnoById(id);if(!prev)return;
+  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado'}:t));
+  recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado,source:'patient'});
+  renderMT();renderHist();renderCalPac();toast('Turno cancelado');
+}
 
 function renderCalPac(){renderCal('pac');renderSlots();}
 function renderSlots(){
 const key=selDate||today();
-const taken=DB.t().filter(t=>t.fecha===key&&t.estado!=='cancelado').map(t=>t.hora);
+const avail=new Set(availableSlots(key));
 $('slots').innerHTML=HORAS.map(h=>{
-const tk=taken.includes(h);const sl=selSlot===h;
+const tk=!avail.has(h);const sl=selSlot===h;
 return`<div class="spill${tk?' taken':''}${sl?' sel':''}" onclick="pickSlot('${h}')">${h}</div>`;
 }).join('');
 }
@@ -753,7 +859,10 @@ $('confirm-wrap').style.display='block';
 function confirmarPac(){
 const key=selDate||today();
 if(!selSlot){toast('Elegí un horario');return;}
-DB.st([...DB.t(),{id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),estado:'pendiente',creado:new Date().toISOString()}]);
+if(!isSlotAvailable(key,selSlot)){toast('Ese horario acaba de ocuparse');renderSlots();return;}
+const nuevo={id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),estado:'pendiente',creado:new Date().toISOString()};
+DB.st([...DB.t(),nuevo]);
+recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:me.id,fecha:key,hora:selSlot,source:'patient'});
 selSlot=null;$('confirm-wrap').style.display='none';$('pac-motivo').value='';
 toast('Turno solicitado ✓');renderMT();renderHist();
 document.querySelectorAll('#screen-paciente .tab').forEach(e=>e.classList.remove('on'));
