@@ -314,6 +314,19 @@ textarea.inp{resize:vertical;min-height:72px;}
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Un archivo con turnos y pacientes combinados, listo para abrir en Excel.</p>
       <button class="btn-main excel" onclick="exportExcel('completo')">⬇ Descargar reporte_completo.csv</button>
     </div>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Registro operativo</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Historial técnico de creación, cambios, recordatorios y acciones de WhatsApp.</p>
+      <button class="btn-main excel" onclick="exportEventsCSV()">⬇ Descargar eventos.csv</button>
+    </div>
+
+    <p class="sh">Diagnóstico local</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Revisa inconsistencias sin modificar datos: teléfonos duplicados, turnos huérfanos, dobles reservas y conflictos con bloqueos.</p>
+      <button class="btn-main soft" onclick="runIntegrityCheck()">Ejecutar diagnóstico</button>
+      <div id="integrity-result" style="margin-top:14px;"></div>
+    </div>
+
     <p class="sh">Respaldo local</p>
     <div class="form-card">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Backup de la app</p>
@@ -1065,6 +1078,55 @@ function csvEsc(v){const s=String(v??'');return s.includes(',')||s.includes('"')
 function downloadCSV(filename,rows){
 const csv=rows.map(r=>r.map(csvEsc).join(',')).join('\n');
 downloadText(filename,'\uFEFF'+csv,'text/csv');
+}
+
+function exportEventsCSV(){
+const rows=[['Fecha','Tipo','Actor','Payload']];
+DB.e().forEach(e=>rows.push([e.at||'',e.type||'',e.actor||'',JSON.stringify(e.payload||{})]));
+downloadCSV('eventos.csv',rows);
+toast('Descarga iniciada ✓');
+}
+
+function integrityIssues(){
+const ps=DB.p(),ts=DB.t(),blocks=DB.b(),issues=[];
+const pids=new Set(ps.map(p=>String(p.id)));
+const byPhone=new Map();
+ps.forEach(p=>{
+  const key=normalizePhone(p.tel);
+  if(!key)return;
+  if(!byPhone.has(key))byPhone.set(key,[]);
+  byPhone.get(key).push(p);
+});
+byPhone.forEach((arr,key)=>{if(arr.length>1)issues.push({level:'warn',code:'duplicate_phone',text:`Teléfono duplicado: ${key} (${arr.length} pacientes)`});});
+
+ts.forEach(t=>{
+  if(!pids.has(String(t.pacienteId)))issues.push({level:'bad',code:'orphan_appointment',text:`Turno ${t.id} sin paciente asociado`});
+  if(t.estado!=='cancelado'&&!HORAS.includes(t.hora))issues.push({level:'warn',code:'unknown_slot',text:`Turno ${t.id} usa horario no configurado (${t.hora})`});
+  if(t.estado!=='cancelado'){
+    const blocked=blocks.some(b=>b.fecha===t.fecha&&(!b.hora||b.hora===t.hora));
+    if(blocked)issues.push({level:'warn',code:'blocked_conflict',text:`Turno ${t.id} coincide con un bloqueo (${t.fecha} ${t.hora})`});
+  }
+});
+
+const active=ts.filter(t=>t.estado!=='cancelado');
+const slots=new Map();
+active.forEach(t=>{
+  const key=t.fecha+'|'+t.hora;
+  if(!slots.has(key))slots.set(key,[]);
+  slots.get(key).push(t);
+});
+slots.forEach((arr,key)=>{if(arr.length>1)issues.push({level:'bad',code:'double_booking',text:`Doble reserva en ${key.replace('|',' ')} (${arr.length} turnos)`});});
+return issues;
+}
+function runIntegrityCheck(){
+const el=$('integrity-result');if(!el)return;
+const issues=integrityIssues();
+recordEvent('integrity_check_run',{issues:issues.length});
+if(!issues.length){
+  el.innerHTML='<div class="contact-note" style="font-size:.75rem;">✓ Sin inconsistencias detectadas.</div>';
+  return;
+}
+el.innerHTML=issues.map(i=>`<div class="${i.level==='bad'?'ops-note':'contact-note'}" style="margin:7px 0;">${i.level==='bad'?'⚠':'•'} ${escHtml(i.text)}</div>`).join('');
 }
 
 function exportExcel(tipo){
