@@ -309,10 +309,18 @@ textarea.inp{resize:vertical;min-height:72px;}
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Lista de pacientes con nombre, teléfono, observaciones y cantidad de turnos.</p>
       <button class="btn-main excel" onclick="exportExcel('pacientes')">⬇ Descargar pacientes.csv</button>
     </div>
-    <div class="form-card">
+    <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Completo</p>
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Un archivo con turnos y pacientes combinados, listo para abrir en Excel.</p>
       <button class="btn-main excel" onclick="exportExcel('completo')">⬇ Descargar reporte_completo.csv</button>
+    </div>
+    <p class="sh">Respaldo local</p>
+    <div class="form-card">
+      <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Backup de la app</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Guarda pacientes, turnos, bloqueos, configuración y registro operativo en un archivo JSON. La clave de acceso no se exporta. El archivo puede contener datos privados: guardalo en un lugar seguro.</p>
+      <button class="btn-main" onclick="exportBackup()">⬇ Descargar backup</button>
+      <button class="btn-main soft" style="margin-top:8px;" onclick="document.getElementById('restore-input').click()">Restaurar backup</button>
+      <input type="file" id="restore-input" accept=".json,application/json" style="display:none" onchange="restoreBackup(this)">
     </div>
   </div>
 
@@ -992,13 +1000,63 @@ $('cfg-clave-actual').value='';$('cfg-clave-nueva').value='';$('cfg-clave-rep').
 toast('Clave actualizada ✓');
 }
 
-// ── CONFIG ──
+// ── RESPALDO / PORTABILIDAD ──
+const BACKUP_SCHEMA='turnos-local-backup';
+const BACKUP_VERSION=1;
+function downloadText(filename,text,type='application/json'){
+  const blob=new Blob([text],{type:type+';charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function exportBackup(){
+  const cfg={...getCfg()};delete cfg.clave;
+  const payload={
+    schema:BACKUP_SCHEMA,
+    version:BACKUP_VERSION,
+    exportedAt:new Date().toISOString(),
+    data:{patients:DB.p(),appointments:DB.t(),blocks:DB.b(),events:DB.e(),config:cfg}
+  };
+  const stamp=new Date().toISOString().slice(0,10);
+  downloadText(`turnos-backup-${stamp}.json`,JSON.stringify(payload,null,2));
+  recordEvent('backup_exported',{version:BACKUP_VERSION});
+  toast('Backup descargado ✓');
+}
+function validateBackupPayload(x){
+  if(!x||x.schema!==BACKUP_SCHEMA||x.version!==BACKUP_VERSION||!x.data)return 'Formato de backup no reconocido';
+  if(!Array.isArray(x.data.patients)||!Array.isArray(x.data.appointments)||!Array.isArray(x.data.blocks)||!Array.isArray(x.data.events))return 'Backup incompleto';
+  if(!x.data.config||typeof x.data.config!=='object'||Array.isArray(x.data.config))return 'Configuración inválida';
+  return '';
+}
+function restoreBackup(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const payload=JSON.parse(reader.result);
+      const err=validateBackupPayload(payload);if(err){toast(err,3200);return;}
+      if(!confirm('Restaurar este backup reemplazará los datos locales actuales. ¿Continuar?'))return;
+      const currentClave=getCfg().clave;
+      DB.sp(payload.data.patients);
+      DB.st(payload.data.appointments);
+      DB.sb(payload.data.blocks);
+      DB.se(payload.data.events.slice(-300));
+      saveCfg({...payload.data.config,...(currentClave?{clave:currentClave}:{})});
+      recordEvent('backup_restored',{version:payload.version,exportedAt:payload.exportedAt||null});
+      applyBranding();selDate=null;selSlot=null;
+      if(me.role==='medico'){renderCal('med');renderStats();renderAgenda();fillNT();}
+      toast('Backup restaurado ✓',3200);
+    }catch(e){toast('No se pudo leer el backup',3200);}
+    finally{input.value='';}
+  };
+  reader.onerror=()=>{toast('No se pudo leer el archivo',3200);input.value='';};
+  reader.readAsText(file);
+}
+
+// ── EXPORTACIONES CSV ──
 function csvEsc(v){const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;}
 function downloadCSV(filename,rows){
 const csv=rows.map(r=>r.map(csvEsc).join(',')).join('\n');
-const bom='\uFEFF';
-const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
-const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+downloadText(filename,'\uFEFF'+csv,'text/csv');
 }
 
 function exportExcel(tipo){
