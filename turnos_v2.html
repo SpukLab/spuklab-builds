@@ -202,6 +202,13 @@ textarea.inp{resize:vertical;min-height:72px;}
 .reprog-current{background:var(--teal-light);border:var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;font-size:.8rem;color:var(--ink2);line-height:1.5;}
 .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;}
 .slot-note{font-size:.7rem;color:var(--ink3);margin:-4px 0 10px;}
+.contact-note{font-size:.66rem;color:var(--ink3);margin-top:8px;line-height:1.4;}
+.block-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:var(--line);}
+.block-row:last-child{border-bottom:none;}
+.block-main{flex:1;min-width:0;}
+.block-title{font-size:.79rem;font-weight:600;color:var(--ink2);}
+.block-meta{font-size:.68rem;color:var(--ink3);margin-top:2px;}
+.inline-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 </style>
 
 </head>
@@ -276,7 +283,7 @@ textarea.inp{resize:vertical;min-height:72px;}
       <label class="lbl">Paciente</label>
       <select class="inp" id="nt-pac"></select>
       <label class="lbl">Fecha</label>
-      <input class="inp" type="date" id="nt-fecha">
+      <input class="inp" type="date" id="nt-fecha" onchange="fillNTHoras()">
       <label class="lbl">Horario</label>
       <select class="inp" id="nt-hora"></select>
       <label class="lbl">Motivo (opcional)</label>
@@ -317,6 +324,28 @@ textarea.inp{resize:vertical;min-height:72px;}
       <input class="inp" id="cfg-tel" placeholder="+54 9 11 0000-0000">
       <button class="btn-main" onclick="guardarConfig()">Guardar datos</button>
     </div>
+
+    <p class="sh">Disponibilidad</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Bloqueá un día completo o un horario puntual. Los turnos existentes no se eliminan: el bloqueo solo impide nuevas reservas y reprogramaciones.</p>
+      <div class="inline-grid">
+        <div>
+          <label class="lbl">Fecha</label>
+          <input class="inp" type="date" id="cfg-block-fecha">
+        </div>
+        <div>
+          <label class="lbl">Alcance</label>
+          <select class="inp" id="cfg-block-hora">
+            <option value="">Día completo</option>
+          </select>
+        </div>
+      </div>
+      <label class="lbl">Motivo (opcional)</label>
+      <input class="inp" id="cfg-block-motivo" placeholder="Vacaciones, capacitación, consultorio cerrado...">
+      <button class="btn-main" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
+      <div id="cfg-block-list" style="margin-top:14px;"></div>
+    </div>
+
     <p class="sh">Seguridad</p>
     <div class="form-card">
       <label class="lbl">Clave actual</label>
@@ -412,6 +441,8 @@ const DB={
   sp:v=>localStorage.setItem('cl_p',JSON.stringify(v)),
   e:()=>{try{return JSON.parse(localStorage.getItem('cl_events'))||[]}catch{return[]}},
   se:v=>localStorage.setItem('cl_events',JSON.stringify(v)),
+  b:()=>{try{return JSON.parse(localStorage.getItem('cl_blocks'))||[]}catch{return[]}},
+  sb:v=>localStorage.setItem('cl_blocks',JSON.stringify(v)),
 };
 
 function recordEvent(type,payload={}){
@@ -436,9 +467,13 @@ function openM(id){$(id).classList.add('on');}
 function closeM(id){$(id).classList.remove('on');}
 
 function turnoById(id){return DB.t().find(t=>t.id===id);}
+function blocksFor(fecha){return DB.b().filter(b=>b.fecha===fecha);}
+function isDayBlocked(fecha){return blocksFor(fecha).some(b=>!b.hora);}
 function availableSlots(fecha,excludeId=null){
+  if(isDayBlocked(fecha))return[];
   const used=new Set(DB.t().filter(t=>t.fecha===fecha&&t.estado!=='cancelado'&&t.id!==excludeId).map(t=>t.hora));
-  return HORAS.filter(h=>!used.has(h));
+  const blocked=new Set(blocksFor(fecha).filter(b=>b.hora).map(b=>b.hora));
+  return HORAS.filter(h=>!used.has(h)&&!blocked.has(h));
 }
 function isSlotAvailable(fecha,hora,excludeId=null){return availableSlots(fecha,excludeId).includes(hora);}
 function consultorioInfo(){
@@ -455,7 +490,10 @@ function openWhatsApp(turnoId){
   const n=pac.tel.replace(/\D/g,'');if(!n){toast('Teléfono inválido');return;}
   const c=consultorioInfo();
   const msg=encodeURIComponent(`Hola ${pac.nombre} 👋\n\nLe recordamos su turno en:\n*${c.consultorio}*\n${c.nombre}\n\n📅 ${fmtL(dp(t.fecha))}\n🕐 ${t.hora} hs${t.motivo?'\n📋 '+t.motivo:''}\n📍 ${c.dir}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!`);
+  const now=new Date().toISOString();
+  DB.st(DB.t().map(x=>x.id===t.id?{...x,waOpenedAt:now,waOpenedCount:(x.waOpenedCount||0)+1}:x));
   recordEvent('whatsapp_opened',{turnoId:t.id,pacienteId:pac.id});
+  if(me.role==='medico')renderAgenda();
   window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
 }
 
@@ -512,8 +550,9 @@ function renderCal(who){
   $(id).innerHTML=days.map((d,i)=>{
     const key=dk(d);
     const dot=DB.t().some(t=>t.fecha===key&&t.estado!=='cancelado');
+    const closed=isDayBlocked(key);
     const sel=selDate===key;
-    return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" onclick="pickDay('${key}','${who}')">
+    return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
       <div class="dn">${DN[i]}</div><div class="dd">${d.getDate()}</div>
       ${dot&&!sel?'<div class="ddot"></div>':'<div style="height:7px"></div>'}
     </div>`;
@@ -548,12 +587,13 @@ function renderAgenda(){
       <div class="aitem-time">${t.hora} hs</div>
       <div class="aitem-name">${pac.nombre}</div>
       ${t.motivo?`<div class="aitem-motivo">${t.motivo}</div>`:''}
+      ${t.waOpenedAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
         <span class="tag ${tc}">${tl}</span>
         <div class="aitem-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
           ${t.estado!=='cancelado'?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
-          ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 WA</button>`:''}
+          ${waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
           ${t.estado!=='cancelado'?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
         </div>
       </div>
@@ -735,15 +775,20 @@ refreshFileList(id,ps[i].archivos);toast('Archivo eliminado');
 // ── NUEVO TURNO MED ──
 function fillNT(){
 $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-$('nt-hora').innerHTML=HORAS.map(h=>`<option value="${h}">${h}</option>`).join('');
 if(!$('nt-fecha').value)$('nt-fecha').value=today();
+fillNTHoras();
+}
+function fillNTHoras(){
+const fecha=$('nt-fecha').value||today();const avail=availableSlots(fecha);
+$('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
 }
 function crearTurnoMed(){
 const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
 const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();
 if(!pacId){toast('Seleccioná un paciente');return;}
 if(!fecha){toast('Elegí una fecha');return;}
-if(!isSlotAvailable(fecha,hora)){toast('Horario ya ocupado');return;}
+if(!hora){toast('No hay horarios disponibles');return;}
+if(!isSlotAvailable(fecha,hora)){toast('Horario ya ocupado o bloqueado');fillNTHoras();return;}
 const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,estado:'pendiente',creado:new Date().toISOString()};
 DB.st([...DB.t(),nuevo]);
 recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:pacId,fecha,hora,source:'professional'});
@@ -765,6 +810,42 @@ $('cfg-nombre').value=c.nombre||'Dr. José A. López';
 $('cfg-consultorio').value=c.consultorio||'Consultorio Odontológico';
 $('cfg-dir').value=c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela';
 $('cfg-tel').value=c.tel||'';
+$('cfg-block-fecha').min=today();
+if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
+$('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+HORAS.map(h=>`<option value="${h}">${h}</option>`).join('');
+renderAvailabilityBlocks();
+}
+
+function renderAvailabilityBlocks(){
+const el=$('cfg-block-list');if(!el)return;
+const blocks=DB.b().slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||''));
+if(!blocks.length){el.innerHTML='<p style="font-size:.72rem;color:var(--ink3);">Sin bloqueos cargados.</p>';return;}
+el.innerHTML=blocks.map(b=>`<div class="block-row">
+  <div class="block-main">
+    <div class="block-title">${fmtL(dp(b.fecha))} · ${b.hora?b.hora+' hs':'día completo'}</div>
+    ${b.motivo?`<div class="block-meta">${escHtml(b.motivo)}</div>`:''}
+  </div>
+  <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
+</div>`).join('');
+}
+function addAvailabilityBlock(){
+const fecha=$('cfg-block-fecha').value;const hora=$('cfg-block-hora').value;const motivo=$('cfg-block-motivo').value.trim();
+if(!fecha){toast('Elegí una fecha');return;}
+if(fecha<today()){toast('La fecha ya pasó');return;}
+const blocks=DB.b();
+if(blocks.some(b=>b.fecha===fecha&&b.hora===hora)){toast('Ese bloqueo ya existe');return;}
+if(!hora&&DB.t().some(t=>t.fecha===fecha&&t.estado!=='cancelado')){
+  if(!confirm('Ese día ya tiene turnos. El bloqueo no los cancela. ¿Continuar?'))return;
+}
+const block={id:'B'+Date.now(),fecha,hora,motivo,creado:new Date().toISOString()};
+DB.sb([...blocks,block]);recordEvent('availability_block_added',{blockId:block.id,fecha,hora});
+$('cfg-block-motivo').value='';renderAvailabilityBlocks();
+renderCal('med');renderStats();renderAgenda();toast('Bloqueo agregado ✓');
+}
+function removeAvailabilityBlock(id){
+const b=DB.b().find(x=>x.id===id);if(!b)return;
+DB.sb(DB.b().filter(x=>x.id!==id));recordEvent('availability_block_removed',{blockId:id,fecha:b.fecha,hora:b.hora});
+renderAvailabilityBlocks();renderCal('med');renderAgenda();toast('Bloqueo quitado');
 }
 
 function guardarConfig(){
@@ -845,6 +926,10 @@ function renderCalPac(){renderCal('pac');renderSlots();}
 function renderSlots(){
 const key=selDate||today();
 const avail=new Set(availableSlots(key));
+if(!avail.size&&isDayBlocked(key)){
+  $('slots').innerHTML='<div class="empty" style="grid-column:1/-1;padding:28px 10px;"><p>Consultorio no disponible este día</p><small>Elegí otra fecha</small></div>';
+  return;
+}
 $('slots').innerHTML=HORAS.map(h=>{
 const tk=!avail.has(h);const sl=selSlot===h;
 return`<div class="spill${tk?' taken':''}${sl?' sel':''}" onclick="pickSlot('${h}')">${h}</div>`;
