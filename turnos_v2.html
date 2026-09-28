@@ -627,6 +627,58 @@ function availableSlots(fecha,excludeId=null,duracionMin=30,resourceId=null){
   });
 }
 function isSlotAvailable(fecha,hora,excludeId=null,duracionMin=30,resourceId=null){return availableSlots(fecha,excludeId,duracionMin,resourceId).includes(hora);}
+function domainResult(ok,code,data={},message=''){return {ok,code,...data,...(message?{message}:{})};}
+function newId(prefix){return prefix+Date.now()+'-'+Math.random().toString(36).slice(2,7);}
+const TurnosDomain={
+  listAvailability({fecha,servicioId,resourceId}={}){
+    const svc=serviceById(servicioId)||services()[0];
+    const res=resourceById(resourceId)||resources()[0];
+    if(!fecha)return domainResult(false,'invalid_date',{},'Falta fecha');
+    return domainResult(true,'availability',{fecha,service:serviceSnapshot(svc),resource:resourceSnapshot(res),slots:availableSlots(fecha,null,svc.duracionMin,res.id)});
+  },
+  createAppointment({patientId,fecha,hora,servicioId,resourceId,motivo='',source='domain'}={}){
+    const patient=DB.p().find(p=>String(p.id)===String(patientId));
+    if(!patient)return domainResult(false,'patient_not_found',{},'No existe la persona');
+    if(!fecha||fecha<today())return domainResult(false,'invalid_date',{},'Fecha inválida');
+    const svc=serviceById(servicioId)||services()[0];
+    const res=resourceById(resourceId)||resources()[0];
+    if(!hora||!isSlotAvailable(fecha,hora,null,svc.duracionMin,res.id))return domainResult(false,'slot_unavailable',{},'Horario no disponible');
+    const appointment={id:newId('T'),pacienteId:patient.id,fecha,hora,motivo:String(motivo||'').trim(),...serviceSnapshot(svc),...resourceSnapshot(res),estado:'pendiente',creado:new Date().toISOString()};
+    DB.st([...DB.t(),appointment]);
+    recordEvent('appointment_created',{turnoId:appointment.id,pacienteId:patient.id,fecha,hora,servicioId:svc.id,resourceId:res.id,source});
+    return domainResult(true,'appointment_created',{appointment});
+  },
+  confirmAppointment({id,source='domain'}={}){
+    const t=turnoById(id);if(!t)return domainResult(false,'appointment_not_found');
+    if(t.estado==='confirmado')return domainResult(true,'appointment_already_confirmed',{appointment:t});
+    if(t.estado!=='pendiente')return domainResult(false,'invalid_state',{appointment:t});
+    const now=new Date().toISOString();
+    const next={...t,estado:'confirmado',confirmadoPor:source,confirmadoAt:now};
+    DB.st(DB.t().map(x=>x.id===id?next:x));
+    recordEvent('appointment_confirmed',{turnoId:id,from:t.estado,source});
+    return domainResult(true,'appointment_confirmed',{appointment:next});
+  },
+  cancelAppointment({id,source='domain'}={}){
+    const t=turnoById(id);if(!t)return domainResult(false,'appointment_not_found');
+    if(t.estado==='cancelado')return domainResult(true,'appointment_already_cancelled',{appointment:t});
+    if(!isOpenAppointment(t))return domainResult(false,'invalid_state',{appointment:t});
+    const next={...t,estado:'cancelado',cerradoAt:new Date().toISOString()};
+    DB.st(DB.t().map(x=>x.id===id?next:x));
+    recordEvent('appointment_cancelled',{turnoId:id,from:t.estado,source});
+    return domainResult(true,'appointment_cancelled',{appointment:next});
+  },
+  rescheduleAppointment({id,fecha,hora,source='domain'}={}){
+    const t=turnoById(id);if(!t)return domainResult(false,'appointment_not_found');
+    if(!isOpenAppointment(t))return domainResult(false,'invalid_state',{appointment:t});
+    if(!fecha||fecha<today())return domainResult(false,'invalid_date');
+    if(!hora||!isSlotAvailable(fecha,hora,t.id,appointmentDuration(t),appointmentResourceId(t)))return domainResult(false,'slot_unavailable');
+    const from={fecha:t.fecha,hora:t.hora,estado:t.estado};
+    const next={...t,fecha,hora,estado:'pendiente',reprogramado:new Date().toISOString(),confirmadoAt:null,confirmadoPor:null};
+    DB.st(DB.t().map(x=>x.id===id?next:x));
+    recordEvent('appointment_rescheduled',{turnoId:id,from,to:{fecha,hora,estado:'pendiente'},source});
+    return domainResult(true,'appointment_rescheduled',{appointment:next});
+  }
+};
 function consultorioInfo(){
   const c=getCfg();
   return {
@@ -855,15 +907,18 @@ function renderAgenda(){
 }
 
 function setEstado(id,e){
-  const prev=turnoById(id);if(!prev)return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:e}:t));
-  recordEvent('appointment_status_changed',{turnoId:id,from:prev.estado,to:e});
+  if(e==='confirmado'){
+    const r=TurnosDomain.confirmAppointment({id,source:'operator'});
+    if(!r.ok){toast('No se pudo confirmar');return;}
+  }else{
+    const prev=turnoById(id);if(!prev)return;
+    DB.st(DB.t().map(t=>t.id===id?{...t,estado:e}:t));
+    recordEvent('appointment_status_changed',{turnoId:id,from:prev.estado,to:e});
+  }
   renderAgenda();renderStats();toast('Actualizado');
 }
 function cancelTurno(id){
-  const prev=turnoById(id);if(!isOpenAppointment(prev))return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado',cerradoAt:new Date().toISOString()}:t));
-  recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado});
+  const r=TurnosDomain.cancelAppointment({id,source:'operator'});if(!r.ok)return;
   renderAgenda();renderStats();renderCal('med');toast('Cancelado');
 }
 function closeAppointment(id,outcome){
@@ -900,10 +955,8 @@ function confirmReprogram(){
   const fecha=$('reprog-fecha').value;
   if(!fecha||fecha<today()){toast('Elegí una fecha válida');return;}
   if(!reprogHora){toast('Elegí un horario');return;}
-  if(!isSlotAvailable(fecha,reprogHora,t.id,appointmentDuration(t),appointmentResourceId(t))){toast('Ese horario ya no está disponible');renderReprogSlots();return;}
-  const from={fecha:t.fecha,hora:t.hora,estado:t.estado};
-  DB.st(DB.t().map(x=>x.id===t.id?{...x,fecha,hora:reprogHora,estado:'pendiente',reprogramado:new Date().toISOString()}:x));
-  recordEvent('appointment_rescheduled',{turnoId:t.id,from,to:{fecha,hora:reprogHora,estado:'pendiente'}});
+  const r=TurnosDomain.rescheduleAppointment({id:t.id,fecha,hora:reprogHora,source:me.role==='paciente'?'patient':'operator'});
+  if(!r.ok){toast(r.code==='slot_unavailable'?'Ese horario ya no está disponible':'No se pudo reprogramar');renderReprogSlots();return;}
   closeM('m-reprogram');reprogTurnoId=null;reprogHora=null;
   if(me.role==='paciente'){renderMT();renderHist();renderCalPac();}
   else{selDate=fecha;renderCal('med');renderStats();renderAgenda();}
@@ -1064,10 +1117,8 @@ if(!pacId){toast('Seleccioná un paciente');return;}
 if(!fecha){toast('Elegí una fecha');return;}
 if(fecha<today()){toast('No se pueden crear turnos en una fecha pasada');return;}
 if(!hora){toast('No hay horarios disponibles');return;}
-if(!isSlotAvailable(fecha,hora,null,svc.duracionMin,res.id)){toast('Horario ya ocupado o bloqueado');fillNTHoras();return;}
-const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,...serviceSnapshot(svc),...resourceSnapshot(res),estado:'pendiente',creado:new Date().toISOString()};
-DB.st([...DB.t(),nuevo]);
-recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:pacId,fecha,hora,source:'professional'});
+const created=TurnosDomain.createAppointment({patientId:pacId,fecha,hora,servicioId:svc.id,resourceId:res.id,motivo,source:'professional'});
+if(!created.ok){toast(created.code==='slot_unavailable'?'Horario ya ocupado o bloqueado':'No se pudo crear el turno');fillNTHoras();return;}
 toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
 document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
 document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
@@ -1372,16 +1423,12 @@ const t=prox[0];const d=dp(t.fecha);const c=consultorioInfo();
 el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs · ${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min · ${escHtml(appointmentResourceName(t))}</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">${escHtml(c.dir)}</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} ${t.estado==='pendiente'?`<button class="btn-main" style="margin-bottom:8px;" onclick="confirmarPropioT('${t.id}')">Confirmar asistencia</button>`:''} <div class="modal-actions"><button class="btn-main soft" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
 }
 function confirmarPropioT(id){
-  const prev=turnoById(id);if(!prev||prev.estado!=='pendiente')return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'confirmado',confirmadoPor:'paciente',confirmadoAt:new Date().toISOString()}:t));
-  recordEvent('appointment_confirmed',{turnoId:id,source:'patient'});
+  const r=TurnosDomain.confirmAppointment({id,source:'patient'});if(!r.ok)return;
   renderMT();toast('Asistencia confirmada ✓');
 }
 function cancelarPropioT(id){
   if(!confirm('¿Cancelar?'))return;
-  const prev=turnoById(id);if(!isOpenAppointment(prev))return;
-  DB.st(DB.t().map(t=>t.id===id?{...t,estado:'cancelado',cerradoAt:new Date().toISOString()}:t));
-  recordEvent('appointment_cancelled',{turnoId:id,from:prev.estado,source:'patient'});
+  const r=TurnosDomain.cancelAppointment({id,source:'patient'});if(!r.ok)return;
   renderMT();renderHist();renderCalPac();toast('Turno cancelado');
 }
 
@@ -1414,10 +1461,8 @@ function confirmarPac(){
 const key=selDate||today();const svc=selectedService('pac-service');const res=selectedResource('pac-resource');
 if(key<today()){toast('Elegí una fecha futura');return;}
 if(!selSlot){toast('Elegí un horario');return;}
-if(!isSlotAvailable(key,selSlot,null,svc.duracionMin,res.id)){toast('Ese horario acaba de ocuparse');renderSlots();return;}
-const nuevo={id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),...serviceSnapshot(svc),...resourceSnapshot(res),estado:'pendiente',creado:new Date().toISOString()};
-DB.st([...DB.t(),nuevo]);
-recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:me.id,fecha:key,hora:selSlot,source:'patient'});
+const created=TurnosDomain.createAppointment({patientId:me.id,fecha:key,hora:selSlot,servicioId:svc.id,resourceId:res.id,motivo:$('pac-motivo').value.trim(),source:'patient'});
+if(!created.ok){toast(created.code==='slot_unavailable'?'Ese horario acaba de ocuparse':'No se pudo crear el turno');renderSlots();return;}
 selSlot=null;$('confirm-wrap').style.display='none';$('pac-motivo').value='';
 toast('Turno solicitado ✓');renderMT();renderHist();
 document.querySelectorAll('#screen-paciente .tab').forEach(e=>e.classList.remove('on'));
