@@ -133,6 +133,8 @@ Ejemplos:
 
 La especialización futura debe resolverse mediante perfiles/terminología y campos opcionales, no mediante forks del motor de agenda.
 
+La UI ya contempla terminología configurable `Paciente` / `Cliente`; internamente se mantiene compatibilidad con el modelo existente para evitar migraciones innecesarias.
+
 ## Frontera WhatsApp
 
 WhatsApp es un adaptador de canal, no la autoridad del turno.
