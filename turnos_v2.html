@@ -291,6 +291,8 @@ textarea.inp{resize:vertical;min-height:72px;}
       <select class="inp" id="nt-pac"></select>
       <label class="lbl">Servicio</label>
       <select class="inp" id="nt-service" onchange="fillNTHoras()"></select>
+      <label class="lbl">Profesional / recurso</label>
+      <select class="inp" id="nt-resource" onchange="fillNTHoras()"></select>
       <label class="lbl">Fecha</label>
       <input class="inp" type="date" id="nt-fecha" onchange="fillNTHoras()">
       <label class="lbl">Horario</label>
@@ -379,6 +381,15 @@ textarea.inp{resize:vertical;min-height:72px;}
       <div id="cfg-service-list" style="margin-top:14px;"></div>
     </div>
 
+    <p class="sh">Profesionales / recursos</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Cada recurso tiene su propia agenda. Puede ser un odontólogo, peluquero, tatuador, box, sillón o cualquier unidad que no deba recibir dos turnos al mismo tiempo.</p>
+      <label class="lbl">Nombre</label>
+      <input class="inp" id="cfg-resource-name" placeholder="Profesional principal, Juan, Box 1...">
+      <button class="btn-main" onclick="addResource()">Agregar recurso</button>
+      <div id="cfg-resource-list" style="margin-top:14px;"></div>
+    </div>
+
     <p class="sh">Recordatorios WhatsApp</p>
     <div class="form-card" style="margin-bottom:14px;">
       <label class="lbl">Mostrar pendientes con anticipación</label>
@@ -390,7 +401,7 @@ textarea.inp{resize:vertical;min-height:72px;}
       </select>
       <label class="lbl">Plantilla del recordatorio</label>
       <textarea class="inp" id="cfg-reminder-template" style="min-height:150px;" placeholder="Hola {paciente}..."></textarea>
-      <p class="hint" style="margin-top:-8px;line-height:1.5;">Variables: {paciente}, {fecha}, {hora}, {servicio}, {motivo}, {consultorio}, {profesional}, {direccion}.</p>
+      <p class="hint" style="margin-top:-8px;line-height:1.5;">Variables: {paciente}, {fecha}, {hora}, {servicio}, {recurso}, {motivo}, {consultorio}, {profesional}, {direccion}.</p>
       <button class="btn-main soft" type="button" onclick="resetReminderTemplate()">Restablecer plantilla</button>
       <button class="btn-main" style="margin-top:8px;" type="button" onclick="guardarConfig()">Guardar recordatorios</button>
     </div>
@@ -449,6 +460,8 @@ textarea.inp{resize:vertical;min-height:72px;}
   <div id="p-paciente-sacar" class="pane">
     <p class="sh">Elegí un servicio</p>
     <select class="inp" id="pac-service" onchange="selSlot=null;document.getElementById('confirm-wrap').style.display='none';renderSlots();"></select>
+    <p class="sh">Profesional / recurso</p>
+    <select class="inp" id="pac-resource" onchange="selSlot=null;document.getElementById('confirm-wrap').style.display='none';renderSlots();"></select>
     <p class="sh">Elegí un día</p>
     <div class="cal" id="cal-pac"></div>
     <p class="sh">Horarios disponibles</p>
@@ -506,6 +519,7 @@ const PASS='1234';
 const HORAS=['08:30','09:00','09:30','10:00','10:30','11:00','11:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
 const SLOT_MINUTES=30;
 const DEFAULT_SERVICES=[{id:'S001',nombre:'Consulta',duracionMin:30,creado:'default'}];
+const DEFAULT_RESOURCES=[{id:'R001',nombre:'Profesional principal',creado:'default'}];
 const DEFAULT_REMINDER_TEMPLATE='Hola {paciente} 👋\n\nLe recordamos su turno en:\n*{consultorio}*\n{profesional}\n\n📅 {fecha}\n🕐 {hora} hs\n📌 {servicio}{motivo}\n📍 {direccion}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!';
 
 const DB={
@@ -519,6 +533,8 @@ const DB={
   sb:v=>localStorage.setItem('cl_blocks',JSON.stringify(v)),
   s:()=>{try{return JSON.parse(localStorage.getItem('cl_services'))||[]}catch{return[]}},
   ss:v=>localStorage.setItem('cl_services',JSON.stringify(v)),
+  r:()=>{try{return JSON.parse(localStorage.getItem('cl_resources'))||[]}catch{return[]}},
+  sr:v=>localStorage.setItem('cl_resources',JSON.stringify(v)),
 };
 
 function recordEvent(type,payload={}){
@@ -550,11 +566,25 @@ function ensureServices(){
 }
 function services(){ensureServices();return DB.s();}
 function serviceById(id){return services().find(s=>s.id===id)||null;}
+function ensureResources(){
+  if(!DB.r().length){
+    const name=(getCfg().nombre||'Profesional principal').trim()||'Profesional principal';
+    DB.sr([{id:'R001',nombre:name,creado:'default'}]);
+  }
+}
+function resources(){ensureResources();return DB.r();}
+function resourceById(id){return resources().find(r=>r.id===id)||null;}
+function selectedResource(selectId){
+  const el=$(selectId);return resourceById(el&&el.value)||resources()[0]||DEFAULT_RESOURCES[0];
+}
 function selectedService(selectId){
   const el=$(selectId);return serviceById(el&&el.value)||services()[0]||DEFAULT_SERVICES[0];
 }
 function serviceSnapshot(s){return {servicioId:s.id,servicioNombre:s.nombre,duracionMin:Number(s.duracionMin)||30};}
+function resourceSnapshot(r){return {resourceId:r.id,resourceName:r.nombre};}
 function turnoById(id){return DB.t().find(t=>t.id===id);}
+function appointmentResourceId(t){return (t&&t.resourceId)||resources()[0].id;}
+function appointmentResourceName(t){return (t&&t.resourceName)||(resourceById(appointmentResourceId(t))||resources()[0]).nombre;}
 function appointmentDuration(t){return Math.max(30,Number(t&&t.duracionMin)||30);}
 function appointmentServiceName(t){return (t&&t.servicioNombre)||'Consulta';}
 function hmToMin(h){const [hh,mm]=String(h||'').split(':').map(Number);return hh*60+mm;}
@@ -578,10 +608,11 @@ function statusMeta(estado){
 }
 function blocksFor(fecha){return DB.b().filter(b=>b.fecha===fecha);}
 function isDayBlocked(fecha){return blocksFor(fecha).some(b=>!b.hora);}
-function availableSlots(fecha,excludeId=null,duracionMin=30){
+function availableSlots(fecha,excludeId=null,duracionMin=30,resourceId=null){
   if(!fecha||fecha<today()||isDayBlocked(fecha))return[];
+  const rid=resourceId||resources()[0].id;
   const used=new Set();
-  DB.t().filter(t=>t.fecha===fecha&&isOpenAppointment(t)&&t.id!==excludeId)
+  DB.t().filter(t=>t.fecha===fecha&&isOpenAppointment(t)&&t.id!==excludeId&&appointmentResourceId(t)===rid)
     .forEach(t=>slotSpan(t.hora,appointmentDuration(t)).forEach(h=>used.add(h)));
   const blocked=new Set(blocksFor(fecha).filter(b=>b.hora).map(b=>b.hora));
   const current=fecha===today()?nowHM():null;
@@ -590,7 +621,7 @@ function availableSlots(fecha,excludeId=null,duracionMin=30){
     return needed.length&&needed.every(x=>!used.has(x)&&!blocked.has(x))&&(!current||h>current);
   });
 }
-function isSlotAvailable(fecha,hora,excludeId=null,duracionMin=30){return availableSlots(fecha,excludeId,duracionMin).includes(hora);}
+function isSlotAvailable(fecha,hora,excludeId=null,duracionMin=30,resourceId=null){return availableSlots(fecha,excludeId,duracionMin,resourceId).includes(hora);}
 function consultorioInfo(){
   const c=getCfg();
   return {
@@ -629,12 +660,13 @@ function reminderMessage(t,pac){
     fecha:fmtL(dp(t.fecha)),
     hora:t.hora||'',
     servicio:appointmentServiceName(t),
+    recurso:appointmentResourceName(t),
     motivo,
     consultorio:c.consultorio,
     profesional:c.nombre,
     direccion:c.dir
   };
-  return reminderTemplate().replace(/\{(paciente|fecha|hora|servicio|motivo|consultorio|profesional|direccion)\}/g,(_,k)=>vars[k]??'');
+  return reminderTemplate().replace(/\{(paciente|fecha|hora|servicio|recurso|motivo|consultorio|profesional|direccion)\}/g,(_,k)=>vars[k]??'');
 }
 function reminderNeeded(t){
   if(!t||t.estado!=='pendiente'||t.recordatorioAt)return false;
@@ -787,7 +819,7 @@ function renderAgenda(){
     return`<div class="aitem">
       <div class="aitem-time">${t.hora} hs</div>
       <div class="aitem-name">${pac.nombre}</div>
-      <div class="aitem-motivo">${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min</div>
+      <div class="aitem-motivo">${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min · ${escHtml(appointmentResourceName(t))}</div>
       ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
       ${reminderNeeded(t)?`<div class="ops-note">Recordatorio pendiente</div>`:''}
       ${t.recordatorioAt?`<div class="contact-note">Recordatorio marcado como enviado ${new Date(t.recordatorioAt).toLocaleString()} · esperando confirmación.</div>`:''}
@@ -840,7 +872,7 @@ function openReprogram(id){
 function renderReprogSlots(){
   const t=turnoById(reprogTurnoId);if(!t)return;
   const fecha=$('reprog-fecha').value||t.fecha;
-  const avail=availableSlots(fecha,t.id,appointmentDuration(t));
+  const avail=availableSlots(fecha,t.id,appointmentDuration(t),appointmentResourceId(t));
   if(!avail.includes(reprogHora))reprogHora=null;
   $('reprog-slots').innerHTML=HORAS.map(h=>{
     const free=avail.includes(h),sel=reprogHora===h;
@@ -853,7 +885,7 @@ function confirmReprogram(){
   const fecha=$('reprog-fecha').value;
   if(!fecha||fecha<today()){toast('Elegí una fecha válida');return;}
   if(!reprogHora){toast('Elegí un horario');return;}
-  if(!isSlotAvailable(fecha,reprogHora,t.id,appointmentDuration(t))){toast('Ese horario ya no está disponible');renderReprogSlots();return;}
+  if(!isSlotAvailable(fecha,reprogHora,t.id,appointmentDuration(t),appointmentResourceId(t))){toast('Ese horario ya no está disponible');renderReprogSlots();return;}
   const from={fecha:t.fecha,hora:t.hora,estado:t.estado};
   DB.st(DB.t().map(x=>x.id===t.id?{...x,fecha,hora:reprogHora,estado:'pendiente',reprogramado:new Date().toISOString()}:x));
   recordEvent('appointment_rescheduled',{turnoId:t.id,from,to:{fecha,hora:reprogHora,estado:'pendiente'}});
@@ -927,7 +959,7 @@ function verFicha(id){
 ${ts.length?ts.slice(0,6).map(t=>{
   const sm=statusMeta(t.estado);
   return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:var(--line);font-size:.79rem;">
-    <span style="color:var(--ink2);">${t.fecha} · ${t.hora} · ${escHtml(appointmentServiceName(t))}${t.motivo?' — '+escHtml(t.motivo):''}</span>
+    <span style="color:var(--ink2);">${t.fecha} · ${t.hora} · ${escHtml(appointmentServiceName(t))} · ${escHtml(appointmentResourceName(t))}${t.motivo?' — '+escHtml(t.motivo):''}</span>
     <span class="tag ${sm.cls}">${sm.label}</span>
   </div>`;
 }).join(''):`<p style="font-size:.79rem;color:var(--ink3);">Sin turnos aún.</p>`}
@@ -993,26 +1025,32 @@ const current=el.value;
 el.innerHTML=services().map(s=>`<option value="${s.id}">${escHtml(s.nombre)} · ${s.duracionMin} min</option>`).join('');
 if(current&&serviceById(current))el.value=current;
 }
+function fillResourceSelect(id){
+const el=$(id);if(!el)return;
+const current=el.value;
+el.innerHTML=resources().map(r=>`<option value="${r.id}">${escHtml(r.nombre)}</option>`).join('');
+if(current&&resourceById(current))el.value=current;
+}
 function fillNT(){
 $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-fillServiceSelect('nt-service');
+fillServiceSelect('nt-service');fillResourceSelect('nt-resource');
 $('nt-fecha').min=today();
 if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
 fillNTHoras();
 }
 function fillNTHoras(){
-const fecha=$('nt-fecha').value||today();const svc=selectedService('nt-service');const avail=availableSlots(fecha,null,svc.duracionMin);
+const fecha=$('nt-fecha').value||today();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');const avail=availableSlots(fecha,null,svc.duracionMin,res.id);
 $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
 }
 function crearTurnoMed(){
 const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
-const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();const svc=selectedService('nt-service');
+const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');
 if(!pacId){toast('Seleccioná un paciente');return;}
 if(!fecha){toast('Elegí una fecha');return;}
 if(fecha<today()){toast('No se pueden crear turnos en una fecha pasada');return;}
 if(!hora){toast('No hay horarios disponibles');return;}
-if(!isSlotAvailable(fecha,hora,null,svc.duracionMin)){toast('Horario ya ocupado o bloqueado');fillNTHoras();return;}
-const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,...serviceSnapshot(svc),estado:'pendiente',creado:new Date().toISOString()};
+if(!isSlotAvailable(fecha,hora,null,svc.duracionMin,res.id)){toast('Horario ya ocupado o bloqueado');fillNTHoras();return;}
+const nuevo={id:'T'+Date.now(),pacienteId:pacId,fecha,hora,motivo,...serviceSnapshot(svc),...resourceSnapshot(res),estado:'pendiente',creado:new Date().toISOString()};
 DB.st([...DB.t(),nuevo]);
 recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:pacId,fecha,hora,source:'professional'});
 toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
@@ -1042,6 +1080,7 @@ if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
 $('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+HORAS.map(h=>`<option value="${h}">${h}</option>`).join('');
 renderAvailabilityBlocks();
 renderServicesConfig();
+renderResourcesConfig();
 }
 
 function renderServicesConfig(){
@@ -1067,6 +1106,30 @@ const list=services();if(list.length<=1){toast('Debe quedar al menos un servicio
 const svc=list.find(s=>s.id===id);if(!svc)return;
 DB.ss(list.filter(s=>s.id!==id));recordEvent('service_removed',{serviceId:id,nombre:svc.nombre});
 renderServicesConfig();toast('Servicio quitado');
+}
+
+function renderResourcesConfig(){
+const el=$('cfg-resource-list');if(!el)return;
+const list=resources();
+el.innerHTML=list.map(r=>`<div class="block-row">
+  <div class="block-main"><div class="block-title">${escHtml(r.nombre)}</div><div class="block-meta">Agenda independiente</div></div>
+  <button class="mb cancel" onclick="removeResource('${r.id}')">Quitar</button>
+</div>`).join('');
+fillResourceSelect('nt-resource');fillResourceSelect('pac-resource');
+}
+function addResource(){
+const nombre=$('cfg-resource-name').value.trim();if(!nombre){toast('Ingresá un nombre');return;}
+if(resources().some(r=>r.nombre.toLowerCase()===nombre.toLowerCase())){toast('Ese recurso ya existe');return;}
+const resource={id:'R'+Date.now(),nombre,creado:new Date().toISOString()};
+DB.sr([...resources(),resource]);recordEvent('resource_added',{resourceId:resource.id,nombre});
+$('cfg-resource-name').value='';renderResourcesConfig();toast('Recurso agregado ✓');
+}
+function removeResource(id){
+const list=resources();if(list.length<=1){toast('Debe quedar al menos un recurso');return;}
+const r=list.find(x=>x.id===id);if(!r)return;
+if(DB.t().some(t=>isOpenAppointment(t)&&appointmentResourceId(t)===id)){toast('Ese recurso tiene turnos activos');return;}
+DB.sr(list.filter(x=>x.id!==id));recordEvent('resource_removed',{resourceId:id,nombre:r.nombre});
+renderResourcesConfig();toast('Recurso quitado');
 }
 
 function renderAvailabilityBlocks(){
@@ -1136,7 +1199,7 @@ toast('Clave actualizada ✓');
 
 // ── RESPALDO / PORTABILIDAD ──
 const BACKUP_SCHEMA='turnos-local-backup';
-const BACKUP_VERSION=2;
+const BACKUP_VERSION=3;
 function downloadText(filename,text,type='application/json'){
   const blob=new Blob([text],{type:type+';charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
@@ -1148,7 +1211,7 @@ function exportBackup(){
     schema:BACKUP_SCHEMA,
     version:BACKUP_VERSION,
     exportedAt:new Date().toISOString(),
-    data:{patients:DB.p(),appointments:DB.t(),blocks:DB.b(),services:services(),events:DB.e(),config:cfg}
+    data:{patients:DB.p(),appointments:DB.t(),blocks:DB.b(),services:services(),resources:resources(),events:DB.e(),config:cfg}
   };
   const stamp=new Date().toISOString().slice(0,10);
   downloadText(`turnos-backup-${stamp}.json`,JSON.stringify(payload,null,2));
@@ -1156,9 +1219,10 @@ function exportBackup(){
   toast('Backup descargado ✓');
 }
 function validateBackupPayload(x){
-  if(!x||x.schema!==BACKUP_SCHEMA||![1,2].includes(x.version)||!x.data)return 'Formato de backup no reconocido';
+  if(!x||x.schema!==BACKUP_SCHEMA||![1,2,3].includes(x.version)||!x.data)return 'Formato de backup no reconocido';
   if(!Array.isArray(x.data.patients)||!Array.isArray(x.data.appointments)||!Array.isArray(x.data.blocks)||!Array.isArray(x.data.events))return 'Backup incompleto';
   if(x.version>=2&&!Array.isArray(x.data.services))return 'Backup sin catálogo de servicios';
+  if(x.version>=3&&!Array.isArray(x.data.resources))return 'Backup sin catálogo de recursos';
   if(!x.data.config||typeof x.data.config!=='object'||Array.isArray(x.data.config))return 'Configuración inválida';
   return '';
 }
@@ -1175,6 +1239,7 @@ function restoreBackup(input){
       DB.st(payload.data.appointments);
       DB.sb(payload.data.blocks);
       DB.ss(Array.isArray(payload.data.services)&&payload.data.services.length?payload.data.services:DEFAULT_SERVICES.map(x=>({...x})));
+      DB.sr(Array.isArray(payload.data.resources)&&payload.data.resources.length?payload.data.resources:DEFAULT_RESOURCES.map(x=>({...x})));
       DB.se(payload.data.events.slice(-300));
       saveCfg({...payload.data.config,...(currentClave?{clave:currentClave}:{})});
       recordEvent('backup_restored',{version:payload.version,exportedAt:payload.exportedAt||null});
@@ -1229,7 +1294,7 @@ const active=ts.filter(isOpenAppointment);
 const slots=new Map();
 active.forEach(t=>{
   slotSpan(t.hora,appointmentDuration(t)).forEach(h=>{
-    const key=t.fecha+'|'+h;
+    const key=t.fecha+'|'+appointmentResourceId(t)+'|'+h;
     if(!slots.has(key))slots.set(key,[]);
     slots.get(key).push(t);
   });
@@ -1239,7 +1304,7 @@ slots.forEach((arr,key)=>{
   const ids=[...new Set(arr.map(t=>t.id))];
   if(ids.length>1){
     const sig=ids.sort().join('|');
-    if(!reported.has(sig)){reported.add(sig);issues.push({level:'bad',code:'double_booking',text:`Solapamiento de turnos en ${key.replace('|',' ')} (${ids.length} turnos)`});}
+    if(!reported.has(sig)){reported.add(sig);issues.push({level:'bad',code:'double_booking',text:`Solapamiento de turnos en ${key.split('|')[0]} ${key.split('|')[2]} · ${appointmentResourceName(arr[0])} (${ids.length} turnos)`});}
   }
 });
 return issues;
@@ -1261,8 +1326,8 @@ const getNombre=id=>(ps.find(p=>p.id===id)||{nombre:'—'}).nombre;
 const getTel=id=>(ps.find(p=>p.id===id)||{tel:'—'}).tel||'—';
 
 if(tipo==='turnos'){
-const rows=[['ID','Paciente','Teléfono','Fecha','Hora','Servicio','Duración min','Motivo','Estado','Creado']];
-ts.forEach(t=>rows.push([t.id,getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,appointmentServiceName(t),appointmentDuration(t),t.motivo||'',t.estado,t.creado?.slice(0,10)||'']));
+const rows=[['ID','Paciente','Teléfono','Fecha','Hora','Servicio','Duración min','Profesional / recurso','Motivo','Estado','Creado']];
+ts.forEach(t=>rows.push([t.id,getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,appointmentServiceName(t),appointmentDuration(t),appointmentResourceName(t),t.motivo||'',t.estado,t.creado?.slice(0,10)||'']));
 downloadCSV('turnos.csv',rows);
 } else if(tipo==='pacientes'){
 const rows=[['ID','Nombre','Teléfono','Alergias','Observaciones','Turnos','Registrado']];
@@ -1287,7 +1352,7 @@ const prox=DB.t().filter(t=>t.pacienteId===me.id&&t.fecha>=hoy&&isOpenAppointmen
 const el=$('mt-view');
 if(!prox.length){el.innerHTML=`<div class="empty"><div class="ei">🦷</div><p>Sin turnos próximos</p><small>Sacá un turno desde "Sacar turno"</small></div>`;return;}
 const t=prox[0];const d=dp(t.fecha);const c=consultorioInfo();
-el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs · ${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">${escHtml(c.dir)}</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} ${t.estado==='pendiente'?`<button class="btn-main" style="margin-bottom:8px;" onclick="confirmarPropioT('${t.id}')">Confirmar asistencia</button>`:''} <div class="modal-actions"><button class="btn-main soft" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
+el.innerHTML=` <div class="turno-hero"> <div class="th-eye">PRÓXIMO TURNO</div> <div class="th-fecha">${fmt(d)}</div> <div class="th-hora">${t.hora} hs · ${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min · ${escHtml(appointmentResourceName(t))}</div> ${t.motivo?`<div class="th-motivo">${t.motivo}</div>`:''} <div class="th-status"><span class="tag-inv">${t.estado==='confirmado'?'✓ Confirmado':'⏳ Pendiente de confirmación'}</span></div> </div> <div style="background:var(--white);border:var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;"> <p class="sh" style="margin:0 0 6px;">Dirección</p> <p style="font-size:.88rem;font-weight:500;color:var(--ink);">${escHtml(c.dir)}</p> </div> ${prox.length>1?`<p style="font-size:.77rem;color:var(--ink3);margin-bottom:12px;">+ ${prox.length-1} turno${prox.length-1>1?'s':''} más agendado${prox.length-1>1?'s':''}</p>`:''} ${t.estado==='pendiente'?`<button class="btn-main" style="margin-bottom:8px;" onclick="confirmarPropioT('${t.id}')">Confirmar asistencia</button>`:''} <div class="modal-actions"><button class="btn-main soft" onclick="openReprogram('${t.id}')">Reprogramar</button><button class="btn-main soft" onclick="cancelarPropioT('${t.id}')">Cancelar</button></div>`;
 }
 function confirmarPropioT(id){
   const prev=turnoById(id);if(!prev||prev.estado!=='pendiente')return;
@@ -1303,10 +1368,10 @@ function cancelarPropioT(id){
   renderMT();renderHist();renderCalPac();toast('Turno cancelado');
 }
 
-function renderCalPac(){fillServiceSelect('pac-service');renderCal('pac');renderSlots();}
+function renderCalPac(){fillServiceSelect('pac-service');fillResourceSelect('pac-resource');renderCal('pac');renderSlots();}
 function renderSlots(){
-const key=selDate||today();const svc=selectedService('pac-service');
-const avail=new Set(availableSlots(key,null,svc.duracionMin));
+const key=selDate||today();const svc=selectedService('pac-service');const res=selectedResource('pac-resource');
+const avail=new Set(availableSlots(key,null,svc.duracionMin,res.id));
 if(!avail.size){
   const past=key<today();
   const closed=isDayBlocked(key);
@@ -1324,16 +1389,16 @@ return`<div class="spill${tk?' taken':''}${sl?' sel':''}" onclick="pickSlot('${h
 function pickSlot(h){
 selSlot=h;renderSlots();
 const key=selDate||today();
-const svc=selectedService('pac-service');
-$('tp-preview').textContent=`${fmt(dp(key))} · ${h} hs · ${svc.nombre} (${svc.duracionMin} min)`;
+const svc=selectedService('pac-service');const res=selectedResource('pac-resource');
+$('tp-preview').textContent=`${fmt(dp(key))} · ${h} hs · ${svc.nombre} (${svc.duracionMin} min) · ${res.nombre}`;
 $('confirm-wrap').style.display='block';
 }
 function confirmarPac(){
-const key=selDate||today();const svc=selectedService('pac-service');
+const key=selDate||today();const svc=selectedService('pac-service');const res=selectedResource('pac-resource');
 if(key<today()){toast('Elegí una fecha futura');return;}
 if(!selSlot){toast('Elegí un horario');return;}
-if(!isSlotAvailable(key,selSlot,null,svc.duracionMin)){toast('Ese horario acaba de ocuparse');renderSlots();return;}
-const nuevo={id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),...serviceSnapshot(svc),estado:'pendiente',creado:new Date().toISOString()};
+if(!isSlotAvailable(key,selSlot,null,svc.duracionMin,res.id)){toast('Ese horario acaba de ocuparse');renderSlots();return;}
+const nuevo={id:'T'+Date.now(),pacienteId:me.id,fecha:key,hora:selSlot,motivo:$('pac-motivo').value.trim(),...serviceSnapshot(svc),...resourceSnapshot(res),estado:'pendiente',creado:new Date().toISOString()};
 DB.st([...DB.t(),nuevo]);
 recordEvent('appointment_created',{turnoId:nuevo.id,pacienteId:me.id,fecha:key,hora:selSlot,source:'patient'});
 selSlot=null;$('confirm-wrap').style.display='none';$('pac-motivo').value='';
@@ -1351,7 +1416,7 @@ const el=$('hist-list');
 if(!ps.length){el.innerHTML=`<div class="empty"><div class="ei">📂</div><p>Sin historial aún</p></div>`;return;}
 el.innerHTML=ps.map(t=>{
 const sm=statusMeta(t.estado);
-return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora} · ${escHtml(appointmentServiceName(t))}</div>${t.motivo?`<div class="hm">${t.motivo}</div>`:''}</div> <span class="tag ${sm.cls}">${sm.label}</span> </div>`;
+return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora} · ${escHtml(appointmentServiceName(t))} · ${escHtml(appointmentResourceName(t))}</div>${t.motivo?`<div class="hm">${t.motivo}</div>`:''}</div> <span class="tag ${sm.cls}">${sm.label}</span> </div>`;
 }).join('');
 }
 
@@ -1365,12 +1430,13 @@ DB.sp([
 ]);
 const hoy=today();const man=dk(new Date(Date.now()+86400000));
 DB.st([
-{id:'T001',pacienteId:1001,fecha:hoy,hora:'10:00',servicioNombre:'Consulta',duracionMin:30,motivo:'Limpieza dental',estado:'pendiente',creado:new Date().toISOString()},
-{id:'T002',pacienteId:1002,fecha:hoy,hora:'11:30',servicioNombre:'Consulta',duracionMin:30,motivo:'Dolor muela del juicio',estado:'confirmado',creado:new Date().toISOString()},
-{id:'T003',pacienteId:1003,fecha:man,hora:'09:00',servicioNombre:'Consulta',duracionMin:30,motivo:'Ortodoncia — seguimiento',estado:'pendiente',creado:new Date().toISOString()},
+{id:'T001',pacienteId:1001,fecha:hoy,hora:'10:00',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Limpieza dental',estado:'pendiente',creado:new Date().toISOString()},
+{id:'T002',pacienteId:1002,fecha:hoy,hora:'11:30',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Dolor muela del juicio',estado:'confirmado',creado:new Date().toISOString()},
+{id:'T003',pacienteId:1003,fecha:man,hora:'09:00',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Ortodoncia — seguimiento',estado:'pendiente',creado:new Date().toISOString()},
 ]);
 })();
 ensureServices();
+ensureResources();
 applyBranding();
 </script>
 
