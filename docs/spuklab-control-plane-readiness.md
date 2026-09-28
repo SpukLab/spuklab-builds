@@ -7,7 +7,7 @@ Estado: diseño objetivo. No introduce dependencia de ejecución entre productos
 Los productos deben poder funcionar y venderse de forma autónoma antes de existir una plataforma central completa.
 
 Ejemplos:
-- Turnos: agenda, servicios, recursos y WhatsApp.
+- CITHELA: agenda, servicios, recursos y WhatsApp.
 - SURKARA: operación rural.
 - DAHZEA: comercio conversacional y automatización.
 
@@ -29,7 +29,7 @@ La integración futura no debe convertir a DAHZEA en una dependencia técnica ob
                                 │ entitlements / identity
         ┌───────────────────────┼───────────────────────┐
         │                       │                       │
-     Turnos                  DAHZEA                 SURKARA
+     CITHELA                 DAHZEA                 SURKARA
         │                       │                       │
    WhatsApp/API            ML/WhatsApp/...        Campo/offline/...
 ```
@@ -136,7 +136,7 @@ Los secretos reales deben almacenarse en infraestructura segura del backend, no 
 ## Estrategia para Turnos
 
 ### Ahora
-Turnos permanece completamente autónomo:
+CITHELA permanece completamente autónoma:
 - marca configurable;
 - servicios;
 - recursos/profesionales;
@@ -146,18 +146,18 @@ Turnos permanece completamente autónomo:
 - operación local.
 
 ### Próxima etapa autónoma
-Backend propio de Turnos:
+Backend propio de CITHELA:
 - almacenamiento multiusuario;
 - autenticación;
 - concurrencia real;
 - API de agenda;
 - webhook/adaptador oficial de WhatsApp.
 
-Turnos puede venderse y operar sin DAHZEA.
+CITHELA puede venderse y operar sin DAHZEA.
 
 ### Integración posterior
 Cuando exista el control plane:
-- se asigna un `tenantId`;
+- se asigna un `tenantId` y `productKey=cithela`;
 - se crea un `productInstanceId`;
 - se reciben entitlements;
 - los usuarios pueden entrar desde un portal común;
@@ -172,8 +172,8 @@ WhatsApp debe modelarse como integración/canal, no como parte inseparable de DA
 Posibles combinaciones comerciales:
 
 ```text
-Turnos
-Turnos + WhatsApp
+CITHELA
+CITHELA + WhatsApp
 DAHZEA
 DAHZEA + WhatsApp
 Turnos + DAHZEA + WhatsApp
