@@ -545,6 +545,8 @@ const DB={
   ss:v=>localStorage.setItem('cl_services',JSON.stringify(v)),
   r:()=>{try{return JSON.parse(localStorage.getItem('cl_resources'))||[]}catch{return[]}},
   sr:v=>localStorage.setItem('cl_resources',JSON.stringify(v)),
+  q:()=>{try{return JSON.parse(localStorage.getItem('cl_requests'))||[]}catch{return[]}},
+  sq:v=>localStorage.setItem('cl_requests',JSON.stringify(v)),
 };
 
 function recordEvent(type,payload={}){
@@ -635,6 +637,25 @@ function isSlotAvailable(fecha,hora,excludeId=null,duracionMin=30,resourceId=nul
 function domainResult(ok,code,data={},message=''){return {ok,code,...data,...(message?{message}:{})};}
 function newId(prefix){return prefix+Date.now()+'-'+Math.random().toString(36).slice(2,7);}
 const TurnosDomain={
+  listServices(){
+    return domainResult(true,'services',{services:services().map(s=>({...s}))});
+  },
+  listResources(){
+    return domainResult(true,'resources',{resources:resources().map(r=>({...r}))});
+  },
+  resolvePerson({phone,name='',createIfMissing=false}={}){
+    const key=normalizePhone(phone);
+    if(!validPhone(phone))return domainResult(false,'invalid_phone');
+    let people=DB.p();let person=people.find(p=>normalizePhone(p.tel)===key);
+    if(person)return domainResult(true,'person_found',{person});
+    if(!createIfMissing)return domainResult(false,'person_not_found');
+    const cleanName=String(name||'').trim();
+    if(!cleanName)return domainResult(false,'name_required');
+    person={id:Date.now(),nombre:cleanName,tel:String(phone).trim(),obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};
+    people.push(person);DB.sp(people);
+    recordEvent('person_created',{patientId:person.id,source:'domain_resolve'});
+    return domainResult(true,'person_created',{person});
+  },
   listAvailability({fecha,servicioId,resourceId}={}){
     const svc=serviceById(servicioId)||services()[0];
     const res=resourceById(resourceId)||resources()[0];
@@ -687,15 +708,27 @@ const TurnosDomain={
 
 const CHANNEL_CONTRACT_VERSION=1;
 const CHANNEL_COMMANDS=new Set([
+  'catalog.services',
+  'catalog.resources',
+  'person.resolve',
   'availability.query',
   'appointment.create',
   'appointment.confirm',
   'appointment.cancel',
   'appointment.reschedule'
 ]);
+function cachedChannelResponse(requestId){
+  return DB.q().find(x=>x.requestId===requestId)||null;
+}
+function cacheChannelResponse(requestId,command,response){
+  const entries=DB.q().filter(x=>x.requestId!==requestId);
+  entries.push({requestId,command,response,at:new Date().toISOString()});
+  DB.sq(entries.slice(-200));
+}
 const TurnosChannel={
   execute(envelope={}){
     const version=Number(envelope.version||CHANNEL_CONTRACT_VERSION);
+    const suppliedRequestId=envelope.requestId!=null&&String(envelope.requestId).trim()!=='';
     const requestId=String(envelope.requestId||newId('REQ'));
     const channel=String(envelope.channel||'api');
     const actor=envelope.actor&&typeof envelope.actor==='object'?envelope.actor:{type:'system'};
@@ -703,16 +736,28 @@ const TurnosChannel={
     const payload=envelope.payload&&typeof envelope.payload==='object'?envelope.payload:{};
     if(version!==CHANNEL_CONTRACT_VERSION)return {ok:false,code:'unsupported_version',requestId,version:CHANNEL_CONTRACT_VERSION};
     if(!CHANNEL_COMMANDS.has(command))return {ok:false,code:'unsupported_command',requestId,version};
+    if(suppliedRequestId){
+      const cached=cachedChannelResponse(requestId);
+      if(cached){
+        if(cached.command!==command)return {ok:false,code:'request_id_conflict',requestId,version};
+        return {...cached.response,replayed:true};
+      }
+    }
     const source=channel+':'+String(actor.type||'system');
     let result;
-    if(command==='availability.query')result=TurnosDomain.listAvailability(payload);
+    if(command==='catalog.services')result=TurnosDomain.listServices();
+    else if(command==='catalog.resources')result=TurnosDomain.listResources();
+    else if(command==='person.resolve')result=TurnosDomain.resolvePerson(payload);
+    else if(command==='availability.query')result=TurnosDomain.listAvailability(payload);
     else if(command==='appointment.create')result=TurnosDomain.createAppointment({...payload,source});
     else if(command==='appointment.confirm')result=TurnosDomain.confirmAppointment({...payload,source});
     else if(command==='appointment.cancel')result=TurnosDomain.cancelAppointment({...payload,source});
     else if(command==='appointment.reschedule')result=TurnosDomain.rescheduleAppointment({...payload,source});
     else result=domainResult(false,'unsupported_command');
     recordEvent('channel_command_executed',{requestId,channel,actorType:actor.type||'system',command,ok:!!result.ok,code:result.code});
-    return {...result,requestId,version};
+    const response={...result,requestId,version};
+    if(suppliedRequestId)cacheChannelResponse(requestId,command,response);
+    return response;
   }
 };
 function consultorioInfo(){
@@ -1374,17 +1419,21 @@ toast('Descarga iniciada ✓');
 function runChannelContractCheck(){
 const el=$('channel-check-result');if(!el)return;
 const svc=services()[0],res=resources()[0],fecha=dk(new Date(Date.now()+86400000));
-const checks=[];
-const a=TurnosChannel.execute({version:1,requestId:'selftest-availability',channel:'selftest',actor:{type:'system'},command:'availability.query',payload:{fecha,servicioId:svc.id,resourceId:res.id}});
+const checks=[];const seed='selftest-'+Date.now();
+const cat=TurnosChannel.execute({version:1,requestId:seed+'-catalog',channel:'selftest',actor:{type:'system'},command:'catalog.services',payload:{}});
+checks.push(cat.ok&&cat.code==='services'&&Array.isArray(cat.services));
+const a=TurnosChannel.execute({version:1,requestId:seed+'-availability',channel:'selftest',actor:{type:'system'},command:'availability.query',payload:{fecha,servicioId:svc.id,resourceId:res.id}});
 checks.push(a.ok&&a.code==='availability'&&Array.isArray(a.slots));
-const badVersion=TurnosChannel.execute({version:999,requestId:'selftest-version',command:'availability.query',payload:{}});
+const replay=TurnosChannel.execute({version:1,requestId:seed+'-availability',channel:'selftest',actor:{type:'system'},command:'availability.query',payload:{fecha,servicioId:svc.id,resourceId:res.id}});
+checks.push(replay.ok&&replay.replayed===true);
+const badVersion=TurnosChannel.execute({version:999,requestId:seed+'-version',command:'availability.query',payload:{}});
 checks.push(!badVersion.ok&&badVersion.code==='unsupported_version');
-const badCommand=TurnosChannel.execute({version:1,requestId:'selftest-command',command:'unknown.command',payload:{}});
+const badCommand=TurnosChannel.execute({version:1,requestId:seed+'-command',command:'unknown.command',payload:{}});
 checks.push(!badCommand.ok&&badCommand.code==='unsupported_command');
 const ok=checks.every(Boolean);
 recordEvent('channel_contract_check_run',{ok,checks:checks.length});
 el.innerHTML=ok
-  ?'<div class="contact-note" style="font-size:.75rem;">✓ Contrato v1 operativo: dispatcher, versionado y disponibilidad.</div>'
+  ?'<div class="contact-note" style="font-size:.75rem;">✓ Contrato v1 operativo: catálogo, dispatcher, versionado, disponibilidad e idempotencia local.</div>'
   :'<div class="ops-note" style="font-size:.75rem;">⚠ Falló una validación del contrato de canales.</div>';
 }
 
