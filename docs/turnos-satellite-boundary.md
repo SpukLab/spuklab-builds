@@ -170,6 +170,14 @@ Backup portable:
 - version actual: `3` (restaura backups v1/v2 con valores por defecto para servicios/recursos)
 - la clave local de acceso se excluye del backup.
 
+## Integración futura con plataforma SpukLab
+
+Turnos seguirá siendo un producto autónomo. La plataforma central futura —que puede incluir a DAHZEA como gestor/orquestador— administrará identidad de tenant, usuarios, suscripciones, entitlements y conectores sin absorber el dominio de agenda.
+
+Regla principal: **control plane ≠ runtime del producto**. Si el portal central no está disponible temporalmente, una instancia provisionada de Turnos no debería perder su capacidad operativa por ese motivo.
+
+La estrategia completa está documentada en `docs/spuklab-control-plane-readiness.md`.
+
 ## Futura conexión con backend / DAHZEA
 
 La migración deberá reemplazar el adaptador de persistencia, no las reglas del dominio.
