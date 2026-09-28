@@ -328,6 +328,11 @@ textarea.inp{resize:vertical;min-height:72px;}
 
     <p class="sh">Diagnóstico local</p>
     <div class="form-card" style="margin-bottom:14px;">
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Valida también la frontera que usarán WhatsApp, DAHZEA y futuros clientes del motor.</p>
+      <button class="btn-main soft" onclick="runChannelContractCheck()">Validar contrato de canales</button>
+      <div id="channel-check-result" style="margin-top:12px;"></div>
+    </div>
+    <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Revisa inconsistencias sin modificar datos: teléfonos duplicados, turnos huérfanos, dobles reservas y conflictos con bloqueos.</p>
       <button class="btn-main soft" onclick="runIntegrityCheck()">Ejecutar diagnóstico</button>
       <div id="integrity-result" style="margin-top:14px;"></div>
@@ -677,6 +682,37 @@ const TurnosDomain={
     DB.st(DB.t().map(x=>x.id===id?next:x));
     recordEvent('appointment_rescheduled',{turnoId:id,from,to:{fecha,hora,estado:'pendiente'},source});
     return domainResult(true,'appointment_rescheduled',{appointment:next});
+  }
+};
+
+const CHANNEL_CONTRACT_VERSION=1;
+const CHANNEL_COMMANDS=new Set([
+  'availability.query',
+  'appointment.create',
+  'appointment.confirm',
+  'appointment.cancel',
+  'appointment.reschedule'
+]);
+const TurnosChannel={
+  execute(envelope={}){
+    const version=Number(envelope.version||CHANNEL_CONTRACT_VERSION);
+    const requestId=String(envelope.requestId||newId('REQ'));
+    const channel=String(envelope.channel||'api');
+    const actor=envelope.actor&&typeof envelope.actor==='object'?envelope.actor:{type:'system'};
+    const command=String(envelope.command||'');
+    const payload=envelope.payload&&typeof envelope.payload==='object'?envelope.payload:{};
+    if(version!==CHANNEL_CONTRACT_VERSION)return {ok:false,code:'unsupported_version',requestId,version:CHANNEL_CONTRACT_VERSION};
+    if(!CHANNEL_COMMANDS.has(command))return {ok:false,code:'unsupported_command',requestId,version};
+    const source=channel+':'+String(actor.type||'system');
+    let result;
+    if(command==='availability.query')result=TurnosDomain.listAvailability(payload);
+    else if(command==='appointment.create')result=TurnosDomain.createAppointment({...payload,source});
+    else if(command==='appointment.confirm')result=TurnosDomain.confirmAppointment({...payload,source});
+    else if(command==='appointment.cancel')result=TurnosDomain.cancelAppointment({...payload,source});
+    else if(command==='appointment.reschedule')result=TurnosDomain.rescheduleAppointment({...payload,source});
+    else result=domainResult(false,'unsupported_command');
+    recordEvent('channel_command_executed',{requestId,channel,actorType:actor.type||'system',command,ok:!!result.ok,code:result.code});
+    return {...result,requestId,version};
   }
 };
 function consultorioInfo(){
@@ -1333,6 +1369,23 @@ const rows=[['Fecha','Tipo','Actor','Payload']];
 DB.e().forEach(e=>rows.push([e.at||'',e.type||'',e.actor||'',JSON.stringify(e.payload||{})]));
 downloadCSV('eventos.csv',rows);
 toast('Descarga iniciada ✓');
+}
+
+function runChannelContractCheck(){
+const el=$('channel-check-result');if(!el)return;
+const svc=services()[0],res=resources()[0],fecha=dk(new Date(Date.now()+86400000));
+const checks=[];
+const a=TurnosChannel.execute({version:1,requestId:'selftest-availability',channel:'selftest',actor:{type:'system'},command:'availability.query',payload:{fecha,servicioId:svc.id,resourceId:res.id}});
+checks.push(a.ok&&a.code==='availability'&&Array.isArray(a.slots));
+const badVersion=TurnosChannel.execute({version:999,requestId:'selftest-version',command:'availability.query',payload:{}});
+checks.push(!badVersion.ok&&badVersion.code==='unsupported_version');
+const badCommand=TurnosChannel.execute({version:1,requestId:'selftest-command',command:'unknown.command',payload:{}});
+checks.push(!badCommand.ok&&badCommand.code==='unsupported_command');
+const ok=checks.every(Boolean);
+recordEvent('channel_contract_check_run',{ok,checks:checks.length});
+el.innerHTML=ok
+  ?'<div class="contact-note" style="font-size:.75rem;">✓ Contrato v1 operativo: dispatcher, versionado y disponibilidad.</div>'
+  :'<div class="ops-note" style="font-size:.75rem;">⚠ Falló una validación del contrato de canales.</div>';
 }
 
 function integrityIssues(){
