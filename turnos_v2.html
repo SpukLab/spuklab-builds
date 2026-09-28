@@ -437,6 +437,11 @@ textarea.inp{resize:vertical;min-height:72px;}
       <div id="cfg-block-list" style="margin-top:14px;"></div>
     </div>
 
+    <p class="sh">Infraestructura</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <div id="infra-status"></div>
+    </div>
+
     <p class="sh">Seguridad</p>
     <div class="form-card">
       <label class="lbl">Clave actual</label>
@@ -764,6 +769,14 @@ const TurnosChannel={
   }
 };
 const CITHELA_PRODUCT_KEY='cithela';
+const CITHELA_RUNTIME_CAPABILITIES=Object.freeze({
+  persistence:'local',
+  multiUser:false,
+  realtime:false,
+  serverIdempotency:false,
+  authoritativeConcurrency:false,
+  backend:'not_provisioned'
+});
 function uiChannel(command,payload={},actorType=null){
   const resolvedActor=actorType||(role==='paciente'?'customer':'operator');
   return TurnosChannel.execute({
@@ -782,6 +795,7 @@ function uiAvailability(fecha,servicioId,resourceId,excludeAppointmentId=null){
 const CithelaAPI=Object.freeze({
   productKey:CITHELA_PRODUCT_KEY,
   contractVersion:CHANNEL_CONTRACT_VERSION,
+  capabilities(){return {...CITHELA_RUNTIME_CAPABILITIES};},
   execute(envelope={}){
     return TurnosChannel.execute({...envelope,version:envelope.version??CHANNEL_CONTRACT_VERSION});
   },
@@ -1243,6 +1257,29 @@ renderCal('med');renderStats();renderAgenda();
 function getCfg(){try{return JSON.parse(localStorage.getItem('cl_cfg'))||{}}catch{return{};}}
 function saveCfg(v){localStorage.setItem('cl_cfg',JSON.stringify(v));}
 
+function renderInfrastructureStatus(){
+const el=$('infra-status');if(!el)return;
+const cap=CithelaAPI.capabilities();
+const yes=v=>v?'Sí':'No';
+el.innerHTML=`
+  <div class="block-row">
+    <div class="block-main"><div class="block-title">Persistencia</div><div class="block-meta">${cap.persistence==='local'?'Local · este dispositivo':'Remota'}</div></div>
+    <span class="tag ${cap.persistence==='local'?'p':'c'}">${cap.persistence.toUpperCase()}</span>
+  </div>
+  <div class="block-row">
+    <div class="block-main"><div class="block-title">Multiusuario</div><div class="block-meta">Sincronización entre operadores</div></div>
+    <span class="tag ${cap.multiUser?'c':'x'}">${yes(cap.multiUser)}</span>
+  </div>
+  <div class="block-row">
+    <div class="block-main"><div class="block-title">Realtime</div><div class="block-meta">Cambios visibles entre dispositivos</div></div>
+    <span class="tag ${cap.realtime?'c':'x'}">${yes(cap.realtime)}</span>
+  </div>
+  <div class="block-row">
+    <div class="block-main"><div class="block-title">Concurrencia autoritativa</div><div class="block-meta">Protección servidor contra doble reserva simultánea</div></div>
+    <span class="tag ${cap.authoritativeConcurrency?'c':'x'}">${yes(cap.authoritativeConcurrency)}</span>
+  </div>
+  <p class="contact-note">Estado actual: prototipo local estable. El backend Supabase de CITHELA está diseñado pero todavía no fue provisionado; esta pantalla no simula conectividad inexistente.</p>`;
+}
 function cargarConfig(){
 const c=getCfg();
 $('cfg-brand').value=c.brand||'CITHELA';
@@ -1260,6 +1297,7 @@ $('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+HORAS.ma
 renderAvailabilityBlocks();
 renderServicesConfig();
 renderResourcesConfig();
+renderInfrastructureStatus();
 }
 
 function renderServicesConfig(){
