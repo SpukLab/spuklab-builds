@@ -226,7 +226,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     <p class="address" id="login-meta">Consultorio Odontológico</p>
     <div class="seg">
       <button class="seg-btn on" id="rb-med" onclick="setRole('medico');return false;">Profesional</button>
-      <button class="seg-btn" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
+      <button class="seg-btn js-person-singular" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
     </div>
     <label class="lbl">Nombre completo</label>
     <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
@@ -254,7 +254,7 @@ textarea.inp{resize:vertical;min-height:72px;}
   </nav>
   <div class="tabs">
     <button class="tab on"  onclick="tab('medico','agenda',this)">Agenda</button>
-    <button class="tab"     onclick="tab('medico','pacientes',this)">Pacientes</button>
+    <button class="tab js-person-plural" onclick="tab('medico','pacientes',this)">Pacientes</button>
     <button class="tab"     onclick="tab('medico','nuevo',this)">+ Turno</button>
     <button class="tab"     onclick="tab('medico','reportes',this)">Reportes</button>
     <button class="tab"     onclick="tab('medico','config',this)">⚙ Config</button>
@@ -287,7 +287,7 @@ textarea.inp{resize:vertical;min-height:72px;}
   <div id="p-medico-nuevo" class="pane">
     <p class="sh">Crear turno</p>
     <div class="form-card">
-      <label class="lbl">Paciente</label>
+      <label class="lbl js-person-singular">Paciente</label>
       <select class="inp" id="nt-pac"></select>
       <label class="lbl">Servicio</label>
       <select class="inp" id="nt-service" onchange="fillNTHoras()"></select>
@@ -312,7 +312,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Pacientes</p>
-      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Lista de pacientes con nombre, teléfono, observaciones y cantidad de turnos.</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Lista de personas registradas con nombre, teléfono, observaciones y cantidad de turnos.</p>
       <button class="btn-main excel" onclick="exportExcel('pacientes')">⬇ Descargar pacientes.csv</button>
     </div>
     <div class="form-card" style="margin-bottom:14px;">
@@ -355,6 +355,11 @@ textarea.inp{resize:vertical;min-height:72px;}
       <input class="inp" id="cfg-consultorio" placeholder="Consultorio, estudio, salón...">
       <label class="lbl">Actividad / rubro</label>
       <input class="inp" id="cfg-activity" placeholder="Odontología, peluquería, tatuajes, estética...">
+      <label class="lbl">Cómo llamar a quien reserva</label>
+      <select class="inp" id="cfg-person-term">
+        <option value="paciente">Paciente</option>
+        <option value="cliente">Cliente</option>
+      </select>
       <label class="lbl">Dirección</label>
       <input class="inp" id="cfg-dir" placeholder="Boulevar Hipólito Yrigoyen 69, local 8">
       <label class="lbl">Teléfono / WhatsApp del consultorio</label>
@@ -488,7 +493,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 <div class="overlay" id="m-ficha" onclick="closeM('m-ficha')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <h3>Ficha del paciente</h3>
+    <h3>Ficha</h3>
     <div id="m-ficha-body"></div>
   </div>
 </div>
@@ -632,6 +637,15 @@ function consultorioInfo(){
     dir:c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela'
   };
 }
+function personTerms(){
+  const base=getCfg().personTerm==='cliente'?'cliente':'paciente';
+  return base==='cliente'?{singular:'Cliente',plural:'Clientes'}:{singular:'Paciente',plural:'Pacientes'};
+}
+function applyTerminology(){
+  const t=personTerms();
+  document.querySelectorAll('.js-person-singular').forEach(el=>el.textContent=t.singular);
+  document.querySelectorAll('.js-person-plural').forEach(el=>el.textContent=t.plural);
+}
 function applyBranding(){
   const c=consultorioInfo();
   document.title=c.brand;
@@ -640,6 +654,7 @@ function applyBranding(){
   const lb=$('login-brand'),lm=$('login-meta');
   if(lb)lb.textContent=c.brand;
   if(lm)lm.innerHTML=escHtml(c.consultorio)+'<br>'+escHtml(c.nombre)+'<br>'+escHtml(c.dir);
+  applyTerminology();
 }
 function dayDistance(fecha){
   const a=dp(today()),b=dp(fecha);
@@ -900,7 +915,7 @@ function renderPacs(){
   const q=($('s-pac')?.value||'').toLowerCase();
   const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q));
   const el=$('pacs-wrap');
-  if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin pacientes.</p>`;return;}
+  if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()}.</p>`;return;}
   el.innerHTML=ps.map(p=>{
     const n=DB.t().filter(t=>t.pacienteId===p.id).length;
     return`<div class="prow">
@@ -930,11 +945,11 @@ function verFicha(id){
     ${waN?`<button class="mb wa" style="margin-bottom:14px;padding:8px 16px;" onclick="openPatientWhatsApp(${p.id})">📲 Enviar WhatsApp</button>`:''}
     <hr class="divider">
 
-    <p class="sh" style="margin-top:0;">Ficha clínica</p>
-    <label class="lbl">Alergias / medicamentos</label>
-    <input class="inp" id="f-alergias" value="${escHtml(p.alergias||'')}" placeholder="Penicilina, ibuprofeno...">
-    <label class="lbl">Observaciones clínicas</label>
-    <textarea class="inp" id="f-obs" placeholder="Notas, diagnósticos, tratamientos...">${escHtml(p.obs||'')}</textarea>
+    <p class="sh" style="margin-top:0;">Ficha / notas</p>
+    <label class="lbl">Alertas / alergias</label>
+    <input class="inp" id="f-alergias" value="${escHtml(p.alergias||'')}" placeholder="Alergias, sensibilidades, alertas...">
+    <label class="lbl">Observaciones</label>
+    <textarea class="inp" id="f-obs" placeholder="Notas, preferencias, antecedentes...">${escHtml(p.obs||'')}</textarea>
 
 <button class="mb teal" style="margin-bottom:14px;" onclick="guardarFicha(${p.id})">Guardar ficha</button>
 
@@ -1071,6 +1086,7 @@ $('cfg-brand').value=c.brand||'Turnos';
 $('cfg-nombre').value=c.nombre||'Dr. José A. López';
 $('cfg-consultorio').value=c.consultorio||'Consultorio Odontológico';
 $('cfg-activity').value=c.activity||'Odontología';
+$('cfg-person-term').value=c.personTerm||'paciente';
 $('cfg-dir').value=c.dir||'Boulevar Hipólito Yrigoyen 69, local 8 — Edif. Gacela';
 $('cfg-tel').value=c.tel||'';
 $('cfg-reminder-days').value=String(c.reminderDays??1);
@@ -1176,6 +1192,7 @@ c.brand=$('cfg-brand').value.trim()||'Turnos';
 c.nombre=$('cfg-nombre').value.trim()||c.nombre;
 c.consultorio=$('cfg-consultorio').value.trim()||c.consultorio;
 c.activity=$('cfg-activity').value.trim()||c.activity;
+c.personTerm=$('cfg-person-term').value||'paciente';
 c.dir=$('cfg-dir').value.trim()||c.dir;
 c.tel=$('cfg-tel').value.trim();
 c.reminderDays=Number($('cfg-reminder-days').value||1);
@@ -1326,18 +1343,18 @@ const getNombre=id=>(ps.find(p=>p.id===id)||{nombre:'—'}).nombre;
 const getTel=id=>(ps.find(p=>p.id===id)||{tel:'—'}).tel||'—';
 
 if(tipo==='turnos'){
-const rows=[['ID','Paciente','Teléfono','Fecha','Hora','Servicio','Duración min','Profesional / recurso','Motivo','Estado','Creado']];
+const rows=[['ID',personTerms().singular,'Teléfono','Fecha','Hora','Servicio','Duración min','Profesional / recurso','Motivo','Estado','Creado']];
 ts.forEach(t=>rows.push([t.id,getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,appointmentServiceName(t),appointmentDuration(t),appointmentResourceName(t),t.motivo||'',t.estado,t.creado?.slice(0,10)||'']));
 downloadCSV('turnos.csv',rows);
 } else if(tipo==='pacientes'){
-const rows=[['ID','Nombre','Teléfono','Alergias','Observaciones','Turnos','Registrado']];
+const rows=[['ID','Nombre','Teléfono','Alertas / alergias','Observaciones','Turnos','Registrado']];
 ps.forEach(p=>{
 const n=ts.filter(t=>t.pacienteId===p.id).length;
 rows.push([p.id,p.nombre,p.tel||'',p.alergias||'',p.obs||'',n,p.creado?.slice(0,10)||'']);
 });
 downloadCSV('pacientes.csv',rows);
 } else {
-const rows=[['Tipo','Paciente','Teléfono','Fecha','Hora','Motivo / Obs','Estado / Alergias']];
+const rows=[['Tipo',personTerms().singular,'Teléfono','Fecha','Hora','Motivo / Obs','Estado / Alertas']];
 ps.forEach(p=>rows.push(['PACIENTE',p.nombre,p.tel||'',p.creado?.slice(0,10)||'','',p.obs||'',p.alergias||'']));
 ts.forEach(t=>rows.push(['TURNO',getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,t.motivo||'',t.estado]));
 downloadCSV('reporte_completo.csv',rows);
@@ -1375,7 +1392,7 @@ const avail=new Set(availableSlots(key,null,svc.duracionMin,res.id));
 if(!avail.size){
   const past=key<today();
   const closed=isDayBlocked(key);
-  const msg=past?'La fecha ya pasó':closed?'Consultorio no disponible este día':'No quedan horarios disponibles';
+  const msg=past?'La fecha ya pasó':closed?'No hay disponibilidad este día':'No quedan horarios disponibles';
   const sub=past?'Elegí una fecha futura':closed?'Elegí otra fecha':'Probá con otro día';
   $('slots').innerHTML=`<div class="empty" style="grid-column:1/-1;padding:28px 10px;"><p>${msg}</p><small>${sub}</small></div>`;
   $('confirm-wrap').style.display='none';selSlot=null;
