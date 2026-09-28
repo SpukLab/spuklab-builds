@@ -85,7 +85,8 @@ Entrada:
 {
   "fecha": "2026-10-01",
   "servicioId": "S001",
-  "resourceId": "R001"
+  "resourceId": "R001",
+  "excludeAppointmentId": "opcional, para reprogramación"
 }
 ```
 
@@ -270,10 +271,13 @@ Cambios incompatibles requieren una nueva versión del contrato. Los eventos per
 
 ## Estado de migración de la UI
 
-La UI local ya enruta por `TurnosChannel.execute()` las mutaciones principales:
+La UI local ya enruta por `TurnosChannel.execute()`:
+- consulta de disponibilidad;
 - crear turno;
 - confirmar;
 - cancelar;
 - reprogramar.
 
-Esto hace que la UI web y el futuro adaptador de WhatsApp compartan la misma frontera de comandos. Las consultas de disponibilidad internas aún pueden usar helpers locales mientras se completa la migración de lecturas al contrato.
+`excludeAppointmentId` permite consultar disponibilidad para reprogramar sin que el propio turno bloquee su horario actual. Si el servicio o recurso histórico ya no existe en el catálogo activo, la consulta puede reutilizar el snapshot guardado en el turno.
+
+La UI web y el futuro adaptador de WhatsApp comparten así la misma frontera de agenda.
