@@ -135,6 +135,12 @@ La especialización futura debe resolverse mediante perfiles/terminología y cam
 
 La UI ya contempla terminología configurable `Paciente` / `Cliente`; internamente se mantiene compatibilidad con el modelo existente para evitar migraciones innecesarias.
 
+## Contrato de canales
+
+La UI, WhatsApp, DAHZEA y futuros clientes deben utilizar comandos de dominio comunes. El contrato v1 está documentado en `docs/turnos-channel-contract-v1.md`.
+
+La implementación local ya expone la fachada `TurnosDomain` para disponibilidad, creación, confirmación, cancelación y reprogramación.
+
 ## Frontera WhatsApp
 
 WhatsApp es un adaptador de canal, no la autoridad del turno.
