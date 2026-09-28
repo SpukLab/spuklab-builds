@@ -139,7 +139,7 @@ La UI ya contempla terminología configurable `Paciente` / `Cliente`; internamen
 
 La UI, WhatsApp, DAHZEA y futuros clientes deben utilizar comandos de dominio comunes. El contrato v1 está documentado en `docs/turnos-channel-contract-v1.md`.
 
-La implementación local ya expone la fachada `TurnosDomain` para disponibilidad, creación, confirmación, cancelación y reprogramación.
+La implementación local ya expone la fachada `TurnosDomain` para catálogo, resolución de identidad, disponibilidad, creación, confirmación, cancelación y reprogramación. `TurnosChannel.execute` actúa como dispatcher versionado para UI, WhatsApp, DAHZEA y futuros clientes.
 
 ## Frontera WhatsApp
 
@@ -168,6 +168,7 @@ Cuando exista integración oficial, esos eventos podrán provenir de un proveedo
 - `cl_blocks`: bloqueos
 - `cl_services`: catálogo de servicios
 - `cl_resources`: profesionales/recursos
+- `cl_requests`: cache local acotada de requestId para validar idempotencia del contrato de canales
 - `cl_events`: eventos
 - `cl_cfg`: configuración
 
