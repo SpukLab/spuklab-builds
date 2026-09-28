@@ -141,7 +141,7 @@ La UI de CITHELA, WhatsApp, DAHZEA y futuros clientes deben utilizar comandos de
 
 La implementación local ya expone la fachada `TurnosDomain` para catálogo, resolución de identidad, disponibilidad, creación, confirmación, cancelación y reprogramación. `TurnosChannel.execute` actúa como dispatcher versionado para UI, WhatsApp, DAHZEA y futuros clientes.
 
-Desde el checkpoint CITHELA, las mutaciones principales de la UI (crear, confirmar, cancelar y reprogramar) pasan por `TurnosChannel` en lugar de invocar el dominio directamente.
+Desde el checkpoint CITHELA, la UI usa `TurnosChannel` para consultar disponibilidad y para las mutaciones principales (crear, confirmar, cancelar y reprogramar), en lugar de invocar el dominio directamente.
 
 ## Frontera WhatsApp
 
