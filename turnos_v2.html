@@ -656,11 +656,14 @@ const TurnosDomain={
     recordEvent('person_created',{patientId:person.id,source:'domain_resolve'});
     return domainResult(true,'person_created',{person});
   },
-  listAvailability({fecha,servicioId,resourceId}={}){
-    const svc=serviceById(servicioId)||services()[0];
-    const res=resourceById(resourceId)||resources()[0];
+  listAvailability({fecha,servicioId,resourceId,excludeAppointmentId=null}={}){
+    const excluded=excludeAppointmentId?turnoById(excludeAppointmentId):null;
+    const fallbackService=excluded?{id:excluded.servicioId||'historical',nombre:appointmentServiceName(excluded),duracionMin:appointmentDuration(excluded)}:services()[0];
+    const fallbackResource=excluded?{id:appointmentResourceId(excluded),nombre:appointmentResourceName(excluded)}:resources()[0];
+    const svc=serviceById(servicioId)||fallbackService;
+    const res=resourceById(resourceId)||fallbackResource;
     if(!fecha)return domainResult(false,'invalid_date',{},'Falta fecha');
-    return domainResult(true,'availability',{fecha,service:serviceSnapshot(svc),resource:resourceSnapshot(res),slots:availableSlots(fecha,null,svc.duracionMin,res.id)});
+    return domainResult(true,'availability',{fecha,service:serviceSnapshot(svc),resource:resourceSnapshot(res),excludeAppointmentId,slots:availableSlots(fecha,excludeAppointmentId,svc.duracionMin,res.id)});
   },
   createAppointment({patientId,fecha,hora,servicioId,resourceId,motivo='',source='domain'}={}){
     const patient=DB.p().find(p=>String(p.id)===String(patientId));
@@ -771,6 +774,10 @@ function uiChannel(command,payload={},actorType=null){
     command,
     payload
   });
+}
+function uiAvailability(fecha,servicioId,resourceId,excludeAppointmentId=null){
+  const r=uiChannel('availability.query',{fecha,servicioId,resourceId,excludeAppointmentId});
+  return r.ok&&Array.isArray(r.slots)?r.slots:[];
 }
 const CithelaAPI=Object.freeze({
   productKey:CITHELA_PRODUCT_KEY,
@@ -1047,7 +1054,7 @@ function openReprogram(id){
 function renderReprogSlots(){
   const t=turnoById(reprogTurnoId);if(!t)return;
   const fecha=$('reprog-fecha').value||t.fecha;
-  const avail=availableSlots(fecha,t.id,appointmentDuration(t),appointmentResourceId(t));
+  const avail=uiAvailability(fecha,t.servicioId,appointmentResourceId(t),t.id);
   if(!avail.includes(reprogHora))reprogHora=null;
   $('reprog-slots').innerHTML=HORAS.map(h=>{
     const free=avail.includes(h),sel=reprogHora===h;
@@ -1212,7 +1219,7 @@ if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today()
 fillNTHoras();
 }
 function fillNTHoras(){
-const fecha=$('nt-fecha').value||today();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');const avail=availableSlots(fecha,null,svc.duracionMin,res.id);
+const fecha=$('nt-fecha').value||today();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');const avail=uiAvailability(fecha,svc.id,res.id);
 $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
 }
 function crearTurnoMed(){
@@ -1561,7 +1568,7 @@ function cancelarPropioT(id){
 function renderCalPac(){fillServiceSelect('pac-service');fillResourceSelect('pac-resource');renderCal('pac');renderSlots();}
 function renderSlots(){
 const key=selDate||today();const svc=selectedService('pac-service');const res=selectedResource('pac-resource');
-const avail=new Set(availableSlots(key,null,svc.duracionMin,res.id));
+const avail=new Set(uiAvailability(key,svc.id,res.id));
 if(!avail.size){
   const past=key<today();
   const closed=isDayBlocked(key);
