@@ -1,4 +1,4 @@
-# Turnos — Satellite Boundary v2
+# CITHELA — Satellite Boundary v2
 
 Estado: **satélite independiente**. Este documento define la frontera para que el módulo pueda evolucionar sin depender del runtime de DAHZEA y, más adelante, conectarse sin reescribir el dominio.
 
@@ -6,7 +6,7 @@ Estado: **satélite independiente**. Este documento define la frontera para que 
 
 Resolver agenda de turnos, disponibilidad, confirmaciones y operación asistida por WhatsApp en un módulo autónomo y reutilizable por distintos rubros: odontología, peluquería/barbería, tatuajes, estética, bienestar y otros servicios por cita.
 
-La palabra **Turnos** es un nombre funcional interno. La marca visible es configurable y puede cambiar sin renombrar las entidades del dominio.
+La marca del producto es **CITHELA**. La palabra **Turnos** se conserva como vocabulario técnico interno del dominio y de claves históricas de persistencia. La presentación por tenant puede incluir el nombre del consultorio, salón o profesional sin renombrar las entidades del dominio.
 
 ## Invariantes
 
@@ -137,9 +137,11 @@ La UI ya contempla terminología configurable `Paciente` / `Cliente`; internamen
 
 ## Contrato de canales
 
-La UI, WhatsApp, DAHZEA y futuros clientes deben utilizar comandos de dominio comunes. El contrato v1 está documentado en `docs/turnos-channel-contract-v1.md`.
+La UI de CITHELA, WhatsApp, DAHZEA y futuros clientes deben utilizar comandos de dominio comunes. El contrato v1 está documentado en `docs/turnos-channel-contract-v1.md`.
 
 La implementación local ya expone la fachada `TurnosDomain` para catálogo, resolución de identidad, disponibilidad, creación, confirmación, cancelación y reprogramación. `TurnosChannel.execute` actúa como dispatcher versionado para UI, WhatsApp, DAHZEA y futuros clientes.
+
+Desde el checkpoint CITHELA, las mutaciones principales de la UI (crear, confirmar, cancelar y reprogramar) pasan por `TurnosChannel` en lugar de invocar el dominio directamente.
 
 ## Frontera WhatsApp
 
