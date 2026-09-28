@@ -1,10 +1,12 @@
-# Turnos — Channel Contract v1
+# CITHELA — Channel Contract v1
 
 Estado: contrato conceptual estable para desacoplar UI, WhatsApp y futuros clientes del motor de agenda.
 
+Producto visible: **CITHELA**. `TurnosDomain` y `TurnosChannel` se conservan como nombres técnicos internos para mantener compatibilidad durante la evolución del producto.
+
 ## Objetivo
 
-Cualquier canal debe hablar con Turnos mediante comandos de dominio, no escribiendo directamente en la persistencia.
+Cualquier canal debe hablar con CITHELA mediante comandos de dominio, no escribiendo directamente en la persistencia.
 
 Canales posibles:
 - UI web;
@@ -264,3 +266,14 @@ No debe:
 ## Versionado
 
 Cambios incompatibles requieren una nueva versión del contrato. Los eventos persistidos deben conservar suficiente contexto para auditar qué acción ocurrió y desde qué canal.
+
+
+## Estado de migración de la UI
+
+La UI local ya enruta por `TurnosChannel.execute()` las mutaciones principales:
+- crear turno;
+- confirmar;
+- cancelar;
+- reprogramar.
+
+Esto hace que la UI web y el futuro adaptador de WhatsApp compartan la misma frontera de comandos. Las consultas de disponibilidad internas aún pueden usar helpers locales mientras se completa la migración de lecturas al contrato.
