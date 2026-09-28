@@ -1,17 +1,17 @@
-# Turnos — Satellite Boundary v1
+# Turnos — Satellite Boundary v2
 
 Estado: **satélite independiente**. Este documento define la frontera para que el módulo pueda evolucionar sin depender del runtime de DAHZEA y, más adelante, conectarse sin reescribir el dominio.
 
 ## Objetivo actual
 
-Resolver agenda de turnos, disponibilidad, confirmaciones y operación asistida por WhatsApp en un módulo autónomo.
+Resolver agenda de turnos, disponibilidad, confirmaciones y operación asistida por WhatsApp en un módulo autónomo y reutilizable por distintos rubros: odontología, peluquería/barbería, tatuajes, estética, bienestar y otros servicios por cita.
 
 La palabra **Turnos** es un nombre funcional interno. La marca visible es configurable y puede cambiar sin renombrar las entidades del dominio.
 
 ## Invariantes
 
-1. Un turno activo ocupa exactamente un `fecha + hora`.
-2. Dos turnos activos no deben ocupar el mismo slot.
+1. Un turno activo ocupa un intervalo definido por `fecha + hora + duracionMin`.
+2. Dos turnos activos del mismo `resourceId` no deben solaparse.
 3. Un turno cancelado no bloquea disponibilidad.
 4. Un bloqueo puede cerrar un día completo o un horario puntual.
 5. Reservar o reprogramar siempre revalida disponibilidad al confirmar.
@@ -20,7 +20,8 @@ La palabra **Turnos** es un nombre funcional interno. La marca visible es config
 8. Reprogramar devuelve el turno a `pendiente`.
 9. `atendido` y `ausente` son estados terminales operativos; no deben volver a recordatorios ni a la vista de próximo turno.
 10. La marca/UI no forma parte de la identidad del dominio.
-11. DAHZEA no es una dependencia de ejecución.
+11. Servicio, recurso/profesional y marca son configurables; las reglas de agenda no dependen de un rubro concreto.
+12. DAHZEA no es una dependencia de ejecución.
 
 ## Entidades actuales
 
@@ -36,12 +37,35 @@ Campos principales:
 
 La comparación de identidad telefónica usa una versión normalizada solo con dígitos.
 
+
+### Service
+- `id`
+- `nombre`
+- `duracionMin` (múltiplos de 30 min en el prototipo)
+- `creado`
+
+El turno guarda además un snapshot de `servicioId`, `servicioNombre` y `duracionMin` para que un cambio posterior en el catálogo no altere el turno histórico.
+
+### Resource
+Representa la unidad cuya agenda no puede solaparse: profesional, peluquero, tatuador, box, sillón, etc.
+
+- `id`
+- `nombre`
+- `creado`
+
+El turno guarda un snapshot de `resourceId` y `resourceName`.
+
 ### Appointment
 Campos principales:
 - `id`
 - `pacienteId`
 - `fecha` (`YYYY-MM-DD`)
 - `hora` (`HH:MM`)
+- `servicioId`
+- `servicioNombre`
+- `duracionMin`
+- `resourceId`
+- `resourceName`
 - `motivo`
 - `estado`: `pendiente | confirmado | cancelado | atendido | ausente`
 - `creado`
@@ -73,7 +97,9 @@ Se conservan los últimos 300 eventos en el prototipo local.
 
 ## Operaciones de dominio expuestas hoy
 
-- Consultar slots disponibles.
+- Consultar slots disponibles por servicio, duración y recurso.
+- Administrar catálogo de servicios.
+- Administrar profesionales/recursos con agendas independientes.
 - Crear turno.
 - Confirmar turno.
 - Cancelar turno.
@@ -84,6 +110,28 @@ Se conservan los últimos 300 eventos en el prototipo local.
 - Marcar recordatorio como enviado por el operador.
 - Exportar/restaurar backup local.
 - Ejecutar diagnóstico de integridad.
+
+
+## Perfil multi-rubro
+
+La infraestructura debe separar **motor de agenda** de **presentación vertical**.
+
+Elementos compartidos entre rubros:
+- clientes/pacientes;
+- servicios con distinta duración;
+- profesionales o recursos;
+- disponibilidad y bloqueos;
+- creación, confirmación, reprogramación, cancelación y cierre;
+- recordatorios y WhatsApp;
+- auditoría, backup y diagnóstico.
+
+Ejemplos:
+- odontología: limpieza 30 min, tratamiento 60 min;
+- peluquería: corte 30 min, color 120 min;
+- tatuajes: consulta 30 min, sesión 180/240 min;
+- estética: servicio 60/90 min.
+
+La especialización futura debe resolverse mediante perfiles/terminología y campos opcionales, no mediante forks del motor de agenda.
 
 ## Frontera WhatsApp
 
@@ -110,12 +158,14 @@ Cuando exista integración oficial, esos eventos podrán provenir de un proveedo
 - `cl_p`: pacientes
 - `cl_t`: turnos
 - `cl_blocks`: bloqueos
+- `cl_services`: catálogo de servicios
+- `cl_resources`: profesionales/recursos
 - `cl_events`: eventos
 - `cl_cfg`: configuración
 
 Backup portable:
 - schema: `turnos-local-backup`
-- version: `1`
+- version actual: `3` (restaura backups v1/v2 con valores por defecto para servicios/recursos)
 - la clave local de acceso se excluye del backup.
 
 ## Futura conexión con backend / DAHZEA
@@ -126,9 +176,11 @@ Interfaz conceptual mínima:
 
 ```text
 AppointmentStore
-  listAppointments(range)
+  listAppointments(range, resourceId)
   createAppointment(input)
   updateAppointment(id, patch)
+  listServices()
+  listResources()
   listPatients()
   upsertPatient(input)
   listAvailabilityBlocks(range)
@@ -151,7 +203,7 @@ DAHZEA podrá consumir o invocar estas capacidades como otro cliente/orquestador
 - almacenamiento seguro de archivos;
 - timezone explícita;
 - IDs estables del servidor;
-- control de concurrencia/transacciones para slots;
+- control de concurrencia/transacciones para intervalos y recursos;
 - auditoría persistente;
 - política de retención de datos;
 - integración oficial de WhatsApp;
