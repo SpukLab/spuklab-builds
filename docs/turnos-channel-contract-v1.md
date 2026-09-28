@@ -44,6 +44,37 @@ Los consumidores deben usar `code` y datos estructurados, no depender de textos 
 
 ## Comandos v1
 
+### catalog.services
+
+Devuelve el catálogo de servicios vigente.
+
+### catalog.resources
+
+Devuelve profesionales/recursos disponibles.
+
+### person.resolve
+
+Entrada:
+
+```json
+{
+  "phone": "+54...",
+  "name": "Ana",
+  "createIfMissing": false
+}
+```
+
+El teléfono se normaliza para resolver identidad.
+
+Códigos:
+- `person_found`
+- `person_created`
+- `person_not_found`
+- `invalid_phone`
+- `name_required`
+
+La creación automática solo ocurre cuando `createIfMissing=true`; el canal debe decidir explícitamente esa política.
+
 ### availability.query
 
 Entrada:
@@ -131,7 +162,11 @@ Códigos:
 
 La capa HTTP/webhook futura deberá manejar `requestId` para evitar ejecutar dos veces el mismo comando ante reintentos del proveedor.
 
-El prototipo local todavía no implementa almacenamiento de idempotency keys. Esa responsabilidad debe agregarse en backend antes de recibir webhooks reales.
+El prototipo local implementa una cache acotada de hasta 200 `requestId` en `localStorage` para validar la semántica:
+- repetir el mismo `requestId + command` devuelve la respuesta almacenada con `replayed=true`;
+- reutilizar el mismo `requestId` con otro comando devuelve `request_id_conflict`.
+
+Esto es solo una prueba de contrato. El backend real deberá usar persistencia transaccional y una política explícita de expiración para idempotency keys antes de recibir webhooks reales.
 
 ## WhatsApp
 
@@ -193,6 +228,9 @@ La forma HTTP concreta puede cambiar sin alterar los comandos de dominio.
 El prototipo actual ya expone una fachada interna:
 
 ```text
+TurnosDomain.listServices
+TurnosDomain.listResources
+TurnosDomain.resolvePerson
 TurnosDomain.listAvailability
 TurnosDomain.createAppointment
 TurnosDomain.confirmAppointment
@@ -201,6 +239,12 @@ TurnosDomain.rescheduleAppointment
 ```
 
 La UI web usa progresivamente esta misma fachada. El backend futuro deberá conservar la semántica, aunque cambie la implementación.
+
+## Dispatcher local
+
+El prototipo también expone `TurnosChannel.execute(envelope)`, que valida versión, comando y `requestId`, y traduce comandos de canal a `TurnosDomain`.
+
+Esto permite probar la frontera sin conectar todavía Meta/WhatsApp ni un backend.
 
 ## Relación con DAHZEA
 
