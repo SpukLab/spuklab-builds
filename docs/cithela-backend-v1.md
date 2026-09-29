@@ -1,6 +1,6 @@
 # CITHELA — Backend v1
 
-Estado: **READY FOR PROVISIONING**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
+Estado: **PROJECT PROVISIONED · SCHEMA PENDING**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
 
 ## Objetivos
 
@@ -280,8 +280,8 @@ Los IDs locales se guardan temporalmente en `legacy_id` o en una tabla de mappin
 - ningún secreto en cliente;
 - advisors de seguridad sin hallazgos críticos.
 
-## Provisioning pendiente
+## Proyecto provisionado
 
-CITHELA debe tener un proyecto Supabase propio. No se reutiliza SURKARA ni Spk_Multidev como backend productivo.
+CITHELA tiene un proyecto Supabase propio (`mcqknmqhtmihegmifuka`, región `sa-east-1`) en la organización de SpukLab. No se reutiliza SURKARA ni Spk_Multidev como backend productivo.
 
-La creación del proyecto requiere selección explícita de organización y aceptación del costo correspondiente. Hasta ese punto, este documento es el contrato de implementación y no modifica ningún proyecto Supabase existente.
+Al 2026-09-28, el proyecto figura activo, sin tablas públicas ni migraciones. La web privada sigue en modo local y no está conectada a este proyecto. Los siguientes pasos son implementar y verificar esquema, RLS, Auth y comandos de reserva antes de habilitar `REMOTE SHADOW`.
