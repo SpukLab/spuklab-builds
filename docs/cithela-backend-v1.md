@@ -1,6 +1,6 @@
 # CITHELA — Backend v1
 
-Estado: **PROJECT PROVISIONED · SCHEMA PENDING**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
+Estado: **FOUNDATION DEPLOYED · CLIENT WRITES CLOSED**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
 
 ## Objetivos
 
@@ -284,4 +284,6 @@ Los IDs locales se guardan temporalmente en `legacy_id` o en una tabla de mappin
 
 CITHELA tiene un proyecto Supabase propio (`mcqknmqhtmihegmifuka`, región `sa-east-1`) en la organización de SpukLab. No se reutiliza SURKARA ni Spk_Multidev como backend productivo.
 
-Al 2026-09-28, el proyecto figura activo, sin tablas públicas ni migraciones. La web privada sigue en modo local y no está conectada a este proyecto. Los siguientes pasos son implementar y verificar esquema, RLS, Auth y comandos de reserva antes de habilitar `REMOTE SHADOW`.
+El 2026-09-29 se aplicaron las migraciones `cithela_foundation` y `cithela_security_hardening`: 9 tablas públicas con RLS, lectura por membership, escrituras de cliente cerradas y exclusión de turnos activos superpuestos. Los advisors de seguridad no reportaron hallazgos tras el ajuste. No hay tenants, usuarios ni datos operativos cargados. La web privada sigue en modo local y no está conectada a este proyecto.
+
+Antes de habilitar `REMOTE SHADOW` faltan onboarding Auth y tenant, comandos transaccionales con roles e idempotencia, importación verificada y pruebas de aislamiento entre dos usuarios/tenants. `REMOTE PRIMARY` requiere además sincronización y pruebas en dos dispositivos.
