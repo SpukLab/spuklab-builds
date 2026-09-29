@@ -1,6 +1,6 @@
 # CITHELA — Backend v1
 
-Estado: **FOUNDATION DEPLOYED · CLIENT WRITES CLOSED**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
+Estado: **RESERVATION COMMANDS DEPLOYED · PREVIEW LOCAL**. Diseño para migrar el prototipo local a un backend multiusuario sin cambiar el contrato de canales.
 
 ## Objetivos
 
@@ -286,4 +286,4 @@ CITHELA tiene un proyecto Supabase propio (`mcqknmqhtmihegmifuka`, región `sa-e
 
 El 2026-09-29 se aplicaron las migraciones `cithela_foundation` y `cithela_security_hardening`: 9 tablas públicas con RLS, lectura por membership, escrituras de cliente cerradas y exclusión de turnos activos superpuestos. Los advisors de seguridad no reportaron hallazgos tras el ajuste. No hay tenants, usuarios ni datos operativos cargados. La web privada sigue en modo local y no está conectada a este proyecto.
 
-Antes de habilitar `REMOTE SHADOW` faltan onboarding Auth y tenant, comandos transaccionales con roles e idempotencia, importación verificada y pruebas de aislamiento entre dos usuarios/tenants. `REMOTE PRIMARY` requiere además sincronización y pruebas en dos dispositivos.
+Los cuatro comandos de reserva con roles, versionado e idempotencia están aplicados y probados; ver [checkpoint de comandos](cithela-reservation-commands.md). Antes de habilitar `REMOTE SHADOW` faltan onboarding Auth y tenant, comandos de personas/catálogo, horarios del tenant, adaptador de canal e importación verificada. `REMOTE PRIMARY` requiere además sincronización y pruebas en dos dispositivos.
