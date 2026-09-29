@@ -278,9 +278,17 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 
   <div id="p-medico-pacientes" class="pane">
+    <div class="form-card" style="margin-bottom:14px;">
+      <p class="sh" style="margin:0 0 10px;">Agregar persona</p>
+      <label class="lbl" for="new-person-name">Nombre completo</label>
+      <input class="inp" id="new-person-name" autocomplete="name" placeholder="Nombre y apellido">
+      <label class="lbl" for="new-person-phone">WhatsApp (opcional)</label>
+      <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" placeholder="+54 9 11 0000-0000">
+      <button class="btn-main" onclick="crearPersona()">Guardar persona</button>
+    </div>
     <div class="search-row">
       <span style="color:var(--ink3);">⌕</span>
-      <input id="s-pac" placeholder="Buscar paciente..." oninput="renderPacs()">
+      <input id="s-pac" placeholder="Buscar persona..." oninput="renderPacs()">
     </div>
     <div id="pacs-wrap" style="background:var(--white);border-radius:var(--r);padding:4px 16px;border:var(--line);"></div>
   </div>
@@ -299,7 +307,7 @@ textarea.inp{resize:vertical;min-height:72px;}
       <label class="lbl">Horario</label>
       <select class="inp" id="nt-hora"></select>
       <label class="lbl">Motivo (opcional)</label>
-      <input class="inp" id="nt-motivo" placeholder="Limpieza, ortodoncia, consulta...">
+      <input class="inp" id="nt-motivo" placeholder="Motivo del turno">
       <button class="btn-main" style="margin-top:4px;" onclick="crearTurnoMed()">Confirmar turno</button>
     </div>
   </div>
@@ -569,6 +577,7 @@ function dp(s){return new Date(s+'T12:00:00');}
 function nowHM(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function normalizePhone(v){return String(v||'').replace(/\D/g,'');}
 function validPhone(v){const n=normalizePhone(v);return n.length>=8&&n.length<=16;}
+function newPersonId(people){return Math.max(Date.now(),...people.map(p=>Number(p.id)||0))+1;}
 const DN=['L','M','M','J','V','S','D'];
 const MO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const ML=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -917,7 +926,7 @@ function doLogin(){
     if(!validPhone(tel)){toast('Ingresá un teléfono válido');return;}
     const telKey=normalizePhone(tel);
     let ps=DB.p();let p=ps.find(x=>normalizePhone(x.tel)===telKey);
-    if(!p){p={id:Date.now(),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
+    if(!p){p={id:newPersonId(ps),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
     else{p.nombre=nom;p.tel=tel;}
     DB.sp(ps);me={role:'paciente',...p};
     $('pac-pill').textContent=nom.split(' ')[0];
@@ -1105,6 +1114,20 @@ function renderPacs(){
       <button class="mb ghost" onclick="verFicha(${p.id})">Ver</button>
     </div>`;
   }).join('');
+}
+
+function crearPersona(){
+  const nombre=$('new-person-name').value.trim();
+  const tel=$('new-person-phone').value.trim();
+  if(!nombre){toast('Ingresá el nombre');return;}
+  if(tel&&!validPhone(tel)){toast('Ingresá un WhatsApp válido');return;}
+  const ps=DB.p();
+  if(tel&&ps.some(p=>normalizePhone(p.tel)===normalizePhone(tel))){toast('Ese WhatsApp ya pertenece a una persona');return;}
+  const p={id:newPersonId(ps),nombre,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};
+  ps.push(p);DB.sp(ps);
+  recordEvent('person_created',{personId:p.id});
+  $('new-person-name').value='';$('new-person-phone').value='';
+  renderPacs();fillNT();toast('Persona guardada ✓');
 }
 
 // ── FICHA CON ARCHIVOS Y OBSERVACIONES ──
@@ -1655,21 +1678,6 @@ return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora} 
 }).join('');
 }
 
-// ── SEED ──
-(function(){
-if(DB.p().length)return;
-DB.sp([
-{id:1001,nombre:'Ana García',tel:'+5491112345678',alergias:'Penicilina',obs:'Tratamiento de ortodoncia en curso',archivos:[],creado:new Date().toISOString()},
-{id:1002,nombre:'Carlos Pérez',tel:'+5491198765432',alergias:'',obs:'',archivos:[],creado:new Date().toISOString()},
-{id:1003,nombre:'Lucía Romero',tel:'+5491165432198',alergias:'Ibuprofeno',obs:'Muela del juicio pendiente de extracción',archivos:[],creado:new Date().toISOString()},
-]);
-const hoy=today();const man=dk(new Date(Date.now()+86400000));
-DB.st([
-{id:'T001',pacienteId:1001,fecha:hoy,hora:'10:00',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Limpieza dental',estado:'pendiente',creado:new Date().toISOString()},
-{id:'T002',pacienteId:1002,fecha:hoy,hora:'11:30',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Dolor muela del juicio',estado:'confirmado',creado:new Date().toISOString()},
-{id:'T003',pacienteId:1003,fecha:man,hora:'09:00',servicioNombre:'Consulta',duracionMin:30,resourceId:'R001',resourceName:'Profesional principal',motivo:'Ortodoncia — seguimiento',estado:'pendiente',creado:new Date().toISOString()},
-]);
-})();
 ensureServices();
 ensureResources();
 applyBranding();
