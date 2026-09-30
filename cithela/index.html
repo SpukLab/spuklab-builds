@@ -459,7 +459,8 @@ textarea.inp{resize:vertical;min-height:72px;}
         <label class="lbl">Contraseña Supabase</label>
         <input class="inp" id="cloud-password" type="password" autocomplete="current-password" placeholder="••••••••">
         <button class="btn-main" type="button" onclick="cloudSignIn()">Conectar cuenta</button>
-        <p class="contact-note">La agenda continúa en modo local. Esta conexión sólo habilita el bridge de prueba con el backend; todavía no migra ni sincroniza tus datos.</p>
+        <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignUp()">Crear cuenta de operador</button>
+        <p class="contact-note">La agenda continúa en modo local. Podés crear o conectar una cuenta cloud; todavía no migra ni sincroniza automáticamente tus datos.</p>
       </div>
       <div id="cloud-workspace-form" style="display:none;margin-top:14px;">
         <label class="lbl">Nombre del espacio</label>
@@ -848,6 +849,7 @@ window.CithelaAPI=CithelaAPI;
 const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
+const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
 
 const CithelaCloud=(()=>{
   let client=null;
@@ -955,6 +957,22 @@ const CithelaCloud=(()=>{
     return refresh();
   }
 
+  async function signUp(email,password){
+    const c=await getClient();
+    const {data,error}=await c.auth.signUp({
+      email,password,
+      options:{emailRedirectTo:CITHELA_PUBLIC_URL}
+    });
+    if(error)throw error;
+    if(data?.session)await refresh();
+    return {
+      signedIn:!!data?.session,
+      userId:data?.user?.id||null,
+      email:data?.user?.email||email,
+      requiresConfirmation:!data?.session
+    };
+  }
+
   async function signOut(){
     const c=await getClient();
     const {error}=await c.auth.signOut();
@@ -1008,7 +1026,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signOut,bootstrap,availability,resolvePerson,reservation,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,signOut,bootstrap,availability,resolvePerson,reservation,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1545,6 +1563,22 @@ async function cloudSignIn(){
     $('cloud-password').value='';
     toast('Cuenta cloud conectada ✓');
   }catch(err){toast(err?.message||'No se pudo iniciar sesión',3600);}
+}
+
+async function cloudSignUp(){
+  const email=$('cloud-email').value.trim();
+  const password=$('cloud-password').value;
+  if(!email||!password){toast('Ingresá correo y contraseña');return;}
+  if(password.length<8){toast('Usá una contraseña de al menos 8 caracteres');return;}
+  try{
+    const r=await CithelaCloud.signUp(email,password);
+    $('cloud-password').value='';
+    if(r.signedIn){
+      toast('Cuenta creada y conectada ✓',3200);
+    }else{
+      toast('Cuenta creada. Revisá tu correo para confirmarla.',4200);
+    }
+  }catch(err){toast(err?.message||'No se pudo crear la cuenta',4200);}
 }
 
 async function cloudBootstrap(){
