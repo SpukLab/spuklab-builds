@@ -472,6 +472,28 @@ textarea.inp{resize:vertical;min-height:72px;}
         <button class="btn-main soft" type="button" onclick="cloudCheck()">Probar conexión</button>
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignOut()">Cerrar sesión cloud</button>
       </div>
+      <div id="cloud-hours-form" style="display:none;margin-top:18px;">
+        <p class="sh" style="margin-top:0;">Horarios cloud</p>
+        <p class="contact-note">Horarios generales del workspace remoto. Admiten hasta dos tramos por día desde esta pantalla; los horarios específicos por profesional/recurso se conservan aparte.</p>
+        <div id="cloud-hours-list"></div>
+      </div>
+      <div id="cloud-probe-form" style="display:none;margin-top:18px;">
+        <p class="sh" style="margin-top:0;">Prueba multi-dispositivo</p>
+        <p class="contact-note">Crea un turno únicamente en el backend cloud para comprobar que dos dispositivos conectados al mismo workspace ven el mismo estado. No se mezcla todavía con la agenda local.</p>
+        <label class="lbl">Nombre de prueba</label>
+        <input class="inp" id="cloud-probe-name" placeholder="Ej. Prueba Denis">
+        <label class="lbl">Teléfono E.164</label>
+        <input class="inp" id="cloud-probe-phone" inputmode="tel" placeholder="+5492215551234">
+        <label class="lbl">Servicio cloud</label>
+        <select class="inp" id="cloud-probe-service"></select>
+        <label class="lbl">Recurso cloud</label>
+        <select class="inp" id="cloud-probe-resource"></select>
+        <label class="lbl">Fecha</label>
+        <input class="inp" id="cloud-probe-date" type="date">
+        <button class="btn-main soft" type="button" onclick="cloudProbeAvailability()">Buscar disponibilidad cloud</button>
+        <div id="cloud-probe-slots" style="margin-top:10px;"></div>
+        <div id="cloud-probe-summary" style="margin-top:10px;"></div>
+      </div>
     </div>
 
     <p class="sh">Infraestructura</p>
@@ -856,7 +878,7 @@ const CithelaCloud=(()=>{
   let sdkPromise=null;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
-    services:[],resources:[],workingHours:[],error:null
+    services:[],resources:[],workingHours:[],appointments:[],error:null
   };
 
   function snapshot(){
@@ -868,7 +890,12 @@ const CithelaCloud=(()=>{
       tenant:state.tenant?{...state.tenant}:null,
       serviceCount:state.services.length,
       resourceCount:state.resources.length,
+      services:state.services.map(x=>({...x})),
+      resources:state.resources.map(x=>({...x})),
       workingHoursCount:state.workingHours.length,
+      workingHours:state.workingHours.map(x=>({...x})),
+      appointmentCount:state.appointments.length,
+      appointments:state.appointments.map(x=>({...x})),
       error:state.error
     };
   }
@@ -913,7 +940,7 @@ const CithelaCloud=(()=>{
       const {data:{session},error:sessionError}=await c.auth.getSession();
       if(sessionError)throw sessionError;
       state.session=session||null;
-      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];
+      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];state.appointments=[];
       state.checked=true;state.error=null;
       if(!session){notify();return snapshot();}
 
@@ -927,20 +954,23 @@ const CithelaCloud=(()=>{
       if(!state.membership){notify();return snapshot();}
 
       const tenantId=state.membership.tenant_id;
-      const [tenantQ,servicesQ,resourcesQ,hoursQ]=await Promise.all([
+      const [tenantQ,servicesQ,resourcesQ,hoursQ,appointmentsQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
-        c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local')
+        c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
+        c.from('cithela_appointments').select('id,person_id,starts_at,ends_at,status,service_name,resource_name,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(100)
       ]);
       if(tenantQ.error)throw tenantQ.error;
       if(servicesQ.error)throw servicesQ.error;
       if(resourcesQ.error)throw resourcesQ.error;
       if(hoursQ.error)throw hoursQ.error;
+      if(appointmentsQ.error)throw appointmentsQ.error;
       state.tenant=tenantQ.data;
       state.services=servicesQ.data||[];
       state.resources=resourcesQ.data||[];
       state.workingHours=hoursQ.data||[];
+      state.appointments=appointmentsQ.data||[];
       notify();
       return snapshot();
     }catch(err){
@@ -977,7 +1007,7 @@ const CithelaCloud=(()=>{
     const c=await getClient();
     const {error}=await c.auth.signOut();
     if(error)throw error;
-    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];
+    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];state.appointments=[];
     notify();
     return snapshot();
   }
@@ -996,6 +1026,20 @@ const CithelaCloud=(()=>{
       p_tenant_id:tenantId,p_service_id:serviceId,p_resource_id:resourceId,p_date:date
     });
     if(error)throw error;
+    return data;
+  }
+
+  async function setWorkingHours({tenantId,requestId,weekday,periods}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_configuration_command',{
+      p_tenant_id:tenantId,
+      p_request_id:requestId,
+      p_command:'working_hours.set_day',
+      p_payload:{weekday,periods:Array.isArray(periods)?periods:[]}
+    });
+    if(error)throw error;
+    if(!data?.ok)throw new Error(data?.code||'No se pudieron guardar los horarios');
+    await refresh();
     return data;
   }
 
@@ -1026,7 +1070,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,signOut,bootstrap,availability,resolvePerson,reservation,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1535,13 +1579,14 @@ function renderCloudStatus(){
   const tenant=s.tenant?escHtml(s.tenant.display_name):'Sin workspace';
   const role=s.membership?.role?escHtml(s.membership.role):'—';
   const hours=s.tenant?`${s.workingHoursCount} tramo${s.workingHoursCount===1?'':'s'} horario${s.workingHoursCount===1?'':'s'}`:'—';
+  const appointments=s.tenant?`${s.appointmentCount||0} turno${s.appointmentCount===1?'':'s'} cloud`:'—';
   el.innerHTML=`
     <div class="block-row">
       <div class="block-main"><div class="block-title">${sdk}</div><div class="block-meta">${session}</div></div>
       <span class="tag ${s.error?'x':s.signedIn?'c':'p'}">${s.error?'ERROR':s.signedIn?'AUTH':'LOCAL'}</span>
     </div>
     ${s.signedIn?`<div class="block-row">
-      <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours}</div></div>
+      <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours} · ${appointments}</div></div>
     </div>`:''}
     ${s.error?`<p class="ops-note">${escHtml(s.error)}</p>`:''}
   `;
@@ -1552,6 +1597,185 @@ function renderCloudStatus(){
     if(name&&!name.value)name.value=getCfg().consultorio||getCfg().brand||'CITHELA';
   }
   if(actions)actions.style.display=s.signedIn?'block':'none';
+  renderCloudWorkingHours(s);
+  renderCloudProbe(s);
+}
+
+let cloudProbeResult=null;
+
+function cloudProbeDateDefault(){
+  const d=new Date();
+  d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+
+function renderCloudProbe(s){
+  const box=$('cloud-probe-form'),service=$('cloud-probe-service'),resource=$('cloud-probe-resource');
+  const date=$('cloud-probe-date'),slots=$('cloud-probe-slots'),summary=$('cloud-probe-summary');
+  if(!box||!service||!resource||!date||!slots||!summary)return;
+  const canUse=!!(s?.signedIn&&s?.tenant&&['owner','admin','operator'].includes(s?.membership?.role||''));
+  box.style.display=canUse?'block':'none';
+  if(!canUse){slots.innerHTML='';summary.innerHTML='';cloudProbeResult=null;return;}
+
+  const oldSvc=service.value,oldRes=resource.value;
+  service.innerHTML=(s.services||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)} · ${x.duration_min} min</option>`).join('');
+  resource.innerHTML=(s.resources||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)}</option>`).join('');
+  if(oldSvc&&(s.services||[]).some(x=>x.id===oldSvc))service.value=oldSvc;
+  if(oldRes&&(s.resources||[]).some(x=>x.id===oldRes))resource.value=oldRes;
+  date.min=today();
+  if(!date.value||date.value<today())date.value=cloudProbeDateDefault();
+
+  summary.innerHTML=`<p class="contact-note">Estado remoto visible: <strong>${s.appointmentCount||0}</strong> turno${s.appointmentCount===1?'':'s'} cloud. Abrí la misma cuenta en otro dispositivo y tocá “Probar conexión” para comparar este número.</p>`;
+}
+
+function zonedLocalToIso(dateStr,timeStr,timeZone){
+  const dm=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr||''));
+  const tm=/^(\d{2}):(\d{2})$/.exec(String(timeStr||''));
+  if(!dm||!tm)throw new Error('Fecha u hora inválida');
+  const target=Date.UTC(+dm[1],+dm[2]-1,+dm[3],+tm[1],+tm[2],0);
+  let guess=target;
+  const fmt=new Intl.DateTimeFormat('en-CA',{
+    timeZone,year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
+  });
+  for(let i=0;i<3;i++){
+    const parts=Object.fromEntries(fmt.formatToParts(new Date(guess)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    const seen=Date.UTC(+parts.year,+parts.month-1,+parts.day,+parts.hour,+parts.minute,+parts.second);
+    const diff=target-seen;
+    guess+=diff;
+    if(Math.abs(diff)<1000)break;
+  }
+  return new Date(guess).toISOString();
+}
+
+async function cloudProbeAvailability(){
+  const s=CithelaCloud.state();
+  if(!s.signedIn||!s.tenant){toast('Conectá primero la cuenta cloud');return;}
+  const serviceId=$('cloud-probe-service').value,resourceId=$('cloud-probe-resource').value,date=$('cloud-probe-date').value;
+  if(!serviceId||!resourceId||!date){toast('Completá servicio, recurso y fecha');return;}
+  try{
+    const r=await CithelaCloud.availability({tenantId:s.tenant.id,serviceId,resourceId,date});
+    if(!r?.ok)throw new Error(r?.code||'No se pudo consultar disponibilidad');
+    cloudProbeResult={...r,serviceId,resourceId,date};
+    const slots=Array.isArray(r.slots)?r.slots:[];
+    $('cloud-probe-slots').innerHTML=slots.length
+      ?'<div class="slots">'+slots.map(h=>`<button class="spill" type="button" onclick="cloudCreateProbeAppointment('${h}')">${h}</button>`).join('')+'</div>'
+      :'<p class="ops-note">Sin horarios disponibles para esa fecha.</p>';
+    toast('Disponibilidad cloud actualizada ✓');
+  }catch(err){
+    cloudProbeResult=null;
+    $('cloud-probe-slots').innerHTML='';
+    toast(err?.message||'No se pudo consultar disponibilidad',4200);
+  }
+}
+
+async function cloudCreateProbeAppointment(slot){
+  const s=CithelaCloud.state(),r=cloudProbeResult;
+  const name=$('cloud-probe-name').value.trim(),phone=$('cloud-probe-phone').value.trim();
+  if(!s.signedIn||!s.tenant||!r){toast('Buscá primero disponibilidad cloud');return;}
+  if(!name){toast('Ingresá un nombre de prueba');return;}
+  if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){toast('Usá teléfono E.164, por ejemplo +549221...');return;}
+  try{
+    const person=await CithelaCloud.resolvePerson({
+      tenantId:s.tenant.id,
+      requestId:cloudRequestId('probe-person'),
+      phone,name,createIfMissing:true
+    });
+    if(!person?.ok||!person?.person?.id)throw new Error(person?.code||'No se pudo resolver la persona');
+    const startsAt=zonedLocalToIso(r.date,slot,r.timezone||s.tenant.timezone);
+    const created=await CithelaCloud.reservation({
+      tenantId:s.tenant.id,
+      requestId:cloudRequestId('probe-appointment'),
+      command:'appointment.create',
+      payload:{
+        person_id:person.person.id,
+        service_id:r.serviceId,
+        resource_id:r.resourceId,
+        starts_at:startsAt,
+        reason:'Prueba multi-dispositivo CITHELA'
+      }
+    });
+    if(!created?.ok)throw new Error(created?.code||'No se pudo crear el turno cloud');
+    await CithelaCloud.refresh();
+    cloudProbeResult=null;
+    $('cloud-probe-slots').innerHTML='';
+    toast('Turno cloud creado. Verificalo en el segundo dispositivo ✓',4200);
+  }catch(err){
+    const msg=err?.message==='slot_unavailable'?'Ese horario ya fue ocupado':err?.message;
+    toast(msg||'No se pudo crear el turno cloud',4200);
+  }
+}
+
+const CLOUD_WEEKDAYS=[
+  [1,'Lunes'],[2,'Martes'],[3,'Miércoles'],[4,'Jueves'],
+  [5,'Viernes'],[6,'Sábado'],[7,'Domingo']
+];
+
+function cloudRequestId(prefix='cloud'){
+  const id=(globalThis.crypto&&typeof globalThis.crypto.randomUUID==='function')
+    ?globalThis.crypto.randomUUID()
+    :Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+  return prefix+'-'+id;
+}
+
+function cloudTime(v){
+  const x=String(v||'');
+  return /^\d{2}:\d{2}/.test(x)?x.slice(0,5):'';
+}
+
+function renderCloudWorkingHours(s){
+  const box=$('cloud-hours-form'),list=$('cloud-hours-list');
+  if(!box||!list)return;
+  const role=s?.membership?.role||'';
+  const canEdit=!!(s?.signedIn&&s?.tenant&&['owner','admin'].includes(role));
+  box.style.display=canEdit?'block':'none';
+  if(!canEdit){list.innerHTML='';return;}
+
+  const all=Array.isArray(s.workingHours)?s.workingHours:[];
+  list.innerHTML=CLOUD_WEEKDAYS.map(([day,label])=>{
+    const ps=all.filter(x=>Number(x.weekday)===day&&!x.resource_id)
+      .sort((a,b)=>String(a.starts_local).localeCompare(String(b.starts_local)));
+    const p1=ps[0]||{},p2=ps[1]||{},advanced=ps.length>2;
+    return `<div style="padding:12px 0;border-bottom:var(--line);">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;">
+        <strong style="font-size:.8rem;color:var(--ink);">${label}</strong>
+        <span class="tag ${ps.length?'c':'p'}">${ps.length?ps.length+' tramo'+(ps.length===1?'':'s'):'CERRADO'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <input class="inp" id="cloud-wh-${day}-s1" type="time" value="${cloudTime(p1.starts_local)}" aria-label="${label} inicio 1">
+        <input class="inp" id="cloud-wh-${day}-e1" type="time" value="${cloudTime(p1.ends_local)}" aria-label="${label} fin 1">
+        <input class="inp" id="cloud-wh-${day}-s2" type="time" value="${cloudTime(p2.starts_local)}" aria-label="${label} inicio 2">
+        <input class="inp" id="cloud-wh-${day}-e2" type="time" value="${cloudTime(p2.ends_local)}" aria-label="${label} fin 2">
+      </div>
+      ${advanced?'<p class="ops-note">Este día tiene más de dos tramos. No se modifica desde esta vista simplificada.</p>':''}
+      <button class="btn-main soft" style="margin-top:8px;" type="button" ${advanced?'disabled':''} onclick="cloudSaveWorkingHours(${day})">Guardar ${label.toLowerCase()}</button>
+    </div>`;
+  }).join('');
+}
+
+async function cloudSaveWorkingHours(day){
+  const s=CithelaCloud.state();
+  if(!s.signedIn||!s.tenant){toast('Conectá primero la cuenta cloud');return;}
+  const pairs=[[1],[2]].map(([n])=>({
+    start:$('cloud-wh-'+day+'-s'+n)?.value||'',
+    end:$('cloud-wh-'+day+'-e'+n)?.value||''
+  }));
+  if(pairs.some(p=>(p.start&&!p.end)||(!p.start&&p.end))){
+    toast('Completá inicio y fin de cada tramo');return;
+  }
+  const periods=pairs.filter(p=>p.start&&p.end).sort((a,b)=>a.start.localeCompare(b.start));
+  try{
+    await CithelaCloud.setWorkingHours({
+      tenantId:s.tenant.id,
+      requestId:cloudRequestId('working-hours-'+day),
+      weekday:Number(day),
+      periods
+    });
+    toast(periods.length?'Horarios cloud guardados ✓':'Día cerrado en cloud ✓',3200);
+  }catch(err){
+    const msg=err?.message==='overlapping_hours'?'Los tramos se superponen':err?.message;
+    toast(msg||'No se pudieron guardar los horarios',4200);
+  }
 }
 
 async function cloudSignIn(){
