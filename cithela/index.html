@@ -46,6 +46,13 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .lbl{font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px;display:block;}
 .inp{width:100%;background:var(--bg);border:1.5px solid transparent;border-radius:var(--r-sm);padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;margin-bottom:14px;transition:border .18s;}
 .inp:focus{border-color:var(--teal-mid);background:var(--white);}
+.cloud-shift-stack{display:grid;grid-template-columns:1fr;gap:10px;}
+.cloud-shift{border:var(--line);border-radius:var(--r-sm);padding:10px;background:var(--bg);min-width:0;overflow:hidden;}
+.cloud-shift-title{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;}
+.cloud-time-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;min-width:0;}
+.cloud-time-grid>label{display:block;min-width:0;font-size:.64rem;font-weight:700;color:var(--ink3);padding-right:10px;}
+.cloud-time-grid>label+label{border-left:1px solid #d8e5e1;padding-left:10px;padding-right:0;}
+.cloud-time-grid input[type="time"]{display:block;min-width:0!important;width:100%!important;max-width:100%!important;margin:5px 0 0!important;overflow:hidden;}
 .hint{font-size:.68rem;color:var(--ink4);margin-top:-8px;margin-bottom:16px;}
 .btn-main{width:100%;padding:13px;background:var(--teal);color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .18s;}
 .btn-main:hover{opacity:.85;}
@@ -239,6 +246,13 @@ textarea.inp{resize:vertical;min-height:72px;}
       <label class="lbl">Clave</label>
       <input class="inp" id="l-clave" type="password" placeholder="••••••">
     <p class="hint">Clave inicial: <b>1234</b></p>
+      <div style="margin-top:14px;padding-top:14px;border-top:var(--line);">
+        <label class="lbl">Acceso cloud</label>
+        <input class="inp" id="l-cloud-email" type="email" autocomplete="email" placeholder="tu@email.com">
+        <button class="btn-main soft" type="button" onclick="requestLoginMagicLink()">Enviar enlace mágico</button>
+        <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="loginWithCloudSession()">Continuar con sesión cloud</button>
+        <p class="hint" style="margin:8px 0 0;">Si abriste el enlace recibido por email, volvé acá y continuá con la sesión cloud.</p>
+      </div>
     </div>
     <div id="f-pac" style="display:none">
       <label class="lbl">Teléfono WhatsApp</label>
@@ -459,6 +473,7 @@ textarea.inp{resize:vertical;min-height:72px;}
         <label class="lbl">Contraseña Supabase</label>
         <input class="inp" id="cloud-password" type="password" autocomplete="current-password" placeholder="••••••••">
         <button class="btn-main" type="button" onclick="cloudSignIn()">Conectar cuenta</button>
+        <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudMagicLink()">Enviar enlace mágico</button>
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignUp()">Crear cuenta de operador</button>
         <p class="contact-note">La agenda continúa en modo local. Podés crear o conectar una cuenta cloud; todavía no migra ni sincroniza automáticamente tus datos.</p>
       </div>
@@ -675,13 +690,14 @@ function slotSpan(hora,duracionMin){
 }
 function isOpenAppointment(t){return !!t&&['pendiente','confirmado'].includes(t.estado);}
 function statusMeta(estado){
+  const normalized={pending:'pendiente',confirmed:'confirmado',cancelled:'cancelado',attended:'atendido',no_show:'ausente'}[estado]||estado;
   return {
     pendiente:{cls:'p',label:'Pendiente'},
     confirmado:{cls:'c',label:'Confirmado'},
     cancelado:{cls:'x',label:'Cancelado'},
     atendido:{cls:'a',label:'Atendido'},
     ausente:{cls:'n',label:'No asistió'}
-  }[estado]||{cls:'p',label:estado||'Pendiente'};
+  }[normalized]||{cls:'p',label:normalized||'Pendiente'};
 }
 function blocksFor(fecha){return DB.b().filter(b=>b.fecha===fecha);}
 function isDayBlocked(fecha){return blocksFor(fecha).some(b=>!b.hora);}
@@ -830,11 +846,11 @@ const TurnosChannel={
 };
 const CITHELA_PRODUCT_KEY='cithela';
 const CITHELA_RUNTIME_CAPABILITIES=Object.freeze({
-  persistence:'local',
-  multiUser:false,
+  persistence:'hybrid',
+  multiUser:true,
   realtime:false,
-  serverIdempotency:false,
-  authoritativeConcurrency:false,
+  serverIdempotency:true,
+  authoritativeConcurrency:true,
   backend:'provisioned',
   cloudBridge:true
 });
@@ -878,7 +894,7 @@ const CithelaCloud=(()=>{
   let sdkPromise=null;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
-    services:[],resources:[],workingHours:[],appointments:[],error:null
+    services:[],resources:[],people:[],workingHours:[],appointments:[],error:null
   };
 
   function snapshot(){
@@ -892,6 +908,8 @@ const CithelaCloud=(()=>{
       resourceCount:state.resources.length,
       services:state.services.map(x=>({...x})),
       resources:state.resources.map(x=>({...x})),
+      people:state.people.map(x=>({...x})),
+      peopleCount:state.people.length,
       workingHoursCount:state.workingHours.length,
       workingHours:state.workingHours.map(x=>({...x})),
       appointmentCount:state.appointments.length,
@@ -903,6 +921,18 @@ const CithelaCloud=(()=>{
   function notify(){
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
+    const loginEmail=document.getElementById('l-cloud-email');
+    if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
+    if(typeof me!=='undefined'&&me?.role==='medico'){
+      const med=document.getElementById('screen-medico');
+      if(med?.classList.contains('active')){
+        if(document.getElementById('p-medico-agenda')?.classList.contains('on')){
+          renderCal('med');renderStats();renderAgenda();
+        }
+        if(document.getElementById('p-medico-pacientes')?.classList.contains('on'))renderPacs();
+        if(document.getElementById('p-medico-nuevo')?.classList.contains('on'))fillNT();
+      }
+    }
   }
 
   function loadSdk(){
@@ -940,7 +970,7 @@ const CithelaCloud=(()=>{
       const {data:{session},error:sessionError}=await c.auth.getSession();
       if(sessionError)throw sessionError;
       state.session=session||null;
-      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];state.appointments=[];
+      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.people=[];state.workingHours=[];state.appointments=[];
       state.checked=true;state.error=null;
       if(!session){notify();return snapshot();}
 
@@ -954,21 +984,24 @@ const CithelaCloud=(()=>{
       if(!state.membership){notify();return snapshot();}
 
       const tenantId=state.membership.tenant_id;
-      const [tenantQ,servicesQ,resourcesQ,hoursQ,appointmentsQ]=await Promise.all([
+      const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
+        c.from('cithela_people').select('id,display_name,phone_e164,notes,alerts,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
-        c.from('cithela_appointments').select('id,person_id,starts_at,ends_at,status,service_name,resource_name,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(100)
+        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(250)
       ]);
       if(tenantQ.error)throw tenantQ.error;
       if(servicesQ.error)throw servicesQ.error;
       if(resourcesQ.error)throw resourcesQ.error;
+      if(peopleQ.error)throw peopleQ.error;
       if(hoursQ.error)throw hoursQ.error;
       if(appointmentsQ.error)throw appointmentsQ.error;
       state.tenant=tenantQ.data;
       state.services=servicesQ.data||[];
       state.resources=resourcesQ.data||[];
+      state.people=peopleQ.data||[];
       state.workingHours=hoursQ.data||[];
       state.appointments=appointmentsQ.data||[];
       notify();
@@ -1003,11 +1036,23 @@ const CithelaCloud=(()=>{
     };
   }
 
+  async function sendMagicLink(email){
+    const c=await getClient();
+    const clean=String(email||'').trim();
+    if(!clean)throw new Error('Ingresá tu correo');
+    const {error}=await c.auth.signInWithOtp({
+      email:clean,
+      options:{shouldCreateUser:false,emailRedirectTo:CITHELA_PUBLIC_URL}
+    });
+    if(error)throw error;
+    return {ok:true,email:clean};
+  }
+
   async function signOut(){
     const c=await getClient();
     const {error}=await c.auth.signOut();
     if(error)throw error;
-    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];state.appointments=[];
+    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.people=[];state.workingHours=[];state.appointments=[];
     notify();
     return snapshot();
   }
@@ -1064,15 +1109,78 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  let autoRefreshInstalled=false,lastAutoRefreshAt=0;
+  function installAutoRefresh(){
+    if(autoRefreshInstalled)return;
+    autoRefreshInstalled=true;
+    const run=()=>{
+      if(!state.session||document.visibilityState==='hidden')return;
+      const now=Date.now();
+      if(now-lastAutoRefreshAt<5000)return;
+      lastAutoRefreshAt=now;
+      refresh().catch(()=>{});
+    };
+    window.addEventListener('focus',run);
+    document.addEventListener('visibilitychange',run);
+  }
+
   async function init(){
     notify();
     try{await refresh();}catch{}
+    installAutoRefresh();
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
+
+function professionalCloudReady(){
+  const s=window.CithelaCloud?CithelaCloud.state():null;
+  return !!(me?.role==='medico'&&s?.signedIn&&s?.tenant&&s?.membership);
+}
+function professionalCloudWritable(){
+  const s=window.CithelaCloud?CithelaCloud.state():null;
+  return !!(professionalCloudReady()&&['owner','admin','operator'].includes(s?.membership?.role||''));
+}
+function cloudPersonById(id){
+  const s=CithelaCloud.state();
+  const p=(s.people||[]).find(x=>String(x.id)===String(id));
+  return p?{id:p.id,nombre:p.display_name||'—',tel:p.phone_e164||'',obs:p.notes||'',alergias:p.alerts||''}:null;
+}
+function cloudAppointmentRaw(id){
+  return (CithelaCloud.state().appointments||[]).find(x=>String(x.id)===String(id))||null;
+}
+function cloudAppointmentStatus(v){
+  return {pending:'pendiente',confirmed:'confirmado',cancelled:'cancelado',attended:'atendido',no_show:'ausente'}[v]||v;
+}
+function cloudLocalParts(iso,timeZone){
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{
+    timeZone:timeZone||'America/Argentina/Buenos_Aires',
+    year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(new Date(iso)).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+  return {fecha:`${parts.year}-${parts.month}-${parts.day}`,hora:`${parts.hour}:${parts.minute}`};
+}
+function cloudAppointmentViews(){
+  const s=CithelaCloud.state(),tz=s.tenant?.timezone||'America/Argentina/Buenos_Aires';
+  return (s.appointments||[]).map(a=>{
+    const z=cloudLocalParts(a.starts_at,tz);
+    return {
+      id:a.id,pacienteId:a.person_id,fecha:z.fecha,hora:z.hora,
+      motivo:a.reason||'',servicioId:a.service_id,servicioNombre:a.service_name||'Consulta',
+      duracionMin:Number(a.duration_min)||30,resourceId:a.resource_id,
+      resourceName:a.resource_name||'Profesional principal',estado:cloudAppointmentStatus(a.status),
+      rowVersion:Number(a.row_version)||1,cloud:true
+    };
+  });
+}
+function cloudDayOpen(fecha){
+  const s=CithelaCloud.state();
+  const weekday=((dp(fecha).getDay()+6)%7)+1;
+  return (s.workingHours||[]).some(w=>Number(w.weekday)===weekday);
+}
+function cloudServiceById(id){return (CithelaCloud.state().services||[]).find(x=>String(x.id)===String(id))||null;}
+function cloudResourceById(id){return (CithelaCloud.state().resources||[]).find(x=>String(x.id)===String(id))||null;}
 
 function consultorioInfo(){
   const c=getCfg();
@@ -1156,14 +1264,30 @@ function openWhatsApp(turnoId){
 }
 
 function openPatientWhatsApp(patientId){
-  const p=DB.p().find(x=>x.id===patientId);if(!p||!p.tel){toast('Paciente sin WhatsApp');return;}
+  const p=professionalCloudReady()?cloudPersonById(patientId):DB.p().find(x=>x.id===patientId);
+  if(!p||!p.tel){toast('Paciente sin WhatsApp');return;}
   const n=normalizePhone(p.tel);if(!n){toast('Teléfono inválido');return;}
   const c=consultorioInfo();
   const msg=encodeURIComponent(`Hola ${p.nombre}, le contactamos desde *${c.consultorio}* (${c.nombre}).`);
-  recordEvent('whatsapp_general_opened',{pacienteId:p.id});
+  if(!professionalCloudReady())recordEvent('whatsapp_general_opened',{pacienteId:p.id});
   window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
 }
 
+async function requestLoginMagicLink(){
+  const email=$('l-cloud-email')?.value.trim();
+  if(!email){toast('Ingresá tu correo cloud');return;}
+  try{
+    await CithelaCloud.sendMagicLink(email);
+    toast('Enlace mágico enviado. Revisá tu correo.',4200);
+  }catch(err){toast(err?.message||'No se pudo enviar el enlace',4200);}
+}
+async function loginWithCloudSession(){
+  const s=await CithelaCloud.refresh();
+  if(!s.signedIn){toast('Primero abrí el enlace mágico recibido por email');return;}
+  if(!s.membership||!s.tenant){toast('La cuenta no tiene un espacio CITHELA asignado');return;}
+  me={role:'medico',nombre:(s.email||'Profesional').split('@')[0],cloud:true};
+  goMed();
+}
 function setRole(r){
   role=r;
   $('rb-med').classList.toggle('on',r==='medico');
@@ -1216,10 +1340,12 @@ function renderCal(who){
   const days=weekDays(wkOff);const tod=today();
   const id=who==='med'?'cal-med':'cal-pac';
   if(who==='med')$('wk-lbl').textContent=`${fmt(days[0])} — ${fmt(days[6])}`;
+  const cloudMode=who==='med'&&professionalCloudReady();
+  const turns=cloudMode?cloudAppointmentViews():DB.t();
   $(id).innerHTML=days.map((d,i)=>{
     const key=dk(d);
-    const dot=DB.t().some(t=>t.fecha===key&&t.estado!=='cancelado');
-    const closed=isDayBlocked(key);
+    const dot=turns.some(t=>t.fecha===key&&t.estado!=='cancelado');
+    const closed=cloudMode?!cloudDayOpen(key):isDayBlocked(key);
     const sel=selDate===key;
     return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
       <div class="dn">${DN[i]}</div><div class="dd">${d.getDate()}</div>
@@ -1232,17 +1358,19 @@ function changeWeek(d){wkOff+=d;selDate=null;renderCal('med');renderStats();rend
 
 function renderStats(){
   const keys=weekDays(wkOff).map(d=>dk(d));
-  const ts=DB.t().filter(t=>keys.includes(t.fecha));
-  const c=ts.filter(t=>t.estado==='confirmado').length;
-  const p=ts.filter(t=>t.estado==='pendiente').length;
+  const source=professionalCloudReady()?cloudAppointmentViews():DB.t();
+  const ts=source.filter(t=>keys.includes(t.fecha)&&t.estado!=='cancelado');
+  const confirmed=ts.filter(t=>t.estado==='confirmado').length;
+  const pending=ts.filter(t=>t.estado==='pendiente').length;
   $('stats').innerHTML=`
     <div class="sc"><div class="sv">${ts.length}</div><div class="sl">Semana</div></div>
-    <div class="sc"><div class="sv">${c}</div><div class="sl">Confirm.</div></div>
-    <div class="sc"><div class="sv">${p}</div><div class="sl">Pendientes</div></div>`;
+    <div class="sc"><div class="sv">${confirmed}</div><div class="sl">Confirm.</div></div>
+    <div class="sc"><div class="sv">${pending}</div><div class="sl">Pendientes</div></div>`;
 }
 
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
+  if(professionalCloudReady()){wrap.style.display='none';el.innerHTML='';return;}
   const pacs=DB.p();
   const items=DB.t()
     .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
@@ -1271,35 +1399,93 @@ function renderOpsQueue(){
 function renderAgenda(){
   renderOpsQueue();
   const key=selDate||today();
-  const pacs=DB.p();
-  const ts=DB.t().filter(t=>t.fecha===key).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const cloudMode=professionalCloudReady();
+  const pacs=cloudMode?null:DB.p();
+  const ts=(cloudMode?cloudAppointmentViews():DB.t()).filter(t=>t.fecha===key).sort((a,b)=>a.hora.localeCompare(b.hora));
   const el=$('agenda-list');
-  if(!ts.length){el.innerHTML=`<div class="empty"><div class="ei"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="6"/><path d="M15 6v8M33 6v8M7 19h34M17 29h6M17 34h13"/></svg></div><p>Sin turnos este día</p><small>Seleccioná otro día o creá un turno</small></div>`;return;}
+  if(!ts.length){
+    el.innerHTML=`<div class="empty"><div class="ei"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="6"/><path d="M15 6v8M33 6v8M7 19h34M17 29h6M17 34h13"/></svg></div><p>Sin turnos este día</p><small>${cloudMode?'Agenda sincronizada con CITHELA Cloud':'Seleccioná otro día o creá un turno'}</small></div>`;
+    return;
+  }
   el.innerHTML=ts.map(t=>{
-    const pac=pacs.find(p=>p.id===t.pacienteId)||{nombre:'—',tel:''};
-    const sm=statusMeta(t.estado),tc=sm.cls,tl=sm.label;
-    const waN=normalizePhone(pac.tel);
+    const pac=cloudMode?(cloudPersonById(t.pacienteId)||{nombre:'—',tel:''}):(pacs.find(p=>p.id===t.pacienteId)||{nombre:'—',tel:''});
+    const sm=statusMeta(t.estado),waN=normalizePhone(pac.tel);
+    if(cloudMode){
+      const active=['pendiente','confirmado'].includes(t.estado);
+      return`<div class="aitem">
+        <div class="aitem-time">${t.hora} hs <span class="tag c" style="margin-left:6px;">NUBE</span></div>
+        <div class="aitem-name">${escHtml(pac.nombre)}</div>
+        <div class="aitem-motivo">${escHtml(t.servicioNombre)} · ${t.duracionMin} min · ${escHtml(t.resourceName)}</div>
+        ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+        <div class="aitem-foot">
+          <span class="tag ${sm.cls}">${sm.label}</span>
+          <div class="aitem-actions">
+            ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
+            ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+            ${active&&professionalCloudWritable()?`<button class="mb cancel" onclick="cloudCancelAppointment('${t.id}')">✕</button>`:''}
+          </div>
+        </div>
+      </div>`;
+    }
+    const waNLocal=normalizePhone(pac.tel);
     return`<div class="aitem">
       <div class="aitem-time">${t.hora} hs</div>
-      <div class="aitem-name">${pac.nombre}</div>
+      <div class="aitem-name">${escHtml(pac.nombre)}</div>
       <div class="aitem-motivo">${escHtml(appointmentServiceName(t))} · ${appointmentDuration(t)} min · ${escHtml(appointmentResourceName(t))}</div>
       ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
       ${reminderNeeded(t)?`<div class="ops-note">Recordatorio pendiente</div>`:''}
       ${t.recordatorioAt?`<div class="contact-note">Recordatorio marcado como enviado ${new Date(t.recordatorioAt).toLocaleString()} · esperando confirmación.</div>`:''}
       ${t.waOpenedAt&&!t.recordatorioAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
-        <span class="tag ${tc}">${tl}</span>
+        <span class="tag ${sm.cls}">${sm.label}</span>
         <div class="aitem-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
           ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
-          ${isOpenAppointment(t)&&waN?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+          ${isOpenAppointment(t)&&waNLocal?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
           ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
         </div>
       </div>
     </div>`;
   }).join('');
+}
+
+async function cloudConfirmAppointment(id){
+  const a=cloudAppointmentRaw(id);if(!a)return;
+  try{
+    const r=await CithelaCloud.reservation({
+      tenantId:CithelaCloud.state().tenant.id,
+      requestId:cloudRequestId('agenda-confirm'),
+      command:'appointment.confirm',
+      payload:{id:a.id,expected_version:Number(a.row_version)}
+    });
+    if(!r?.ok)throw new Error(r?.code||'No se pudo confirmar');
+    await CithelaCloud.refresh();
+    toast('Turno confirmado en la nube ✓');
+  }catch(err){toast(err?.message==='stale_write'?'El turno cambió en otro dispositivo. Actualizá e intentá nuevamente.':err?.message||'No se pudo confirmar',4200);}
+}
+async function cloudCancelAppointment(id){
+  const a=cloudAppointmentRaw(id);if(!a)return;
+  if(!confirm('¿Cancelar este turno?'))return;
+  try{
+    const r=await CithelaCloud.reservation({
+      tenantId:CithelaCloud.state().tenant.id,
+      requestId:cloudRequestId('agenda-cancel'),
+      command:'appointment.cancel',
+      payload:{id:a.id,expected_version:Number(a.row_version)}
+    });
+    if(!r?.ok)throw new Error(r?.code||'No se pudo cancelar');
+    await CithelaCloud.refresh();
+    toast('Turno cancelado en la nube');
+  }catch(err){toast(err?.message==='stale_write'?'El turno cambió en otro dispositivo. Actualizá e intentá nuevamente.':err?.message||'No se pudo cancelar',4200);}
+}
+function cloudOpenWhatsApp(id){
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
+  const pac=t?cloudPersonById(t.pacienteId):null;
+  if(!t||!pac?.tel){toast('Paciente sin WhatsApp');return;}
+  const n=normalizePhone(pac.tel);if(!n){toast('Teléfono inválido');return;}
+  window.open(`https://wa.me/${n}?text=${encodeURIComponent(reminderMessage(t,pac))}`,'_blank');
 }
 
 function setEstado(id,e){
@@ -1362,6 +1548,22 @@ function confirmReprogram(){
 // ── PACIENTES ──
 function renderPacs(){
   const q=($('s-pac')?.value||'').toLowerCase();
+  if(professionalCloudReady()){
+    const ps=(CithelaCloud.state().people||[]).filter(p=>!q||(p.display_name||'').toLowerCase().includes(q)||(p.phone_e164||'').includes(q));
+    const turns=cloudAppointmentViews();
+    const el=$('pacs-wrap');
+    if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()} en la nube.</p>`;return;}
+    el.innerHTML=ps.map(p=>{
+      const n=turns.filter(t=>String(t.pacienteId)===String(p.id)).length;
+      const wa=normalizePhone(p.phone_e164||'');
+      return`<div class="prow">
+        <div class="ava">${ini(p.display_name||'—')}</div>
+        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')} · ${n} turno${n!==1?'s':''} · nube</div></div>
+        ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">WhatsApp</button>`:''}
+      </div>`;
+    }).join('');
+    return;
+  }
   const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q));
   const el=$('pacs-wrap');
   if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()}.</p>`;return;}
@@ -1375,10 +1577,25 @@ function renderPacs(){
   }).join('');
 }
 
-function crearPersona(){
+async function crearPersona(){
   const nombre=$('new-person-name').value.trim();
   const tel=$('new-person-phone').value.trim();
   if(!nombre){toast('Ingresá el nombre');return;}
+  if(professionalCloudReady()){
+    if(!/^\+[1-9][0-9]{7,14}$/.test(tel)){toast('En nube usá WhatsApp E.164, por ejemplo +549221...');return;}
+    try{
+      const s=CithelaCloud.state();
+      const r=await CithelaCloud.resolvePerson({
+        tenantId:s.tenant.id,requestId:cloudRequestId('person'),
+        phone:tel,name:nombre,createIfMissing:true
+      });
+      if(!r?.ok)throw new Error(r?.code||'No se pudo guardar');
+      await CithelaCloud.refresh();
+      $('new-person-name').value='';$('new-person-phone').value='';
+      toast(r.code==='person_created'?'Persona guardada en la nube ✓':'La persona ya existía en la nube');
+    }catch(err){toast(err?.message||'No se pudo guardar la persona',4200);}
+    return;
+  }
   if(tel&&!validPhone(tel)){toast('Ingresá un WhatsApp válido');return;}
   const ps=DB.p();
   if(tel&&ps.some(p=>normalizePhone(p.tel)===normalizePhone(tel))){toast('Ese WhatsApp ya pertenece a una persona');return;}
@@ -1498,43 +1715,99 @@ refreshFileList(id,ps[i].archivos);toast('Archivo eliminado');
 
 // ── NUEVO TURNO MED ──
 function fillServiceSelect(id){
-const el=$(id);if(!el)return;
-const current=el.value;
-el.innerHTML=services().map(s=>`<option value="${s.id}">${escHtml(s.nombre)} · ${s.duracionMin} min</option>`).join('');
-if(current&&serviceById(current))el.value=current;
+  const el=$(id);if(!el)return;
+  const current=el.value;
+  el.innerHTML=services().map(s=>`<option value="${s.id}">${escHtml(s.nombre)} · ${s.duracionMin} min</option>`).join('');
+  if(current&&serviceById(current))el.value=current;
 }
 function fillResourceSelect(id){
-const el=$(id);if(!el)return;
-const current=el.value;
-el.innerHTML=resources().map(r=>`<option value="${r.id}">${escHtml(r.nombre)}</option>`).join('');
-if(current&&resourceById(current))el.value=current;
+  const el=$(id);if(!el)return;
+  const current=el.value;
+  el.innerHTML=resources().map(r=>`<option value="${r.id}">${escHtml(r.nombre)}</option>`).join('');
+  if(current&&resourceById(current))el.value=current;
 }
 function fillNT(){
-$('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-fillServiceSelect('nt-service');fillResourceSelect('nt-resource');
-$('nt-fecha').min=today();
-if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
-fillNTHoras();
+  if(professionalCloudReady()){
+    const s=CithelaCloud.state();
+    const pac=$('nt-pac'),svc=$('nt-service'),res=$('nt-resource');
+    const oldPac=pac.value,oldSvc=svc.value,oldRes=res.value;
+    pac.innerHTML='<option value="">— Seleccionar —</option>'+(s.people||[]).map(p=>`<option value="${p.id}">${escHtml(p.display_name)}</option>`).join('');
+    svc.innerHTML=(s.services||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)} · ${x.duration_min} min</option>`).join('');
+    res.innerHTML=(s.resources||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)}</option>`).join('');
+    if(oldPac&&(s.people||[]).some(x=>x.id===oldPac))pac.value=oldPac;
+    if(oldSvc&&(s.services||[]).some(x=>x.id===oldSvc))svc.value=oldSvc;
+    if(oldRes&&(s.resources||[]).some(x=>x.id===oldRes))res.value=oldRes;
+    $('nt-fecha').min=today();
+    if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
+    fillNTHoras();
+    return;
+  }
+  $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  fillServiceSelect('nt-service');fillResourceSelect('nt-resource');
+  $('nt-fecha').min=today();
+  if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
+  fillNTHoras();
 }
-function fillNTHoras(){
-const fecha=$('nt-fecha').value||today();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');const avail=uiAvailability(fecha,svc.id,res.id);
-$('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
+async function fillNTHoras(){
+  const fecha=$('nt-fecha').value||today();
+  if(professionalCloudReady()){
+    const s=CithelaCloud.state(),serviceId=$('nt-service').value,resourceId=$('nt-resource').value;
+    $('nt-hora').innerHTML='<option value="">Consultando...</option>';
+    if(!serviceId||!resourceId){$('nt-hora').innerHTML='<option value="">Sin configuración cloud</option>';return;}
+    try{
+      const r=await CithelaCloud.availability({tenantId:s.tenant.id,serviceId,resourceId,date:fecha});
+      const avail=r?.ok&&Array.isArray(r.slots)?r.slots:[];
+      $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
+    }catch(err){
+      $('nt-hora').innerHTML='<option value="">Error de disponibilidad</option>';
+      toast(err?.message||'No se pudo consultar disponibilidad',3200);
+    }
+    return;
+  }
+  const svc=selectedService('nt-service'),res=selectedResource('nt-resource'),avail=uiAvailability(fecha,svc.id,res.id);
+  $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
 }
-function crearTurnoMed(){
-const pacId=+$('nt-pac').value;const fecha=$('nt-fecha').value;
-const hora=$('nt-hora').value;const motivo=$('nt-motivo').value.trim();const svc=selectedService('nt-service');const res=selectedResource('nt-resource');
-if(!pacId){toast('Seleccioná un paciente');return;}
-if(!fecha){toast('Elegí una fecha');return;}
-if(fecha<today()){toast('No se pueden crear turnos en una fecha pasada');return;}
-if(!hora){toast('No hay horarios disponibles');return;}
-const created=uiChannel('appointment.create',{patientId:pacId,fecha,hora,servicioId:svc.id,resourceId:res.id,motivo},'operator');
-if(!created.ok){toast(created.code==='slot_unavailable'?'Horario ya ocupado o bloqueado':'No se pudo crear el turno');fillNTHoras();return;}
-toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
-document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
-document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
-$('p-medico-agenda').classList.add('on');
-document.querySelector('#screen-medico .tab').classList.add('on');
-renderCal('med');renderStats();renderAgenda();
+async function crearTurnoMed(){
+  const fecha=$('nt-fecha').value,hora=$('nt-hora').value,motivo=$('nt-motivo').value.trim();
+  if(!fecha){toast('Elegí una fecha');return;}
+  if(fecha<today()){toast('No se pueden crear turnos en una fecha pasada');return;}
+  if(!hora){toast('No hay horarios disponibles');return;}
+  if(professionalCloudReady()){
+    const personId=$('nt-pac').value,serviceId=$('nt-service').value,resourceId=$('nt-resource').value;
+    if(!personId){toast('Seleccioná un paciente');return;}
+    if(!professionalCloudWritable()){toast('Tu rol cloud es de solo lectura');return;}
+    try{
+      const s=CithelaCloud.state();
+      const startsAt=zonedLocalToIso(fecha,hora,s.tenant.timezone);
+      const created=await CithelaCloud.reservation({
+        tenantId:s.tenant.id,requestId:cloudRequestId('agenda-create'),command:'appointment.create',
+        payload:{person_id:personId,service_id:serviceId,resource_id:resourceId,starts_at:startsAt,reason:motivo}
+      });
+      if(!created?.ok)throw new Error(created?.code||'No se pudo crear el turno');
+      await CithelaCloud.refresh();
+      $('nt-motivo').value='';selDate=fecha;
+      document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
+      document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
+      $('p-medico-agenda').classList.add('on');
+      document.querySelector('#screen-medico .tab').classList.add('on');
+      renderCal('med');renderStats();renderAgenda();
+      toast('Turno creado en la nube ✓');
+    }catch(err){
+      const msg=err?.message==='slot_unavailable'?'Ese horario acaba de ocuparse':err?.message==='outside_working_hours'?'El horario quedó fuera de la jornada configurada':err?.message;
+      toast(msg||'No se pudo crear el turno',4200);fillNTHoras();
+    }
+    return;
+  }
+  const pacId=+$('nt-pac').value;const svc=selectedService('nt-service');const res=selectedResource('nt-resource');
+  if(!pacId){toast('Seleccioná un paciente');return;}
+  const created=uiChannel('appointment.create',{patientId:pacId,fecha,hora,servicioId:svc.id,resourceId:res.id,motivo},'operator');
+  if(!created.ok){toast(created.code==='slot_unavailable'?'Horario ya ocupado o bloqueado':'No se pudo crear el turno');fillNTHoras();return;}
+  toast('Turno creado ✓');$('nt-motivo').value='';selDate=fecha;
+  document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
+  $('p-medico-agenda').classList.add('on');
+  document.querySelector('#screen-medico .tab').classList.add('on');
+  renderCal('med');renderStats();renderAgenda();
 }
 
 // ── CONFIG ──
@@ -1545,25 +1818,25 @@ function renderInfrastructureStatus(){
 const el=$('infra-status');if(!el)return;
 const cap=CithelaAPI.capabilities();
 const cloud=window.CithelaCloud?CithelaCloud.state():null;
-const yes=v=>v?'Sí':'No';
+const active=professionalCloudReady();
 el.innerHTML=`
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Persistencia activa</div><div class="block-meta">La UI todavía opera en este dispositivo</div></div>
-    <span class="tag p">LOCAL</span>
+    <div class="block-main"><div class="block-title">Agenda profesional</div><div class="block-meta">${active?'Turnos, personas y disponibilidad compartidos entre dispositivos':'Fallback local disponible'}</div></div>
+    <span class="tag ${active?'c':'p'}">${active?'NUBE':'LOCAL'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Backend Supabase</div><div class="block-meta">RLS, reservas, horarios y directorio</div></div>
+    <div class="block-main"><div class="block-title">Backend Supabase</div><div class="block-meta">RLS, reservas, horarios, directorio e idempotencia</div></div>
     <span class="tag ${cap.backend==='provisioned'?'c':'x'}">${cap.backend==='provisioned'?'LISTO':'NO'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Bridge cloud</div><div class="block-meta">${cloud?.signedIn?'Sesión autenticada':'Preparado · sin sesión'}</div></div>
-    <span class="tag ${cloud?.signedIn?'c':'p'}">${cloud?.signedIn?'CONECTADO':'STANDBY'}</span>
+    <div class="block-main"><div class="block-title">Multi-dispositivo</div><div class="block-meta">${active?'Actualiza al volver a la app y después de cada acción':'Requiere sesión cloud'}</div></div>
+    <span class="tag ${active?'c':'p'}">${active?'ACTIVO':'STANDBY'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Multiusuario UI</div><div class="block-meta">Se habilita después del test en dos dispositivos</div></div>
-    <span class="tag x">${yes(cap.multiUser)}</span>
+    <div class="block-main"><div class="block-title">Tiempo real push</div><div class="block-meta">Todavía no usa suscripción Realtime; refresca por foco/acciones</div></div>
+    <span class="tag p">PENDIENTE</span>
   </div>
-  <p class="contact-note">El servidor ya protege concurrencia e idempotencia, pero la agenda visible sigue local. No declararemos sincronización multiusuario hasta completar la prueba real.</p>`;
+  <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
 }
 
 function renderCloudStatus(){
@@ -1741,26 +2014,26 @@ function renderCloudWorkingHours(s){
         <strong style="font-size:.8rem;color:var(--ink);">${label}</strong>
         <span class="tag ${ps.length?'c':'p'}">${ps.length?ps.length+' tramo'+(ps.length===1?'':'s'):'CERRADO'}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-        <div style="border:var(--line);border-radius:var(--r-sm);padding:10px;background:var(--bg);">
-          <div style="font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;">Tramo 1</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="display:block;font-size:.64rem;font-weight:700;color:var(--ink3);">Inicio
-              <input class="inp" style="margin:5px 0 0;" id="cloud-wh-${day}-s1" type="time" value="${cloudTime(p1.starts_local)}" aria-label="${label} tramo 1 inicio">
+      <div class="cloud-shift-stack">
+        <div class="cloud-shift">
+          <div class="cloud-shift-title">Tramo 1</div>
+          <div class="cloud-time-grid">
+            <label>Inicio
+              <input class="inp" id="cloud-wh-${day}-s1" type="time" value="${cloudTime(p1.starts_local)}" aria-label="${label} tramo 1 inicio">
             </label>
-            <label style="display:block;font-size:.64rem;font-weight:700;color:var(--ink3);">Fin
-              <input class="inp" style="margin:5px 0 0;" id="cloud-wh-${day}-e1" type="time" value="${cloudTime(p1.ends_local)}" aria-label="${label} tramo 1 fin">
+            <label>Fin
+              <input class="inp" id="cloud-wh-${day}-e1" type="time" value="${cloudTime(p1.ends_local)}" aria-label="${label} tramo 1 fin">
             </label>
           </div>
         </div>
-        <div style="border:var(--line);border-radius:var(--r-sm);padding:10px;background:var(--bg);">
-          <div style="font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;">Tramo 2 <span style="font-weight:500;text-transform:none;letter-spacing:0;">(opcional)</span></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="display:block;font-size:.64rem;font-weight:700;color:var(--ink3);">Inicio
-              <input class="inp" style="margin:5px 0 0;" id="cloud-wh-${day}-s2" type="time" value="${cloudTime(p2.starts_local)}" aria-label="${label} tramo 2 inicio">
+        <div class="cloud-shift">
+          <div class="cloud-shift-title">Tramo 2 <span style="font-weight:500;text-transform:none;letter-spacing:0;">(opcional)</span></div>
+          <div class="cloud-time-grid">
+            <label>Inicio
+              <input class="inp" id="cloud-wh-${day}-s2" type="time" value="${cloudTime(p2.starts_local)}" aria-label="${label} tramo 2 inicio">
             </label>
-            <label style="display:block;font-size:.64rem;font-weight:700;color:var(--ink3);">Fin
-              <input class="inp" style="margin:5px 0 0;" id="cloud-wh-${day}-e2" type="time" value="${cloudTime(p2.ends_local)}" aria-label="${label} tramo 2 fin">
+            <label>Fin
+              <input class="inp" id="cloud-wh-${day}-e2" type="time" value="${cloudTime(p2.ends_local)}" aria-label="${label} tramo 2 fin">
             </label>
           </div>
         </div>
@@ -1805,6 +2078,15 @@ async function cloudSignIn(){
     $('cloud-password').value='';
     toast('Cuenta cloud conectada ✓');
   }catch(err){toast(err?.message||'No se pudo iniciar sesión',3600);}
+}
+
+async function cloudMagicLink(){
+  const email=$('cloud-email').value.trim();
+  if(!email){toast('Ingresá tu correo');return;}
+  try{
+    await CithelaCloud.sendMagicLink(email);
+    toast('Enlace mágico enviado. Revisá tu correo.',4200);
+  }catch(err){toast(err?.message||'No se pudo enviar el enlace',4200);}
 }
 
 async function cloudSignUp(){
