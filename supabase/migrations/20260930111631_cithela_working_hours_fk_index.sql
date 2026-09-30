@@ -1,0 +1,1 @@
+create index cithela_working_hours_tenant_resource_idx on public.cithela_working_hours(tenant_id,resource_id);

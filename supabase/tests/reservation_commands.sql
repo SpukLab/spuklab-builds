@@ -16,6 +16,8 @@ begin
   insert into public.cithela_people(tenant_id,display_name) values(tb,'B') returning id into pb;
   insert into public.cithela_services(tenant_id,name,duration_min) values(ta,'Test',30) returning id into s;
   insert into public.cithela_resources(tenant_id,name) values(ta,'Test') returning id into r;
+  insert into public.cithela_working_hours(tenant_id,weekday,starts_local,ends_local)
+    values(ta,extract(isodow from (ts at time zone 'America/Argentina/Buenos_Aires'))::integer,'08:00','18:00');
   insert into public.cithela_availability_blocks(tenant_id,starts_at,ends_at) values(ta,ts+interval '2 hours',ts+interval '3 hours');
   payload := jsonb_build_object('person_id',pa,'service_id',s,'resource_id',r,'starts_at',to_char(ts,'YYYY-MM-DD"T"HH24:MI:SSOF'));
   -- to_char OF may omit :00; build an explicit UTC offset instead.
