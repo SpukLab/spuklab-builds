@@ -450,6 +450,29 @@ textarea.inp{resize:vertical;min-height:72px;}
       <div id="cfg-block-list" style="margin-top:14px;"></div>
     </div>
 
+    <p class="sh">Nube CITHELA</p>
+    <div class="form-card" style="margin-bottom:14px;">
+      <div id="cloud-status"></div>
+      <div id="cloud-auth-form" style="margin-top:14px;">
+        <label class="lbl">Correo del operador</label>
+        <input class="inp" id="cloud-email" type="email" autocomplete="email" placeholder="nombre@correo.com">
+        <label class="lbl">Contraseña Supabase</label>
+        <input class="inp" id="cloud-password" type="password" autocomplete="current-password" placeholder="••••••••">
+        <button class="btn-main" type="button" onclick="cloudSignIn()">Conectar cuenta</button>
+        <p class="contact-note">La agenda continúa en modo local. Esta conexión sólo habilita el bridge de prueba con el backend; todavía no migra ni sincroniza tus datos.</p>
+      </div>
+      <div id="cloud-workspace-form" style="display:none;margin-top:14px;">
+        <label class="lbl">Nombre del espacio</label>
+        <input class="inp" id="cloud-workspace-name" placeholder="Consultorio, salón, estudio...">
+        <button class="btn-main" type="button" onclick="cloudBootstrap()">Crear espacio CITHELA</button>
+        <p class="contact-note">Se crea un único workspace inicial con servicio “Consulta” y recurso “Profesional principal”. Luego deben configurarse horarios reales.</p>
+      </div>
+      <div id="cloud-actions" style="display:none;margin-top:14px;">
+        <button class="btn-main soft" type="button" onclick="cloudCheck()">Probar conexión</button>
+        <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignOut()">Cerrar sesión cloud</button>
+      </div>
+    </div>
+
     <p class="sh">Infraestructura</p>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="infra-status"></div>
@@ -789,7 +812,8 @@ const CITHELA_RUNTIME_CAPABILITIES=Object.freeze({
   realtime:false,
   serverIdempotency:false,
   authoritativeConcurrency:false,
-  backend:'not_provisioned'
+  backend:'provisioned',
+  cloudBridge:true
 });
 function uiChannel(command,payload={},actorType=null){
   const resolvedActor=actorType||(role==='paciente'?'customer':'operator');
@@ -818,6 +842,175 @@ const CithelaAPI=Object.freeze({
   availability(payload){return TurnosChannel.execute({version:CHANNEL_CONTRACT_VERSION,channel:'api',actor:{type:'system'},command:'availability.query',payload:payload||{}});}
 });
 window.CithelaAPI=CithelaAPI;
+
+// ── CLOUD BRIDGE ──
+// Preparado para validar Auth/RLS y backend sin cambiar todavía el runtime local autoritativo.
+const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
+const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
+const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
+
+const CithelaCloud=(()=>{
+  let client=null;
+  let sdkPromise=null;
+  const state={
+    sdk:false,checked:false,session:null,membership:null,tenant:null,
+    services:[],resources:[],workingHours:[],error:null
+  };
+
+  function snapshot(){
+    return {
+      sdk:state.sdk,checked:state.checked,
+      signedIn:!!state.session,
+      email:state.session?.user?.email||null,
+      membership:state.membership?{...state.membership}:null,
+      tenant:state.tenant?{...state.tenant}:null,
+      serviceCount:state.services.length,
+      resourceCount:state.resources.length,
+      workingHoursCount:state.workingHours.length,
+      error:state.error
+    };
+  }
+
+  function notify(){
+    if(typeof renderCloudStatus==='function')renderCloudStatus();
+    if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
+  }
+
+  function loadSdk(){
+    if(window.supabase?.createClient){state.sdk=true;return Promise.resolve(window.supabase);}
+    if(sdkPromise)return sdkPromise;
+    sdkPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src=CITHELA_SUPABASE_JS;
+      script.async=true;
+      script.crossOrigin='anonymous';
+      script.onload=()=>window.supabase?.createClient?resolve(window.supabase):reject(new Error('SDK Supabase no disponible'));
+      script.onerror=()=>reject(new Error('No se pudo cargar Supabase JS'));
+      document.head.appendChild(script);
+    }).then(lib=>{state.sdk=true;state.error=null;return lib;})
+      .catch(err=>{state.sdk=false;state.error=err.message;notify();throw err;});
+    return sdkPromise;
+  }
+
+  async function getClient(){
+    if(client)return client;
+    const lib=await loadSdk();
+    client=lib.createClient(CITHELA_SUPABASE_URL,CITHELA_SUPABASE_PUBLISHABLE_KEY,{
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+    });
+    client.auth.onAuthStateChange((_event,session)=>{
+      state.session=session||null;
+      setTimeout(()=>refresh().catch(()=>{}),0);
+    });
+    return client;
+  }
+
+  async function refresh(){
+    try{
+      const c=await getClient();
+      const {data:{session},error:sessionError}=await c.auth.getSession();
+      if(sessionError)throw sessionError;
+      state.session=session||null;
+      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];
+      state.checked=true;state.error=null;
+      if(!session){notify();return snapshot();}
+
+      const {data:memberships,error:membershipError}=await c
+        .from('cithela_tenant_memberships')
+        .select('tenant_id,role,created_at')
+        .order('created_at',{ascending:true})
+        .limit(1);
+      if(membershipError)throw membershipError;
+      state.membership=memberships?.[0]||null;
+      if(!state.membership){notify();return snapshot();}
+
+      const tenantId=state.membership.tenant_id;
+      const [tenantQ,servicesQ,resourcesQ,hoursQ]=await Promise.all([
+        c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
+        c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
+        c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
+        c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local')
+      ]);
+      if(tenantQ.error)throw tenantQ.error;
+      if(servicesQ.error)throw servicesQ.error;
+      if(resourcesQ.error)throw resourcesQ.error;
+      if(hoursQ.error)throw hoursQ.error;
+      state.tenant=tenantQ.data;
+      state.services=servicesQ.data||[];
+      state.resources=resourcesQ.data||[];
+      state.workingHours=hoursQ.data||[];
+      notify();
+      return snapshot();
+    }catch(err){
+      state.checked=true;state.error=err?.message||'Error cloud';
+      notify();
+      return snapshot();
+    }
+  }
+
+  async function signIn(email,password){
+    const c=await getClient();
+    const {error}=await c.auth.signInWithPassword({email,password});
+    if(error)throw error;
+    return refresh();
+  }
+
+  async function signOut(){
+    const c=await getClient();
+    const {error}=await c.auth.signOut();
+    if(error)throw error;
+    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.workingHours=[];
+    notify();
+    return snapshot();
+  }
+
+  async function bootstrap(displayName,timezone='America/Argentina/Buenos_Aires'){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_bootstrap_tenant',{p_display_name:displayName,p_timezone:timezone});
+    if(error)throw error;
+    await refresh();
+    return data;
+  }
+
+  async function availability({tenantId,serviceId,resourceId,date}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_availability_query',{
+      p_tenant_id:tenantId,p_service_id:serviceId,p_resource_id:resourceId,p_date:date
+    });
+    if(error)throw error;
+    return data;
+  }
+
+  async function resolvePerson({tenantId,requestId,phone,name='',createIfMissing=false}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_directory_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_command:'person.resolve',
+      p_payload:{phone,name,create_if_missing:!!createIfMissing}
+    });
+    if(error)throw error;
+    return data;
+  }
+
+  async function reservation({tenantId,requestId,command,payload}){
+    const allowed=new Set(['appointment.create','appointment.confirm','appointment.cancel','appointment.reschedule']);
+    if(!allowed.has(command))throw new Error('Comando de reserva no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_reservation_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_command:command,p_payload:payload||{}
+    });
+    if(error)throw error;
+    return data;
+  }
+
+  async function init(){
+    notify();
+    try{await refresh();}catch{}
+    return snapshot();
+  }
+
+  return Object.freeze({init,refresh,signIn,signOut,bootstrap,availability,resolvePerson,reservation,state:snapshot});
+})();
+window.CithelaCloud=CithelaCloud;
 
 function consultorioInfo(){
   const c=getCfg();
@@ -1289,25 +1482,90 @@ function saveCfg(v){localStorage.setItem('cl_cfg',JSON.stringify(v));}
 function renderInfrastructureStatus(){
 const el=$('infra-status');if(!el)return;
 const cap=CithelaAPI.capabilities();
+const cloud=window.CithelaCloud?CithelaCloud.state():null;
 const yes=v=>v?'Sí':'No';
 el.innerHTML=`
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Persistencia</div><div class="block-meta">${cap.persistence==='local'?'Local · este dispositivo':'Remota'}</div></div>
-    <span class="tag ${cap.persistence==='local'?'p':'c'}">${cap.persistence.toUpperCase()}</span>
+    <div class="block-main"><div class="block-title">Persistencia activa</div><div class="block-meta">La UI todavía opera en este dispositivo</div></div>
+    <span class="tag p">LOCAL</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Multiusuario</div><div class="block-meta">Sincronización entre operadores</div></div>
-    <span class="tag ${cap.multiUser?'c':'x'}">${yes(cap.multiUser)}</span>
+    <div class="block-main"><div class="block-title">Backend Supabase</div><div class="block-meta">RLS, reservas, horarios y directorio</div></div>
+    <span class="tag ${cap.backend==='provisioned'?'c':'x'}">${cap.backend==='provisioned'?'LISTO':'NO'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Realtime</div><div class="block-meta">Cambios visibles entre dispositivos</div></div>
-    <span class="tag ${cap.realtime?'c':'x'}">${yes(cap.realtime)}</span>
+    <div class="block-main"><div class="block-title">Bridge cloud</div><div class="block-meta">${cloud?.signedIn?'Sesión autenticada':'Preparado · sin sesión'}</div></div>
+    <span class="tag ${cloud?.signedIn?'c':'p'}">${cloud?.signedIn?'CONECTADO':'STANDBY'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Concurrencia autoritativa</div><div class="block-meta">Protección servidor contra doble reserva simultánea</div></div>
-    <span class="tag ${cap.authoritativeConcurrency?'c':'x'}">${yes(cap.authoritativeConcurrency)}</span>
+    <div class="block-main"><div class="block-title">Multiusuario UI</div><div class="block-meta">Se habilita después del test en dos dispositivos</div></div>
+    <span class="tag x">${yes(cap.multiUser)}</span>
   </div>
-  <p class="contact-note">Estado actual: prototipo local estable. El backend Supabase de CITHELA está diseñado pero todavía no fue provisionado; esta pantalla no simula conectividad inexistente.</p>`;
+  <p class="contact-note">El servidor ya protege concurrencia e idempotencia, pero la agenda visible sigue local. No declararemos sincronización multiusuario hasta completar la prueba real.</p>`;
+}
+
+function renderCloudStatus(){
+  const el=$('cloud-status');if(!el)return;
+  const s=window.CithelaCloud?CithelaCloud.state():null;
+  const auth=$('cloud-auth-form'),workspace=$('cloud-workspace-form'),actions=$('cloud-actions');
+  if(!s){
+    el.innerHTML='<p class="contact-note">Bridge cloud aún no inicializado.</p>';
+    return;
+  }
+  const sdk=s.sdk?'SDK listo':'Cargando SDK';
+  const session=s.signedIn?(s.email||'Sesión activa'):'Sin sesión cloud';
+  const tenant=s.tenant?escHtml(s.tenant.display_name):'Sin workspace';
+  const role=s.membership?.role?escHtml(s.membership.role):'—';
+  const hours=s.tenant?`${s.workingHoursCount} tramo${s.workingHoursCount===1?'':'s'} horario${s.workingHoursCount===1?'':'s'}`:'—';
+  el.innerHTML=`
+    <div class="block-row">
+      <div class="block-main"><div class="block-title">${sdk}</div><div class="block-meta">${session}</div></div>
+      <span class="tag ${s.error?'x':s.signedIn?'c':'p'}">${s.error?'ERROR':s.signedIn?'AUTH':'LOCAL'}</span>
+    </div>
+    ${s.signedIn?`<div class="block-row">
+      <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours}</div></div>
+    </div>`:''}
+    ${s.error?`<p class="ops-note">${escHtml(s.error)}</p>`:''}
+  `;
+  if(auth)auth.style.display=s.signedIn?'none':'block';
+  if(workspace){
+    workspace.style.display=s.signedIn&&!s.membership?'block':'none';
+    const name=$('cloud-workspace-name');
+    if(name&&!name.value)name.value=getCfg().consultorio||getCfg().brand||'CITHELA';
+  }
+  if(actions)actions.style.display=s.signedIn?'block':'none';
+}
+
+async function cloudSignIn(){
+  const email=$('cloud-email').value.trim();
+  const password=$('cloud-password').value;
+  if(!email||!password){toast('Ingresá correo y contraseña');return;}
+  try{
+    await CithelaCloud.signIn(email,password);
+    $('cloud-password').value='';
+    toast('Cuenta cloud conectada ✓');
+  }catch(err){toast(err?.message||'No se pudo iniciar sesión',3600);}
+}
+
+async function cloudBootstrap(){
+  const name=$('cloud-workspace-name').value.trim();
+  if(!name){toast('Ingresá un nombre de espacio');return;}
+  try{
+    const r=await CithelaCloud.bootstrap(name);
+    toast(r?.code==='workspace_created'?'Espacio CITHELA creado ✓':'Espacio cloud recuperado ✓',3200);
+  }catch(err){toast(err?.message||'No se pudo crear el espacio',3600);}
+}
+
+async function cloudCheck(){
+  try{
+    const s=await CithelaCloud.refresh();
+    toast(s.error?'La conexión devolvió un error':'Conexión cloud verificada ✓',3200);
+  }catch(err){toast(err?.message||'No se pudo verificar',3600);}
+}
+
+async function cloudSignOut(){
+  try{await CithelaCloud.signOut();toast('Sesión cloud cerrada');}
+  catch(err){toast(err?.message||'No se pudo cerrar la sesión',3200);}
 }
 function cargarConfig(){
 const c=getCfg();
@@ -1685,6 +1943,7 @@ return`<div class="hrow"> <div><div class="hf">${fmt(dp(t.fecha))} · ${t.hora} 
 ensureServices();
 ensureResources();
 applyBranding();
+CithelaCloud.init().catch(()=>{});
 </script>
 
 </body>
