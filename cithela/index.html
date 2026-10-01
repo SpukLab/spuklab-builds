@@ -854,7 +854,7 @@ const CITHELA_PRODUCT_KEY='cithela';
 const CITHELA_RUNTIME_CAPABILITIES=Object.freeze({
   persistence:'hybrid',
   multiUser:true,
-  realtime:false,
+  realtime:true,
   serverIdempotency:true,
   authoritativeConcurrency:true,
   backend:'provisioned',
@@ -899,14 +899,15 @@ const CithelaCloud=(()=>{
   let client=null;
   let sdkPromise=null;
   let refreshSerial=0;
+  let realtimeChannel=null,realtimeTenantId=null,realtimeDebounceTimer=null;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
-    services:[],resources:[],people:[],workingHours:[],appointments:[],error:null
+    services:[],resources:[],people:[],workingHours:[],appointments:[],realtimeStatus:'IDLE',error:null
   };
 
   function snapshot(){
     return {
-      sdk:state.sdk,checked:state.checked,
+      sdk:state.sdk,checked:state.checked,realtimeStatus:state.realtimeStatus,
       signedIn:!!state.session,
       email:state.session?.user?.email||null,
       membership:state.membership?{...state.membership}:null,
@@ -923,6 +924,52 @@ const CithelaCloud=(()=>{
       appointments:state.appointments.map(x=>({...x})),
       error:state.error
     };
+  }
+
+  function stopRealtime(){
+    if(realtimeDebounceTimer){
+      clearTimeout(realtimeDebounceTimer);
+      realtimeDebounceTimer=null;
+    }
+    const old=realtimeChannel;
+    realtimeChannel=null;realtimeTenantId=null;
+    state.realtimeStatus='IDLE';
+    if(old&&client){
+      try{Promise.resolve(client.removeChannel(old)).catch(()=>{});}catch{}
+    }
+  }
+
+  function scheduleRealtimeRefresh(){
+    if(realtimeDebounceTimer)clearTimeout(realtimeDebounceTimer);
+    realtimeDebounceTimer=setTimeout(()=>{
+      realtimeDebounceTimer=null;
+      if(state.session&&document.visibilityState!=='hidden')refresh().catch(()=>{});
+    },400);
+  }
+
+  function startRealtime(tenantId){
+    if(!client||!state.session||!tenantId)return;
+    if(realtimeChannel&&realtimeTenantId===tenantId)return;
+    stopRealtime();
+    state.realtimeStatus='CONNECTING';
+    realtimeTenantId=tenantId;
+    const ch=client.channel('cithela-operator-'+tenantId);
+    for(const table of [
+      'cithela_appointments','cithela_people','cithela_working_hours',
+      'cithela_services','cithela_resources'
+    ]){
+      ch.on('postgres_changes',{
+        event:'*',schema:'public',table,filter:'tenant_id=eq.'+tenantId
+      },()=>scheduleRealtimeRefresh());
+    }
+    realtimeChannel=ch;
+    ch.subscribe(status=>{
+      if(realtimeChannel!==ch)return;
+      if(state.realtimeStatus!==status){
+        state.realtimeStatus=status;
+        notify();
+      }
+    });
   }
 
   function notify(){
@@ -979,6 +1026,7 @@ const CithelaCloud=(()=>{
   }
 
   function resetWorkspace(){
+    stopRealtime();
     state.membership=null;state.tenant=null;
     state.services=[];state.resources=[];state.people=[];
     state.workingHours=[];state.appointments=[];
@@ -1029,6 +1077,7 @@ const CithelaCloud=(()=>{
       state.workingHours=hoursQ.data||[];
       state.appointments=appointmentsQ.data||[];
       state.checked=true;state.error=null;
+      startRealtime(tenantId);
       notify();
       return snapshot();
     }catch(err){
@@ -1978,8 +2027,8 @@ el.innerHTML=`
     <span class="tag ${active?'c':'p'}">${active?'ACTIVO':'STANDBY'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Tiempo real push</div><div class="block-meta">Todavía no usa suscripción Realtime; refresca por foco/acciones</div></div>
-    <span class="tag p">PENDIENTE</span>
+    <div class="block-main"><div class="block-title">Sincronización en vivo</div><div class="block-meta">${cloud?.realtimeStatus==='SUBSCRIBED'?'Cambios cloud recibidos mientras la app está abierta':'Respaldo automático al volver y cada 45 segundos'}</div></div>
+    <span class="tag ${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'c':'p'}">${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'EN VIVO':'RESPALDO'}</span>
   </div>
   <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
 }
@@ -1998,13 +2047,14 @@ function renderCloudStatus(){
   const role=s.membership?.role?escHtml(s.membership.role):'—';
   const hours=s.tenant?`${s.workingHoursCount} tramo${s.workingHoursCount===1?'':'s'} horario${s.workingHoursCount===1?'':'s'}`:'—';
   const appointments=s.tenant?`${s.appointmentCount||0} turno${s.appointmentCount===1?'':'s'} cloud`:'—';
+  const sync=s.realtimeStatus==='SUBSCRIBED'?'En vivo':'Actualización al volver';
   el.innerHTML=`
     <div class="block-row">
       <div class="block-main"><div class="block-title">${sdk}</div><div class="block-meta">${session}</div></div>
       <span class="tag ${s.error?'x':s.signedIn?'c':'p'}">${s.error?'ERROR':s.signedIn?'AUTH':'LOCAL'}</span>
     </div>
     ${s.signedIn?`<div class="block-row">
-      <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours} · ${appointments}</div></div>
+      <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours} · ${appointments} · ${sync}</div></div>
     </div>`:''}
     ${s.error?`<p class="ops-note">${escHtml(s.error)}</p>`:''}
   `;
