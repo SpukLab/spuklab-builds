@@ -1323,7 +1323,19 @@ function doLogin(){
   }
 }
 
-function logout(){hideVisiblePasswords();me={};scr('login');}
+async function logout(){
+  if(me?.role==='medico'&&CithelaCloud.state().signedIn){
+    try{
+      await CithelaCloud.signOut();
+    }catch(err){
+      toast(err?.message||'No se pudo cerrar la sesión cloud',4200);
+      return;
+    }
+  }
+  hideVisiblePasswords();
+  me={};
+  scr('login');
+}
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
 function goMed(){applyBranding();scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
 function goPac(){applyBranding();scr('paciente');renderMT();renderCalPac();renderHist();}
@@ -1360,7 +1372,12 @@ function renderCal(who){
   }).join('');
 }
 function pickDay(key,who){selDate=key;if(who==='med'){renderCal('med');renderAgenda();}else{renderCal('pac');renderSlots();}}
-function changeWeek(d){wkOff+=d;selDate=null;renderCal('med');renderStats();renderAgenda();}
+function changeWeek(d){
+  wkOff+=d;
+  const days=weekDays(wkOff);
+  selDate=wkOff===0?today():dk(days[0]);
+  renderCal('med');renderStats();renderAgenda();
+}
 
 function renderStats(){
   const keys=weekDays(wkOff).map(d=>dk(d));
@@ -1427,6 +1444,7 @@ function renderAgenda(){
           <span class="tag ${sm.cls}">${sm.label}</span>
           <div class="aitem-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
+            ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">📲 Recordar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" onclick="cloudCancelAppointment('${t.id}')">✕</button>`:''}
           </div>
@@ -1519,6 +1537,7 @@ function closeAppointment(id,outcome){
   toast(outcome==='atendido'?'Marcado como atendido ✓':'Marcado como no asistió');
 }
 function openReprogram(id){
+  if(professionalCloudReady()){cloudOpenReprogram(id);return;}
   const t=turnoById(id);if(!isOpenAppointment(t))return;
   reprogTurnoId=id;reprogHora=t.hora;
   $('reprog-current').textContent=`Actual: ${fmtL(dp(t.fecha))} · ${t.hora} hs`;
@@ -1527,7 +1546,52 @@ function openReprogram(id){
   renderReprogSlots();
   openM('m-reprogram');
 }
-function renderReprogSlots(){
+let cloudReprogDate='';
+let cloudReprogSlots=[];
+let cloudReprogRequest=0;
+
+function cloudOpenReprogram(id){
+  const raw=cloudAppointmentRaw(id);
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
+  if(!raw||!t||!['pendiente','confirmado'].includes(t.estado)||!professionalCloudWritable())return;
+  reprogTurnoId=id;reprogHora=null;cloudReprogDate='';cloudReprogSlots=[];
+  $('reprog-current').textContent=`Actual: ${fmtL(dp(t.fecha))} · ${t.hora} hs`;
+  $('reprog-fecha').min=today();
+  $('reprog-fecha').value=t.fecha<today()?today():t.fecha;
+  openM('m-reprogram');
+  renderReprogSlots();
+}
+function renderCloudReprogChoices(){
+  const el=$('reprog-slots');
+  if(!cloudReprogSlots.length){
+    el.innerHTML='<p class="ops-note">No hay horarios libres para esa fecha. Elegí otro día.</p>';
+    return;
+  }
+  el.innerHTML=cloudReprogSlots.map(h=>`<button type="button" class="spill${reprogHora===h?' sel':''}" onclick="pickReprogSlot('${h}')">${h}</button>`).join('');
+}
+async function renderReprogSlots(){
+  if(professionalCloudReady()&&cloudAppointmentRaw(reprogTurnoId)){
+    const s=CithelaCloud.state(),t=cloudAppointmentRaw(reprogTurnoId);
+    const fecha=$('reprog-fecha').value;
+    const request=++cloudReprogRequest;
+    cloudReprogDate=fecha;cloudReprogSlots=[];reprogHora=null;
+    $('reprog-slots').innerHTML='<p class="ops-note">Consultando disponibilidad cloud…</p>';
+    if(!fecha||fecha<today()){ $('reprog-slots').innerHTML='<p class="ops-note">Elegí una fecha futura.</p>';return; }
+    try{
+      const r=await CithelaCloud.availability({
+        tenantId:s.tenant.id,serviceId:t.service_id,resourceId:t.resource_id,date:fecha
+      });
+      if(request!==cloudReprogRequest||String(reprogTurnoId)!==String(t.id))return;
+      if(!r?.ok)throw Error(r?.code||'No se pudo consultar disponibilidad');
+      cloudReprogSlots=(Array.isArray(r.slots)?r.slots:[]).filter(h=>/^([01]\d|2[0-3]):[0-5]\d$/.test(h));
+      renderCloudReprogChoices();
+    }catch(err){
+      if(request!==cloudReprogRequest)return;
+      $('reprog-slots').innerHTML='<p class="ops-note">No se pudo consultar disponibilidad. Cambiá de fecha para reintentar.</p>';
+      toast(err?.message||'Error al consultar horarios',3600);
+    }
+    return;
+  }
   const t=turnoById(reprogTurnoId);if(!t)return;
   const fecha=$('reprog-fecha').value||t.fecha;
   const avail=uiAvailability(fecha,t.servicioId,appointmentResourceId(t),t.id);
@@ -1537,8 +1601,51 @@ function renderReprogSlots(){
     return`<div class="spill${free?'':' taken'}${sel?' sel':''}" onclick="${free?`pickReprogSlot('${h}')`:''}">${h}</div>`;
   }).join('');
 }
-function pickReprogSlot(h){reprogHora=h;renderReprogSlots();}
-function confirmReprogram(){
+function pickReprogSlot(h){
+  if(professionalCloudReady()&&cloudAppointmentRaw(reprogTurnoId)){
+    if(!cloudReprogSlots.includes(h))return;
+    reprogHora=h;renderCloudReprogChoices();return;
+  }
+  reprogHora=h;renderReprogSlots();
+}
+async function confirmReprogram(){
+  if(professionalCloudReady()&&cloudAppointmentRaw(reprogTurnoId)){
+    if(!professionalCloudWritable())return;
+    const t=cloudAppointmentRaw(reprogTurnoId),fecha=$('reprog-fecha').value,hora=reprogHora;
+    if(!fecha||fecha<today()||fecha!==cloudReprogDate||!cloudReprogSlots.includes(hora)){
+      toast('Elegí un horario cloud disponible');return;
+    }
+    const s=CithelaCloud.state();
+    const current=cloudLocalParts(t.starts_at,s.tenant.timezone);
+    if(current.fecha===fecha&&current.hora===hora){toast('Elegí un horario diferente');return;}
+    try{
+      const r=await CithelaCloud.reservation({
+        tenantId:s.tenant.id,requestId:cloudRequestId('agenda-reschedule'),
+        command:'appointment.reschedule',
+        payload:{id:t.id,expected_version:Number(t.row_version),
+          starts_at:zonedLocalToIso(fecha,hora,s.tenant.timezone)}
+      });
+      if(!r?.ok)throw Error(r?.code||'No se pudo reprogramar');
+      ++cloudReprogRequest;
+      reprogTurnoId=null;reprogHora=null;cloudReprogSlots=[];cloudReprogDate='';
+      closeM('m-reprogram');
+      const newDate=dp(fecha),startOfWeek=weekDays(0)[0];
+      wkOff=Math.round((newDate-startOfWeek)/604800000);
+      selDate=fecha;
+      await CithelaCloud.refresh();
+      renderCal('med');renderStats();renderAgenda();
+      toast('Turno reprogramado en la nube ✓');
+    }catch(err){
+      if(err?.message==='stale_write'){
+        await CithelaCloud.refresh();closeM('m-reprogram');
+        toast('El turno cambió en otro dispositivo. Volvé a abrirlo.',4200);
+      }else{
+        toast(err?.message==='slot_unavailable'?'Ese horario acaba de ocuparse':err?.message||'No se pudo reprogramar',4200);
+        renderReprogSlots();
+      }
+    }
+    return;
+  }
   const t=turnoById(reprogTurnoId);if(!t)return;
   const fecha=$('reprog-fecha').value;
   if(!fecha||fecha<today()){toast('Elegí una fecha válida');return;}
