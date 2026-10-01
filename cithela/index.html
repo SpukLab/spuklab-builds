@@ -898,6 +898,7 @@ const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
 const CithelaCloud=(()=>{
   let client=null;
   let sdkPromise=null;
+  let refreshSerial=0;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
     services:[],resources:[],people:[],workingHours:[],appointments:[],error:null
@@ -965,56 +966,76 @@ const CithelaCloud=(()=>{
     });
     client.auth.onAuthStateChange((_event,session)=>{
       state.session=session||null;
+      if(!session){
+        ++refreshSerial;
+        resetWorkspace();
+        state.checked=true;
+        state.error=null;
+        notify();
+      }
       setTimeout(()=>refresh().catch(()=>{}),0);
     });
     return client;
   }
 
+  function resetWorkspace(){
+    state.membership=null;state.tenant=null;
+    state.services=[];state.resources=[];state.people=[];
+    state.workingHours=[];state.appointments=[];
+  }
+
   async function refresh(){
+    const request=++refreshSerial;
     try{
       const c=await getClient();
       const {data:{session},error:sessionError}=await c.auth.getSession();
+      if(request!==refreshSerial)return snapshot();
       if(sessionError)throw sessionError;
-      state.session=session||null;
-      state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.people=[];state.workingHours=[];state.appointments=[];
-      state.checked=true;state.error=null;
-      if(!session){notify();return snapshot();}
-
+      if(!session){
+        state.session=null;resetWorkspace();
+        state.checked=true;state.error=null;
+        notify();return snapshot();
+      }
       const {data:memberships,error:membershipError}=await c
         .from('cithela_tenant_memberships')
         .select('tenant_id,role,created_at')
         .order('created_at',{ascending:true})
         .limit(1);
+      if(request!==refreshSerial)return snapshot();
       if(membershipError)throw membershipError;
-      state.membership=memberships?.[0]||null;
-      if(!state.membership){notify();return snapshot();}
-
-      const tenantId=state.membership.tenant_id;
+      const membership=memberships?.[0]||null;
+      if(!membership){
+        state.session=session;resetWorkspace();
+        state.checked=true;state.error=null;
+        notify();return snapshot();
+      }
+      const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,notes,alerts,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
-        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(250)
+        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500)
       ]);
-      if(tenantQ.error)throw tenantQ.error;
-      if(servicesQ.error)throw servicesQ.error;
-      if(resourcesQ.error)throw resourcesQ.error;
-      if(peopleQ.error)throw peopleQ.error;
-      if(hoursQ.error)throw hoursQ.error;
-      if(appointmentsQ.error)throw appointmentsQ.error;
+      if(request!==refreshSerial)return snapshot();
+      for(const q of [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ])if(q.error)throw q.error;
+      state.session=session;
+      state.membership=membership;
       state.tenant=tenantQ.data;
       state.services=servicesQ.data||[];
       state.resources=resourcesQ.data||[];
       state.people=peopleQ.data||[];
       state.workingHours=hoursQ.data||[];
       state.appointments=appointmentsQ.data||[];
+      state.checked=true;state.error=null;
       notify();
       return snapshot();
     }catch(err){
-      state.checked=true;state.error=err?.message||'Error cloud';
-      notify();
+      if(request===refreshSerial){
+        state.checked=true;state.error=err?.message||'Error cloud';
+        notify();
+      }
       return snapshot();
     }
   }
@@ -1058,7 +1079,9 @@ const CithelaCloud=(()=>{
     const c=await getClient();
     const {error}=await c.auth.signOut();
     if(error)throw error;
-    state.session=null;state.membership=null;state.tenant=null;state.services=[];state.resources=[];state.people=[];state.workingHours=[];state.appointments=[];
+    ++refreshSerial;
+    state.session=null;resetWorkspace();
+    state.checked=true;state.error=null;
     notify();
     return snapshot();
   }
@@ -1128,6 +1151,7 @@ const CithelaCloud=(()=>{
     };
     window.addEventListener('focus',run);
     document.addEventListener('visibilitychange',run);
+    window.setInterval(run,45000);
   }
 
   async function init(){
@@ -1303,6 +1327,12 @@ function setRole(r){
 }
 
 function doLogin(){
+  if(role==='medico'){
+    const s=CithelaCloud.state();
+    if(s.signedIn&&s.membership&&s.tenant){
+      loginWithCloudSession();return;
+    }
+  }
   const nom=$('l-nombre').value.trim();
   if(!nom){toast('Ingresá tu nombre');return;}
   if(role==='medico'){
@@ -1324,17 +1354,19 @@ function doLogin(){
 }
 
 async function logout(){
-  if(me?.role==='medico'&&CithelaCloud.state().signedIn){
-    try{
-      await CithelaCloud.signOut();
-    }catch(err){
-      toast(err?.message||'No se pudo cerrar la sesión cloud',4200);
-      return;
-    }
-  }
+  const previous=me;
   hideVisiblePasswords();
   me={};
   scr('login');
+  if(CithelaCloud.state().signedIn){
+    try{await CithelaCloud.signOut();}
+    catch(err){
+      me=previous;
+      if(previous.role==='medico')goMed();
+      else if(previous.role==='paciente')goPac();
+      toast(err?.message||'No se pudo cerrar la sesión cloud',4200);
+    }
+  }
 }
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
 function goMed(){applyBranding();scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
@@ -2235,8 +2267,13 @@ async function cloudCheck(){
 }
 
 async function cloudSignOut(){
-  try{await CithelaCloud.signOut();toast('Sesión cloud cerrada');}
-  catch(err){toast(err?.message||'No se pudo cerrar la sesión',3200);}
+  try{
+    await CithelaCloud.signOut();
+    if(me?.role==='medico'){
+      hideVisiblePasswords();me={};scr('login');
+    }
+    toast('Sesión cloud cerrada');
+  }catch(err){toast(err?.message||'No se pudo cerrar la sesión',3200);}
 }
 function cargarConfig(){
 const c=getCfg();
