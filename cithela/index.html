@@ -286,6 +286,7 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 
   <div id="p-medico-agenda" class="pane on">
+    <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
       <button class="wn-btn" onclick="changeWeek(-1)">‹</button>
       <span class="wn-lbl" id="wk-lbl">—</span>
@@ -302,6 +303,7 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 
   <div id="p-medico-pacientes" class="pane">
+    <p class="ops-note" id="mode-pacientes" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="form-card" style="margin-bottom:14px;">
       <p class="sh" style="margin:0 0 10px;">Agregar persona</p>
       <label class="lbl" for="new-person-name">Nombre completo</label>
@@ -318,6 +320,7 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 
   <div id="p-medico-nuevo" class="pane">
+    <p class="ops-note" id="mode-nuevo" role="status" style="display:none;margin-bottom:12px;"></p>
     <p class="sh">Crear turno</p>
     <div class="form-card">
       <label class="lbl js-person-singular">Paciente</label>
@@ -338,6 +341,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 
   <div id="p-medico-reportes" class="pane">
     <p class="sh">Exportar datos</p>
+    <p class="contact-note" id="report-source" role="status"></p>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Turnos</p>
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Todos los turnos registrados con paciente, fecha, hora, motivo y estado.</p>
@@ -356,7 +360,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Registro operativo</p>
       <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;">Historial técnico de creación, cambios, recordatorios y acciones de WhatsApp.</p>
-      <button class="btn-main excel" onclick="exportEventsCSV()">⬇ Descargar eventos.csv</button>
+      <button class="btn-main excel" onclick="exportEventsCSV()">⬇ Descargar eventos locales.csv</button>
     </div>
 
     <p class="sh">Diagnóstico local</p>
@@ -551,8 +555,9 @@ textarea.inp{resize:vertical;min-height:72px;}
     <button class="tab"    onclick="tab('paciente','sacar',this)">Sacar turno</button>
     <button class="tab"    onclick="tab('paciente','historial',this)">Historial</button>
   </div>
-  <div id="p-paciente-miturno" class="pane on"><div id="mt-view"></div></div>
+  <div id="p-paciente-miturno" class="pane on"><p class="ops-note" role="status">Modo de prueba local. Esta pantalla todavía no consulta los turnos del consultorio cloud.</p><div id="mt-view"></div></div>
   <div id="p-paciente-sacar" class="pane">
+    <p class="ops-note" role="status">Modo de prueba local: estos turnos no se envían al consultorio cloud. No lo utilices para reservas reales.</p>
     <p class="sh">Elegí un servicio</p>
     <select class="inp" id="pac-service" onchange="selSlot=null;document.getElementById('confirm-wrap').style.display='none';renderSlots();"></select>
     <p class="sh">Profesional / recurso</p>
@@ -985,6 +990,8 @@ const CithelaCloud=(()=>{
         }
         if(document.getElementById('p-medico-pacientes')?.classList.contains('on'))renderPacs();
         if(document.getElementById('p-medico-nuevo')?.classList.contains('on'))fillNT();
+        if(document.getElementById('p-medico-reportes')?.classList.contains('on'))renderReportSource();
+        renderProfessionalMode();
       }
     }
   }
@@ -1187,6 +1194,30 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function exportSnapshot(){
+    if(!state.session||!state.tenant||!state.membership)throw Error('Conectá la cuenta cloud');
+    const tenantId=state.tenant.id,c=await getClient(),pageSize=500;
+    async function fetchAll(table,columns){
+      const result=[];
+      for(let start=0;;start+=pageSize){
+        const {data,error}=await c.from(table).select(columns)
+          .eq('tenant_id',tenantId).order('created_at',{ascending:true})
+          .range(start,start+pageSize-1);
+        if(error)throw error;
+        const page=data||[];
+        result.push(...page);
+        if(page.length<pageSize)break;
+      }
+      return result;
+    }
+    const [people,appointments]=await Promise.all([
+      fetchAll('cithela_people','id,display_name,phone_e164,notes,alerts,created_at'),
+      fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,created_at')
+    ]);
+    if(!state.session||state.tenant?.id!==tenantId)throw Error('La sesión cloud cambió durante la exportación');
+    return {people,appointments,timezone:state.tenant.timezone};
+  }
+
   let autoRefreshInstalled=false,lastAutoRefreshAt=0;
   function installAutoRefresh(){
     if(autoRefreshInstalled)return;
@@ -1210,7 +1241,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1418,7 +1449,7 @@ async function logout(){
   }
 }
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
-function goMed(){applyBranding();scr('medico');renderCal('med');renderStats();renderAgenda();fillNT();}
+function goMed(){applyBranding();scr('medico');renderProfessionalMode();renderCal('med');renderStats();renderAgenda();fillNT();}
 function goPac(){applyBranding();scr('paciente');renderMT();renderCalPac();renderHist();}
 
 function tab(sc,id,btn){
@@ -1426,13 +1457,31 @@ function tab(sc,id,btn){
   document.querySelectorAll(`[id^="${pfx}"]`).forEach(e=>e.classList.remove('on'));
   document.querySelectorAll(`#screen-${sc} .tab`).forEach(e=>e.classList.remove('on'));
   $(`${pfx}${id}`).classList.add('on');btn.classList.add('on');
+  if(sc==='medico')renderProfessionalMode();
   if(sc==='medico'&&id==='pacientes')renderPacs();
   if(sc==='medico'&&id==='agenda'){renderCal('med');renderStats();renderAgenda();}
   if(sc==='medico'&&id==='nuevo')fillNT();
+  if(sc==='medico'&&id==='reportes')renderReportSource();
   if(sc==='medico'&&id==='config')cargarConfig();
   if(sc==='paciente'&&id==='historial')renderHist();
   if(sc==='paciente'&&id==='miturno')renderMT();
   if(sc==='paciente'&&id==='sacar')renderCalPac();
+}
+
+function renderProfessionalMode(){
+  const active=professionalCloudReady();
+  const note='Modo local: los turnos y pacientes de este dispositivo NO se sincronizan con CITHELA Cloud. Conectá la cuenta cloud antes de operar.';
+  for(const id of ['mode-agenda','mode-pacientes','mode-nuevo']){
+    const el=$(id);if(!el)continue;
+    el.style.display=active?'none':'block';
+    if(!active)el.textContent=note;
+  }
+}
+function renderReportSource(){
+  const el=$('report-source');if(!el)return;
+  el.textContent=professionalCloudReady()
+    ?'Exportación desde CITHELA Cloud. Los archivos pueden contener datos personales; guardalos en un lugar seguro. El registro de eventos y el backup siguen siendo locales.'
+    :'Exportación local de este dispositivo. No incluye los datos de CITHELA Cloud.';
 }
 
 function renderCal(who){
@@ -1474,7 +1523,28 @@ function renderStats(){
 
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
-  if(professionalCloudReady()){wrap.style.display='none';el.innerHTML='';return;}
+  if(professionalCloudReady()){
+    const items=cloudAppointmentViews()
+      .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
+      .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+    wrap.style.display=items.length?'block':'none';
+    if(!items.length){el.innerHTML='';return;}
+    el.innerHTML=items.map(t=>{
+      const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
+      const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
+      const wa=normalizePhone(p.tel);
+      return`<div class="aitem" style="padding:13px 15px;">
+        <div class="aitem-time">${when} · ${t.hora} hs</div>
+        <div class="aitem-name">${escHtml(p.nombre)}</div>
+        <div class="ops-note">Pendiente de confirmación · ${escHtml(t.servicioNombre)}</div>
+        <div class="aitem-actions" style="margin-top:9px;">
+          ${wa?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">Abrir WhatsApp</button>`:''}
+          ${professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
   const pacs=DB.p();
   const items=DB.t()
     .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
@@ -2517,13 +2587,18 @@ function restoreBackup(input){
 }
 
 // ── EXPORTACIONES CSV ──
-function csvEsc(v){const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;}
+function csvEsc(v){
+  const raw=String(v??'');
+  const s=/^[\s]*[=+@-]/.test(raw)?"'"+raw:raw;
+  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;
+}
 function downloadCSV(filename,rows){
 const csv=rows.map(r=>r.map(csvEsc).join(',')).join('\n');
 downloadText(filename,'\uFEFF'+csv,'text/csv');
 }
 
 function exportEventsCSV(){
+if(professionalCloudReady()){toast('El registro de eventos cloud todavía no se exporta desde aquí',4200);return;}
 const rows=[['Fecha','Tipo','Actor','Payload']];
 DB.e().forEach(e=>rows.push([e.at||'',e.type||'',e.actor||'',JSON.stringify(e.payload||{})]));
 downloadCSV('eventos.csv',rows);
@@ -2604,7 +2679,44 @@ if(!issues.length){
 el.innerHTML=issues.map(i=>`<div class="${i.level==='bad'?'ops-note':'contact-note'}" style="margin:7px 0;">${i.level==='bad'?'⚠':'•'} ${escHtml(i.text)}</div>`).join('');
 }
 
-function exportExcel(tipo){
+async function exportCloudCSV(tipo){
+  if(!confirm('El CSV puede contener datos personales. ¿Descargarlo en este dispositivo?'))return;
+  try{
+    const s=await CithelaCloud.exportSnapshot(),ts=s.appointments,ps=s.people;
+    const byId=new Map(ps.map(p=>[p.id,p]));
+    const person=id=>byId.get(id)||{display_name:'—',phone_e164:''};
+    const when=t=>cloudLocalParts(t.starts_at,s.timezone);
+    let rows=[],filename='';
+    if(tipo==='turnos'){
+      filename='turnos_cloud.csv';
+      rows=[['ID',personTerms().singular,'Teléfono','Fecha','Hora','Servicio','Duración min','Profesional / recurso','Motivo','Estado','Creado']];
+      ts.forEach(t=>{const d=when(t),p=person(t.person_id);rows.push([
+        t.id,p.display_name,p.phone_e164||'',d.fecha,d.hora,t.service_name||'',
+        t.duration_min||30,t.resource_name||'',t.reason||'',cloudAppointmentStatus(t.status),
+        t.created_at?.slice(0,10)||''
+      ]);});
+    }else if(tipo==='pacientes'){
+      filename='pacientes_cloud.csv';
+      rows=[['ID','Nombre','Teléfono','Alertas / alergias','Observaciones','Turnos','Registrado']];
+      ps.forEach(p=>rows.push([p.id,p.display_name,p.phone_e164||'',p.alerts||'',p.notes||'',
+        ts.filter(t=>t.person_id===p.id).length,p.created_at?.slice(0,10)||'']));
+    }else{
+      filename='reporte_completo_cloud.csv';
+      rows=[['Tipo',personTerms().singular,'Teléfono','Fecha','Hora','Motivo / Obs','Estado / Alertas']];
+      ps.forEach(p=>rows.push(['PACIENTE',p.display_name,p.phone_e164||'',
+        p.created_at?.slice(0,10)||'','',p.notes||'',p.alerts||'']));
+      ts.forEach(t=>{const d=when(t),p=person(t.person_id);
+        rows.push(['TURNO',p.display_name,p.phone_e164||'',d.fecha,d.hora,
+          t.reason||'',cloudAppointmentStatus(t.status)]);
+      });
+    }
+    downloadCSV(filename,rows);
+    toast('Descarga cloud iniciada ✓');
+  }catch(err){toast(err?.message||'No se pudo exportar desde CITHELA Cloud',4200);}
+}
+
+async function exportExcel(tipo){
+if(professionalCloudReady())return exportCloudCSV(tipo);
 const ts=DB.t();const ps=DB.p();
 const getNombre=id=>(ps.find(p=>p.id===id)||{nombre:'—'}).nombre;
 const getTel=id=>(ps.find(p=>p.id===id)||{tel:'—'}).tel||'—';
