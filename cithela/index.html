@@ -246,8 +246,10 @@ textarea.inp{resize:vertical;min-height:72px;}
       <button class="seg-btn on" id="rb-med" onclick="setRole('medico');return false;">Profesional</button>
       <button class="seg-btn js-person-singular" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
     </div>
-    <label class="lbl">Nombre completo</label>
-    <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
+    <div id="login-name-wrap">
+      <label class="lbl">Nombre completo</label>
+      <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
+    </div>
     <div id="f-medico">
       <label class="lbl">Clave</label>
       <input class="inp" id="l-clave" type="password" placeholder="••••••">
@@ -261,10 +263,26 @@ textarea.inp{resize:vertical;min-height:72px;}
       </div>
     </div>
     <div id="f-pac" style="display:none">
-      <label class="lbl">Teléfono WhatsApp</label>
-      <input class="inp" id="l-tel" type="tel" placeholder="+54 9 11 0000-0000">
+      <label class="lbl">Tu correo verificado</label>
+      <input class="inp" id="l-patient-email" type="email" autocomplete="email" placeholder="tu@correo.com">
+      <button class="btn-main soft" type="button" onclick="patientSendMagicLink()">Enviar enlace mágico</button>
+      <label class="lbl" style="margin-top:16px;">Código de invitación del consultorio (solo la primera vez)</label>
+      <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Código recibido por WhatsApp">
+      <p class="contact-note">Abrí el enlace del correo y regresá aquí. Ingresá el código que te facilitó el consultorio; después no tendrás que repetirlo.</p>
+      <button class="btn-main" type="button" onclick="patientEnter()">Ver mis turnos cloud</button>
+      <div style="margin-top:16px;border-top:var(--line);padding-top:12px;">
+        <button class="mb ghost" type="button" onclick="togglePatientDemo()">Mostrar demostración local</button>
+        <div id="patient-demo-form" style="display:none;margin-top:12px;">
+          <p class="ops-note">Demostración sin datos reales ni sincronización con el consultorio.</p>
+          <label class="lbl">Nombre de prueba</label>
+          <input class="inp" id="l-demo-name" placeholder="Paciente de prueba">
+          <label class="lbl">WhatsApp de prueba</label>
+          <input class="inp" id="l-tel" type="tel" placeholder="+54 9 11 0000-0000">
+          <button class="btn-main soft" type="button" onclick="patientDemoLogin()">Abrir demostración</button>
+        </div>
+      </div>
     </div>
-    <button class="btn-main" onclick="doLogin()">Ingresar</button>
+    <button class="btn-main" id="professional-login-button" onclick="doLogin()">Ingresar</button>
     <div class="byline" style="border:none;margin-top:24px;padding-bottom:0;"><p>by <span>SpukLab</span></p></div>
   </div>
 </div>
@@ -583,6 +601,22 @@ textarea.inp{resize:vertical;min-height:72px;}
   <div id="p-paciente-historial" class="pane">
     <p class="sh">Consultas anteriores</p>
     <div id="hist-list"></div>
+  </div>
+  <div class="byline"><p>by <span>SpukLab</span></p></div>
+</div>
+
+<div id="screen-patient-cloud" class="screen">
+  <nav>
+    <div class="nav-brand"><span class="nb1 js-app-brand">CITHELA</span><span class="nb2">Mis turnos</span></div>
+    <span class="pill">Paciente · Nube</span>
+    <button class="nav-out" onclick="logout()">Salir</button>
+  </nav>
+  <div style="padding:24px 20px;max-width:840px;margin:0 auto;width:100%;box-sizing:border-box;">
+    <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
+    <p class="contact-note" id="patient-cloud-identity"></p>
+    <button class="btn-main soft" type="button" onclick="patientRefreshPortal()" style="margin:12px 0 18px;">Actualizar mis turnos</button>
+    <div id="patient-cloud-list" aria-live="polite"></div>
+    <p class="contact-note" style="margin-top:20px;">Portal de consulta. Para reservar, modificar o cancelar un turno, contactá al consultorio por ahora.</p>
   </div>
   <div class="byline"><p>by <span>SpukLab</span></p></div>
 </div>
@@ -1141,6 +1175,42 @@ const CithelaCloud=(()=>{
     return {ok:true,email:clean};
   }
 
+  async function sendPatientMagicLink(email){
+    const c=await getClient();
+    const clean=String(email||'').trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean))throw Error('Ingresá un correo válido');
+    const {error}=await c.auth.signInWithOtp({
+      email:clean,options:{shouldCreateUser:true,emailRedirectTo:CITHELA_PUBLIC_URL}
+    });
+    if(error)throw error;
+    return {ok:true};
+  }
+  async function issuePatientInvite({tenantId,personId,email}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_invite_issue',{
+      p_tenant_id:tenantId,p_person_id:personId,p_email:email
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo crear la invitación');
+    return data;
+  }
+  async function redeemPatientInvite(code){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_invite_redeem',{
+      p_invite_code:String(code||'').trim()
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'Invitación inválida');
+    return data;
+  }
+  async function patientPortal(){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_portal');
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo consultar el portal');
+    return data;
+  }
+
   async function signOut(){
     const c=await getClient();
     const {error}=await c.auth.signOut();
@@ -1262,6 +1332,11 @@ const CithelaCloud=(()=>{
     autoRefreshInstalled=true;
     const run=()=>{
       if(!state.session||document.visibilityState==='hidden')return;
+      if(typeof me!=='undefined'&&me?.role==='paciente'&&me?.cloud&&
+         document.getElementById('screen-patient-cloud')?.classList.contains('active')){
+        if(typeof patientRefreshPortal==='function')patientRefreshPortal();
+        return;
+      }
       const now=Date.now();
       if(now-lastAutoRefreshAt<5000)return;
       lastAutoRefreshAt=now;
@@ -1279,7 +1354,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1421,6 +1496,106 @@ function openPatientWhatsApp(patientId){
   window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
 }
 
+let patientPortalData=null,patientPortalRequest=0;
+
+function togglePatientDemo(){
+  const el=$('patient-demo-form');
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+function patientDemoLogin(){
+  const nom=$('l-demo-name').value.trim(),tel=$('l-tel').value.trim();
+  if(!nom||!validPhone(tel)){toast('Completá el nombre y el teléfono de prueba');return;}
+  const key=normalizePhone(tel);
+  const ps=DB.p();
+  let p=ps.find(x=>normalizePhone(x.tel)===key);
+  if(!p){p={id:newPersonId(ps),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
+  else{p.nombre=nom;p.tel=tel;}
+  DB.sp(ps);me={role:'paciente',...p,cloud:false};
+  $('pac-pill').textContent=nom.split(' ')[0];
+  goPac();
+}
+async function patientSendMagicLink(){
+  const email=$('l-patient-email').value.trim();
+  try{
+    await CithelaCloud.sendPatientMagicLink(email);
+    toast('Revisá tu correo y abrí el enlace de acceso',4800);
+  }catch(err){toast(err?.message||'No se pudo enviar el enlace',4200);}
+}
+async function patientEnter(){
+  try{
+    const s=await CithelaCloud.refresh();
+    if(!s.signedIn){
+      toast('Primero abrí el enlace mágico enviado a tu correo',4300);return;
+    }
+    const typedEmail=$('l-patient-email').value.trim().toLowerCase();
+    if(typedEmail&&typedEmail!==String(s.email||'').toLowerCase()){
+      toast('La sesión pertenece a otro correo. Cerrá sesión y volvé a ingresar.',4700);return;
+    }
+    const code=$('l-patient-invite').value.trim();
+    if(code){
+      await CithelaCloud.redeemPatientInvite(code);
+      $('l-patient-invite').value='';
+    }
+    const result=await CithelaCloud.patientPortal();
+    if(!result.profiles?.length){
+      toast('Tu correo está autenticado. Necesitás el código de invitación del consultorio.',4700);
+      return;
+    }
+    patientPortalData=result;
+    me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
+    goPac();
+  }catch(err){
+    const map={invalid_invite:'Invitación inválida, vencida o destinada a otro correo.',
+      email_not_verified:'Primero confirmá el correo con el enlace mágico.',
+      already_linked:'La ficha ya está vinculada a otra cuenta. Contactá al consultorio.'};
+    toast(map[err?.message]||err?.message||'No se pudo ingresar al portal',4800);
+  }
+}
+async function patientRefreshPortal(){
+  if(!me?.cloud||me?.role!=='paciente')return;
+  const req=++patientPortalRequest;
+  const el=$('patient-cloud-list');
+  el.innerHTML='<p class="contact-note">Consultando los turnos del consultorio…</p>';
+  try{
+    const result=await CithelaCloud.patientPortal();
+    if(req!==patientPortalRequest||!me?.cloud)return;
+    patientPortalData=result;
+    $('patient-cloud-identity').textContent=me.email||'Cuenta verificada';
+    if(!result.profiles?.length){
+      el.innerHTML='<p class="ops-note">No hay una ficha vinculada a esta cuenta. Contactá al consultorio.</p>';
+      return;
+    }
+    const now=Date.now();
+    el.innerHTML=result.profiles.map(profile=>{
+      const appointments=profile.appointments||[];
+      const ordered=appointments.slice().sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+      const upcoming=ordered.filter(a=>['pending','confirmed'].includes(a.status)&&new Date(a.ends_at).getTime()>=now);
+      const history=ordered.filter(a=>!upcoming.includes(a)).reverse();
+      const renderAppointment=a=>{
+        const date=cloudLocalParts(a.starts_at,profile.timezone);
+        const sm=statusMeta(cloudAppointmentStatus(a.status));
+        return `<div class="aitem" style="margin-bottom:10px;">
+          <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
+          <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
+          <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
+          <div class="aitem-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span></div>
+        </div>`;
+      };
+      return `<section class="form-card" style="margin-bottom:16px;">
+        <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
+        <p class="contact-note">${escHtml(profile.name)}</p>
+        <p class="sh" style="margin-top:12px;">Próximos (${upcoming.length})</p>
+        ${upcoming.length?upcoming.map(renderAppointment).join(''):'<p class="contact-note">Sin turnos próximos.</p>'}
+        <p class="sh" style="margin-top:16px;">Historial (${history.length})</p>
+        ${history.length?history.slice(0,20).map(renderAppointment).join(''):'<p class="contact-note">Todavía no hay turnos anteriores.</p>'}
+      </section>`;
+    }).join('');
+  }catch(err){
+    if(req!==patientPortalRequest)return;
+    el.innerHTML=`<p class="ops-note">${escHtml(err?.message||'No se pudo consultar la nube')}</p>`;
+  }
+}
+
 async function requestLoginMagicLink(){
   const email=$('l-cloud-email')?.value.trim();
   if(!email){toast('Ingresá tu correo cloud');return;}
@@ -1442,6 +1617,8 @@ function setRole(r){
   $('rb-pac').classList.toggle('on',r==='paciente');
   $('f-medico').style.display=r==='medico'?'block':'none';
   $('f-pac').style.display=r==='paciente'?'block':'none';
+  $('login-name-wrap').style.display=r==='medico'?'block':'none';
+  $('professional-login-button').style.display=r==='medico'?'block':'none';
 }
 
 function doLogin(){
@@ -1458,21 +1635,14 @@ function doLogin(){
     if($('l-clave').value!==claveActual){toast('Clave incorrecta');return;}
     me={role:'medico',nombre:nom};goMed();
   } else {
-    const tel=$('l-tel').value.trim();
-    if(!tel){toast('Ingresá tu teléfono');return;}
-    if(!validPhone(tel)){toast('Ingresá un teléfono válido');return;}
-    const telKey=normalizePhone(tel);
-    let ps=DB.p();let p=ps.find(x=>normalizePhone(x.tel)===telKey);
-    if(!p){p={id:newPersonId(ps),nombre:nom,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};ps.push(p);}
-    else{p.nombre=nom;p.tel=tel;}
-    DB.sp(ps);me={role:'paciente',...p};
-    $('pac-pill').textContent=nom.split(' ')[0];
-    goPac();
+    patientEnter();
   }
 }
 
 async function logout(){
   const previous=me;
+  ++patientPortalRequest;
+  patientPortalData=null;
   hideVisiblePasswords();
   me={};
   scr('login');
@@ -1488,7 +1658,15 @@ async function logout(){
 }
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
 function goMed(){applyBranding();scr('medico');renderProfessionalMode();renderCal('med');renderStats();renderAgenda();fillNT();}
-function goPac(){applyBranding();scr('paciente');renderMT();renderCalPac();renderHist();}
+function goPac(){
+  applyBranding();
+  if(me.cloud){
+    scr('patient-cloud');
+    patientRefreshPortal();
+    return;
+  }
+  scr('paciente');renderMT();renderCalPac();renderHist();
+}
 
 function tab(sc,id,btn){
   const pfx=`p-${sc}-`;
