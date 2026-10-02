@@ -130,7 +130,7 @@ begin
   insert into public.cithela_channel_requests(tenant_id,request_id,command,response,actor_user_id,request_payload)
     values(p_tenant_id,p_request_id,p_command,result,actor,p_payload);
   return result;
-end $function$
+end $function$;
 
 do $cithela$
 begin
