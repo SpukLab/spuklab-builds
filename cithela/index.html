@@ -996,7 +996,9 @@ const CithelaCloud=(()=>{
         if(document.getElementById('p-medico-pacientes')?.classList.contains('on'))renderPacs();
         if(document.getElementById('p-medico-nuevo')?.classList.contains('on'))fillNT();
         if(document.getElementById('p-medico-reportes')?.classList.contains('on'))renderReportSource();
-        if(document.getElementById('p-medico-config')?.classList.contains('on'))renderAvailabilityBlocks();
+        if(document.getElementById('p-medico-config')?.classList.contains('on')){
+          renderAvailabilityBlocks();renderServicesConfig();renderResourcesConfig();
+        }
         renderProfessionalMode();
       }
     }
@@ -2542,7 +2544,9 @@ $('cfg-reminder-days').value=String(c.reminderDays??1);
 $('cfg-reminder-template').value=c.reminderTemplate||DEFAULT_REMINDER_TEMPLATE;
 $('cfg-block-fecha').min=today();
 if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
-$('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+HORAS.map(h=>`<option value="${h}">${h}</option>`).join('');
+const blockHours=professionalCloudReady()?Array.from({length:48},(_,i)=>minToHM(i*30)):HORAS;
+$('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+
+  blockHours.map(h=>`<option value="${h}">${h}</option>`).join('');
 renderAvailabilityBlocks();
 renderServicesConfig();
 renderResourcesConfig();
@@ -2624,36 +2628,114 @@ DB.sr(list.filter(x=>x.id!==id));recordEvent('resource_removed',{resourceId:id,n
 renderResourcesConfig();toast('Recurso quitado');
 }
 
+function canManageCloudBlocks(){
+  return professionalCloudReady()&&
+    ['owner','admin'].includes(CithelaCloud.state().membership?.role||'');
+}
 function renderAvailabilityBlocks(){
-const el=$('cfg-block-list');if(!el)return;
-const blocks=DB.b().slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||''));
-if(!blocks.length){el.innerHTML='<p style="font-size:.72rem;color:var(--ink3);">Sin bloqueos cargados.</p>';return;}
-el.innerHTML=blocks.map(b=>`<div class="block-row">
-  <div class="block-main">
-    <div class="block-title">${fmtL(dp(b.fecha))} · ${b.hora?b.hora+' hs':'día completo'}</div>
-    ${b.motivo?`<div class="block-meta">${escHtml(b.motivo)}</div>`:''}
-  </div>
-  <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
-</div>`).join('');
+  const el=$('cfg-block-list');if(!el)return;
+  if(professionalCloudReady()){
+    const s=CithelaCloud.state(),tz=s.tenant.timezone;
+    const canManage=canManageCloudBlocks();
+    const blocks=(s.availabilityBlocks||[]).slice().sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
+    const note='<p class="contact-note">Bloqueos cloud. Impiden nuevas reservas, pero no cancelan los turnos existentes.</p>';
+    const access=canManage?'':'<p class="ops-note">Solo el propietario o administrador puede modificar los bloqueos cloud.</p>';
+    if(!blocks.length){el.innerHTML=note+access+'<p class="contact-note">Sin bloqueos cloud.</p>';return;}
+    el.innerHTML=note+access+blocks.map(b=>{
+      const start=cloudLocalParts(b.starts_at,tz),end=cloudLocalParts(b.ends_at,tz);
+      const fullDay=start.hora==='00:00'&&end.hora==='00:00'&&start.fecha!==end.fecha;
+      const label=fullDay?'Día completo':`${start.hora}–${end.hora}${start.fecha!==end.fecha?' · hasta '+end.fecha:''}`;
+      const resource=b.resource_id?(cloudResourceById(b.resource_id)?.name||'Recurso'):'Todos los recursos';
+      return`<div class="block-row">
+        <div class="block-main">
+          <div class="block-title">${escHtml(start.fecha)} · ${escHtml(label)}</div>
+          <div class="block-meta">${escHtml(resource)}${b.reason?' · '+escHtml(b.reason):''}</div>
+        </div>
+        ${canManage?`<button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>`:''}
+      </div>`;
+    }).join('');
+    return;
+  }
+  const blocks=DB.b().slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||''));
+  if(!blocks.length){el.innerHTML='<p style="font-size:.72rem;color:var(--ink3);">Sin bloqueos cargados.</p>';return;}
+  el.innerHTML=blocks.map(b=>`<div class="block-row">
+    <div class="block-main">
+      <div class="block-title">${fmtL(dp(b.fecha))} · ${b.hora?b.hora+' hs':'día completo'}</div>
+      ${b.motivo?`<div class="block-meta">${escHtml(b.motivo)}</div>`:''}
+    </div>
+    <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
+  </div>`).join('');
 }
-function addAvailabilityBlock(){
-const fecha=$('cfg-block-fecha').value;const hora=$('cfg-block-hora').value;const motivo=$('cfg-block-motivo').value.trim();
-if(!fecha){toast('Elegí una fecha');return;}
-if(fecha<today()){toast('La fecha ya pasó');return;}
-const blocks=DB.b();
-if(blocks.some(b=>b.fecha===fecha&&b.hora===hora)){toast('Ese bloqueo ya existe');return;}
-if(!hora&&DB.t().some(t=>t.fecha===fecha&&t.estado!=='cancelado')){
-  if(!confirm('Ese día ya tiene turnos. El bloqueo no los cancela. ¿Continuar?'))return;
+async function addAvailabilityBlock(){
+  const fecha=$('cfg-block-fecha').value,hora=$('cfg-block-hora').value;
+  const motivo=$('cfg-block-motivo').value.trim();
+  if(!fecha){toast('Elegí una fecha');return;}
+  if(fecha<today()){toast('La fecha ya pasó');return;}
+  if(professionalCloudReady()){
+    if(!canManageCloudBlocks()){toast('No tenés permisos para editar los bloqueos cloud');return;}
+    const s=CithelaCloud.state(),tz=s.tenant.timezone;
+    const existing=cloudAppointmentViews().filter(t=>
+      t.fecha===fecha&&['pendiente','confirmado'].includes(t.estado)&&
+      (!hora||(hmToMin(t.hora)<hmToMin(hora)+30&&
+        hmToMin(t.hora)+t.duracionMin>hmToMin(hora)))
+    );
+    if(existing.length&&!confirm('Hay turnos existentes en ese período. El bloqueo NO los cancela. ¿Continuar?'))return;
+    const next=new Date(fecha+'T12:00:00Z');
+    next.setUTCDate(next.getUTCDate()+1);
+    const nextDate=next.toISOString().slice(0,10);
+    try{
+      const starts_at=hora
+        ?zonedLocalToIso(fecha,hora,tz)
+        :fecha===today()?new Date(Date.now()+120000).toISOString()
+          :zonedLocalToIso(fecha,'00:00',tz);
+      const ends_at=hora
+        ?new Date(new Date(starts_at).getTime()+30*60000).toISOString()
+        :zonedLocalToIso(nextDate,'00:00',tz);
+      if(new Date(ends_at)<=new Date(starts_at)){toast('Ya terminó ese período. Elegí otro día.');return;}
+      await CithelaCloud.blockCommand({
+        tenantId:s.tenant.id,requestId:cloudRequestId('block-create'),
+        command:'availability_block.create',payload:{starts_at,ends_at,reason:motivo}
+      });
+      $('cfg-block-motivo').value='';
+      renderAvailabilityBlocks();
+      toast('Bloqueo guardado en la nube ✓');
+    }catch(err){
+      const code=err?.message;
+      toast(code==='overlapping_block'?'Ya hay un bloqueo en ese período':
+        code==='invalid_payload'||code==='invalid_date'?'El período es inválido o ya comenzó':
+        code||'No se pudo bloquear la disponibilidad',4200);
+    }
+    return;
+  }
+  const blocks=DB.b();
+  if(blocks.some(b=>b.fecha===fecha&&b.hora===hora)){toast('Ese bloqueo ya existe');return;}
+  if(!hora&&DB.t().some(t=>t.fecha===fecha&&t.estado!=='cancelado')){
+    if(!confirm('Ese día ya tiene turnos. El bloqueo no los cancela. ¿Continuar?'))return;
+  }
+  const block={id:'B'+Date.now(),fecha,hora,motivo,creado:new Date().toISOString()};
+  DB.sb([...blocks,block]);recordEvent('availability_block_added',{blockId:block.id,fecha,hora});
+  $('cfg-block-motivo').value='';renderAvailabilityBlocks();
+  renderCal('med');renderStats();renderAgenda();toast('Bloqueo agregado ✓');
 }
-const block={id:'B'+Date.now(),fecha,hora,motivo,creado:new Date().toISOString()};
-DB.sb([...blocks,block]);recordEvent('availability_block_added',{blockId:block.id,fecha,hora});
-$('cfg-block-motivo').value='';renderAvailabilityBlocks();
-renderCal('med');renderStats();renderAgenda();toast('Bloqueo agregado ✓');
-}
-function removeAvailabilityBlock(id){
-const b=DB.b().find(x=>x.id===id);if(!b)return;
-DB.sb(DB.b().filter(x=>x.id!==id));recordEvent('availability_block_removed',{blockId:id,fecha:b.fecha,hora:b.hora});
-renderAvailabilityBlocks();renderCal('med');renderAgenda();toast('Bloqueo quitado');
+async function removeAvailabilityBlock(id){
+  if(professionalCloudReady()){
+    if(!canManageCloudBlocks()){toast('No tenés permisos para quitar bloqueos cloud');return;}
+    const s=CithelaCloud.state();
+    if(!(s.availabilityBlocks||[]).some(b=>b.id===id))return;
+    if(!confirm('¿Quitar este bloqueo cloud y volver a habilitar ese período?'))return;
+    try{
+      await CithelaCloud.blockCommand({
+        tenantId:s.tenant.id,requestId:cloudRequestId('block-delete'),
+        command:'availability_block.delete',payload:{id}
+      });
+      renderAvailabilityBlocks();
+      toast('Bloqueo cloud eliminado ✓');
+    }catch(err){toast(err?.message||'No se pudo quitar el bloqueo',4200);}
+    return;
+  }
+  const b=DB.b().find(x=>x.id===id);if(!b)return;
+  DB.sb(DB.b().filter(x=>x.id!==id));recordEvent('availability_block_removed',{blockId:id,fecha:b.fecha,hora:b.hora});
+  renderAvailabilityBlocks();renderCal('med');renderAgenda();toast('Bloqueo quitado');
 }
 
 function resetReminderTemplate(){
