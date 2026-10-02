@@ -1194,6 +1194,21 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function personHistory(personId){
+    if(!state.session||!state.tenant||!state.membership)throw Error('Conectá la cuenta cloud');
+    const tenantId=state.tenant.id;
+    const person=(state.people||[]).find(p=>String(p.id)===String(personId));
+    if(!person)throw Error('Esta persona no pertenece al espacio activo');
+    const c=await getClient();
+    const {data,error}=await c.from('cithela_appointments')
+      .select('id,person_id,starts_at,status,service_name,duration_min,resource_name,reason')
+      .eq('tenant_id',tenantId).eq('person_id',personId)
+      .order('starts_at',{ascending:false}).limit(50);
+    if(error)throw error;
+    if(!state.session||state.tenant?.id!==tenantId)throw Error('La sesión cambió durante la consulta');
+    return {person,appointments:data||[],timezone:state.tenant.timezone};
+  }
+
   async function exportSnapshot(){
     if(!state.session||!state.tenant||!state.membership)throw Error('Conectá la cuenta cloud');
     const tenantId=state.tenant.id,c=await getClient(),pageSize=500;
@@ -1241,7 +1256,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,signOut,bootstrap,availability,setWorkingHours,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1470,6 +1485,13 @@ function tab(sc,id,btn){
 
 function renderProfessionalMode(){
   const active=professionalCloudReady();
+  const phoneLabel=document.querySelector('label[for="new-person-phone"]');
+  if(phoneLabel)phoneLabel.textContent=active?'WhatsApp E.164 (obligatorio)':'WhatsApp (opcional)';
+  const phoneField=$('new-person-phone');
+  if(phoneField){
+    phoneField.required=active;
+    phoneField.placeholder=active?'+5492210000000':'+54 9 11 0000-0000';
+  }
   const note='Modo local: los turnos y pacientes de este dispositivo NO se sincronizan con CITHELA Cloud. Conectá la cuenta cloud antes de operar.';
   for(const id of ['mode-agenda','mode-pacientes','mode-nuevo']){
     const el=$(id);if(!el)continue;
@@ -1855,8 +1877,9 @@ function renderPacs(){
       const n=turns.filter(t=>String(t.pacienteId)===String(p.id)).length;
       const wa=normalizePhone(p.phone_e164||'');
       return`<div class="prow">
-        <div class="ava">${ini(p.display_name||'—')}</div>
+        <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
         <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')} · ${n} turno${n!==1?'s':''} · nube</div></div>
+        <button class="mb ghost" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
         ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">WhatsApp</button>`:''}
       </div>`;
     }).join('');
@@ -1873,6 +1896,62 @@ function renderPacs(){
       <button class="mb ghost" onclick="verFicha(${p.id})">Ver</button>
     </div>`;
   }).join('');
+}
+
+let cloudFichaRequest=0;
+async function cloudVerFicha(id){
+  if(!professionalCloudReady())return;
+  const req=++cloudFichaRequest;
+  const body=$('m-ficha-body');
+  body.innerHTML='<p class="contact-note">Cargando ficha desde CITHELA Cloud…</p>';
+  openM('m-ficha');
+  try{
+    const result=await CithelaCloud.personHistory(id);
+    if(req!==cloudFichaRequest||!professionalCloudReady())return;
+    const p=result.person,appointments=result.appointments;
+    const name=escHtml(p.display_name||'—');
+    const phone=escHtml(p.phone_e164||'Sin WhatsApp');
+    const initials=escHtml(ini(p.display_name||'—'));
+    const alerts=escHtml(p.alerts||'Sin alertas registradas');
+    const notes=escHtml(p.notes||'Sin observaciones registradas');
+    const wa=normalizePhone(p.phone_e164||'');
+    const rows=appointments.map(t=>{
+      const local=cloudLocalParts(t.starts_at,result.timezone);
+      const label=statusMeta(cloudAppointmentStatus(t.status));
+      return `<div style="padding:11px 0;border-bottom:var(--line);font-size:.79rem;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span style="color:var(--ink2);">${local.fecha} · ${local.hora}</span>
+          <span class="tag ${label.cls}">${escHtml(label.label)}</span>
+        </div>
+        <div style="color:var(--ink2);margin-top:5px;">${escHtml(t.service_name||'Consulta')} · ${Number(t.duration_min)||30} min · ${escHtml(t.resource_name||'—')}</div>
+        ${t.reason?`<div style="color:var(--ink3);margin-top:4px;white-space:pre-wrap;">${escHtml(t.reason)}</div>`:''}
+      </div>`;
+    }).join('');
+    body.innerHTML=`
+      <div style="display:flex;gap:13px;align-items:center;margin-bottom:16px;">
+        <div class="ava" style="width:46px;height:46px;border-radius:12px;">${initials}</div>
+        <div style="min-width:0;">
+          <div style="font-size:1rem;font-weight:600;color:var(--ink);overflow-wrap:anywhere;">${name}</div>
+          <div style="font-size:.8rem;color:var(--ink3);margin-top:3px;">${phone}</div>
+          <div style="font-size:.68rem;color:var(--ink3);margin-top:4px;">Ficha cloud · solo lectura</div>
+        </div>
+      </div>
+      ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Abrir WhatsApp</button>`:''}
+      <hr class="divider">
+      <p class="sh" style="margin:0 0 7px;">Alertas / alergias</p>
+      <p style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84rem;margin-bottom:15px;">${alerts}</p>
+      <p class="sh" style="margin:0 0 7px;">Observaciones</p>
+      <p style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84rem;margin-bottom:16px;">${notes}</p>
+      <hr class="divider">
+      <p class="sh">Últimos turnos (${appointments.length}${appointments.length===50?'+':''})</p>
+      ${appointments.length?rows:'<p class="contact-note">Todavía no hay turnos registrados.</p>'}
+      <p class="contact-note" style="margin-top:14px;">Las notas, los archivos adjuntos y los cambios de ficha todavía no se editan desde esta pantalla cloud.</p>
+      <button class="btn-main soft" style="margin-top:12px;" onclick="closeM('m-ficha')">Cerrar</button>`;
+  }catch(err){
+    if(req!==cloudFichaRequest)return;
+    body.innerHTML=`<p class="ops-note">${escHtml(err?.message||'No se pudo consultar la ficha cloud')}</p>
+      <button class="btn-main soft" onclick="closeM('m-ficha')">Cerrar</button>`;
+  }
 }
 
 async function crearPersona(){
