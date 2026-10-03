@@ -1186,7 +1186,7 @@ const CithelaCloud=(()=>{
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
-        c.from('cithela_people').select('id,display_name,phone_e164,notes,alerts,updated_at').eq('tenant_id',tenantId).order('display_name'),
+        c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
         c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
         c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason').eq('tenant_id',tenantId).order('starts_at',{ascending:true})
@@ -1408,6 +1408,24 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function updatePersonProfile({tenantId,personId,expectedUpdatedAt,payload}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_person_profile_update',{
+      p_tenant_id:tenantId,p_person_id:personId,p_expected_updated_at:expectedUpdatedAt,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo guardar la ficha');
+    await refresh();return data;
+  }
+  async function patientUpdateSharedNote({tenantId,personId,expectedUpdatedAt,note}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_shared_note_update',{
+      p_tenant_id:tenantId,p_person_id:personId,p_expected_updated_at:expectedUpdatedAt,p_note:note
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo guardar la información');
+    return data;
+  }
   async function personHistory(personId){
     if(!state.session||!state.tenant||!state.membership)throw Error('Conectá la cuenta cloud');
     const tenantId=state.tenant.id;
@@ -1440,7 +1458,7 @@ const CithelaCloud=(()=>{
       return result;
     }
     const [people,appointments]=await Promise.all([
-      fetchAll('cithela_people','id,display_name,phone_e164,notes,alerts,created_at'),
+      fetchAll('cithela_people','id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,created_at'),
       fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,created_at')
     ]);
     if(!state.session||state.tenant?.id!==tenantId)throw Error('La sesión cloud cambió durante la exportación');
@@ -1475,7 +1493,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1490,7 +1508,7 @@ function professionalCloudWritable(){
 function cloudPersonById(id){
   const s=CithelaCloud.state();
   const p=(s.people||[]).find(x=>String(x.id)===String(id));
-  return p?{id:p.id,nombre:p.display_name||'—',tel:p.phone_e164||'',obs:p.notes||'',alergias:p.alerts||''}:null;
+  return p?{id:p.id,nombre:p.display_name||'—',tel:p.phone_e164||'',obs:p.notes||'',alergias:p.alerts||'',informacion:p.patient_shared_note||'',contact_email:p.contact_email||''}:null;
 }
 function cloudAppointmentRaw(id){
   return (CithelaCloud.state().appointments||[]).find(x=>String(x.id)===String(id))||null;
