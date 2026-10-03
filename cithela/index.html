@@ -1634,8 +1634,14 @@ function openPatientWhatsApp(patientId){
   const p=professionalCloudReady()?cloudPersonById(patientId):DB.p().find(x=>x.id===patientId);
   if(!p||!p.tel){toast('Paciente sin WhatsApp');return;}
   const n=normalizePhone(p.tel);if(!n){toast('Teléfono inválido');return;}
-  const c=consultorioInfo();
-  const msg=encodeURIComponent(`Hola ${p.nombre}, le contactamos desde *${c.consultorio}* (${c.nombre}).`);
+  const cfg=consultorioInfo();
+  const clinic=String((professionalCloudReady()?CithelaCloud.state().tenant?.display_name:null)
+    ||cfg.consultorio||'CITHELA').trim()||'CITHELA';
+  const sender=String(cfg.nombre||'').trim();
+  const first=String(p.nombre||'').trim().split(/\s+/)[0];
+  const greeting='Hola'+(first?' '+first:'')+', te escribimos desde *'+clinic+'*';
+  const msg=encodeURIComponent(greeting+(sender&&sender.toLowerCase()!==clinic.toLowerCase()
+    ?' ('+sender+')':'')+'.');
   if(!professionalCloudReady())recordEvent('whatsapp_general_opened',{pacienteId:p.id});
   window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
 }
