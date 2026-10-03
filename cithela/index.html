@@ -496,6 +496,11 @@ textarea.inp{resize:vertical;min-height:72px;}
         <input class="inp" id="cloud-service-name" maxlength="160" placeholder="Corte, coloración, corte + coloración…">
         <label class="lbl" for="cloud-service-duration">Duración de la reserva</label>
         <select class="inp" id="cloud-service-duration"></select>
+        <label class="lbl" for="cloud-service-deposit">Seña requerida (pesos argentinos, opcional)</label>
+        <input class="inp" id="cloud-service-deposit" inputmode="decimal" type="text"
+          value="0" maxlength="11" placeholder="0,00">
+        <p class="contact-note">Dejá 0 para no solicitar seña. Es un registro manual;
+          no se realizan cobros desde CITHELA. Los turnos ya creados conservan su importe.</p>
         <input type="hidden" id="cloud-service-id">
         <input type="hidden" id="cloud-service-updated-at">
         <button class="btn-main" type="button" id="cloud-service-save"
@@ -1211,11 +1216,11 @@ const CithelaCloud=(()=>{
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
-        c.from('cithela_services').select('id,name,duration_min,active,updated_at').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
+        c.from('cithela_services').select('id,name,duration_min,active,updated_at,deposit_amount_minor,deposit_currency').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
-        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
+        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
         c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason').eq('tenant_id',tenantId).order('starts_at',{ascending:true})
       ]);
       if(request!==refreshSerial)return snapshot();
@@ -1402,6 +1407,19 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function depositCommand({tenantId,requestId,command,payload}){
+    if(!['deposit.verify','deposit.waive','deposit.refund','deposit.undo'].includes(command))
+      throw Error('Comando de seña no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_deposit_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_command:command,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo registrar la seña');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1535,7 +1553,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -3714,6 +3732,34 @@ renderResourcesConfig();
 renderInfrastructureStatus();
 }
 
+// Deposit amounts use integer minor units to avoid floating-point accounting errors.
+function parseDepositARS(input){
+  const s=String(input||'').trim().replace(',', '.');
+  if(!/^(?:0|[1-9]\d{0,6})(?:\.\d{1,2})?$/.test(s))return null;
+  const [whole,fraction='']=s.split('.');
+  const n=Number(whole)*100+Number(fraction.padEnd(2,'0'));
+  return Number.isInteger(n)&&n<=500000000?n:null;
+}
+function depositARS(minor){
+  const cents=Number(minor)||0;
+  return 'ARS $'+(cents/100).toLocaleString('es-AR',{
+    minimumFractionDigits:0,maximumFractionDigits:2
+  });
+}
+function depositInputARS(minor){
+  const n=Number(minor)||0;
+  return String(Math.trunc(n/100))+(n%100?','+String(n%100).padStart(2,'0'):'');
+}
+const depositStateNames={
+  not_required:'Sin seña',requested:'Seña solicitada',verified:'Cobro verificado manualmente',
+  waived:'Seña eximida',refunded:'Devolución registrada manualmente'
+};
+function depositLabel(a){
+  const amount=Number(a?.deposit_amount_minor)||0;
+  if(!amount)return '';
+  return depositARS(amount)+' · '+(depositStateNames[a.deposit_status]||'Seña solicitada');
+}
+
 function canManageCloudServices(){
   const s=CithelaCloud.state();
   return professionalCloudReady()&&['owner','admin'].includes(s.membership?.role||'');
@@ -3736,6 +3782,7 @@ function resetCloudServiceEditor(){
   const name=$('cloud-service-name'),duration=$('cloud-service-duration');
   if(!name||!duration)return;
   name.value='';duration.value='30';
+  $('cloud-service-deposit').value='0';
   $('cloud-service-id').value='';
   $('cloud-service-updated-at').value='';
   $('cloud-service-save').textContent='Agregar servicio';
@@ -3747,6 +3794,7 @@ function editCloudService(id){
   if(!svc)return;
   $('cloud-service-name').value=svc.name;
   $('cloud-service-duration').value=String(svc.duration_min);
+  $('cloud-service-deposit').value=depositInputARS(svc.deposit_amount_minor);
   $('cloud-service-id').value=svc.id;
   $('cloud-service-updated-at').value=svc.updated_at;
   $('cloud-service-save').textContent='Guardar cambios';
@@ -3757,10 +3805,12 @@ async function saveCloudService(){
   if(cloudServiceBusy||!canManageCloudServices())return;
   const s=CithelaCloud.state();
   const name=$('cloud-service-name').value.trim(),duration=Number($('cloud-service-duration').value);
+  const deposit=parseDepositARS($('cloud-service-deposit').value);
   const id=$('cloud-service-id').value,expected=$('cloud-service-updated-at').value;
   if(!name||name.length>160||!Number.isInteger(duration)||duration<15||duration>720||duration%15!==0){
     toast(cloudServiceErrorMessage('invalid_payload'));return;
   }
+  if(deposit===null){toast('Ingresá la seña en pesos (0 si no corresponde).');return;}
   if(id&&!expected){toast('Volvé a seleccionar el servicio para editarlo.');return;}
   const save=$('cloud-service-save');
   cloudServiceBusy=true;save.disabled=true;
@@ -3768,8 +3818,9 @@ async function saveCloudService(){
     await CithelaCloud.serviceCatalogCommand({
       tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
       command:id?'service.update':'service.create',
-      payload:id?{id,expected_updated_at:expected,name,duration_min:duration}
-        :{name,duration_min:duration}
+      payload:id?{id,expected_updated_at:expected,name,duration_min:duration,
+          deposit_amount_minor:deposit,deposit_currency:'ARS'}
+        :{name,duration_min:duration,deposit_amount_minor:deposit,deposit_currency:'ARS'}
     });
     if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
     resetCloudServiceEditor();renderServicesConfig();
@@ -3834,7 +3885,7 @@ function renderServicesConfig(){
         </div>`:'';
       return `<div class="block-row" style="display:block;">
         <div class="block-title">${escHtml(svc.name)} ${state}</div>
-        <div class="block-meta">${Number(svc.duration_min)} minutos · nube</div>
+        <div class="block-meta">${Number(svc.duration_min)} minutos · nube · ${Number(svc.deposit_amount_minor)>0?'Seña '+depositARS(svc.deposit_amount_minor):'Sin seña'}</div>
         ${buttons}
       </div>`;
     }).join('')+(list.length?'':'<p class="contact-note">Todavía no hay servicios configurados.</p>');
