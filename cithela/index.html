@@ -1678,7 +1678,7 @@ function patientShowReschedule(tenantId,appointmentId){
     toast('Para reprogramar faltando menos de 2 horas, contactá al consultorio.',4600);return;
   }
   const date=cloudLocalParts(a.starts_at,found.profile.timezone).fecha;
-  patientRescheduleState={tenantId,appointmentId,date,slots:[],loading:false};
+  patientRescheduleState={tenantId,appointmentId,date,expectedVersion:Number(a.row_version),slots:[],loading:false};
   ++patientSlotRequest;
   renderPatientPortalCards();
   patientLoadRescheduleSlots();
@@ -1815,9 +1815,14 @@ async function patientRefreshPortal(){
     if(request!==patientPortalRequest||!me?.cloud)return;
     patientPortalData=result;
     $('patient-cloud-identity').textContent=me.email||'Cuenta verificada';
-    if(patientRescheduleState&&!patientOwnAppointment(
-      patientRescheduleState.tenantId,patientRescheduleState.appointmentId)){
-      patientRescheduleState=null;++patientSlotRequest;
+    if(patientRescheduleState){
+      const current=patientOwnAppointment(
+        patientRescheduleState.tenantId,patientRescheduleState.appointmentId);
+      if(!current||!['pending','confirmed'].includes(current.appointment.status)
+        ||Number(current.appointment.row_version)!==patientRescheduleState.expectedVersion){
+        patientRescheduleState=null;++patientSlotRequest;
+        toast('El turno cambió. Actualizamos la información del portal.',4200);
+      }
     }
     renderPatientPortalCards();
   }catch(err){
