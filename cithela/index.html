@@ -368,7 +368,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     <div class="cal" id="cal-med"></div>
     <div class="stats" id="stats"></div>
     <div id="ops-queue-wrap" style="display:none;">
-      <p class="sh">Pendientes próximos</p>
+      <p class="sh" id="ops-queue-title">Pendientes próximos</p>
       <div id="ops-queue"></div>
     </div>
     <p class="sh">Turnos activos del día</p>
@@ -2280,27 +2280,38 @@ function renderStats(){
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
   if(professionalCloudReady()){
-    const items=cloudAppointmentViews()
-      .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
+    const all=cloudAppointmentViews()
+      .filter(t=>['pendiente','confirmado'].includes(t.estado))
+      .filter(t=>{
+        const a=cloudAppointmentRaw(t.id);
+        if(!a||new Date(a.starts_at).getTime()<=Date.now()||dayDistance(t.fecha)<0)return false;
+        if(t.estado==='pendiente')return true;
+        const p=cloudPersonById(t.pacienteId);
+        return dayDistance(t.fecha)<=reminderDays()&&validPhone(p?.tel||'');
+      })
       .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
-    wrap.style.display=items.length?'block':'none';
-    if(!items.length){el.innerHTML='';return;}
+    $('ops-queue-title').textContent='Pendientes y recordatorios';
+    wrap.style.display=all.length?'block':'none';
+    if(!all.length){el.innerHTML='';return;}
+    const items=all.slice(0,12);
     el.innerHTML=items.map(t=>{
       const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
       const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
-      const wa=normalizePhone(p.tel);
+      const wa=normalizePhone(p.tel),pending=t.estado==='pendiente';
+      const kind=pending&&d>reminderDays()?'booking':'reminder';
       return`<div class="aitem" style="padding:13px 15px;">
         <div class="aitem-time">${when} · ${t.hora} hs</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
-        <div class="ops-note">Pendiente de confirmación · ${escHtml(t.servicioNombre)}</div>
+        <div class="ops-note">${pending?'Pendiente de confirmación':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
         <div class="aitem-actions" style="margin-top:9px;">
-          ${wa?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}','reminder')">Preparar recordatorio</button>`:''}
-          ${professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
+          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':'Preparar recordatorio'}</button>`:''}
+          ${pending&&professionalCloudWritable()?`<button class="mb confirm" type="button" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
         </div>
       </div>`;
-    }).join('');
+    }).join('')+(all.length>12?'<p class="contact-note">Mostrando los primeros 12 turnos. Consultá la agenda para ver los demás.</p>':'');
     return;
   }
+  $('ops-queue-title').textContent='Pendientes próximos';
   const pacs=DB.p();
   const items=DB.t()
     .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
