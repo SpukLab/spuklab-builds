@@ -233,6 +233,10 @@ textarea.inp{resize:vertical;min-height:72px;}
 .hf{font-size:.87rem;font-weight:600;color:var(--ink);}
 .hm{font-size:.73rem;color:var(--ink3);margin-top:2px;}
 
+/* WhatsApp draft stays operator-controlled: no automatic send or delivery claim. */
+.wa-draft-text{min-height:155px;resize:vertical;line-height:1.55;font-size:.86rem;}
+#wa-draft-patient{margin-bottom:15px;overflow-wrap:anywhere;}
+
 /* MODAL */
 .overlay{display:none;position:fixed;inset:0;background:rgba(10,30,38,.4);z-index:200;align-items:flex-end;justify-content:center;}
 .overlay.on{display:flex;}
@@ -364,7 +368,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     <div class="cal" id="cal-med"></div>
     <div class="stats" id="stats"></div>
     <div id="ops-queue-wrap" style="display:none;">
-      <p class="sh">Pendientes próximos</p>
+      <p class="sh" id="ops-queue-title">Pendientes próximos</p>
       <div id="ops-queue"></div>
     </div>
     <p class="sh">Turnos activos del día</p>
@@ -696,6 +700,24 @@ textarea.inp{resize:vertical;min-height:72px;}
     <div class="modal-actions">
       <button class="btn-main soft" onclick="closeM('m-reprogram')">Cancelar</button>
       <button class="btn-main" onclick="confirmReprogram()">Guardar cambio</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="m-whatsapp" onclick="closeCloudWhatsAppDraft()">
+  <div class="modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="wa-draft-title">
+    <div class="modal-handle"></div>
+    <h3 id="wa-draft-title">Aviso por WhatsApp</h3>
+    <p id="wa-draft-patient" class="contact-note"></p>
+    <label class="lbl" for="wa-draft-kind">Tipo de aviso</label>
+    <select class="inp" id="wa-draft-kind" onchange="refreshCloudWhatsAppDraft()"></select>
+    <label class="lbl" for="wa-draft-text">Mensaje (podés editarlo)</label>
+    <textarea class="inp wa-draft-text" id="wa-draft-text" rows="7" maxlength="1600" autocomplete="off"></textarea>
+    <p class="contact-note" style="margin:11px 0 17px;">Se abrirá WhatsApp con el mensaje preparado.
+      Tendrás que pulsar Enviar allí. Abrir WhatsApp no confirma envío, recepción ni lectura.</p>
+    <div class="modal-actions">
+      <button class="btn-main soft" type="button" onclick="closeCloudWhatsAppDraft()">Volver</button>
+      <button class="btn-main" type="button" onclick="openCloudWhatsAppDraftChat()">Abrir WhatsApp</button>
     </div>
   </div>
 </div>
@@ -2258,27 +2280,38 @@ function renderStats(){
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
   if(professionalCloudReady()){
-    const items=cloudAppointmentViews()
-      .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
+    const all=cloudAppointmentViews()
+      .filter(t=>['pendiente','confirmado'].includes(t.estado))
+      .filter(t=>{
+        const a=cloudAppointmentRaw(t.id);
+        if(!a||new Date(a.starts_at).getTime()<=Date.now()||dayDistance(t.fecha)<0)return false;
+        if(t.estado==='pendiente')return true;
+        const p=cloudPersonById(t.pacienteId);
+        return dayDistance(t.fecha)<=reminderDays()&&validPhone(p?.tel||'');
+      })
       .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
-    wrap.style.display=items.length?'block':'none';
-    if(!items.length){el.innerHTML='';return;}
+    $('ops-queue-title').textContent='Pendientes y recordatorios';
+    wrap.style.display=all.length?'block':'none';
+    if(!all.length){el.innerHTML='';return;}
+    const items=all.slice(0,12);
     el.innerHTML=items.map(t=>{
       const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
       const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
-      const wa=normalizePhone(p.tel);
+      const wa=normalizePhone(p.tel),pending=t.estado==='pendiente';
+      const kind=pending&&d>reminderDays()?'booking':'reminder';
       return`<div class="aitem" style="padding:13px 15px;">
         <div class="aitem-time">${when} · ${t.hora} hs</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
-        <div class="ops-note">Pendiente de confirmación · ${escHtml(t.servicioNombre)}</div>
+        <div class="ops-note">${pending?'Pendiente de confirmación':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
         <div class="aitem-actions" style="margin-top:9px;">
-          ${wa?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">Abrir WhatsApp</button>`:''}
-          ${professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
+          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':'Preparar recordatorio'}</button>`:''}
+          ${pending&&professionalCloudWritable()?`<button class="mb confirm" type="button" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
         </div>
       </div>`;
-    }).join('');
+    }).join('')+(all.length>12?'<p class="contact-note">Mostrando los primeros 12 turnos. Consultá la agenda para ver los demás.</p>':'');
     return;
   }
+  $('ops-queue-title').textContent='Pendientes próximos';
   const pacs=DB.p();
   const items=DB.t()
     .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
@@ -2338,7 +2371,7 @@ function renderAgenda(){
           <div class="aitem-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
-            ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+            ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">WhatsApp</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
           </div>
@@ -2388,7 +2421,10 @@ function renderAgendaHistory(appointments,cloudMode,pacs,key){
       <div class="aitem-name">${escHtml(pac.nombre)}</div>
       <div class="aitem-motivo">${escHtml(service)} · ${cloudMode?t.duracionMin:appointmentDuration(t)} min · ${escHtml(resource)}</div>
       ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
-      <div class="aitem-foot"><span class="tag ${status.cls}">${escHtml(status.label)}</span></div>
+      <div class="aitem-foot"><span class="tag ${status.cls}">${escHtml(status.label)}</span>
+        ${cloudMode&&t.estado==='cancelado'&&validPhone(pac.tel)
+          ?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','cancelled')">Avisar cancelación</button>`:''}
+      </div>
     </div>`;
   }).join('');
   el.innerHTML=`<details class="agenda-history" ${keepOpen?'open':''}>
@@ -2456,12 +2492,105 @@ async function cloudMarkOutcome(id,outcome){
   }
 }
 
-function cloudOpenWhatsApp(id){
+let cloudWhatsAppDraft=null;
+function cloudWhatsAppKinds(status){
+  if(status==='pendiente')return [
+    ['booking','Nueva reserva pendiente'],
+    ['rescheduled','Turno reprogramado'],
+    ['reminder','Recordatorio']
+  ];
+  if(status==='confirmado')return [
+    ['confirmed','Turno confirmado'],
+    ['rescheduled','Turno reprogramado'],
+    ['reminder','Recordatorio']
+  ];
+  if(status==='cancelado')return [['cancelled','Turno cancelado']];
+  return [];
+}
+function cloudWhatsAppContent(t,pac,kind){
+  const s=CithelaCloud.state();
+  const clinic=String(s.tenant?.display_name||'CITHELA').replace(/[\r\n\t]/g,' ').trim().slice(0,90);
+  const first=String(pac.nombre||'').replace(/[\r\n\t]/g,' ').trim().split(/\s+/)[0].slice(0,45);
+  const when=t.fecha+' a las '+t.hora+' hs';
+  const hello='Hola'+(first?' '+first:'')+'. Te escribimos desde '+clinic+'.\n\n';
+  let body='';
+  if(kind==='booking')
+    body='Recibimos tu solicitud de turno para el '+when+'. Está pendiente de confirmación.';
+  else if(kind==='confirmed')
+    body='Tu turno está confirmado para el '+when+'.';
+  else if(kind==='rescheduled')
+    body='Tu turno quedó reprogramado para el '+when+
+      '. Estado actual: '+(t.estado==='confirmado'?'confirmado':'pendiente de confirmación')+'.';
+  else if(kind==='cancelled')
+    body='El turno del '+when+' quedó cancelado. Podés solicitar otro desde CITHELA.';
+  else
+    body='Te recordamos tu turno del '+when+
+      '. Estado actual: '+(t.estado==='confirmado'?'confirmado':'pendiente de confirmación')+'.';
+  return hello+body+'\n\nSi ya tenés acceso, podés consultar y gestionar tus turnos en '+CITHELA_PUBLIC_URL;
+}
+function closeCloudWhatsAppDraft(){
+  cloudWhatsAppDraft=null;
+  closeM('m-whatsapp');
+}
+function cloudOpenWhatsApp(id,preset){
+  if(!professionalCloudReady())return;
   const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
+  const raw=t?cloudAppointmentRaw(t.id):null;
   const pac=t?cloudPersonById(t.pacienteId):null;
-  if(!t||!pac?.tel){toast('Paciente sin WhatsApp');return;}
-  const n=normalizePhone(pac.tel);if(!n){toast('Teléfono inválido');return;}
-  window.open(`https://wa.me/${n}?text=${encodeURIComponent(reminderMessage(t,pac))}`,'_blank');
+  const n=normalizePhone(pac?.tel||'');
+  if(!t||!raw||!pac||!validPhone(n)){toast('Paciente sin teléfono de WhatsApp válido');return;}
+  const kinds=cloudWhatsAppKinds(t.estado);
+  if(!kinds.length){toast('No hay avisos disponibles para este estado');return;}
+  const kind=kinds.some(([k])=>k===preset)?preset:kinds[0][0];
+  cloudWhatsAppDraft={
+    id:t.id,tenantId:CithelaCloud.state().tenant.id,
+    rowVersion:Number(raw.row_version),startsAt:raw.starts_at,
+    phone:n,kind
+  };
+  $('wa-draft-patient').textContent=pac.nombre+' · '+t.fecha+' '+t.hora+' hs · '+n;
+  $('wa-draft-kind').innerHTML=kinds.map(([value,label])=>
+    '<option value="'+value+'"'+(value===kind?' selected':'')+'>'+label+'</option>').join('');
+  $('wa-draft-kind').value=kind;
+  refreshCloudWhatsAppDraft();
+  openM('m-whatsapp');
+}
+function refreshCloudWhatsAppDraft(){
+  const draft=cloudWhatsAppDraft;if(!draft)return;
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(draft.id));
+  const pac=t?cloudPersonById(t.pacienteId):null;
+  const kind=$('wa-draft-kind').value;
+  if(!t||!pac||!cloudWhatsAppKinds(t.estado).some(([k])=>k===kind))return;
+  draft.kind=kind;
+  $('wa-draft-text').value=cloudWhatsAppContent(t,pac,kind);
+}
+function openCloudWhatsAppDraftChat(){
+  const draft=cloudWhatsAppDraft;
+  if(!draft||!professionalCloudReady())return;
+  const s=CithelaCloud.state();
+  const raw=cloudAppointmentRaw(draft.id);
+  if(s.tenant?.id!==draft.tenantId||!raw||
+    Number(raw.row_version)!==draft.rowVersion||raw.starts_at!==draft.startsAt){
+    closeCloudWhatsAppDraft();
+    toast('El turno cambió. Revisá la información antes de avisar.',4800);
+    return;
+  }
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(draft.id));
+  const pac=t?cloudPersonById(t.pacienteId):null;
+  const phone=normalizePhone(pac?.tel||'');
+  if(!t||!pac||phone!==draft.phone||
+    !cloudWhatsAppKinds(t.estado).some(([kind])=>kind===draft.kind)){
+    closeCloudWhatsAppDraft();
+    toast('Cambió el estado o el teléfono. Prepará un nuevo aviso.',4800);
+    return;
+  }
+  const message=String($('wa-draft-text').value||'').trim();
+  if(!message||message.length>1600){
+    toast('Ingresá un mensaje de hasta 1600 caracteres');return;
+  }
+  // Must stay in the direct click handler to avoid Safari popup blocking.
+  const url='https://wa.me/'+phone+'?text='+encodeURIComponent(message);
+  window.open(url,'_blank','noopener,noreferrer');
+  closeCloudWhatsAppDraft();
 }
 
 function setEstado(id,e){
