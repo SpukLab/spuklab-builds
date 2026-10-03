@@ -326,7 +326,7 @@ textarea.inp{resize:vertical;min-height:72px;}
       <p id="patient-session-state" class="contact-note" role="status" style="display:none;margin:8px 0;"></p>
       <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
       <button class="btn-main soft" type="button" onclick="patientSendMagicLink()">Enviar enlace mágico</button>
-      <label class="lbl" style="margin-top:16px;">Código de invitación del consultorio (solo la primera vez)</label>
+      <label class="lbl" style="margin-top:16px;">Código de invitación del establecimiento (solo la primera vez)</label>
       <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Código recibido por WhatsApp">
       <p class="contact-note">Abrí el enlace del correo y regresá aquí. Ingresá el código que te facilitó el consultorio; después no tendrás que repetirlo.</p>
       <button class="btn-main" type="button" onclick="patientEnter()">Ver mis turnos cloud</button>
@@ -1730,7 +1730,7 @@ async function patientEnter(){
     }
     const result=await CithelaCloud.patientPortal();
     if(!result.profiles?.length){
-      toast('Tu correo está autenticado. Necesitás el código de invitación del consultorio.',4700);
+      toast('Tu correo está autenticado. Necesitás el código de invitación del establecimiento.',4700);
       return;
     }
     patientPortalData=result;
@@ -1783,7 +1783,7 @@ async function patientApplyAction(tenantId,appointmentId,action){
   if(!['pending','confirmed'].includes(a.status))return;
   if(action==='confirm'&&(a.status!=='pending'||starts<=now))return;
   if(action==='cancel'&&starts-now<2*3600000){
-    toast('Para cancelar faltando menos de 2 horas, contactá al consultorio.',4300);return;
+    toast('Para cancelar faltando menos de 2 horas, contactá al establecimiento.',4300);return;
   }
   if(action==='cancel'){
     const when=cloudLocalParts(a.starts_at,found.profile.timezone);
@@ -1809,7 +1809,7 @@ function patientShowReschedule(tenantId,appointmentId){
   const a=found.appointment;
   if(!['pending','confirmed'].includes(a.status))return;
   if(new Date(a.starts_at).getTime()-Date.now()<2*3600000){
-    toast('Para reprogramar faltando menos de 2 horas, contactá al consultorio.',4600);return;
+    toast('Para reprogramar faltando menos de 2 horas, contactá al establecimiento.',4600);return;
   }
   const date=cloudLocalParts(a.starts_at,found.profile.timezone).fecha;
   patientRescheduleState={tenantId,appointmentId,date,expectedVersion:Number(a.row_version),slots:[],loading:false};
@@ -2149,7 +2149,7 @@ function renderPatientPortalCards(){
               <button class="mb cancel" type="button" aria-label="Cancelar turno del ${date.fecha} a las ${date.hora}" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
           </div>`:''}
         </div>
-        ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al consultorio.</p>':''}
+        ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al establecimiento.</p>':''}
         ${picker}
       </div>`;
     };
@@ -2954,7 +2954,7 @@ async function cloudVerFicha(id){
     const name=escHtml(p.display_name||'—');
     const phone=escHtml(p.phone_e164||'Sin WhatsApp');
     const initials=escHtml(ini(p.display_name||'—'));
-    const alerts=escHtml(p.alerts||'Sin alertas registradas');
+    const alerts=escHtml(p.alerts||'Sin consideraciones registradas');
     const notes=escHtml(p.notes||'Sin notas internas');
     const shared=escHtml(p.patient_shared_note||'Sin información compartida');
     const contact=escHtml(p.contact_email||'Sin correo de contacto');
@@ -4014,7 +4014,7 @@ async function exportCloudCSV(tipo){
       ]);});
     }else if(tipo==='pacientes'){
       filename='pacientes_cloud.csv';
-      rows=[['ID','Nombre','Teléfono','Alertas / alergias','Observaciones','Turnos','Registrado']];
+      rows=[['ID','Nombre','Teléfono','Consideraciones del servicio','Observaciones','Turnos','Registrado']];
       ps.forEach(p=>rows.push([p.id,p.display_name,p.phone_e164||'',p.alerts||'',p.notes||'',
         ts.filter(t=>t.person_id===p.id).length,p.created_at?.slice(0,10)||'']));
     }else{
@@ -4043,7 +4043,7 @@ const rows=[['ID',personTerms().singular,'Teléfono','Fecha','Hora','Servicio','
 ts.forEach(t=>rows.push([t.id,getNombre(t.pacienteId),getTel(t.pacienteId),t.fecha,t.hora,appointmentServiceName(t),appointmentDuration(t),appointmentResourceName(t),t.motivo||'',t.estado,t.creado?.slice(0,10)||'']));
 downloadCSV('turnos.csv',rows);
 } else if(tipo==='pacientes'){
-const rows=[['ID','Nombre','Teléfono','Alertas / alergias','Observaciones','Turnos','Registrado']];
+const rows=[['ID','Nombre','Teléfono','Consideraciones del servicio','Observaciones','Turnos','Registrado']];
 ps.forEach(p=>{
 const n=ts.filter(t=>t.pacienteId===p.id).length;
 rows.push([p.id,p.nombre,p.tel||'',p.alergias||'',p.obs||'',n,p.creado?.slice(0,10)||'']);
