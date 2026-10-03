@@ -2027,6 +2027,12 @@ function patientBookingSelectionChanged(){
   state.resourceId=$('patient-book-resource')?.value||'';
   state.date=$('patient-book-date')?.value||state.date;
   state.reason=$('patient-book-reason')?.value||'';
+  const chosen=state.catalog.services.find(x=>x.id===state.serviceId);
+  const depositNote=$('patient-book-deposit-note');
+  if(depositNote)depositNote.textContent=Number(chosen?.deposit_amount_minor)>0
+    ?'Seña del servicio: '+depositARS(chosen.deposit_amount_minor)+
+     '. El establecimiento te indicará cómo abonarla; CITHELA no procesa pagos.'
+    :'Este servicio no requiere seña.';
   state.slots=[];state.requestId=null;state.requestKey=null;
   ++patientBookingRequest;
   patientLoadBookingSlots();
@@ -2085,6 +2091,12 @@ function renderPatientBookingPanel(profile){
     <select class="inp" id="patient-book-service" onchange="patientBookingSelectionChanged()">
       ${s.catalog.services.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.serviceId?'selected':''}>${escHtml(x.name)} · ${Number(x.duration_min)} min</option>`).join('')}
     </select>
+    <p id="patient-book-deposit-note" class="contact-note" style="margin:10px 0;">
+      ${Number(s.catalog.services.find(x=>x.id===s.serviceId)?.deposit_amount_minor)>0
+        ?'Seña del servicio: '+depositARS(s.catalog.services.find(x=>x.id===s.serviceId).deposit_amount_minor)+
+         '. El establecimiento te indicará cómo abonarla; CITHELA no procesa pagos.'
+        :'Este servicio no requiere seña.'}
+    </p>
     <label class="lbl" for="patient-book-resource">Profesional</label>
     <select class="inp" id="patient-book-resource" onchange="patientBookingSelectionChanged()">
       ${s.catalog.resources.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.resourceId?'selected':''}>${escHtml(x.name)}</option>`).join('')}
@@ -2123,7 +2135,10 @@ async function patientSubmitBooking(hour){
   if(!confirm('¿Reservar '+service.name+' ('+service.duration_min+' min) con '+
     resource.name+' el '+s.date+' de '+hour+' a '+
     minToHM(hmToMin(hour)+Number(service.duration_min))+
-    '? El turno quedará pendiente de confirmación.'))return;
+    '? El turno quedará pendiente de confirmación.'+
+    (Number(service.deposit_amount_minor)>0
+      ?' Seña del servicio: '+depositARS(service.deposit_amount_minor)+
+       '. El pago se coordina con el establecimiento; CITHELA no cobra.':'') ))return;
   if(s.requestKey!==start){
     s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
   }
@@ -2242,6 +2257,7 @@ function renderPatientPortalCards(){
         <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
         <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
         <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
+        ${depositLabel(a)?`<p class="contact-note" style="margin-top:8px;">${escHtml(depositLabel(a))} · El establecimiento gestiona el pago.</p>`:''}
         <div class="aitem-foot patient-appointment-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
           ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
             ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
