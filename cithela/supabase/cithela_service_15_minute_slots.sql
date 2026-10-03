@@ -243,6 +243,7 @@ begin
   );
 end $function$
 
+;
 
 CREATE OR REPLACE FUNCTION cithela_private.patient_reschedule_slots(p_tenant_id uuid, p_appointment_id uuid, p_date date)
  RETURNS jsonb
@@ -325,5 +326,4 @@ begin
   return jsonb_build_object('ok',true,'code','patient_availability',
     'date',p_date,'timezone',v_tz,'slots',v_slots);
 end
-$function$
-
+$function$;
