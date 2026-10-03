@@ -490,7 +490,19 @@ textarea.inp{resize:vertical;min-height:72px;}
 
     <p class="sh">Servicios</p>
     <div class="form-card" style="margin-bottom:14px;">
-      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Los servicios definen cuánto tiempo bloquea cada turno. Esto permite usar la misma base para odontología, peluquería, tatuajes, estética y otros trabajos con agenda.</p>
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Definí cada tarea con su duración. La disponibilidad del profesional se calculará con ese tiempo. Podés crear un servicio combinado, como “Corte + coloración”. Los turnos ya reservados conservan su duración original.</p>
+      <div id="cfg-service-cloud-editor" style="display:none;">
+        <label class="lbl" for="cloud-service-name">Nombre del servicio o tarea</label>
+        <input class="inp" id="cloud-service-name" maxlength="160" placeholder="Corte, coloración, corte + coloración…">
+        <label class="lbl" for="cloud-service-duration">Duración de la reserva</label>
+        <select class="inp" id="cloud-service-duration"></select>
+        <input type="hidden" id="cloud-service-id">
+        <input type="hidden" id="cloud-service-updated-at">
+        <button class="btn-main" type="button" id="cloud-service-save"
+          onclick="saveCloudService()">Agregar servicio</button>
+        <button class="btn-main soft" type="button" id="cloud-service-reset"
+          style="display:none;margin-top:8px;" onclick="resetCloudServiceEditor()">Cancelar edición</button>
+      </div>
       <div id="cfg-service-local-editor">
       <label class="lbl">Nombre del servicio</label>
       <input class="inp" id="cfg-service-name" placeholder="Consulta, corte, sesión, control...">
@@ -1026,7 +1038,7 @@ const CithelaCloud=(()=>{
   let realtimeChannel=null,realtimeTenantId=null,realtimeDebounceTimer=null;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
-    services:[],resources:[],people:[],workingHours:[],appointments:[],availabilityBlocks:[],realtimeStatus:'IDLE',error:null
+    services:[],serviceCatalog:[],resources:[],people:[],workingHours:[],appointments:[],availabilityBlocks:[],realtimeStatus:'IDLE',error:null
   };
 
   function snapshot(){
@@ -1039,6 +1051,7 @@ const CithelaCloud=(()=>{
       serviceCount:state.services.length,
       resourceCount:state.resources.length,
       services:state.services.map(x=>({...x})),
+      serviceCatalog:state.serviceCatalog.map(x=>({...x})),
       resources:state.resources.map(x=>({...x})),
       people:state.people.map(x=>({...x})),
       peopleCount:state.people.length,
@@ -1159,7 +1172,7 @@ const CithelaCloud=(()=>{
   function resetWorkspace(){
     stopRealtime();
     state.membership=null;state.tenant=null;
-    state.services=[];state.resources=[];state.people=[];
+    state.services=[];state.serviceCatalog=[];state.resources=[];state.people=[];
     state.workingHours=[];state.appointments=[];state.availabilityBlocks=[];
   }
 
@@ -1191,7 +1204,7 @@ const CithelaCloud=(()=>{
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
-        c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
+        c.from('cithela_services').select('id,name,duration_min,active,updated_at').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
@@ -1203,7 +1216,8 @@ const CithelaCloud=(()=>{
       state.session=session;
       state.membership=membership;
       state.tenant=tenantQ.data;
-      state.services=servicesQ.data||[];
+      state.serviceCatalog=servicesQ.data||[];
+      state.services=state.serviceCatalog.filter(x=>x.active);
       state.resources=resourcesQ.data||[];
       state.people=peopleQ.data||[];
       state.workingHours=hoursQ.data||[];
@@ -1367,6 +1381,20 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function serviceCatalogCommand({tenantId,requestId,command,payload}){
+    if(!['service.create','service.update','service.deactivate','service.reactivate'].includes(command))
+      throw Error('Comando de catálogo no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_service_catalog_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,
+      p_command:command,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo actualizar el servicio');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1500,7 +1528,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
