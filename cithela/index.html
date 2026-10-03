@@ -264,7 +264,9 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
     <div id="f-pac" style="display:none">
       <label class="lbl">Tu correo verificado</label>
-      <input class="inp" id="l-patient-email" type="email" autocomplete="email" placeholder="tu@correo.com">
+      <input class="inp" id="l-patient-email" type="email" autocomplete="email" placeholder="tu@correo.com" oninput="renderPatientLoginSession()">
+      <p id="patient-session-state" class="contact-note" role="status" style="display:none;margin:8px 0;"></p>
+      <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
       <button class="btn-main soft" type="button" onclick="patientSendMagicLink()">Enviar enlace mágico</button>
       <label class="lbl" style="margin-top:16px;">Código de invitación del consultorio (solo la primera vez)</label>
       <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Código recibido por WhatsApp">
@@ -1019,6 +1021,7 @@ const CithelaCloud=(()=>{
   function notify(){
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
+    if(typeof renderPatientLoginSession==='function')renderPatientLoginSession();
     const loginEmail=document.getElementById('l-cloud-email');
     if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
     if(typeof me!=='undefined'&&me?.role==='medico'){
@@ -1213,7 +1216,7 @@ const CithelaCloud=(()=>{
 
   async function signOut(){
     const c=await getClient();
-    const {error}=await c.auth.signOut();
+    const {error}=await c.auth.signOut({scope:'local'});
     if(error)throw error;
     ++refreshSerial;
     state.session=null;resetWorkspace();
@@ -1514,8 +1517,51 @@ function patientDemoLogin(){
   $('pac-pill').textContent=nom.split(' ')[0];
   goPac();
 }
+function renderPatientLoginSession(){
+  const note=$('patient-session-state');
+  const button=$('patient-switch-account');
+  if(!note||!button)return;
+  const session=CithelaCloud.state(),email=String(session.email||'').trim();
+  if(role!=='paciente'||!session.signedIn||!email){
+    note.style.display='none';button.style.display='none';return;
+  }
+  const entered=String($('l-patient-email')?.value||'').trim().toLowerCase();
+  note.style.display='block';
+  note.textContent=entered&&entered!==email.toLowerCase()
+    ?'Sesión activa: '+email+'. Es distinta del correo indicado; cambiá de cuenta para continuar.'
+    :'Sesión cloud activa en este dispositivo: '+email+'.';
+  button.style.display='inline-flex';
+}
+async function patientSwitchAccount(){
+  const button=$('patient-switch-account');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  try{
+    await CithelaCloud.signOut();
+    ++patientPortalRequest;
+    patientPortalData=null;
+    me={};
+    setRole('paciente');
+    renderPatientLoginSession();
+    toast('Sesión cerrada en este dispositivo. Solicitá el enlace mágico de tu correo.',4600);
+  }catch(err){
+    toast(err?.message||'No se pudo cambiar de cuenta',4200);
+  }finally{
+    if(button)button.disabled=false;
+  }
+}
 async function patientSendMagicLink(){
   const email=$('l-patient-email').value.trim();
+  const s=CithelaCloud.state();
+  if(s.signedIn&&s.email&&s.email.toLowerCase()!==email.toLowerCase()){
+    renderPatientLoginSession();
+    toast('Primero pulsá Cambiar de cuenta. Hay otro correo conectado.',4400);
+    return;
+  }
+  if(s.signedIn&&s.email&&s.email.toLowerCase()===email.toLowerCase()){
+    toast('Ya tenés sesión con este correo. Ingresá el código y elegí Ver mis turnos cloud.',4600);
+    return;
+  }
   try{
     await CithelaCloud.sendPatientMagicLink(email);
     toast('Revisá tu correo y abrí el enlace de acceso',4800);
@@ -1619,6 +1665,7 @@ function setRole(r){
   $('f-pac').style.display=r==='paciente'?'block':'none';
   $('login-name-wrap').style.display=r==='medico'?'block':'none';
   $('professional-login-button').style.display=r==='medico'?'block':'none';
+  renderPatientLoginSession();
 }
 
 function doLogin(){
