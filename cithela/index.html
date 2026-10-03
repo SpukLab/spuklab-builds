@@ -1681,7 +1681,10 @@ async function patientApplyAction(tenantId,appointmentId,action){
   if(action==='cancel'&&starts-now<2*3600000){
     toast('Para cancelar faltando menos de 2 horas, contactá al consultorio.',4300);return;
   }
-  if(action==='cancel'&&!confirm('¿Cancelar este turno? No podrás recuperarlo desde el portal.'))return;
+  if(action==='cancel'){
+    const when=cloudLocalParts(a.starts_at,found.profile.timezone);
+    if(!confirm('¿Cancelar el turno del '+when.fecha+' a las '+when.hora+'? No podrás recuperarlo desde el portal.'))return;
+  }
   patientMutationBusy=true;
   try{
     await CithelaCloud.patientCommand({
@@ -1813,7 +1816,7 @@ function renderPatientPortalCards(){
           ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
             ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
             ${mayModify?`<button class="mb teal" type="button" onclick="patientShowReschedule('${profile.tenant_id}','${a.id}')">Reprogramar</button>
-              <button class="mb cancel" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
+              <button class="mb cancel" type="button" aria-label="Cancelar turno del ${date.fecha} a las ${date.hora}" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
           </div>`:''}
         </div>
         ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al consultorio.</p>':''}
