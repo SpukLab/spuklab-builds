@@ -411,10 +411,18 @@ textarea.inp{resize:vertical;min-height:72px;}
       <label class="lbl">Fecha</label>
       <input class="inp" type="date" id="nt-fecha" onchange="fillNTHoras()">
       <label class="lbl">Horario</label>
-      <select class="inp" id="nt-hora"></select>
+      <select class="inp" id="nt-hora" aria-describedby="nt-slot-info"></select>
+      <p class="contact-note" id="nt-slot-info" role="status" aria-live="polite"
+        style="margin:8px 0 12px;"></p>
+      <div id="nt-slot-actions" style="display:none;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
+        <button class="mb teal" id="nt-next-open" type="button"
+          onclick="ntGoNextWorkingDay()">Próximo día de atención</button>
+        <button class="mb ghost" id="nt-config-hours" type="button"
+          onclick="ntGoToHoursConfig()">Configurar horarios</button>
+      </div>
       <label class="lbl">Motivo (opcional)</label>
       <input class="inp" id="nt-motivo" placeholder="Motivo del turno">
-      <button class="btn-main" style="margin-top:4px;" onclick="crearTurnoMed()">Confirmar turno</button>
+      <button class="btn-main" id="nt-submit" type="button" style="margin-top:4px;" onclick="crearTurnoMed()">Confirmar turno</button>
     </div>
   </div>
 
@@ -3473,24 +3481,109 @@ function fillNT(){
   if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
   fillNTHoras();
 }
+let ntAvailabilitySequence=0;
+let ntAvailabilityContext=null;
+function ntSlotMessage(message,{next=false,config=false}={}){
+  const label=$('nt-slot-info'),actions=$('nt-slot-actions');
+  if(label)label.textContent=message;
+  if(actions)actions.style.display=next||config?'flex':'none';
+  if($('nt-next-open'))$('nt-next-open').style.display=next?'':'none';
+  if($('nt-config-hours'))$('nt-config-hours').style.display=config?'':'none';
+}
+function ntWorkingPeriods(fecha,resourceId,source){
+  const weekday=((dp(fecha).getDay()+6)%7)+1;
+  const sameDay=(source||[]).filter(w=>Number(w.weekday)===weekday);
+  const specific=sameDay.filter(w=>w.resource_id&&String(w.resource_id)===String(resourceId));
+  return specific.length?specific:sameDay.filter(w=>!w.resource_id);
+}
+function ntGoToHoursConfig(){
+  const button=document.querySelector('#screen-medico .tabs .tab:last-child');
+  if(!button)return;
+  tab('medico','config',button);
+  $('cloud-hours-form')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function ntGoNextWorkingDay(){
+  if(!professionalCloudReady())return;
+  const s=CithelaCloud.state();
+  const resourceId=$('nt-resource').value;
+  const serviceId=$('nt-service').value;
+  const service=(s.services||[]).find(x=>String(x.id)===String(serviceId));
+  const base=$('nt-fecha').value||today();
+  const start=dp(base<today()?today():base);
+  for(let offset=1;offset<=35;offset++){
+    const day=new Date(start);
+    day.setDate(day.getDate()+offset);
+    const date=dk(day);
+    const periods=ntWorkingPeriods(date,resourceId,s.workingHours);
+    if(periods.some(w=>hmToMin(w.ends_local)-hmToMin(w.starts_local)>=Number(service?.duration_min||30))){
+      $('nt-fecha').value=date;
+      fillNTHoras();
+      return;
+    }
+  }
+  toast('No hay otro día de atención con un tramo suficiente en las próximas cinco semanas.',5100);
+}
 async function fillNTHoras(){
-  const fecha=$('nt-fecha').value||today();
+  const request=++ntAvailabilitySequence;
+  ntAvailabilityContext=null;
+  const fecha=$('nt-fecha').value||today(),slot=$('nt-hora'),submit=$('nt-submit');
+  slot.innerHTML='<option value="">Consultando horarios…</option>';
+  if(submit)submit.disabled=true;
   if(professionalCloudReady()){
-    const s=CithelaCloud.state(),serviceId=$('nt-service').value,resourceId=$('nt-resource').value;
-    $('nt-hora').innerHTML='<option value="">Consultando...</option>';
-    if(!serviceId||!resourceId){$('nt-hora').innerHTML='<option value="">Sin configuración cloud</option>';return;}
+    const s=CithelaCloud.state(),tenantId=s.tenant.id;
+    const serviceId=$('nt-service').value,resourceId=$('nt-resource').value;
+    const service=(s.services||[]).find(x=>String(x.id)===String(serviceId));
+    const resource=(s.resources||[]).find(x=>String(x.id)===String(resourceId));
+    if(!service||!resource){
+      slot.innerHTML='<option value="">Sin configuración cloud</option>';
+      ntSlotMessage('Elegí un servicio y un profesional activos.');return;
+    }
+    const periods=ntWorkingPeriods(fecha,resourceId,s.workingHours);
+    const weekday=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dp(fecha).getDay()];
+    if(!periods.length){
+      slot.innerHTML='<option value="">Día cerrado</option>';
+      ntSlotMessage('El '+weekday+' está cerrado para '+resource.name+
+        '. Elegí un día de atención o configurá sus horarios en Nube CITHELA.',{next:true,config:true});
+      return;
+    }
+    const window=periods.map(w=>String(w.starts_local).slice(0,5)+'–'+String(w.ends_local).slice(0,5)).join(', ');
+    const valid=()=>request===ntAvailabilitySequence&&professionalCloudReady()&&
+      CithelaCloud.state().tenant?.id===tenantId&&$('nt-fecha').value===fecha&&
+      $('nt-service').value===serviceId&&$('nt-resource').value===resourceId;
+    ntSlotMessage('Consultando disponibilidad cloud · atención '+window+'…');
     try{
-      const r=await CithelaCloud.availability({tenantId:s.tenant.id,serviceId,resourceId,date:fecha});
-      const avail=r?.ok&&Array.isArray(r.slots)?r.slots:[];
-      $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
+      const r=await CithelaCloud.availability({tenantId,serviceId,resourceId,date:fecha});
+      if(!valid())return;
+      if(!r?.ok||!Array.isArray(r.slots))throw Error(r?.code||'Respuesta de disponibilidad inválida');
+      const avail=r.slots.filter(h=>/^([01]\\d|2[0-3]):[0-5]\\d$/.test(h));
+      if(!avail.length){
+        slot.innerHTML='<option value="">Agenda completa para este servicio</option>';
+        ntSlotMessage('No quedan espacios de '+service.duration_min+' min para '+service.name+
+          ' el '+weekday+' ('+window+'). Elegí otra fecha o servicio.',{next:true,config:false});
+        return;
+      }
+      slot.innerHTML=avail.map(h=>'<option value="'+h+'">'+h+'</option>').join('');
+      ntAvailabilityContext={tenantId,fecha,serviceId,resourceId};
+      if(submit)submit.disabled=false;
+      ntSlotMessage(avail.length+' horario'+(avail.length!==1?'s':'')+' disponible'+
+        (avail.length!==1?'s':'')+' · '+service.name+' ('+service.duration_min+' min) · atención '+window+'.');
     }catch(err){
-      $('nt-hora').innerHTML='<option value="">Error de disponibilidad</option>';
-      toast(err?.message||'No se pudo consultar disponibilidad',3200);
+      if(!valid())return;
+      slot.innerHTML='<option value="">No se pudo consultar</option>';
+      ntSlotMessage(err?.message==='invalid_date'?'La fecha elegida ya pasó. Seleccioná una futura.':
+        'Error al consultar la nube. No significa que la agenda esté completa; intentá nuevamente.',
+        {next:false,config:false});
+      toast(err?.message||'No se pudo consultar disponibilidad',3900);
     }
     return;
   }
-  const svc=selectedService('nt-service'),res=selectedResource('nt-resource'),avail=uiAvailability(fecha,svc.id,res.id);
-  $('nt-hora').innerHTML=avail.length?avail.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sin horarios disponibles</option>';
+  const svc=selectedService('nt-service'),res=selectedResource('nt-resource');
+  const avail=uiAvailability(fecha,svc.id,res.id);
+  slot.innerHTML=avail.length?avail.map(h=>'<option value="'+h+'">'+h+'</option>').join(''):
+    '<option value="">Sin horarios disponibles</option>';
+  if(submit)submit.disabled=!avail.length;
+  ntSlotMessage(avail.length?'Horarios del modo local; no se sincronizan con CITHELA Cloud.':
+    'No hay horarios locales. Probá con otra fecha o configuración.');
 }
 async function crearTurnoMed(){
   const fecha=$('nt-fecha').value,hora=$('nt-hora').value,motivo=$('nt-motivo').value.trim();
@@ -3501,8 +3594,12 @@ async function crearTurnoMed(){
     const personId=$('nt-pac').value,serviceId=$('nt-service').value,resourceId=$('nt-resource').value;
     if(!personId){toast('Seleccioná un paciente');return;}
     if(!professionalCloudWritable()){toast('Tu rol cloud es de solo lectura');return;}
+    const s=CithelaCloud.state(),ctx=ntAvailabilityContext;
+    if(!ctx||ctx.tenantId!==s.tenant.id||ctx.fecha!==fecha||
+      ctx.serviceId!==serviceId||ctx.resourceId!==resourceId){
+      toast('Esperá a que se actualice la disponibilidad para la selección actual.');return;
+    }
     try{
-      const s=CithelaCloud.state();
       const startsAt=zonedLocalToIso(fecha,hora,s.tenant.timezone);
       const created=await CithelaCloud.reservation({
         tenantId:s.tenant.id,requestId:cloudRequestId('agenda-create'),command:'appointment.create',
