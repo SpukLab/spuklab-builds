@@ -17,14 +17,17 @@
   --teal-mid:#aed2c7;
   --ink:#243331;
   --ink2:#536561;
-  --ink3:#81948e;
+  --ink3:#60756e;
+  --danger:#8e3548;
+  --danger-bg:#fff1f3;
+  --danger-border:#ba7484;
   --ink4:#c8d4cf;
-  --s-ok:#3AA8C1;
+  --s-ok:#206475;
   --s-ok-bg:#e8f6f9;
-  --s-wait:#7a9eaa;
+  --s-wait:#476977;
   --s-wait-bg:#f0f6f8;
-  --s-off:#aabcc4;
-  --s-off-bg:#f4f7f8;
+  --s-off:#824453;
+  --s-off-bg:#f8edf0;
   --line:1px solid #e0ecf0;
   --r:14px;--r-sm:9px;
   --sh:0 2px 12px rgba(58,168,193,.09);
@@ -119,21 +122,45 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .aitem-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
 /* TAGS */
-.tag{font-size:.59rem;font-weight:700;letter-spacing:.04em;padding:3px 10px;border-radius:20px;display:inline-block;}
+.tag{font-size:.7rem;font-weight:700;letter-spacing:.02em;padding:5px 11px;border-radius:20px;display:inline-block;line-height:1.25;}
 .tag.p{background:var(--s-wait-bg);color:var(--s-wait);}
 .tag.c{background:var(--s-ok-bg);color:var(--s-ok);}
 .tag.x{background:var(--s-off-bg);color:var(--s-off);}
 .tag.a{background:var(--teal-light);color:var(--teal2);}
-.tag.n{background:var(--s-off-bg);color:var(--ink2);}
+.tag.n{background:#edf2f1;color:var(--ink2);}
 
-/* MICRO BTN */
-.mb{padding:6px 13px;font-size:.71rem;font-weight:600;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid;transition:opacity .15s;}
-.mb:hover{opacity:.75;}
-.mb.confirm{background:var(--s-ok-bg);border-color:var(--teal-mid);color:var(--teal2);}
-.mb.wa{background:#f0fdf8;border-color:#a7dfc4;color:#2a7a52;}
-.mb.cancel{background:var(--s-off-bg);border-color:var(--ink4);color:var(--s-off);}
-.mb.ghost{background:var(--bg);border-color:var(--ink4);color:var(--ink2);}
-.mb.teal{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal2);}
+/* Actions: color conveys intent; only a real disabled state is faded. */
+.mb{min-height:40px;padding:9px 13px;font-size:.78rem;font-weight:600;line-height:1.3;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid;transition:background-color .15s,border-color .15s,transform .15s;}
+.mb:hover:not(:disabled){filter:brightness(.97);}
+.mb:active:not(:disabled){transform:translateY(1px);}
+.mb:focus-visible,.btn-main:focus-visible,.nav-out:focus-visible,.spill:focus-visible{outline:3px solid var(--teal2);outline-offset:3px;}
+.mb:disabled,.btn-main:disabled{opacity:.44;cursor:not-allowed;transform:none;}
+.mb.confirm{background:var(--s-ok-bg);border-color:#80b7b8;color:#215c61;}
+.mb.wa{background:#f0fdf8;border-color:#91c9a9;color:#286b48;}
+.mb.cancel{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger);}
+.mb.ghost{background:var(--white);border-color:#9fb0a9;color:var(--ink2);}
+.mb.teal{background:var(--teal-light);border-color:#87bbb0;color:var(--teal2);}
+
+/* Patient portal: visible status and thumb-sized actions on any screen. */
+.patient-portal-content{padding:24px 20px;max-width:800px;margin:0 auto;width:100%;box-sizing:border-box;}
+.patient-refresh{max-width:280px;}
+.patient-workspace{padding:20px;}
+.patient-appointment-card{margin-bottom:12px;}
+.patient-appointment-card .aitem-time{font-size:.81rem;}
+.patient-appointment-card .aitem-name{font-size:1rem;}
+.patient-appointment-card .aitem-motivo{font-size:.82rem;line-height:1.45;color:var(--ink2);}
+.patient-appointment-foot{display:block;}
+.patient-appointment-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;max-width:440px;margin-top:13px;}
+.patient-appointment-actions .mb{min-height:44px;width:100%;padding:10px 9px;font-size:.84rem;white-space:normal;}
+.patient-appointment-actions .mb.confirm{grid-column:1 / -1;}
+.patient-appointment-card .tag{font-size:.76rem;}
+@media(max-width:600px){
+  .patient-portal-content{padding:18px 14px;}
+  .patient-workspace{padding:16px;}
+  .patient-appointment-card{padding:15px;}
+  .patient-refresh{max-width:none;}
+  .patient-appointment-actions{max-width:none;}
+}
 
 /* SEARCH */
 .search-row{display:flex;align-items:center;gap:8px;background:var(--white);border:var(--line);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;}
@@ -613,10 +640,10 @@ textarea.inp{resize:vertical;min-height:72px;}
     <span class="pill">Paciente · Nube</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
-  <div style="padding:24px 20px;max-width:840px;margin:0 auto;width:100%;box-sizing:border-box;">
+  <div class="patient-portal-content">
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
-    <button class="btn-main soft" type="button" onclick="patientRefreshPortal()" style="margin:12px 0 18px;">Actualizar mis turnos</button>
+    <button class="btn-main soft patient-refresh" type="button" onclick="patientRefreshPortal()" style="margin:12px 0 18px;">Actualizar mis turnos</button>
     <div id="patient-cloud-list" aria-live="polite"></div>
     <p class="contact-note" style="margin-top:20px;">Podés confirmar tus turnos hasta el inicio y cancelar o reprogramar con al menos 2 horas de anticipación. Para nuevas reservas, contactá al consultorio por ahora.</p>
   </div>
@@ -1778,22 +1805,22 @@ function renderPatientPortalCards(){
           <button class="mb ghost" type="button" onclick="patientCloseReschedule()" style="margin-top:8px;">Cerrar</button>
         </div>`;
       }
-      return `<div class="aitem" style="margin-bottom:10px;">
+      return `<div class="aitem patient-appointment-card">
         <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
         <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
         <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
-        <div class="aitem-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
-          <div class="aitem-actions">
-            ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar</button>`:''}
+        <div class="aitem-foot patient-appointment-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
+          ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
+            ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
             ${mayModify?`<button class="mb teal" type="button" onclick="patientShowReschedule('${profile.tenant_id}','${a.id}')">Reprogramar</button>
-              <button class="mb cancel" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar</button>`:''}
-          </div>
+              <button class="mb cancel" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
+          </div>`:''}
         </div>
         ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al consultorio.</p>':''}
         ${picker}
       </div>`;
     };
-    return `<section class="form-card" style="margin-bottom:16px;">
+    return `<section class="form-card patient-workspace" style="margin-bottom:16px;">
       <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
       <p class="contact-note">${escHtml(profile.name)}</p>
       <p class="sh" style="margin-top:12px;">Próximos (${upcoming.length})</p>
@@ -2064,7 +2091,7 @@ function renderAgenda(){
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">📲 Recordar</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
-            ${active&&professionalCloudWritable()?`<button class="mb cancel" onclick="cloudCancelAppointment('${t.id}')">✕</button>`:''}
+            ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
           </div>
         </div>
       </div>`;
@@ -2086,7 +2113,7 @@ function renderAgenda(){
           ${isOpenAppointment(t)?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
           ${isOpenAppointment(t)&&waNLocal?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
           ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
-          ${isOpenAppointment(t)?`<button class="mb cancel" onclick="cancelTurno('${t.id}')">✕</button>`:''}
+          ${isOpenAppointment(t)?`<button class="mb cancel" type="button" onclick="cancelTurno('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
         </div>
       </div>
     </div>`;
