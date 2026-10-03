@@ -490,15 +490,31 @@ textarea.inp{resize:vertical;min-height:72px;}
 
     <p class="sh">Servicios</p>
     <div class="form-card" style="margin-bottom:14px;">
-      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Los servicios definen cuánto tiempo bloquea cada turno. Esto permite usar la misma base para odontología, peluquería, tatuajes, estética y otros trabajos con agenda.</p>
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Definí cada tarea con su duración. La disponibilidad del profesional se calculará con ese tiempo. Podés crear un servicio combinado, como “Corte + coloración”. Los turnos ya reservados conservan su duración original.</p>
+      <div id="cfg-service-cloud-editor" style="display:none;">
+        <label class="lbl" for="cloud-service-name">Nombre del servicio o tarea</label>
+        <input class="inp" id="cloud-service-name" maxlength="160" placeholder="Corte, coloración, corte + coloración…">
+        <label class="lbl" for="cloud-service-duration">Duración de la reserva</label>
+        <select class="inp" id="cloud-service-duration"></select>
+        <input type="hidden" id="cloud-service-id">
+        <input type="hidden" id="cloud-service-updated-at">
+        <button class="btn-main" type="button" id="cloud-service-save"
+          onclick="saveCloudService()">Agregar servicio</button>
+        <button class="btn-main soft" type="button" id="cloud-service-reset"
+          style="display:none;margin-top:8px;" onclick="resetCloudServiceEditor()">Cancelar edición</button>
+      </div>
       <div id="cfg-service-local-editor">
       <label class="lbl">Nombre del servicio</label>
       <input class="inp" id="cfg-service-name" placeholder="Consulta, corte, sesión, control...">
       <label class="lbl">Duración</label>
       <select class="inp" id="cfg-service-duration">
+        <option value="15">15 min</option>
         <option value="30">30 min</option>
+        <option value="45">45 min</option>
         <option value="60">60 min</option>
+        <option value="75">75 min</option>
         <option value="90">90 min</option>
+        <option value="105">105 min</option>
         <option value="120">120 min</option>
         <option value="150">150 min</option>
         <option value="180">180 min</option>
@@ -735,8 +751,11 @@ textarea.inp{resize:vertical;min-height:72px;}
 // CITHELA PRODUCT SHELL / TURNOS DOMAIN: standalone prototype. No DAHZEA runtime dependency; WhatsApp remains an external channel adapter.
 let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
 const PASS='1234';
-const HORAS=['08:30','09:00','09:30','10:00','10:30','11:00','11:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
-const SLOT_MINUTES=30;
+const SLOT_MINUTES=15;
+const HORAS=[
+  ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
+  ...Array.from({length:18},(_,i)=>14*60+i*SLOT_MINUTES)
+].map(m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
 const DEFAULT_SERVICES=[{id:'S001',nombre:'Consulta',duracionMin:30,creado:'default'}];
 const DEFAULT_RESOURCES=[{id:'R001',nombre:'Profesional principal',creado:'default'}];
 const DEFAULT_REMINDER_TEMPLATE='Hola {paciente} 👋\n\nLe recordamos su turno en:\n*{consultorio}*\n{profesional}\n\n📅 {fecha}\n🕐 {hora} hs\n📌 {servicio}{motivo}\n📍 {direccion}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!';
@@ -1026,7 +1045,7 @@ const CithelaCloud=(()=>{
   let realtimeChannel=null,realtimeTenantId=null,realtimeDebounceTimer=null;
   const state={
     sdk:false,checked:false,session:null,membership:null,tenant:null,
-    services:[],resources:[],people:[],workingHours:[],appointments:[],availabilityBlocks:[],realtimeStatus:'IDLE',error:null
+    services:[],serviceCatalog:[],resources:[],people:[],workingHours:[],appointments:[],availabilityBlocks:[],realtimeStatus:'IDLE',error:null
   };
 
   function snapshot(){
@@ -1039,6 +1058,7 @@ const CithelaCloud=(()=>{
       serviceCount:state.services.length,
       resourceCount:state.resources.length,
       services:state.services.map(x=>({...x})),
+      serviceCatalog:state.serviceCatalog.map(x=>({...x})),
       resources:state.resources.map(x=>({...x})),
       people:state.people.map(x=>({...x})),
       peopleCount:state.people.length,
@@ -1159,7 +1179,7 @@ const CithelaCloud=(()=>{
   function resetWorkspace(){
     stopRealtime();
     state.membership=null;state.tenant=null;
-    state.services=[];state.resources=[];state.people=[];
+    state.services=[];state.serviceCatalog=[];state.resources=[];state.people=[];
     state.workingHours=[];state.appointments=[];state.availabilityBlocks=[];
   }
 
@@ -1191,7 +1211,7 @@ const CithelaCloud=(()=>{
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
-        c.from('cithela_services').select('id,name,duration_min,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
+        c.from('cithela_services').select('id,name,duration_min,active,updated_at').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
@@ -1203,7 +1223,8 @@ const CithelaCloud=(()=>{
       state.session=session;
       state.membership=membership;
       state.tenant=tenantQ.data;
-      state.services=servicesQ.data||[];
+      state.serviceCatalog=servicesQ.data||[];
+      state.services=state.serviceCatalog.filter(x=>x.active);
       state.resources=resourcesQ.data||[];
       state.people=peopleQ.data||[];
       state.workingHours=hoursQ.data||[];
@@ -1367,6 +1388,20 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function serviceCatalogCommand({tenantId,requestId,command,payload}){
+    if(!['service.create','service.update','service.deactivate','service.reactivate'].includes(command))
+      throw Error('Comando de catálogo no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_service_catalog_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,
+      p_command:command,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo actualizar el servicio');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1500,7 +1535,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1997,8 +2032,11 @@ function renderPatientBookingSlots(){
   if(s.loading){el.innerHTML='<p class="contact-note">Consultando horarios disponibles…</p>';return;}
   if(s.error){el.innerHTML='<p class="ops-note">'+escHtml(s.error)+'</p>';return;}
   el.innerHTML=s.slots.length
-    ?'<div class="slots-grid">'+s.slots.map(h=>
-      `<button class="spill" type="button" onclick="patientSubmitBooking('${h}')">${h}</button>`).join('')+'</div>'
+    ?'<div class="slots-grid">'+s.slots.map(h=>{
+      const duration=Number(s.catalog.services.find(x=>x.id===s.serviceId)?.duration_min)||30;
+      const end=minToHM(hmToMin(h)+duration);
+      return `<button class="spill" type="button" onclick="patientSubmitBooking('${h}')">${h}–${end}</button>`;
+    }).join('')+'</div>'
     :'<p class="contact-note">No hay horarios libres para esta combinación. Probá otro día o profesional.</p>';
 }
 function renderPatientBookingPanel(profile){
@@ -2053,8 +2091,10 @@ async function patientSubmitBooking(hour){
     toast('Seleccioná un horario con al menos 2 horas de anticipación.',4300);
     return;
   }
-  if(!confirm('¿Reservar '+service.name+' con '+resource.name+' el '+s.date+
-    ' a las '+hour+'? El turno quedará pendiente de confirmación.'))return;
+  if(!confirm('¿Reservar '+service.name+' ('+service.duration_min+' min) con '+
+    resource.name+' el '+s.date+' de '+hour+' a '+
+    minToHM(hmToMin(hour)+Number(service.duration_min))+
+    '? El turno quedará pendiente de confirmación.'))return;
   if(s.requestKey!==start){
     s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
   }
@@ -3674,31 +3714,144 @@ renderResourcesConfig();
 renderInfrastructureStatus();
 }
 
-function renderServicesConfig(){
-const el=$('cfg-service-list');if(!el)return;
-const cloud=professionalCloudReady();
-const editor=$('cfg-service-local-editor');if(editor)editor.style.display=cloud?'none':'block';
-if(cloud){
-  const list=CithelaCloud.state().services||[];
-  el.innerHTML='<p class="contact-note">Catálogo cloud · solo lectura. La edición remota de servicios está pendiente.</p>'+
-    list.map(s=>`<div class="block-row"><div class="block-main">
-      <div class="block-title">${escHtml(s.name)}</div>
-      <div class="block-meta">${Number(s.duration_min)} minutos · nube</div>
-    </div></div>`).join('');
-  return;
+function canManageCloudServices(){
+  const s=CithelaCloud.state();
+  return professionalCloudReady()&&['owner','admin'].includes(s.membership?.role||'');
 }
-const list=services();
-el.innerHTML=list.map(s=>`<div class="block-row">
+let cloudServiceBusy=false;
+function cloudServiceErrorMessage(code){
+  return ({
+    forbidden:'Solo el propietario o administrador puede modificar el catálogo.',
+    invalid_payload:'Ingresá un nombre y una duración válida (intervalos de 15 minutos).',
+    catalog_limit:'El catálogo admite hasta 40 servicios.',
+    service_name_exists:'Ya existe un servicio con ese nombre.',
+    service_not_found:'El servicio ya no está disponible.',
+    stale_write:'El servicio se modificó en otro dispositivo. Volvé a abrir la edición.',
+    last_active_service:'Debe permanecer al menos un servicio activo.',
+    service_has_future_bookings:'El servicio tiene turnos pendientes o confirmados. No puede desactivarse todavía.',
+    tenant_inactive:'Este establecimiento no está activo.'
+  })[code]||code||'No se pudo actualizar el catálogo';
+}
+function resetCloudServiceEditor(){
+  const name=$('cloud-service-name'),duration=$('cloud-service-duration');
+  if(!name||!duration)return;
+  name.value='';duration.value='30';
+  $('cloud-service-id').value='';
+  $('cloud-service-updated-at').value='';
+  $('cloud-service-save').textContent='Agregar servicio';
+  $('cloud-service-reset').style.display='none';
+}
+function editCloudService(id){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const svc=(CithelaCloud.state().serviceCatalog||[]).find(x=>x.id===id);
+  if(!svc)return;
+  $('cloud-service-name').value=svc.name;
+  $('cloud-service-duration').value=String(svc.duration_min);
+  $('cloud-service-id').value=svc.id;
+  $('cloud-service-updated-at').value=svc.updated_at;
+  $('cloud-service-save').textContent='Guardar cambios';
+  $('cloud-service-reset').style.display='block';
+  $('cloud-service-name').focus();
+}
+async function saveCloudService(){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const s=CithelaCloud.state();
+  const name=$('cloud-service-name').value.trim(),duration=Number($('cloud-service-duration').value);
+  const id=$('cloud-service-id').value,expected=$('cloud-service-updated-at').value;
+  if(!name||name.length>160||!Number.isInteger(duration)||duration<15||duration>720||duration%15!==0){
+    toast(cloudServiceErrorMessage('invalid_payload'));return;
+  }
+  if(id&&!expected){toast('Volvé a seleccionar el servicio para editarlo.');return;}
+  const save=$('cloud-service-save');
+  cloudServiceBusy=true;save.disabled=true;
+  try{
+    await CithelaCloud.serviceCatalogCommand({
+      tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
+      command:id?'service.update':'service.create',
+      payload:id?{id,expected_updated_at:expected,name,duration_min:duration}
+        :{name,duration_min:duration}
+    });
+    if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
+    resetCloudServiceEditor();renderServicesConfig();
+    toast(id?'Servicio actualizado ✓':'Servicio agregado ✓');
+  }catch(err){
+    toast(cloudServiceErrorMessage(err?.message),5200);
+    if(err?.message==='stale_write'){
+      resetCloudServiceEditor();renderServicesConfig();
+    }
+  }finally{cloudServiceBusy=false;save.disabled=false;}
+}
+async function toggleCloudService(id){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const s=CithelaCloud.state();
+  const svc=(s.serviceCatalog||[]).find(x=>x.id===id);if(!svc)return;
+  if(svc.active&&!confirm('¿Desactivar «'+svc.name+'»? No aparecerá para nuevas reservas.'))return;
+  cloudServiceBusy=true;
+  try{
+    await CithelaCloud.serviceCatalogCommand({
+      tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
+      command:svc.active?'service.deactivate':'service.reactivate',
+      payload:{id:svc.id,expected_updated_at:svc.updated_at}
+    });
+    if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
+    if($('cloud-service-id')?.value===id)resetCloudServiceEditor();
+    renderServicesConfig();
+    toast(svc.active?'Servicio desactivado ✓':'Servicio reactivado ✓');
+  }catch(err){
+    toast(cloudServiceErrorMessage(err?.message),5200);
+    renderServicesConfig();
+  }finally{cloudServiceBusy=false;}
+}
+function renderServicesConfig(){
+  const el=$('cfg-service-list');if(!el)return;
+  const cloud=professionalCloudReady();
+  const localEditor=$('cfg-service-local-editor');
+  const cloudEditor=$('cfg-service-cloud-editor');
+  if(localEditor)localEditor.style.display=cloud?'none':'block';
+  if(cloudEditor)cloudEditor.style.display=cloud&&canManageCloudServices()?'block':'none';
+  if(cloud){
+    const s=CithelaCloud.state(),list=s.serviceCatalog||[],editable=canManageCloudServices();
+    const duration=$('cloud-service-duration');
+    if(duration&&!duration.options.length){
+      duration.innerHTML=Array.from({length:48},(_,i)=>{
+        const min=(i+1)*15;return '<option value="'+min+'">'+min+' min</option>';
+      }).join('');
+      duration.value='30';
+    }
+    const active=list.filter(x=>x.active).length;
+    const note='<p class="contact-note">'+active+' servicio(s) activo(s). '+
+      'La duración rige para nuevas reservas; los turnos ya creados conservan la original.'+
+      (editable?'':' Solo el propietario o administrador puede editar.')+'</p>';
+    el.innerHTML=note+list.map(svc=>{
+      const state=svc.active
+        ?'<span class="tag c">Activo</span>'
+        :'<span class="tag n">Inactivo</span>';
+      const buttons=editable
+        ?`<div class="aitem-actions" style="margin-top:8px;">
+          <button class="mb teal" type="button" onclick="editCloudService('${svc.id}')">Editar</button>
+          <button class="mb ${svc.active?'cancel':'confirm'}" type="button"
+            onclick="toggleCloudService('${svc.id}')">${svc.active?'Desactivar':'Reactivar'}</button>
+        </div>`:'';
+      return `<div class="block-row" style="display:block;">
+        <div class="block-title">${escHtml(svc.name)} ${state}</div>
+        <div class="block-meta">${Number(svc.duration_min)} minutos · nube</div>
+        ${buttons}
+      </div>`;
+    }).join('')+(list.length?'':'<p class="contact-note">Todavía no hay servicios configurados.</p>');
+    return;
+  }
+  const list=services();
+  el.innerHTML=list.map(s=>`<div class="block-row">
   <div class="block-main"><div class="block-title">${escHtml(s.nombre)}</div><div class="block-meta">${s.duracionMin} minutos</div></div>
   <button class="mb cancel" onclick="removeService('${s.id}')">Quitar</button>
 </div>`).join('');
-fillServiceSelect('nt-service');fillServiceSelect('pac-service');
+  fillServiceSelect('nt-service');fillServiceSelect('pac-service');
 }
 function addService(){
 if(professionalCloudReady()){toast('El catálogo cloud está en modo solo lectura');return;}
 const nombre=$('cfg-service-name').value.trim();const duracionMin=Number($('cfg-service-duration').value);
 if(!nombre){toast('Ingresá un nombre de servicio');return;}
-if(!duracionMin||duracionMin%SLOT_MINUTES!==0){toast('Duración inválida');return;}
+if(!Number.isInteger(duracionMin)||duracionMin<15||duracionMin>720||duracionMin%SLOT_MINUTES!==0){toast('Duración inválida');return;}
 if(services().some(s=>s.nombre.toLowerCase()===nombre.toLowerCase())){toast('Ese servicio ya existe');return;}
 const service={id:'S'+Date.now(),nombre,duracionMin,creado:new Date().toISOString()};
 DB.ss([...services(),service]);recordEvent('service_added',{serviceId:service.id,nombre,duracionMin});
