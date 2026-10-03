@@ -121,6 +121,21 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .aitem-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:var(--line);flex-wrap:wrap;gap:6px;}
 .aitem-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
+/* Read-only daily history: separate from actionable appointments. */
+.agenda-history{margin-top:20px;padding-top:13px;border-top:var(--line);}
+.agenda-history summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;
+  list-style:none;font-size:.82rem;font-weight:700;color:var(--ink2);
+  background:var(--white);padding:10px 13px;border:var(--line);border-radius:10px;}
+.agenda-history summary::-webkit-details-marker{display:none;}
+.agenda-history summary::after{content:'⌄';margin-left:auto;font-size:1rem;color:var(--teal2);}
+.agenda-history[open] summary::after{transform:rotate(180deg);}
+.agenda-history summary:focus-visible{outline:3px solid var(--teal2);outline-offset:3px;}
+.agenda-history-count{display:inline-flex;min-width:25px;min-height:25px;align-items:center;
+  justify-content:center;border-radius:16px;padding:2px 7px;background:#edf2f1;color:var(--ink2);}
+.agenda-history-items{padding-top:12px;}
+.agenda-historical-card{box-shadow:none;border-color:#dce5e2;}
+.agenda-historical-card .aitem-foot{justify-content:flex-start;}
+
 /* TAGS */
 .tag{font-size:.7rem;font-weight:700;letter-spacing:.02em;padding:5px 11px;border-radius:20px;display:inline-block;line-height:1.25;}
 .tag.p{background:var(--s-wait-bg);color:var(--s-wait);}
@@ -354,6 +369,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
     <p class="sh">Turnos del día</p>
     <div id="agenda-list"></div>
+    <div id="agenda-history-wrap"></div>
   </div>
 
   <div id="p-medico-pacientes" class="pane">
@@ -2210,7 +2226,7 @@ function renderCal(who){
   const turns=cloudMode?cloudAppointmentViews():DB.t();
   $(id).innerHTML=days.map((d,i)=>{
     const key=dk(d);
-    const dot=turns.some(t=>t.fecha===key&&t.estado!=='cancelado');
+    const dot=turns.some(t=>t.fecha===key&&isOpenAppointment(t));
     const closed=cloudMode?!cloudDayOpen(key):isDayBlocked(key);
     const sel=selDate===key;
     return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
@@ -2230,7 +2246,7 @@ function changeWeek(d){
 function renderStats(){
   const keys=weekDays(wkOff).map(d=>dk(d));
   const source=professionalCloudReady()?cloudAppointmentViews():DB.t();
-  const ts=source.filter(t=>keys.includes(t.fecha)&&t.estado!=='cancelado');
+  const ts=source.filter(t=>keys.includes(t.fecha)&&isOpenAppointment(t));
   const confirmed=ts.filter(t=>t.estado==='confirmado').length;
   const pending=ts.filter(t=>t.estado==='pendiente').length;
   $('stats').innerHTML=`
@@ -2293,7 +2309,12 @@ function renderAgenda(){
   const key=selDate||today();
   const cloudMode=professionalCloudReady();
   const pacs=cloudMode?null:DB.p();
-  const ts=(cloudMode?cloudAppointmentViews():DB.t()).filter(t=>t.fecha===key).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const dayAppointments=(cloudMode?cloudAppointmentViews():DB.t())
+    .filter(t=>t.fecha===key)
+    .sort((a,b)=>a.hora.localeCompare(b.hora));
+  const ts=dayAppointments.filter(isOpenAppointment);
+  const historical=dayAppointments.filter(t=>!isOpenAppointment(t));
+  renderAgendaHistory(historical,cloudMode,pacs,key);
   const el=$('agenda-list');
   if(!ts.length){
     el.innerHTML=`<div class="empty"><div class="ei"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="6"/><path d="M15 6v8M33 6v8M7 19h34M17 29h6M17 34h13"/></svg></div><p>Sin turnos este día</p><small>${cloudMode?'Agenda sincronizada con CITHELA Cloud':'Seleccioná otro día o creá un turno'}</small></div>`;
@@ -2346,6 +2367,34 @@ function renderAgenda(){
       </div>
     </div>`;
   }).join('');
+}
+
+function renderAgendaHistory(appointments,cloudMode,pacs,key){
+  const el=$('agenda-history-wrap');if(!el)return;
+  const mode=cloudMode?'cloud':'local';
+  const keepOpen=el.dataset.date===key&&el.dataset.mode===mode
+    &&el.querySelector('details')?.open===true;
+  el.dataset.date=key;el.dataset.mode=mode;
+  if(!appointments.length){el.innerHTML='';return;}
+  const cards=appointments.map(t=>{
+    const pac=cloudMode
+      ?(cloudPersonById(t.pacienteId)||{nombre:'—'})
+      :(pacs.find(p=>p.id===t.pacienteId)||{nombre:'—'});
+    const status=statusMeta(t.estado);
+    const service=cloudMode?t.servicioNombre:appointmentServiceName(t);
+    const resource=cloudMode?t.resourceName:appointmentResourceName(t);
+    return `<div class="aitem agenda-historical-card">
+      <div class="aitem-time">${escHtml(t.hora)} hs${cloudMode?' · Nube':''}</div>
+      <div class="aitem-name">${escHtml(pac.nombre)}</div>
+      <div class="aitem-motivo">${escHtml(service)} · ${cloudMode?t.duracionMin:appointmentDuration(t)} min · ${escHtml(resource)}</div>
+      ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+      <div class="aitem-foot"><span class="tag ${status.cls}">${escHtml(status.label)}</span></div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<details class="agenda-history" ${keepOpen?'open':''}>
+    <summary>Historial del día <span class="agenda-history-count">${appointments.length}</span></summary>
+    <div class="agenda-history-items">${cards}</div>
+  </details>`;
 }
 
 async function cloudConfirmAppointment(id){
