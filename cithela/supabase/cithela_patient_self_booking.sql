@@ -164,7 +164,7 @@ begin
   v_response:=cithela_private.channel_availability_core(
     p_tenant_id,v_service_id,v_resource_id,v_local::date);
   if not coalesce((v_response->>'ok')::boolean,false) then return v_response; end if;
-  if not coalesce(v_response->'slots','[]'::jsonb) ? v_slot then
+  if not (coalesce(v_response->'slots','[]'::jsonb) ? v_slot) then
     return jsonb_build_object('ok',false,'code','slot_unavailable');
   end if;
   v_end:=v_start+v_service.duration_min*interval '1 minute';
