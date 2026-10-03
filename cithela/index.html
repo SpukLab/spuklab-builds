@@ -2489,6 +2489,7 @@ function renderOpsQueue(){
         const a=cloudAppointmentRaw(t.id);
         if(!a||new Date(a.starts_at).getTime()<=Date.now()||dayDistance(t.fecha)<0)return false;
         if(t.estado==='pendiente')return true;
+        if(Number(a.deposit_amount_minor)>0&&a.deposit_status==='requested')return true;
         const p=cloudPersonById(t.pacienteId);
         return dayDistance(t.fecha)<=reminderDays()&&validPhone(p?.tel||'');
       })
@@ -2501,17 +2502,18 @@ function renderOpsQueue(){
       const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
       const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
       const wa=normalizePhone(p.tel),pending=t.estado==='pendiente';
-      const kind=pending&&d>reminderDays()?'booking':'reminder';
       const appt=cloudAppointmentRaw(t.id);
       const depositDue=Number(appt?.deposit_amount_minor)>0&&appt?.deposit_status==='requested';
+      const kind=pending&&d>reminderDays()?'booking':
+        (!pending&&depositDue&&d>reminderDays()?'deposit':'reminder');
       return`<div class="aitem" style="padding:13px 15px;">
         <div class="aitem-time">${when} · ${t.hora} hs</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
-        <div class="ops-note">${pending?'Pendiente de confirmación':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
+        <div class="ops-note">${pending?'Pendiente de confirmación':depositDue?'Confirmado · seña pendiente':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
         ${depositDue?`<div class="ops-note">Seña pendiente: ${escHtml(depositARS(appt.deposit_amount_minor))}</div>`:''}
         <div class="aitem-actions" style="margin-top:9px;">
-          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':'Preparar recordatorio'}</button>`:''}
-          ${depositDue&&validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','deposit')">Solicitar seña</button>`:''}
+          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':kind==='deposit'?'Solicitar seña':'Preparar recordatorio'}</button>`:''}
+          ${depositDue&&validPhone(wa)&&kind!=='deposit'?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','deposit')">Solicitar seña</button>`:''}
           ${depositDue&&professionalCloudWritable()?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
           ${pending&&professionalCloudWritable()?`<button class="mb confirm" type="button" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
         </div>
