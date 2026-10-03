@@ -724,6 +724,8 @@ textarea.inp{resize:vertical;min-height:72px;}
       <button class="btn-main soft" type="button" onclick="closeCloudWhatsAppDraft()">Volver</button>
       <button class="btn-main" type="button" onclick="openCloudWhatsAppDraftChat()">Abrir WhatsApp</button>
     </div>
+    <button class="mb ghost" type="button" style="margin-top:10px;min-height:44px;width:100%;"
+      onclick="copyCloudWhatsAppDraftMessage()">Copiar mensaje (si no abre)</button>
   </div>
 </div>
 
@@ -1618,16 +1620,39 @@ function markReminderSent(id){
   recordEvent('reminder_marked_sent',{turnoId:id});
   renderAgenda();toast('Recordatorio marcado como enviado ✓');
 }
+// Avoid blank _blank browser views after switching to WhatsApp on iOS.
+function openWhatsAppMessage(phone,message){
+  const n=normalizePhone(phone);
+  if(!validPhone(n)||!String(message||'').trim()){
+    toast('Revisá el teléfono y el mensaje de WhatsApp');return false;
+  }
+  const text=encodeURIComponent(String(message));
+  const isIOS=/iPad|iPhone|iPod/i.test(String(navigator.userAgent||''))||
+    (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  try{
+    if(isIOS){
+      // Native app deep link in the current view; CITHELA remains behind WhatsApp.
+      window.location.assign('whatsapp://send?phone='+n+'&text='+text);
+    }else{
+      window.open('https://wa.me/'+n+'?text='+text,'_blank','noopener,noreferrer');
+    }
+    return true;
+  }catch{
+    toast('No se pudo abrir WhatsApp. Copiá el mensaje y pegalo manualmente.');
+    return false;
+  }
+}
+
 function openWhatsApp(turnoId){
   const t=turnoById(turnoId);if(!t)return;
   const pac=DB.p().find(p=>p.id===t.pacienteId);if(!pac||!pac.tel){toast('Paciente sin WhatsApp');return;}
   const n=normalizePhone(pac.tel);if(!n){toast('Teléfono inválido');return;}
-  const msg=encodeURIComponent(reminderMessage(t,pac));
+  const msg=reminderMessage(t,pac);
   const now=new Date().toISOString();
   DB.st(DB.t().map(x=>x.id===t.id?{...x,waOpenedAt:now,waOpenedCount:(x.waOpenedCount||0)+1}:x));
   recordEvent('whatsapp_opened',{turnoId:t.id,pacienteId:pac.id});
   if(me.role==='medico')renderAgenda();
-  window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
+  openWhatsAppMessage(n,msg);
 }
 
 function openPatientWhatsApp(patientId){
@@ -1640,10 +1665,10 @@ function openPatientWhatsApp(patientId){
   const sender=String(cfg.nombre||'').trim();
   const first=String(p.nombre||'').trim().split(/\s+/)[0];
   const greeting='Hola'+(first?' '+first:'')+', te escribimos desde *'+clinic+'*';
-  const msg=encodeURIComponent(greeting+(sender&&sender.toLowerCase()!==clinic.toLowerCase()
-    ?' ('+sender+')':'')+'.');
+  const msg=greeting+(sender&&sender.toLowerCase()!==clinic.toLowerCase()
+    ?' ('+sender+')':'')+'.';
   if(!professionalCloudReady())recordEvent('whatsapp_general_opened',{pacienteId:p.id});
-  window.open(`https://wa.me/${n}?text=${msg}`,'_blank');
+  openWhatsAppMessage(n,msg);
 }
 
 let patientPortalData=null,patientPortalRequest=0;
@@ -2652,6 +2677,22 @@ function refreshCloudWhatsAppDraft(){
   draft.kind=kind;
   $('wa-draft-text').value=cloudWhatsAppContent(t,pac,kind);
 }
+async function copyCloudWhatsAppDraftMessage(){
+  if(!cloudWhatsAppDraft)return;
+  const input=$('wa-draft-text'),message=String(input?.value||'').trim();
+  if(!message){toast('No hay un mensaje para copiar');return;}
+  try{
+    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(message);
+    else{
+      input.focus();input.select();
+      if(!document.execCommand('copy'))throw Error('copy unavailable');
+    }
+    toast('Mensaje copiado. Abrí WhatsApp y pegalo en el chat.');
+  }catch{
+    input.focus();input.select();
+    toast('Seleccioná el texto y elegí Copiar.');
+  }
+}
 function openCloudWhatsAppDraftChat(){
   const draft=cloudWhatsAppDraft;
   if(!draft||!professionalCloudReady())return;
@@ -2676,10 +2717,8 @@ function openCloudWhatsAppDraftChat(){
   if(!message||message.length>1600){
     toast('Ingresá un mensaje de hasta 1600 caracteres');return;
   }
-  // Must stay in the direct click handler to avoid Safari popup blocking.
-  const url='https://wa.me/'+phone+'?text='+encodeURIComponent(message);
-  window.open(url,'_blank','noopener,noreferrer');
-  closeCloudWhatsAppDraft();
+  // Use the operator click directly. Never create an empty iOS browser tab.
+  if(openWhatsAppMessage(phone,message))closeCloudWhatsAppDraft();
 }
 
 function setEstado(id,e){
@@ -2908,7 +2947,7 @@ function sharePatientInviteWhatsApp(personId){
 Solicitá tu enlace mágico con el correo ${email}.
 Tu código de invitación (válido durante 48 horas): ${inp.value}
 Tras abrir el enlace del correo, ingresá el código para consultar tus turnos.`;
-  window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`,'_blank');
+  openWhatsAppMessage(n,msg);
 }
 
 let cloudFichaRequest=0;
