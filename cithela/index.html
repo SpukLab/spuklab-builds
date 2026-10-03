@@ -1530,7 +1530,7 @@ const CithelaCloud=(()=>{
     }
     const [people,appointments]=await Promise.all([
       fetchAll('cithela_people','id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,created_at'),
-      fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,created_at')
+      fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method,created_at')
     ]);
     if(!state.session||state.tenant?.id!==tenantId)throw Error('La sesión cloud cambió durante la exportación');
     return {people,appointments,timezone:state.tenant.timezone};
@@ -2439,7 +2439,7 @@ function renderProfessionalMode(){
 function renderReportSource(){
   const el=$('report-source');if(!el)return;
   el.textContent=professionalCloudReady()
-    ?'Exportación desde CITHELA Cloud. Los archivos pueden contener datos personales; guardalos en un lugar seguro. El registro de eventos y el backup siguen siendo locales.'
+    ?'Exportación desde CITHELA Cloud. Los archivos pueden contener datos personales y estados de señas; guardalos en un lugar seguro. El registro de eventos y el backup siguen siendo locales.'
     :'Exportación local de este dispositivo. No incluye los datos de CITHELA Cloud.';
 }
 
@@ -3887,7 +3887,7 @@ function parseDepositARS(input){
 function depositARS(minor){
   const cents=Number(minor)||0;
   return 'ARS $'+(cents/100).toLocaleString('es-AR',{
-    minimumFractionDigits:0,maximumFractionDigits:2
+    minimumFractionDigits:cents%100?2:0,maximumFractionDigits:2
   });
 }
 function depositInputARS(minor){
