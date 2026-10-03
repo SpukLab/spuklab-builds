@@ -257,6 +257,13 @@ textarea.inp{resize:vertical;min-height:72px;}
 .block-title{font-size:.79rem;font-weight:600;color:var(--ink2);}
 .block-meta{font-size:.68rem;color:var(--ink3);margin-top:2px;}
 .inline-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+/* Patient self-booking form stays visually distinct from existing bookings. */
+.patient-booking-toggle{margin:15px 0 6px;min-height:44px;}
+.patient-booking-panel{background:var(--bg);border:1.5px solid #bfdbd3;border-radius:var(--r-sm);padding:16px;margin:8px 0 18px;}
+.patient-booking-panel .slots-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+.patient-booking-panel .spill{min-height:44px;font-size:.82rem;color:var(--teal2);border-color:#87bbb0;background:var(--white);}
+.patient-booking-panel .spill:focus-visible{outline:3px solid var(--teal2);outline-offset:2px;}
+@media(max-width:400px){.patient-booking-panel .slots-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>
 
 </head>
@@ -1260,6 +1267,32 @@ const CithelaCloud=(()=>{
     if(!data?.ok)throw Error(data?.code||'No se pudo consultar disponibilidad');
     return data;
   }
+  async function patientBookingCatalog(tenantId){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_booking_catalog',{p_tenant_id:tenantId});
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo consultar el catálogo');
+    return data;
+  }
+  async function patientBookingSlots({tenantId,personId,serviceId,resourceId,date}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_booking_slots',{
+      p_tenant_id:tenantId,p_person_id:personId,
+      p_service_id:serviceId,p_resource_id:resourceId,p_date:date
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo consultar disponibilidad');
+    return data;
+  }
+  async function patientBookingCreate({tenantId,requestId,payload}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_booking_create',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo reservar el turno');
+    return data;
+  }
 
   async function signOut(){
     const c=await getClient();
@@ -1404,7 +1437,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1587,6 +1620,8 @@ async function patientSwitchAccount(){
     await CithelaCloud.signOut();
     ++patientPortalRequest;
     ++patientSlotRequest;
+    ++patientBookingRequest;
+    patientBookingState=null;
     patientRescheduleState=null;
     patientPortalData=null;
     me={};
@@ -1669,7 +1704,14 @@ function patientActionErrorMessage(code){
     same_slot:'Elegí un horario diferente.',
     email_not_verified:'Primero verificá tu correo.',
     appointment_not_found:'El turno no está disponible para tu cuenta.',
-    inactive_service_or_resource:'El servicio o profesional ya no está disponible.'
+    inactive_service_or_resource:'El servicio o profesional ya no está disponible.',
+    tenant_inactive:'El consultorio no está disponible para reservas.',
+    forbidden:'Tu cuenta no está vinculada a esta ficha.',
+    service_not_found:'El servicio ya no está disponible.',
+    resource_not_found:'El profesional ya no está disponible.',
+    too_late_or_too_far:'Elegí una fecha entre las próximas 2 horas y los próximos 365 días.',
+    invalid_slot:'Elegí uno de los horarios disponibles.',
+    invalid_date:'Elegí una fecha válida.'
   }[code]||code||'No se pudo actualizar el turno';
 }
 async function patientApplyAction(tenantId,appointmentId,action){
@@ -1773,6 +1815,173 @@ async function patientSubmitReschedule(hour){
     await patientRefreshPortal();
   }finally{patientMutationBusy=false;}
 }
+let patientBookingState=null;
+let patientBookingRequest=0;
+
+function patientBookingProfile(tenantId,personId){
+  if(!me?.cloud||me?.role!=='paciente')return null;
+  if(String(CithelaCloud.state().email||'').toLowerCase()!==String(me.email||'').toLowerCase())return null;
+  return patientPortalData?.profiles?.find(p=>p.tenant_id===tenantId&&p.person_id===personId)||null;
+}
+function patientBookingDateShift(date,days){
+  const value=new Date(date+'T12:00:00Z');
+  value.setUTCDate(value.getUTCDate()+days);
+  return value.toISOString().slice(0,10);
+}
+function patientCloseBooking(){
+  patientBookingState=null;++patientBookingRequest;
+  renderPatientPortalCards();
+}
+async function patientOpenBooking(tenantId,personId){
+  if(patientMutationBusy)return;
+  const profile=patientBookingProfile(tenantId,personId);if(!profile)return;
+  if(patientBookingState?.tenantId===tenantId&&patientBookingState?.personId===personId){
+    patientCloseBooking();return;
+  }
+  ++patientBookingRequest;
+  ++patientSlotRequest;
+  patientRescheduleState=null;
+  const todayLocal=cloudLocalParts(new Date().toISOString(),profile.timezone).fecha;
+  const state={tenantId,personId,date:patientBookingDateShift(todayLocal,1),
+    serviceId:'',resourceId:'',reason:'',catalog:null,slots:[],loading:true,
+    requestId:null,requestKey:null,error:''};
+  patientBookingState=state;
+  renderPatientPortalCards();
+  const request=++patientBookingRequest;
+  try{
+    const catalog=await CithelaCloud.patientBookingCatalog(tenantId);
+    if(request!==patientBookingRequest||patientBookingState!==state||
+      !patientBookingProfile(tenantId,personId))return;
+    state.catalog=catalog;
+    state.serviceId=catalog.services?.[0]?.id||'';
+    state.resourceId=catalog.resources?.[0]?.id||'';
+    state.loading=false;
+    renderPatientPortalCards();
+    if(state.serviceId&&state.resourceId)await patientLoadBookingSlots();
+  }catch(err){
+    if(request!==patientBookingRequest||patientBookingState!==state)return;
+    state.loading=false;state.error=patientActionErrorMessage(err?.message);
+    renderPatientPortalCards();
+  }
+}
+function patientBookingSelectionChanged(){
+  const state=patientBookingState;if(!state||state.loading||patientMutationBusy)return;
+  state.serviceId=$('patient-book-service')?.value||'';
+  state.resourceId=$('patient-book-resource')?.value||'';
+  state.date=$('patient-book-date')?.value||state.date;
+  state.reason=$('patient-book-reason')?.value||'';
+  state.slots=[];state.requestId=null;state.requestKey=null;
+  ++patientBookingRequest;
+  patientLoadBookingSlots();
+}
+async function patientLoadBookingSlots(){
+  const state=patientBookingState;
+  if(!state||!state.catalog||!state.serviceId||!state.resourceId||patientMutationBusy)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(state.date))return;
+  state.error='';state.loading=true;state.slots=[];
+  const request=++patientBookingRequest;
+  const area=$('patient-book-slots');
+  if(area)area.innerHTML='<p class="contact-note">Consultando horarios disponibles…</p>';
+  try{
+    const result=await CithelaCloud.patientBookingSlots({
+      tenantId:state.tenantId,personId:state.personId,serviceId:state.serviceId,
+      resourceId:state.resourceId,date:state.date
+    });
+    if(request!==patientBookingRequest||patientBookingState!==state||
+      !patientBookingProfile(state.tenantId,state.personId))return;
+    state.slots=Array.isArray(result.slots)
+      ?result.slots.filter(h=>/^([01]\d|2[0-3]):[0-5]\d$/.test(h)):[];
+    state.loading=false;
+    renderPatientBookingSlots();
+  }catch(err){
+    if(request!==patientBookingRequest||patientBookingState!==state)return;
+    state.error=patientActionErrorMessage(err?.message);
+    state.loading=false;renderPatientBookingSlots();
+  }
+}
+function renderPatientBookingSlots(){
+  const s=patientBookingState,el=$('patient-book-slots');if(!s||!el)return;
+  if(s.loading){el.innerHTML='<p class="contact-note">Consultando horarios disponibles…</p>';return;}
+  if(s.error){el.innerHTML='<p class="ops-note">'+escHtml(s.error)+'</p>';return;}
+  el.innerHTML=s.slots.length
+    ?'<div class="slots-grid">'+s.slots.map(h=>
+      `<button class="spill" type="button" onclick="patientSubmitBooking('${h}')">${h}</button>`).join('')+'</div>'
+    :'<p class="contact-note">No hay horarios libres para esta combinación. Probá otro día o profesional.</p>';
+}
+function renderPatientBookingPanel(profile){
+  const s=patientBookingState;
+  if(!s||s.tenantId!==profile.tenant_id||s.personId!==profile.person_id)return '';
+  if(!s.catalog)return `<div class="patient-booking-panel" role="region" aria-label="Nueva reserva">
+    ${s.error?`<p class="ops-note">${escHtml(s.error)}</p>`:'<p class="contact-note">Cargando servicios y profesionales…</p>'}
+    <button class="mb ghost" type="button" onclick="patientCloseBooking()">Cerrar</button>
+  </div>`;
+  if(!s.catalog.services?.length||!s.catalog.resources?.length)
+    return '<div class="patient-booking-panel"><p class="ops-note">El consultorio todavía no tiene servicios o profesionales disponibles para reservar.</p><button class="mb ghost" type="button" onclick="patientCloseBooking()">Cerrar</button></div>';
+  const todayLocal=cloudLocalParts(new Date().toISOString(),profile.timezone).fecha;
+  const max=patientBookingDateShift(todayLocal,365);
+  return `<div class="patient-booking-panel" role="region" aria-label="Nueva reserva">
+    <p class="sh" style="margin:0 0 12px;">Reservar nuevo turno</p>
+    <label class="lbl" for="patient-book-service">Servicio</label>
+    <select class="inp" id="patient-book-service" onchange="patientBookingSelectionChanged()">
+      ${s.catalog.services.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.serviceId?'selected':''}>${escHtml(x.name)} · ${Number(x.duration_min)} min</option>`).join('')}
+    </select>
+    <label class="lbl" for="patient-book-resource">Profesional</label>
+    <select class="inp" id="patient-book-resource" onchange="patientBookingSelectionChanged()">
+      ${s.catalog.resources.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.resourceId?'selected':''}>${escHtml(x.name)}</option>`).join('')}
+    </select>
+    <label class="lbl" for="patient-book-date">Fecha</label>
+    <input class="inp" id="patient-book-date" type="date" min="${todayLocal}" max="${max}"
+      value="${s.date}" onchange="patientBookingSelectionChanged()">
+    <label class="lbl" for="patient-book-reason">Motivo (opcional)</label>
+    <textarea class="inp" id="patient-book-reason" maxlength="500" rows="2"
+      placeholder="Comentá brevemente el motivo"
+      oninput="if(patientBookingState)patientBookingState.reason=this.value">${escHtml(s.reason)}</textarea>
+    <p class="contact-note">Horarios disponibles · mínimo 2 horas de anticipación</p>
+    <div id="patient-book-slots" aria-live="polite">
+      ${s.loading?'<p class="contact-note">Consultando horarios disponibles…</p>':
+        s.error?`<p class="ops-note">${escHtml(s.error)}</p>`:
+        s.slots.length?'<p class="contact-note">Elegí un horario.</p>':
+        '<p class="contact-note">No hay horarios libres para esta fecha.</p>'}
+    </div>
+    <button class="mb ghost" type="button" onclick="patientCloseBooking()">Cerrar</button>
+  </div>`;
+}
+async function patientSubmitBooking(hour){
+  const s=patientBookingState;
+  if(!s||s.loading||patientMutationBusy||!s.catalog||!s.slots.includes(hour))return;
+  if(!patientBookingProfile(s.tenantId,s.personId))return;
+  const service=s.catalog.services.find(x=>x.id===s.serviceId);
+  const resource=s.catalog.resources.find(x=>x.id===s.resourceId);
+  if(!service||!resource)return;
+  if(s.reason.length>500){toast('El motivo no puede superar los 500 caracteres');return;}
+  const start=zonedLocalToIso(s.date,hour,
+    patientBookingProfile(s.tenantId,s.personId).timezone);
+  if(new Date(start).getTime()<Date.now()+2*3600000){
+    toast('Seleccioná un horario con al menos 2 horas de anticipación.',4300);
+    return;
+  }
+  if(!confirm('¿Reservar '+service.name+' con '+resource.name+' el '+s.date+
+    ' a las '+hour+'? El turno quedará pendiente de confirmación.'))return;
+  if(s.requestKey!==start){
+    s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
+  }
+  patientMutationBusy=true;
+  try{
+    await CithelaCloud.patientBookingCreate({
+      tenantId:s.tenantId,requestId:s.requestId,
+      payload:{person_id:s.personId,service_id:s.serviceId,
+        resource_id:s.resourceId,starts_at:start,reason:s.reason.trim()}
+    });
+    ++patientBookingRequest;patientBookingState=null;
+    toast('Turno reservado; quedó pendiente de confirmación ✓',4800);
+    await patientRefreshPortal();
+  }catch(err){
+    toast(patientActionErrorMessage(err?.message),4600);
+    await patientRefreshPortal();
+    if(patientBookingState===s)await patientLoadBookingSlots();
+  }finally{patientMutationBusy=false;}
+}
+
 function renderPatientPortalCards(){
   if(!me?.cloud||me?.role!=='paciente'||!patientPortalData)return;
   const el=$('patient-cloud-list'),profiles=patientPortalData.profiles||[];
@@ -1826,6 +2035,12 @@ function renderPatientPortalCards(){
     return `<section class="form-card patient-workspace" style="margin-bottom:16px;">
       <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
       <p class="contact-note">${escHtml(profile.name)}</p>
+      <button class="btn-main patient-booking-toggle" type="button"
+        onclick="patientOpenBooking('${profile.tenant_id}','${profile.person_id}')">
+        ${patientBookingState?.tenantId===profile.tenant_id&&
+          patientBookingState?.personId===profile.person_id?'Cerrar nueva reserva':'Reservar nuevo turno'}
+      </button>
+      ${renderPatientBookingPanel(profile)}
       <p class="sh" style="margin-top:12px;">Próximos (${upcoming.length})</p>
       ${upcoming.length?upcoming.map(a=>renderAppointment(a,true)).join(''):'<p class="contact-note">Sin turnos próximos.</p>'}
       <p class="sh" style="margin-top:16px;">Historial (${history.length})</p>
@@ -1834,6 +2049,8 @@ function renderPatientPortalCards(){
   }).join('');
   if(patientRescheduleState&&!patientRescheduleState.loading&&patientRescheduleState.slots.length)
     renderPatientSlotChoices();
+  if(patientBookingState&&!patientBookingState.loading&&patientBookingState.catalog)
+    renderPatientBookingSlots();
 }
 async function patientRefreshPortal(){
   if(!me?.cloud||me?.role!=='paciente')return;
@@ -1845,6 +2062,10 @@ async function patientRefreshPortal(){
     if(request!==patientPortalRequest||!me?.cloud)return;
     patientPortalData=result;
     $('patient-cloud-identity').textContent=me.email||'Cuenta verificada';
+    if(patientBookingState&&!patientBookingProfile(
+      patientBookingState.tenantId,patientBookingState.personId)){
+      patientBookingState=null;++patientBookingRequest;
+    }
     if(patientRescheduleState){
       const current=patientOwnAppointment(
         patientRescheduleState.tenantId,patientRescheduleState.appointmentId);
@@ -1911,6 +2132,8 @@ async function logout(){
   const previous=me;
   ++patientPortalRequest;
   ++patientSlotRequest;
+  ++patientBookingRequest;
+  patientBookingState=null;
   patientRescheduleState=null;
   patientPortalData=null;
   hideVisiblePasswords();
