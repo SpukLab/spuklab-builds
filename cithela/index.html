@@ -3702,25 +3702,138 @@ renderResourcesConfig();
 renderInfrastructureStatus();
 }
 
-function renderServicesConfig(){
-const el=$('cfg-service-list');if(!el)return;
-const cloud=professionalCloudReady();
-const editor=$('cfg-service-local-editor');if(editor)editor.style.display=cloud?'none':'block';
-if(cloud){
-  const list=CithelaCloud.state().services||[];
-  el.innerHTML='<p class="contact-note">Catálogo cloud · solo lectura. La edición remota de servicios está pendiente.</p>'+
-    list.map(s=>`<div class="block-row"><div class="block-main">
-      <div class="block-title">${escHtml(s.name)}</div>
-      <div class="block-meta">${Number(s.duration_min)} minutos · nube</div>
-    </div></div>`).join('');
-  return;
+function canManageCloudServices(){
+  const s=CithelaCloud.state();
+  return professionalCloudReady()&&['owner','admin'].includes(s.membership?.role||'');
 }
-const list=services();
-el.innerHTML=list.map(s=>`<div class="block-row">
+let cloudServiceBusy=false;
+function cloudServiceErrorMessage(code){
+  return ({
+    forbidden:'Solo el propietario o administrador puede modificar el catálogo.',
+    invalid_payload:'Ingresá un nombre y una duración válida (intervalos de 15 minutos).',
+    catalog_limit:'El catálogo admite hasta 40 servicios.',
+    service_name_exists:'Ya existe un servicio con ese nombre.',
+    service_not_found:'El servicio ya no está disponible.',
+    stale_write:'El servicio se modificó en otro dispositivo. Volvé a abrir la edición.',
+    last_active_service:'Debe permanecer al menos un servicio activo.',
+    service_has_future_bookings:'El servicio tiene turnos pendientes o confirmados. No puede desactivarse todavía.',
+    tenant_inactive:'Este establecimiento no está activo.'
+  })[code]||code||'No se pudo actualizar el catálogo';
+}
+function resetCloudServiceEditor(){
+  const name=$('cloud-service-name'),duration=$('cloud-service-duration');
+  if(!name||!duration)return;
+  name.value='';duration.value='30';
+  $('cloud-service-id').value='';
+  $('cloud-service-updated-at').value='';
+  $('cloud-service-save').textContent='Agregar servicio';
+  $('cloud-service-reset').style.display='none';
+}
+function editCloudService(id){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const svc=(CithelaCloud.state().serviceCatalog||[]).find(x=>x.id===id);
+  if(!svc)return;
+  $('cloud-service-name').value=svc.name;
+  $('cloud-service-duration').value=String(svc.duration_min);
+  $('cloud-service-id').value=svc.id;
+  $('cloud-service-updated-at').value=svc.updated_at;
+  $('cloud-service-save').textContent='Guardar cambios';
+  $('cloud-service-reset').style.display='block';
+  $('cloud-service-name').focus();
+}
+async function saveCloudService(){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const s=CithelaCloud.state();
+  const name=$('cloud-service-name').value.trim(),duration=Number($('cloud-service-duration').value);
+  const id=$('cloud-service-id').value,expected=$('cloud-service-updated-at').value;
+  if(!name||name.length>160||!Number.isInteger(duration)||duration<15||duration>720||duration%15!==0){
+    toast(cloudServiceErrorMessage('invalid_payload'));return;
+  }
+  if(id&&!expected){toast('Volvé a seleccionar el servicio para editarlo.');return;}
+  const save=$('cloud-service-save');
+  cloudServiceBusy=true;save.disabled=true;
+  try{
+    await CithelaCloud.serviceCatalogCommand({
+      tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
+      command:id?'service.update':'service.create',
+      payload:id?{id,expected_updated_at:expected,name,duration_min:duration}
+        :{name,duration_min:duration}
+    });
+    if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
+    resetCloudServiceEditor();renderServicesConfig();
+    toast(id?'Servicio actualizado ✓':'Servicio agregado ✓');
+  }catch(err){
+    toast(cloudServiceErrorMessage(err?.message),5200);
+    if(err?.message==='stale_write'){
+      resetCloudServiceEditor();renderServicesConfig();
+    }
+  }finally{cloudServiceBusy=false;save.disabled=false;}
+}
+async function toggleCloudService(id){
+  if(cloudServiceBusy||!canManageCloudServices())return;
+  const s=CithelaCloud.state();
+  const svc=(s.serviceCatalog||[]).find(x=>x.id===id);if(!svc)return;
+  if(svc.active&&!confirm('¿Desactivar «'+svc.name+'»? No aparecerá para nuevas reservas.'))return;
+  cloudServiceBusy=true;
+  try{
+    await CithelaCloud.serviceCatalogCommand({
+      tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
+      command:svc.active?'service.deactivate':'service.reactivate',
+      payload:{id:svc.id,expected_updated_at:svc.updated_at}
+    });
+    if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
+    if($('cloud-service-id')?.value===id)resetCloudServiceEditor();
+    renderServicesConfig();
+    toast(svc.active?'Servicio desactivado ✓':'Servicio reactivado ✓');
+  }catch(err){
+    toast(cloudServiceErrorMessage(err?.message),5200);
+    renderServicesConfig();
+  }finally{cloudServiceBusy=false;}
+}
+function renderServicesConfig(){
+  const el=$('cfg-service-list');if(!el)return;
+  const cloud=professionalCloudReady();
+  const localEditor=$('cfg-service-local-editor');
+  const cloudEditor=$('cfg-service-cloud-editor');
+  if(localEditor)localEditor.style.display=cloud?'none':'block';
+  if(cloudEditor)cloudEditor.style.display=cloud&&canManageCloudServices()?'block':'none';
+  if(cloud){
+    const s=CithelaCloud.state(),list=s.serviceCatalog||[],editable=canManageCloudServices();
+    const duration=$('cloud-service-duration');
+    if(duration&&!duration.options.length){
+      duration.innerHTML=Array.from({length:48},(_,i)=>{
+        const min=(i+1)*15;return '<option value="'+min+'">'+min+' min</option>';
+      }).join('');
+      duration.value='30';
+    }
+    const active=list.filter(x=>x.active).length;
+    const note='<p class="contact-note">'+active+' servicio(s) activo(s). '+
+      'La duración rige para nuevas reservas; los turnos ya creados conservan la original.'+
+      (editable?'':' Solo el propietario o administrador puede editar.')+'</p>';
+    el.innerHTML=note+list.map(svc=>{
+      const state=svc.active
+        ?'<span class="tag c">Activo</span>'
+        :'<span class="tag n">Inactivo</span>';
+      const buttons=editable
+        ?`<div class="aitem-actions" style="margin-top:8px;">
+          <button class="mb teal" type="button" onclick="editCloudService('${svc.id}')">Editar</button>
+          <button class="mb ${svc.active?'cancel':'confirm'}" type="button"
+            onclick="toggleCloudService('${svc.id}')">${svc.active?'Desactivar':'Reactivar'}</button>
+        </div>`:'';
+      return `<div class="block-row" style="display:block;">
+        <div class="block-title">${escHtml(svc.name)} ${state}</div>
+        <div class="block-meta">${Number(svc.duration_min)} minutos · nube</div>
+        ${buttons}
+      </div>`;
+    }).join('')+(list.length?'':'<p class="contact-note">Todavía no hay servicios configurados.</p>');
+    return;
+  }
+  const list=services();
+  el.innerHTML=list.map(s=>`<div class="block-row">
   <div class="block-main"><div class="block-title">${escHtml(s.nombre)}</div><div class="block-meta">${s.duracionMin} minutos</div></div>
   <button class="mb cancel" onclick="removeService('${s.id}')">Quitar</button>
 </div>`).join('');
-fillServiceSelect('nt-service');fillServiceSelect('pac-service');
+  fillServiceSelect('nt-service');fillServiceSelect('pac-service');
 }
 function addService(){
 if(professionalCloudReady()){toast('El catálogo cloud está en modo solo lectura');return;}
