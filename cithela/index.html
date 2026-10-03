@@ -508,9 +508,13 @@ textarea.inp{resize:vertical;min-height:72px;}
       <input class="inp" id="cfg-service-name" placeholder="Consulta, corte, sesión, control...">
       <label class="lbl">Duración</label>
       <select class="inp" id="cfg-service-duration">
+        <option value="15">15 min</option>
         <option value="30">30 min</option>
+        <option value="45">45 min</option>
         <option value="60">60 min</option>
+        <option value="75">75 min</option>
         <option value="90">90 min</option>
+        <option value="105">105 min</option>
         <option value="120">120 min</option>
         <option value="150">150 min</option>
         <option value="180">180 min</option>
@@ -747,8 +751,11 @@ textarea.inp{resize:vertical;min-height:72px;}
 // CITHELA PRODUCT SHELL / TURNOS DOMAIN: standalone prototype. No DAHZEA runtime dependency; WhatsApp remains an external channel adapter.
 let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
 const PASS='1234';
-const HORAS=['08:30','09:00','09:30','10:00','10:30','11:00','11:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
-const SLOT_MINUTES=30;
+const SLOT_MINUTES=15;
+const HORAS=[
+  ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
+  ...Array.from({length:18},(_,i)=>14*60+i*SLOT_MINUTES)
+].map(m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
 const DEFAULT_SERVICES=[{id:'S001',nombre:'Consulta',duracionMin:30,creado:'default'}];
 const DEFAULT_RESOURCES=[{id:'R001',nombre:'Profesional principal',creado:'default'}];
 const DEFAULT_REMINDER_TEMPLATE='Hola {paciente} 👋\n\nLe recordamos su turno en:\n*{consultorio}*\n{profesional}\n\n📅 {fecha}\n🕐 {hora} hs\n📌 {servicio}{motivo}\n📍 {direccion}\n\nPor favor confirme su asistencia respondiendo este mensaje.\n¡Muchas gracias!';
@@ -2025,8 +2032,11 @@ function renderPatientBookingSlots(){
   if(s.loading){el.innerHTML='<p class="contact-note">Consultando horarios disponibles…</p>';return;}
   if(s.error){el.innerHTML='<p class="ops-note">'+escHtml(s.error)+'</p>';return;}
   el.innerHTML=s.slots.length
-    ?'<div class="slots-grid">'+s.slots.map(h=>
-      `<button class="spill" type="button" onclick="patientSubmitBooking('${h}')">${h}</button>`).join('')+'</div>'
+    ?'<div class="slots-grid">'+s.slots.map(h=>{
+      const duration=Number(s.catalog.services.find(x=>x.id===s.serviceId)?.duration_min)||30;
+      const end=minToHM(hmToMin(h)+duration);
+      return `<button class="spill" type="button" onclick="patientSubmitBooking('${h}')">${h}–${end}</button>`;
+    }).join('')+'</div>'
     :'<p class="contact-note">No hay horarios libres para esta combinación. Probá otro día o profesional.</p>';
 }
 function renderPatientBookingPanel(profile){
@@ -2081,8 +2091,10 @@ async function patientSubmitBooking(hour){
     toast('Seleccioná un horario con al menos 2 horas de anticipación.',4300);
     return;
   }
-  if(!confirm('¿Reservar '+service.name+' con '+resource.name+' el '+s.date+
-    ' a las '+hour+'? El turno quedará pendiente de confirmación.'))return;
+  if(!confirm('¿Reservar '+service.name+' ('+service.duration_min+' min) con '+
+    resource.name+' el '+s.date+' de '+hour+' a '+
+    minToHM(hmToMin(hour)+Number(service.duration_min))+
+    '? El turno quedará pendiente de confirmación.'))return;
   if(s.requestKey!==start){
     s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
   }
@@ -3839,7 +3851,7 @@ function addService(){
 if(professionalCloudReady()){toast('El catálogo cloud está en modo solo lectura');return;}
 const nombre=$('cfg-service-name').value.trim();const duracionMin=Number($('cfg-service-duration').value);
 if(!nombre){toast('Ingresá un nombre de servicio');return;}
-if(!duracionMin||duracionMin%SLOT_MINUTES!==0){toast('Duración inválida');return;}
+if(!Number.isInteger(duracionMin)||duracionMin<15||duracionMin>720||duracionMin%SLOT_MINUTES!==0){toast('Duración inválida');return;}
 if(services().some(s=>s.nombre.toLowerCase()===nombre.toLowerCase())){toast('Ese servicio ya existe');return;}
 const service={id:'S'+Date.now(),nombre,duracionMin,creado:new Date().toISOString()};
 DB.ss([...services(),service]);recordEvent('service_added',{serviceId:service.id,nombre,duracionMin});
