@@ -618,7 +618,7 @@ textarea.inp{resize:vertical;min-height:72px;}
     <p class="contact-note" id="patient-cloud-identity"></p>
     <button class="btn-main soft" type="button" onclick="patientRefreshPortal()" style="margin:12px 0 18px;">Actualizar mis turnos</button>
     <div id="patient-cloud-list" aria-live="polite"></div>
-    <p class="contact-note" style="margin-top:20px;">Portal de consulta. Para reservar, modificar o cancelar un turno, contactá al consultorio por ahora.</p>
+    <p class="contact-note" style="margin-top:20px;">Podés confirmar tus turnos hasta el inicio y cancelar o reprogramar con al menos 2 horas de anticipación. Para nuevas reservas, contactá al consultorio por ahora.</p>
   </div>
   <div class="byline"><p>by <span>SpukLab</span></p></div>
 </div>
@@ -1213,6 +1213,26 @@ const CithelaCloud=(()=>{
     if(!data?.ok)throw Error(data?.code||'No se pudo consultar el portal');
     return data;
   }
+  async function patientCommand({tenantId,requestId,command,payload}){
+    if(!['patient.confirm','patient.cancel','patient.reschedule'].includes(command))
+      throw Error('Comando de paciente no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_appointment_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_command:command,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo modificar el turno');
+    return data;
+  }
+  async function patientRescheduleSlots({tenantId,appointmentId,date}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_reschedule_slots',{
+      p_tenant_id:tenantId,p_appointment_id:appointmentId,p_date:date
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo consultar disponibilidad');
+    return data;
+  }
 
   async function signOut(){
     const c=await getClient();
@@ -1357,7 +1377,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,signOut,bootstrap,availability,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1539,6 +1559,8 @@ async function patientSwitchAccount(){
   try{
     await CithelaCloud.signOut();
     ++patientPortalRequest;
+    ++patientSlotRequest;
+    patientRescheduleState=null;
     patientPortalData=null;
     me={};
     setRole('paciente');
@@ -1597,48 +1619,212 @@ async function patientEnter(){
     toast(map[err?.message]||err?.message||'No se pudo ingresar al portal',4800);
   }
 }
+let patientRescheduleState=null;
+let patientSlotRequest=0;
+let patientMutationBusy=false;
+
+function patientOwnAppointment(tenantId,appointmentId){
+  if(!me?.cloud||me?.role!=='paciente'||!patientPortalData?.profiles)return null;
+  if(String(CithelaCloud.state().email||'').toLowerCase()!==String(me.email||'').toLowerCase())return null;
+  const profile=patientPortalData.profiles.find(p=>p.tenant_id===tenantId);
+  const appointment=profile?.appointments?.find(a=>a.id===appointmentId);
+  return profile&&appointment?{profile,appointment}:null;
+}
+function patientActionErrorMessage(code){
+  return {
+    stale_write:'El turno cambió en otro dispositivo. Actualizá y volvé a intentarlo.',
+    too_late:'El turno está dentro del plazo mínimo de 2 horas. Contactá al consultorio.',
+    appointment_started:'El turno ya comenzó.',
+    invalid_state:'El turno ya no admite esta acción.',
+    already_confirmed:'El turno ya está confirmado.',
+    slot_unavailable:'Ese horario ya fue reservado o bloqueado. Elegí otro.',
+    outside_working_hours:'Ese horario está fuera de la jornada del profesional.',
+    same_slot:'Elegí un horario diferente.',
+    email_not_verified:'Primero verificá tu correo.',
+    appointment_not_found:'El turno no está disponible para tu cuenta.',
+    inactive_service_or_resource:'El servicio o profesional ya no está disponible.'
+  }[code]||code||'No se pudo actualizar el turno';
+}
+async function patientApplyAction(tenantId,appointmentId,action){
+  if(patientMutationBusy||!['confirm','cancel'].includes(action))return;
+  const found=patientOwnAppointment(tenantId,appointmentId);if(!found)return;
+  const a=found.appointment,now=Date.now(),starts=new Date(a.starts_at).getTime();
+  if(!['pending','confirmed'].includes(a.status))return;
+  if(action==='confirm'&&(a.status!=='pending'||starts<=now))return;
+  if(action==='cancel'&&starts-now<2*3600000){
+    toast('Para cancelar faltando menos de 2 horas, contactá al consultorio.',4300);return;
+  }
+  if(action==='cancel'&&!confirm('¿Cancelar este turno? No podrás recuperarlo desde el portal.'))return;
+  patientMutationBusy=true;
+  try{
+    await CithelaCloud.patientCommand({
+      tenantId,requestId:cloudRequestId('patient-'+action),
+      command:'patient.'+action,payload:{id:appointmentId,expected_version:Number(a.row_version)}
+    });
+    patientRescheduleState=null;
+    toast(action==='confirm'?'Turno confirmado ✓':'Turno cancelado ✓');
+    await patientRefreshPortal();
+  }catch(err){
+    toast(patientActionErrorMessage(err?.message),4800);
+    await patientRefreshPortal();
+  }finally{patientMutationBusy=false;}
+}
+function patientShowReschedule(tenantId,appointmentId){
+  if(patientMutationBusy)return;
+  const found=patientOwnAppointment(tenantId,appointmentId);if(!found)return;
+  const a=found.appointment;
+  if(!['pending','confirmed'].includes(a.status))return;
+  if(new Date(a.starts_at).getTime()-Date.now()<2*3600000){
+    toast('Para reprogramar faltando menos de 2 horas, contactá al consultorio.',4600);return;
+  }
+  const date=cloudLocalParts(a.starts_at,found.profile.timezone).fecha;
+  patientRescheduleState={tenantId,appointmentId,date,slots:[],loading:false};
+  ++patientSlotRequest;
+  renderPatientPortalCards();
+  patientLoadRescheduleSlots();
+}
+function patientCloseReschedule(){
+  patientRescheduleState=null;++patientSlotRequest;
+  renderPatientPortalCards();
+}
+async function patientLoadRescheduleSlots(){
+  const state=patientRescheduleState;if(!state||patientMutationBusy)return;
+  const el=$('patient-reschedule-date');
+  const date=el?.value||state.date;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return;
+  state.date=date;state.slots=[];state.loading=true;
+  const request=++patientSlotRequest;
+  const list=$('patient-reschedule-slots');
+  if(list)list.innerHTML='<p class="contact-note">Buscando horarios cloud…</p>';
+  try{
+    const result=await CithelaCloud.patientRescheduleSlots({
+      tenantId:state.tenantId,appointmentId:state.appointmentId,date
+    });
+    if(request!==patientSlotRequest||patientRescheduleState!==state)return;
+    state.slots=Array.isArray(result.slots)?result.slots.filter(x=>/^([01]\d|2[0-3]):[0-5]\d$/.test(x)):[];
+    state.loading=false;
+    renderPatientSlotChoices();
+  }catch(err){
+    if(request!==patientSlotRequest||patientRescheduleState!==state)return;
+    state.loading=false;
+    const list=$('patient-reschedule-slots');
+    if(list)list.innerHTML='<p class="ops-note">'+escHtml(patientActionErrorMessage(err?.message))+'</p>';
+  }
+}
+function renderPatientSlotChoices(){
+  const state=patientRescheduleState,list=$('patient-reschedule-slots');
+  if(!state||!list)return;
+  list.innerHTML=state.slots.length
+    ?'<div class="slots">'+state.slots.map(h=>
+      `<button class="spill" type="button" onclick="patientSubmitReschedule('${h}')">${h}</button>`).join('')+'</div>'
+    :'<p class="contact-note">No hay horarios libres para esa fecha. Elegí otro día.</p>';
+}
+async function patientSubmitReschedule(hour){
+  const state=patientRescheduleState;if(!state||patientMutationBusy||state.loading||!state.slots.includes(hour))return;
+  const found=patientOwnAppointment(state.tenantId,state.appointmentId);
+  if(!found)return;
+  const a=found.appointment;
+  if(!['pending','confirmed'].includes(a.status))return;
+  if(!confirm('¿Cambiar este turno al '+state.date+' a las '+hour+'? Quedará pendiente de confirmación.'))return;
+  patientMutationBusy=true;
+  try{
+    const starts=zonedLocalToIso(state.date,hour,found.profile.timezone);
+    await CithelaCloud.patientCommand({
+      tenantId:state.tenantId,requestId:cloudRequestId('patient-reschedule'),
+      command:'patient.reschedule',payload:{
+        id:state.appointmentId,expected_version:Number(a.row_version),starts_at:starts
+      }
+    });
+    ++patientSlotRequest;patientRescheduleState=null;
+    toast('Turno reprogramado; quedó pendiente de confirmación ✓',4800);
+    await patientRefreshPortal();
+  }catch(err){
+    toast(patientActionErrorMessage(err?.message),4800);
+    await patientRefreshPortal();
+  }finally{patientMutationBusy=false;}
+}
+function renderPatientPortalCards(){
+  if(!me?.cloud||me?.role!=='paciente'||!patientPortalData)return;
+  const el=$('patient-cloud-list'),profiles=patientPortalData.profiles||[];
+  if(!profiles.length){
+    el.innerHTML='<p class="ops-note">No hay una ficha vinculada a esta cuenta. Contactá al consultorio.</p>';
+    return;
+  }
+  const now=Date.now();
+  el.innerHTML=profiles.map(profile=>{
+    const ordered=(profile.appointments||[]).slice().sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+    const upcoming=ordered.filter(a=>['pending','confirmed'].includes(a.status)&&new Date(a.ends_at).getTime()>=now);
+    const history=ordered.filter(a=>!upcoming.includes(a)).reverse();
+    const renderAppointment=(a,upcomingCard)=>{
+      const date=cloudLocalParts(a.starts_at,profile.timezone);
+      const sm=statusMeta(cloudAppointmentStatus(a.status));
+      const hoursUntil=(new Date(a.starts_at).getTime()-now)/3600000;
+      const mayConfirm=upcomingCard&&a.status==='pending'&&hoursUntil>0;
+      const mayModify=upcomingCard&&hoursUntil>=2;
+      const selecting=patientRescheduleState?.tenantId===profile.tenant_id
+        &&patientRescheduleState?.appointmentId===a.id;
+      let picker='';
+      if(selecting){
+        const max=new Date(Date.now()+365*86400000).toISOString().slice(0,10);
+        const min=cloudLocalParts(new Date().toISOString(),profile.timezone).fecha;
+        picker=`<div style="margin-top:13px;padding:12px;border:var(--line);border-radius:var(--r-sm);">
+          <label class="lbl" for="patient-reschedule-date">Nueva fecha</label>
+          <input class="inp" type="date" id="patient-reschedule-date" min="${min}" max="${max}"
+            value="${patientRescheduleState.date}" onchange="patientLoadRescheduleSlots()">
+          <div id="patient-reschedule-slots" aria-live="polite" style="margin-top:10px;">
+            ${patientRescheduleState.loading?'<p class="contact-note">Buscando horarios cloud…</p>'
+              :'<p class="contact-note">Seleccioná un horario disponible.</p>'}
+          </div>
+          <button class="mb ghost" type="button" onclick="patientCloseReschedule()" style="margin-top:8px;">Cerrar</button>
+        </div>`;
+      }
+      return `<div class="aitem" style="margin-bottom:10px;">
+        <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
+        <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
+        <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
+        <div class="aitem-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
+          <div class="aitem-actions">
+            ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar</button>`:''}
+            ${mayModify?`<button class="mb teal" type="button" onclick="patientShowReschedule('${profile.tenant_id}','${a.id}')">Reprogramar</button>
+              <button class="mb cancel" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar</button>`:''}
+          </div>
+        </div>
+        ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al consultorio.</p>':''}
+        ${picker}
+      </div>`;
+    };
+    return `<section class="form-card" style="margin-bottom:16px;">
+      <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
+      <p class="contact-note">${escHtml(profile.name)}</p>
+      <p class="sh" style="margin-top:12px;">Próximos (${upcoming.length})</p>
+      ${upcoming.length?upcoming.map(a=>renderAppointment(a,true)).join(''):'<p class="contact-note">Sin turnos próximos.</p>'}
+      <p class="sh" style="margin-top:16px;">Historial (${history.length})</p>
+      ${history.length?history.slice(0,20).map(a=>renderAppointment(a,false)).join(''):'<p class="contact-note">Todavía no hay turnos anteriores.</p>'}
+    </section>`;
+  }).join('');
+  if(patientRescheduleState&&!patientRescheduleState.loading&&patientRescheduleState.slots.length)
+    renderPatientSlotChoices();
+}
 async function patientRefreshPortal(){
   if(!me?.cloud||me?.role!=='paciente')return;
-  const req=++patientPortalRequest;
+  const request=++patientPortalRequest;
   const el=$('patient-cloud-list');
-  el.innerHTML='<p class="contact-note">Consultando los turnos del consultorio…</p>';
+  if(!patientPortalData)el.innerHTML='<p class="contact-note">Consultando los turnos del consultorio…</p>';
   try{
     const result=await CithelaCloud.patientPortal();
-    if(req!==patientPortalRequest||!me?.cloud)return;
+    if(request!==patientPortalRequest||!me?.cloud)return;
     patientPortalData=result;
     $('patient-cloud-identity').textContent=me.email||'Cuenta verificada';
-    if(!result.profiles?.length){
-      el.innerHTML='<p class="ops-note">No hay una ficha vinculada a esta cuenta. Contactá al consultorio.</p>';
-      return;
+    if(patientRescheduleState&&!patientOwnAppointment(
+      patientRescheduleState.tenantId,patientRescheduleState.appointmentId)){
+      patientRescheduleState=null;++patientSlotRequest;
     }
-    const now=Date.now();
-    el.innerHTML=result.profiles.map(profile=>{
-      const appointments=profile.appointments||[];
-      const ordered=appointments.slice().sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
-      const upcoming=ordered.filter(a=>['pending','confirmed'].includes(a.status)&&new Date(a.ends_at).getTime()>=now);
-      const history=ordered.filter(a=>!upcoming.includes(a)).reverse();
-      const renderAppointment=a=>{
-        const date=cloudLocalParts(a.starts_at,profile.timezone);
-        const sm=statusMeta(cloudAppointmentStatus(a.status));
-        return `<div class="aitem" style="margin-bottom:10px;">
-          <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
-          <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
-          <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
-          <div class="aitem-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span></div>
-        </div>`;
-      };
-      return `<section class="form-card" style="margin-bottom:16px;">
-        <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
-        <p class="contact-note">${escHtml(profile.name)}</p>
-        <p class="sh" style="margin-top:12px;">Próximos (${upcoming.length})</p>
-        ${upcoming.length?upcoming.map(renderAppointment).join(''):'<p class="contact-note">Sin turnos próximos.</p>'}
-        <p class="sh" style="margin-top:16px;">Historial (${history.length})</p>
-        ${history.length?history.slice(0,20).map(renderAppointment).join(''):'<p class="contact-note">Todavía no hay turnos anteriores.</p>'}
-      </section>`;
-    }).join('');
+    renderPatientPortalCards();
   }catch(err){
-    if(req!==patientPortalRequest)return;
-    el.innerHTML=`<p class="ops-note">${escHtml(err?.message||'No se pudo consultar la nube')}</p>`;
+    if(request!==patientPortalRequest)return;
+    if(!patientPortalData)el.innerHTML='<p class="ops-note">'+
+      escHtml(err?.message||'No se pudo consultar la nube')+'</p>';
+    else toast(patientActionErrorMessage(err?.message),4400);
   }
 }
 
@@ -1689,6 +1875,8 @@ function doLogin(){
 async function logout(){
   const previous=me;
   ++patientPortalRequest;
+  ++patientSlotRequest;
+  patientRescheduleState=null;
   patientPortalData=null;
   hideVisiblePasswords();
   me={};
