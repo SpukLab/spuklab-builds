@@ -496,6 +496,11 @@ textarea.inp{resize:vertical;min-height:72px;}
         <input class="inp" id="cloud-service-name" maxlength="160" placeholder="Corte, coloración, corte + coloración…">
         <label class="lbl" for="cloud-service-duration">Duración de la reserva</label>
         <select class="inp" id="cloud-service-duration"></select>
+        <label class="lbl" for="cloud-service-deposit">Seña requerida (pesos argentinos, opcional)</label>
+        <input class="inp" id="cloud-service-deposit" inputmode="decimal" type="text"
+          value="0" maxlength="11" placeholder="0,00">
+        <p class="contact-note">Dejá 0 para no solicitar seña. Es un registro manual;
+          no se realizan cobros desde CITHELA. Los turnos ya creados conservan su importe.</p>
         <input type="hidden" id="cloud-service-id">
         <input type="hidden" id="cloud-service-updated-at">
         <button class="btn-main" type="button" id="cloud-service-save"
@@ -742,6 +747,17 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
     <button class="mb ghost" type="button" style="margin-top:10px;min-height:44px;width:100%;"
       onclick="copyCloudWhatsAppDraftMessage()">Copiar mensaje (si no abre)</button>
+  </div>
+</div>
+
+<div class="overlay" id="m-deposit" onclick="closeCloudDeposit()">
+  <div class="modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="deposit-title">
+    <div class="modal-handle"></div>
+    <h3 id="deposit-title">Gestión de seña</h3>
+    <p class="contact-note" id="deposit-appointment-label"></p>
+    <p class="sh" id="deposit-status-label"></p>
+    <div id="deposit-actions" style="margin:15px 0;"></div>
+    <button class="btn-main soft" type="button" onclick="closeCloudDeposit()">Cerrar</button>
   </div>
 </div>
 
@@ -1211,11 +1227,11 @@ const CithelaCloud=(()=>{
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
         c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
-        c.from('cithela_services').select('id,name,duration_min,active,updated_at').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
+        c.from('cithela_services').select('id,name,duration_min,active,updated_at,deposit_amount_minor,deposit_currency').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
-        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
+        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
         c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason').eq('tenant_id',tenantId).order('starts_at',{ascending:true})
       ]);
       if(request!==refreshSerial)return snapshot();
@@ -1402,6 +1418,19 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function depositCommand({tenantId,requestId,command,payload}){
+    if(!['deposit.verify','deposit.waive','deposit.refund','deposit.undo'].includes(command))
+      throw Error('Comando de seña no permitido');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_deposit_command',{
+      p_tenant_id:tenantId,p_request_id:requestId,p_command:command,p_payload:payload
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo registrar la seña');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1501,7 +1530,7 @@ const CithelaCloud=(()=>{
     }
     const [people,appointments]=await Promise.all([
       fetchAll('cithela_people','id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,created_at'),
-      fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,created_at')
+      fetchAll('cithela_appointments','id,person_id,starts_at,status,service_name,duration_min,resource_name,reason,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method,created_at')
     ]);
     if(!state.session||state.tenant?.id!==tenantId)throw Error('La sesión cloud cambió durante la exportación');
     return {people,appointments,timezone:state.tenant.timezone};
@@ -1535,7 +1564,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -1853,7 +1882,11 @@ async function patientApplyAction(tenantId,appointmentId,action){
   }
   if(action==='cancel'){
     const when=cloudLocalParts(a.starts_at,found.profile.timezone);
-    if(!confirm('¿Cancelar el turno del '+when.fecha+' a las '+when.hora+'? No podrás recuperarlo desde el portal.'))return;
+    if(!confirm('¿Cancelar el turno del '+when.fecha+' a las '+when.hora+
+      '? No podrás recuperarlo desde el portal.'+
+      (a.deposit_status==='verified'?
+        ' Tu seña no se devuelve automáticamente. Consultá la política del establecimiento.':'')
+      ))return;
   }
   patientMutationBusy=true;
   try{
@@ -1998,6 +2031,12 @@ function patientBookingSelectionChanged(){
   state.resourceId=$('patient-book-resource')?.value||'';
   state.date=$('patient-book-date')?.value||state.date;
   state.reason=$('patient-book-reason')?.value||'';
+  const chosen=state.catalog.services.find(x=>x.id===state.serviceId);
+  const depositNote=$('patient-book-deposit-note');
+  if(depositNote)depositNote.textContent=Number(chosen?.deposit_amount_minor)>0
+    ?'Seña del servicio: '+depositARS(chosen.deposit_amount_minor)+
+     '. El establecimiento te indicará cómo abonarla; CITHELA no procesa pagos.'
+    :'Este servicio no requiere seña.';
   state.slots=[];state.requestId=null;state.requestKey=null;
   ++patientBookingRequest;
   patientLoadBookingSlots();
@@ -2056,6 +2095,12 @@ function renderPatientBookingPanel(profile){
     <select class="inp" id="patient-book-service" onchange="patientBookingSelectionChanged()">
       ${s.catalog.services.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.serviceId?'selected':''}>${escHtml(x.name)} · ${Number(x.duration_min)} min</option>`).join('')}
     </select>
+    <p id="patient-book-deposit-note" class="contact-note" style="margin:10px 0;">
+      ${Number(s.catalog.services.find(x=>x.id===s.serviceId)?.deposit_amount_minor)>0
+        ?'Seña del servicio: '+depositARS(s.catalog.services.find(x=>x.id===s.serviceId).deposit_amount_minor)+
+         '. El establecimiento te indicará cómo abonarla; CITHELA no procesa pagos.'
+        :'Este servicio no requiere seña.'}
+    </p>
     <label class="lbl" for="patient-book-resource">Profesional</label>
     <select class="inp" id="patient-book-resource" onchange="patientBookingSelectionChanged()">
       ${s.catalog.resources.map(x=>`<option value="${escHtml(x.id)}" ${x.id===s.resourceId?'selected':''}>${escHtml(x.name)}</option>`).join('')}
@@ -2094,7 +2139,10 @@ async function patientSubmitBooking(hour){
   if(!confirm('¿Reservar '+service.name+' ('+service.duration_min+' min) con '+
     resource.name+' el '+s.date+' de '+hour+' a '+
     minToHM(hmToMin(hour)+Number(service.duration_min))+
-    '? El turno quedará pendiente de confirmación.'))return;
+    '? El turno quedará pendiente de confirmación.'+
+    (Number(service.deposit_amount_minor)>0
+      ?' Seña del servicio: '+depositARS(service.deposit_amount_minor)+
+       '. El pago se coordina con el establecimiento; CITHELA no cobra.':'') ))return;
   if(s.requestKey!==start){
     s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
   }
@@ -2213,6 +2261,7 @@ function renderPatientPortalCards(){
         <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
         <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
         <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
+        ${depositLabel(a)?`<p class="contact-note" style="margin-top:8px;">${escHtml(depositLabel(a))} · El establecimiento gestiona el pago.</p>`:''}
         <div class="aitem-foot patient-appointment-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
           ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
             ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
@@ -2390,7 +2439,7 @@ function renderProfessionalMode(){
 function renderReportSource(){
   const el=$('report-source');if(!el)return;
   el.textContent=professionalCloudReady()
-    ?'Exportación desde CITHELA Cloud. Los archivos pueden contener datos personales; guardalos en un lugar seguro. El registro de eventos y el backup siguen siendo locales.'
+    ?'Exportación desde CITHELA Cloud. Los archivos pueden contener datos personales y estados de señas; guardalos en un lugar seguro. El registro de eventos y el backup siguen siendo locales.'
     :'Exportación local de este dispositivo. No incluye los datos de CITHELA Cloud.';
 }
 
@@ -2440,6 +2489,7 @@ function renderOpsQueue(){
         const a=cloudAppointmentRaw(t.id);
         if(!a||new Date(a.starts_at).getTime()<=Date.now()||dayDistance(t.fecha)<0)return false;
         if(t.estado==='pendiente')return true;
+        if(Number(a.deposit_amount_minor)>0&&a.deposit_status==='requested')return true;
         const p=cloudPersonById(t.pacienteId);
         return dayDistance(t.fecha)<=reminderDays()&&validPhone(p?.tel||'');
       })
@@ -2452,13 +2502,19 @@ function renderOpsQueue(){
       const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
       const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
       const wa=normalizePhone(p.tel),pending=t.estado==='pendiente';
-      const kind=pending&&d>reminderDays()?'booking':'reminder';
+      const appt=cloudAppointmentRaw(t.id);
+      const depositDue=Number(appt?.deposit_amount_minor)>0&&appt?.deposit_status==='requested';
+      const kind=pending&&d>reminderDays()?'booking':
+        (!pending&&depositDue&&d>reminderDays()?'deposit':'reminder');
       return`<div class="aitem" style="padding:13px 15px;">
         <div class="aitem-time">${when} · ${t.hora} hs</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
-        <div class="ops-note">${pending?'Pendiente de confirmación':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
+        <div class="ops-note">${pending?'Pendiente de confirmación':depositDue?'Confirmado · seña pendiente':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
+        ${depositDue?`<div class="ops-note">Seña pendiente: ${escHtml(depositARS(appt.deposit_amount_minor))}</div>`:''}
         <div class="aitem-actions" style="margin-top:9px;">
-          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':'Preparar recordatorio'}</button>`:''}
+          ${validPhone(wa)?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','${kind}')">${kind==='booking'?'Avisar nueva reserva':kind==='deposit'?'Solicitar seña':'Preparar recordatorio'}</button>`:''}
+          ${depositDue&&validPhone(wa)&&kind!=='deposit'?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','deposit')">Solicitar seña</button>`:''}
+          ${depositDue&&professionalCloudWritable()?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
           ${pending&&professionalCloudWritable()?`<button class="mb confirm" type="button" onclick="cloudConfirmAppointment('${t.id}')">Confirmar</button>`:''}
         </div>
       </div>`;
@@ -2520,12 +2576,15 @@ function renderAgenda(){
         <div class="aitem-name">${escHtml(pac.nombre)}</div>
         <div class="aitem-motivo">${escHtml(t.servicioNombre)} · ${t.duracionMin} min · ${escHtml(t.resourceName)}</div>
         ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+        ${depositLabel(appointment)?`<div class="ops-note" style="margin-top:7px;">${escHtml(depositLabel(appointment))}</div>`:''}
         <div class="aitem-foot">
           <span class="tag ${sm.cls}">${sm.label}</span>
           <div class="aitem-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">WhatsApp</button>`:''}
+            ${Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable()
+              ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
           </div>
@@ -2575,9 +2634,13 @@ function renderAgendaHistory(appointments,cloudMode,pacs,key){
       <div class="aitem-name">${escHtml(pac.nombre)}</div>
       <div class="aitem-motivo">${escHtml(service)} · ${cloudMode?t.duracionMin:appointmentDuration(t)} min · ${escHtml(resource)}</div>
       ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+      ${cloudMode&&depositLabel(cloudAppointmentRaw(t.id))?
+        `<div class="ops-note" style="margin-top:6px;">${escHtml(depositLabel(cloudAppointmentRaw(t.id)))}</div>`:''}
       <div class="aitem-foot"><span class="tag ${status.cls}">${escHtml(status.label)}</span>
         ${cloudMode&&t.estado==='cancelado'&&validPhone(pac.tel)
           ?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','cancelled')">Avisar cancelación</button>`:''}
+        ${cloudMode&&Number(cloudAppointmentRaw(t.id)?.deposit_amount_minor)>0&&professionalCloudWritable()
+          ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2585,6 +2648,93 @@ function renderAgendaHistory(appointments,cloudMode,pacs,key){
     <summary>Historial del día <span class="agenda-history-count">${appointments.length}</span></summary>
     <div class="agenda-history-items">${cards}</div>
   </details>`;
+}
+
+let cloudDepositDraft=null,cloudDepositBusy=false;
+function closeCloudDeposit(){
+  if(cloudDepositBusy)return;
+  cloudDepositDraft=null;
+  closeM('m-deposit');
+}
+function cloudOpenDeposit(id){
+  if(!professionalCloudWritable())return;
+  const s=CithelaCloud.state(),a=cloudAppointmentRaw(id);
+  if(!a||!Number(a.deposit_amount_minor))return;
+  cloudDepositDraft={id:a.id,tenantId:s.tenant.id,rowVersion:Number(a.row_version)};
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
+  const p=t?cloudPersonById(t.pacienteId):null;
+  $('deposit-appointment-label').textContent=
+    (p?.nombre||'Cliente')+' · '+(t?.fecha||'')+' '+(t?.hora||'')+' hs';
+  $('deposit-status-label').textContent=depositLabel(a);
+  const owner=['owner','admin'].includes(s.membership?.role||'');
+  const status=a.deposit_status,active=['pending','confirmed'].includes(a.status);
+  let controls='';
+  if(status==='requested'&&active){
+    controls+='<label class="lbl" for="deposit-method">Medio de pago comprobado</label>'+
+      '<select class="inp" id="deposit-method">'+
+      '<option value="transfer">Transferencia acreditada</option>'+
+      '<option value="cash">Efectivo recibido</option>'+
+      '<option value="other">Otro medio comprobado</option></select>'+
+      '<button class="btn-main" type="button" style="margin-top:12px;" onclick="cloudDepositAction(\'deposit.verify\')">Registrar cobro verificado</button>';
+  }
+  if(status==='requested'&&owner){
+    controls+='<button class="btn-main soft" type="button" style="margin-top:10px;" onclick="cloudDepositAction(\'deposit.waive\')">Eximir seña</button>';
+  }
+  if(status==='verified'&&owner){
+    controls+='<button class="btn-main soft" type="button" onclick="cloudDepositAction(\'deposit.refund\')">Registrar devolución completa</button>'+
+      '<button class="mb ghost" type="button" style="margin-top:10px;min-height:44px;" onclick="cloudDepositAction(\'deposit.undo\')">Corregir cobro registrado por error</button>';
+  }
+  if(!controls)controls='<p class="contact-note">No hay acciones disponibles para este estado.</p>';
+  $('deposit-actions').innerHTML=controls+
+    '<p class="contact-note" style="margin-top:12px;">CITHELA solo registra acciones manuales. No realiza transferencias, cobros ni devoluciones.</p>';
+  openM('m-deposit');
+}
+async function cloudDepositAction(command){
+  const draft=cloudDepositDraft;
+  if(cloudDepositBusy||!draft||!professionalCloudWritable())return;
+  const s=CithelaCloud.state(),a=cloudAppointmentRaw(draft.id);
+  if(s.tenant?.id!==draft.tenantId||!a||Number(a.row_version)!==draft.rowVersion){
+    closeCloudDeposit();toast('El turno cambió. Actualizá la agenda antes de registrar la seña.',5200);return;
+  }
+  const amount=depositARS(a.deposit_amount_minor);
+  let warning='',method;
+  if(command==='deposit.verify'){
+    method=$('deposit-method')?.value;
+    if(!['transfer','cash','other'].includes(method))return;
+    warning='¿Comprobaste que recibiste '+amount+'? Esta acción NO realiza ningún cobro.';
+  }else if(command==='deposit.refund'){
+    warning='¿Ya devolviste el importe COMPLETO de '+amount+' por fuera de CITHELA? Esta acción solo registra la devolución.';
+  }else if(command==='deposit.waive'){
+    warning='¿Eximir la seña de '+amount+' para este turno?';
+  }else if(command==='deposit.undo'){
+    warning='¿Corregir el registro de cobro? Solo si se marcó por error y no se recibió el dinero. Esto NO devuelve fondos.';
+  }else return;
+  if(!confirm(warning))return;
+  cloudDepositBusy=true;
+  try{
+    await CithelaCloud.depositCommand({
+      tenantId:draft.tenantId,requestId:cloudRequestId('deposit'),
+      command,payload:{id:draft.id,expected_version:draft.rowVersion,
+        ...(method?{method}:{})}
+    });
+    cloudDepositBusy=false;
+    closeCloudDeposit();
+    if(professionalCloudReady()&&CithelaCloud.state().tenant?.id===draft.tenantId){
+      renderAgenda();
+      toast(command==='deposit.verify'?'Cobro registrado como verificado ✓':
+        command==='deposit.refund'?'Devolución registrada manualmente ✓':
+        command==='deposit.waive'?'Seña eximida ✓':'Corrección registrada ✓');
+    }
+  }catch(err){
+    cloudDepositBusy=false;
+    toast(err?.message==='stale_write'?'El turno cambió en otro dispositivo. Actualizá la agenda.':
+      err?.message||'No se pudo registrar la operación',5300);
+    if(err?.message==='stale_write'){
+      closeCloudDeposit();
+      await CithelaCloud.refresh();
+      renderAgenda();
+    }
+  }
 }
 
 async function cloudConfirmAppointment(id){
@@ -2603,7 +2753,11 @@ async function cloudConfirmAppointment(id){
 }
 async function cloudCancelAppointment(id){
   const a=cloudAppointmentRaw(id);if(!a)return;
-  if(!confirm('¿Cancelar este turno?'))return;
+  if(!confirm('¿Cancelar este turno?'+
+    (a.deposit_status==='verified'?
+      ' Tiene una seña verificada de '+depositARS(a.deposit_amount_minor)+
+      '. La cancelación NO realiza una devolución automática.':'')
+    ))return;
   try{
     const r=await CithelaCloud.reservation({
       tenantId:CithelaCloud.state().tenant.id,
@@ -2647,14 +2801,17 @@ async function cloudMarkOutcome(id,outcome){
 }
 
 let cloudWhatsAppDraft=null;
-function cloudWhatsAppKinds(status){
+function cloudWhatsAppKinds(status,id){
+  const a=id?cloudAppointmentRaw(id):null;
+  const extra=a?.deposit_status==='requested'&&Number(a?.deposit_amount_minor)>0
+    ?[['deposit','Solicitar seña']]:[];
   if(status==='pendiente')return [
-    ['booking','Nueva reserva pendiente'],
+    ['booking','Nueva reserva pendiente'],...extra,
     ['rescheduled','Turno reprogramado'],
     ['reminder','Recordatorio']
   ];
   if(status==='confirmado')return [
-    ['confirmed','Turno confirmado'],
+    ['confirmed','Turno confirmado'],...extra,
     ['rescheduled','Turno reprogramado'],
     ['reminder','Recordatorio']
   ];
@@ -2677,6 +2834,13 @@ function cloudWhatsAppContent(t,pac,kind){
       '. Estado actual: '+(t.estado==='confirmado'?'confirmado':'pendiente de confirmación')+'.';
   else if(kind==='cancelled')
     body='El turno del '+when+' quedó cancelado. Podés solicitar otro desde CITHELA.';
+  else if(kind==='deposit'){
+    const a=cloudAppointmentRaw(t.id);
+    if(a?.deposit_status!=='requested'||!Number(a?.deposit_amount_minor))return '';
+    body='Para tu turno del '+when+' se solicita una seña de '+
+      depositARS(a.deposit_amount_minor)+
+      '. Contactanos para coordinar el pago. CITHELA no cobra desde su enlace.';
+  }
   else
     body='Te recordamos tu turno del '+when+
       '. Estado actual: '+(t.estado==='confirmado'?'confirmado':'pendiente de confirmación')+'.';
@@ -2693,7 +2857,7 @@ function cloudOpenWhatsApp(id,preset){
   const pac=t?cloudPersonById(t.pacienteId):null;
   const n=normalizePhone(pac?.tel||'');
   if(!t||!raw||!pac||!validPhone(n)){toast('Paciente sin teléfono de WhatsApp válido');return;}
-  const kinds=cloudWhatsAppKinds(t.estado);
+  const kinds=cloudWhatsAppKinds(t.estado,t.id);
   if(!kinds.length){toast('No hay avisos disponibles para este estado');return;}
   const kind=kinds.some(([k])=>k===preset)?preset:kinds[0][0];
   cloudWhatsAppDraft={
@@ -2713,7 +2877,7 @@ function refreshCloudWhatsAppDraft(){
   const t=cloudAppointmentViews().find(x=>String(x.id)===String(draft.id));
   const pac=t?cloudPersonById(t.pacienteId):null;
   const kind=$('wa-draft-kind').value;
-  if(!t||!pac||!cloudWhatsAppKinds(t.estado).some(([k])=>k===kind))return;
+  if(!t||!pac||!cloudWhatsAppKinds(t.estado,t.id).some(([k])=>k===kind))return;
   draft.kind=kind;
   $('wa-draft-text').value=cloudWhatsAppContent(t,pac,kind);
 }
@@ -2748,7 +2912,7 @@ function openCloudWhatsAppDraftChat(){
   const pac=t?cloudPersonById(t.pacienteId):null;
   const phone=normalizePhone(pac?.tel||'');
   if(!t||!pac||phone!==draft.phone||
-    !cloudWhatsAppKinds(t.estado).some(([kind])=>kind===draft.kind)){
+    !cloudWhatsAppKinds(t.estado,t.id).some(([kind])=>kind===draft.kind)){
     closeCloudWhatsAppDraft();
     toast('Cambió el estado o el teléfono. Prepará un nuevo aviso.',4800);
     return;
@@ -3714,6 +3878,34 @@ renderResourcesConfig();
 renderInfrastructureStatus();
 }
 
+// Deposit amounts use integer minor units to avoid floating-point accounting errors.
+function parseDepositARS(input){
+  const s=String(input||'').trim().replace(',', '.');
+  if(!/^(?:0|[1-9]\d{0,6})(?:\.\d{1,2})?$/.test(s))return null;
+  const [whole,fraction='']=s.split('.');
+  const n=Number(whole)*100+Number(fraction.padEnd(2,'0'));
+  return Number.isInteger(n)&&n<=500000000?n:null;
+}
+function depositARS(minor){
+  const cents=Number(minor)||0;
+  return 'ARS $'+(cents/100).toLocaleString('es-AR',{
+    minimumFractionDigits:cents%100?2:0,maximumFractionDigits:2
+  });
+}
+function depositInputARS(minor){
+  const n=Number(minor)||0;
+  return String(Math.trunc(n/100))+(n%100?','+String(n%100).padStart(2,'0'):'');
+}
+const depositStateNames={
+  not_required:'Sin seña',requested:'Seña pendiente',verified:'Cobro verificado manualmente',
+  waived:'Seña eximida',refunded:'Devolución registrada manualmente'
+};
+function depositLabel(a){
+  const amount=Number(a?.deposit_amount_minor)||0;
+  if(!amount)return '';
+  return depositARS(amount)+' · '+(depositStateNames[a.deposit_status]||'Seña solicitada');
+}
+
 function canManageCloudServices(){
   const s=CithelaCloud.state();
   return professionalCloudReady()&&['owner','admin'].includes(s.membership?.role||'');
@@ -3736,6 +3928,7 @@ function resetCloudServiceEditor(){
   const name=$('cloud-service-name'),duration=$('cloud-service-duration');
   if(!name||!duration)return;
   name.value='';duration.value='30';
+  $('cloud-service-deposit').value='0';
   $('cloud-service-id').value='';
   $('cloud-service-updated-at').value='';
   $('cloud-service-save').textContent='Agregar servicio';
@@ -3747,6 +3940,7 @@ function editCloudService(id){
   if(!svc)return;
   $('cloud-service-name').value=svc.name;
   $('cloud-service-duration').value=String(svc.duration_min);
+  $('cloud-service-deposit').value=depositInputARS(svc.deposit_amount_minor);
   $('cloud-service-id').value=svc.id;
   $('cloud-service-updated-at').value=svc.updated_at;
   $('cloud-service-save').textContent='Guardar cambios';
@@ -3757,10 +3951,12 @@ async function saveCloudService(){
   if(cloudServiceBusy||!canManageCloudServices())return;
   const s=CithelaCloud.state();
   const name=$('cloud-service-name').value.trim(),duration=Number($('cloud-service-duration').value);
+  const deposit=parseDepositARS($('cloud-service-deposit').value);
   const id=$('cloud-service-id').value,expected=$('cloud-service-updated-at').value;
   if(!name||name.length>160||!Number.isInteger(duration)||duration<15||duration>720||duration%15!==0){
     toast(cloudServiceErrorMessage('invalid_payload'));return;
   }
+  if(deposit===null){toast('Ingresá la seña en pesos (0 si no corresponde).');return;}
   if(id&&!expected){toast('Volvé a seleccionar el servicio para editarlo.');return;}
   const save=$('cloud-service-save');
   cloudServiceBusy=true;save.disabled=true;
@@ -3768,8 +3964,9 @@ async function saveCloudService(){
     await CithelaCloud.serviceCatalogCommand({
       tenantId:s.tenant.id,requestId:cloudRequestId('service-catalog'),
       command:id?'service.update':'service.create',
-      payload:id?{id,expected_updated_at:expected,name,duration_min:duration}
-        :{name,duration_min:duration}
+      payload:id?{id,expected_updated_at:expected,name,duration_min:duration,
+          deposit_amount_minor:deposit,deposit_currency:'ARS'}
+        :{name,duration_min:duration,deposit_amount_minor:deposit,deposit_currency:'ARS'}
     });
     if(CithelaCloud.state().tenant?.id!==s.tenant.id)return;
     resetCloudServiceEditor();renderServicesConfig();
@@ -3834,7 +4031,7 @@ function renderServicesConfig(){
         </div>`:'';
       return `<div class="block-row" style="display:block;">
         <div class="block-title">${escHtml(svc.name)} ${state}</div>
-        <div class="block-meta">${Number(svc.duration_min)} minutos · nube</div>
+        <div class="block-meta">${Number(svc.duration_min)} minutos · nube · ${Number(svc.deposit_amount_minor)>0?'Seña '+depositARS(svc.deposit_amount_minor):'Sin seña'}</div>
         ${buttons}
       </div>`;
     }).join('')+(list.length?'':'<p class="contact-note">Todavía no hay servicios configurados.</p>');
