@@ -750,6 +750,17 @@ textarea.inp{resize:vertical;min-height:72px;}
   </div>
 </div>
 
+<div class="overlay" id="m-deposit" onclick="closeCloudDeposit()">
+  <div class="modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="deposit-title">
+    <div class="modal-handle"></div>
+    <h3 id="deposit-title">Gestión de seña</h3>
+    <p class="contact-note" id="deposit-appointment-label"></p>
+    <p class="sh" id="deposit-status-label"></p>
+    <div id="deposit-actions" style="margin:15px 0;"></div>
+    <button class="btn-main soft" type="button" onclick="closeCloudDeposit()">Cerrar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2538,12 +2549,15 @@ function renderAgenda(){
         <div class="aitem-name">${escHtml(pac.nombre)}</div>
         <div class="aitem-motivo">${escHtml(t.servicioNombre)} · ${t.duracionMin} min · ${escHtml(t.resourceName)}</div>
         ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+        ${depositLabel(appointment)?`<div class="ops-note" style="margin-top:7px;">${escHtml(depositLabel(appointment))}</div>`:''}
         <div class="aitem-foot">
           <span class="tag ${sm.cls}">${sm.label}</span>
           <div class="aitem-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">WhatsApp</button>`:''}
+            ${Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable()
+              ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
           </div>
@@ -2593,9 +2607,13 @@ function renderAgendaHistory(appointments,cloudMode,pacs,key){
       <div class="aitem-name">${escHtml(pac.nombre)}</div>
       <div class="aitem-motivo">${escHtml(service)} · ${cloudMode?t.duracionMin:appointmentDuration(t)} min · ${escHtml(resource)}</div>
       ${t.motivo?`<div class="aitem-motivo">${escHtml(t.motivo)}</div>`:''}
+      ${cloudMode&&depositLabel(cloudAppointmentRaw(t.id))?
+        `<div class="ops-note" style="margin-top:6px;">${escHtml(depositLabel(cloudAppointmentRaw(t.id)))}</div>`:''}
       <div class="aitem-foot"><span class="tag ${status.cls}">${escHtml(status.label)}</span>
         ${cloudMode&&t.estado==='cancelado'&&validPhone(pac.tel)
           ?`<button class="mb wa" type="button" onclick="cloudOpenWhatsApp('${t.id}','cancelled')">Avisar cancelación</button>`:''}
+        ${cloudMode&&Number(cloudAppointmentRaw(t.id)?.deposit_amount_minor)>0&&professionalCloudWritable()
+          ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2603,6 +2621,93 @@ function renderAgendaHistory(appointments,cloudMode,pacs,key){
     <summary>Historial del día <span class="agenda-history-count">${appointments.length}</span></summary>
     <div class="agenda-history-items">${cards}</div>
   </details>`;
+}
+
+let cloudDepositDraft=null,cloudDepositBusy=false;
+function closeCloudDeposit(){
+  if(cloudDepositBusy)return;
+  cloudDepositDraft=null;
+  closeM('m-deposit');
+}
+function cloudOpenDeposit(id){
+  if(!professionalCloudWritable())return;
+  const s=CithelaCloud.state(),a=cloudAppointmentRaw(id);
+  if(!a||!Number(a.deposit_amount_minor))return;
+  cloudDepositDraft={id:a.id,tenantId:s.tenant.id,rowVersion:Number(a.row_version)};
+  const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
+  const p=t?cloudPersonById(t.pacienteId):null;
+  $('deposit-appointment-label').textContent=
+    (p?.nombre||'Cliente')+' · '+(t?.fecha||'')+' '+(t?.hora||'')+' hs';
+  $('deposit-status-label').textContent=depositLabel(a);
+  const owner=['owner','admin'].includes(s.membership?.role||'');
+  const status=a.deposit_status,active=['pending','confirmed'].includes(a.status);
+  let controls='';
+  if(status==='requested'&&active){
+    controls+='<label class="lbl" for="deposit-method">Medio de pago comprobado</label>'+
+      '<select class="inp" id="deposit-method">'+
+      '<option value="transfer">Transferencia acreditada</option>'+
+      '<option value="cash">Efectivo recibido</option>'+
+      '<option value="other">Otro medio comprobado</option></select>'+
+      '<button class="btn-main" type="button" style="margin-top:12px;" onclick="cloudDepositAction(\'deposit.verify\')">Registrar cobro verificado</button>';
+  }
+  if(status==='requested'&&owner){
+    controls+='<button class="btn-main soft" type="button" style="margin-top:10px;" onclick="cloudDepositAction(\'deposit.waive\')">Eximir seña</button>';
+  }
+  if(status==='verified'&&owner){
+    controls+='<button class="btn-main soft" type="button" onclick="cloudDepositAction(\'deposit.refund\')">Registrar devolución completa</button>'+
+      '<button class="mb ghost" type="button" style="margin-top:10px;min-height:44px;" onclick="cloudDepositAction(\'deposit.undo\')">Corregir cobro registrado por error</button>';
+  }
+  if(!controls)controls='<p class="contact-note">No hay acciones disponibles para este estado.</p>';
+  $('deposit-actions').innerHTML=controls+
+    '<p class="contact-note" style="margin-top:12px;">CITHELA solo registra acciones manuales. No realiza transferencias, cobros ni devoluciones.</p>';
+  openM('m-deposit');
+}
+async function cloudDepositAction(command){
+  const draft=cloudDepositDraft;
+  if(cloudDepositBusy||!draft||!professionalCloudWritable())return;
+  const s=CithelaCloud.state(),a=cloudAppointmentRaw(draft.id);
+  if(s.tenant?.id!==draft.tenantId||!a||Number(a.row_version)!==draft.rowVersion){
+    closeCloudDeposit();toast('El turno cambió. Actualizá la agenda antes de registrar la seña.',5200);return;
+  }
+  const amount=depositARS(a.deposit_amount_minor);
+  let warning='',method;
+  if(command==='deposit.verify'){
+    method=$('deposit-method')?.value;
+    if(!['transfer','cash','other'].includes(method))return;
+    warning='¿Comprobaste que recibiste '+amount+'? Esta acción NO realiza ningún cobro.';
+  }else if(command==='deposit.refund'){
+    warning='¿Ya devolviste el importe COMPLETO de '+amount+' por fuera de CITHELA? Esta acción solo registra la devolución.';
+  }else if(command==='deposit.waive'){
+    warning='¿Eximir la seña de '+amount+' para este turno?';
+  }else if(command==='deposit.undo'){
+    warning='¿Corregir el registro de cobro? Solo si se marcó por error y no se recibió el dinero. Esto NO devuelve fondos.';
+  }else return;
+  if(!confirm(warning))return;
+  cloudDepositBusy=true;
+  try{
+    await CithelaCloud.depositCommand({
+      tenantId:draft.tenantId,requestId:cloudRequestId('deposit'),
+      command,payload:{id:draft.id,expected_version:draft.rowVersion,
+        ...(method?{method}:{})}
+    });
+    cloudDepositBusy=false;
+    closeCloudDeposit();
+    if(professionalCloudReady()&&CithelaCloud.state().tenant?.id===draft.tenantId){
+      renderAgenda();
+      toast(command==='deposit.verify'?'Cobro registrado como verificado ✓':
+        command==='deposit.refund'?'Devolución registrada manualmente ✓':
+        command==='deposit.waive'?'Seña eximida ✓':'Corrección registrada ✓');
+    }
+  }catch(err){
+    cloudDepositBusy=false;
+    toast(err?.message==='stale_write'?'El turno cambió en otro dispositivo. Actualizá la agenda.':
+      err?.message||'No se pudo registrar la operación',5300);
+    if(err?.message==='stale_write'){
+      closeCloudDeposit();
+      await CithelaCloud.refresh();
+      renderAgenda();
+    }
+  }
 }
 
 async function cloudConfirmAppointment(id){
@@ -3751,7 +3856,7 @@ function depositInputARS(minor){
   return String(Math.trunc(n/100))+(n%100?','+String(n%100).padStart(2,'0'):'');
 }
 const depositStateNames={
-  not_required:'Sin seña',requested:'Seña solicitada',verified:'Cobro verificado manualmente',
+  not_required:'Sin seña',requested:'Seña pendiente',verified:'Cobro verificado manualmente',
   waived:'Seña eximida',refunded:'Devolución registrada manualmente'
 };
 function depositLabel(a){
