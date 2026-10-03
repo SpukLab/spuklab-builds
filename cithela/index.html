@@ -2826,7 +2826,7 @@ async function confirmReprogram(){
 function renderPacs(){
   const q=($('s-pac')?.value||'').toLowerCase();
   if(professionalCloudReady()){
-    const ps=(CithelaCloud.state().people||[]).filter(p=>!q||(p.display_name||'').toLowerCase().includes(q)||(p.phone_e164||'').includes(q));
+    const ps=(CithelaCloud.state().people||[]).filter(p=>!q||(p.display_name||'').toLowerCase().includes(q)||(p.phone_e164||'').includes(q)||(p.contact_email||'').toLowerCase().includes(q));
     const turns=cloudAppointmentViews();
     const el=$('pacs-wrap');
     if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()} en la nube.</p>`;return;}
@@ -2835,21 +2835,21 @@ function renderPacs(){
       const wa=normalizePhone(p.phone_e164||'');
       return`<div class="prow">
         <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
-        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')} · ${n} turno${n!==1?'s':''} · nube</div></div>
+        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''} · nube</div></div>
         <button class="mb ghost" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
         ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">WhatsApp</button>`:''}
       </div>`;
     }).join('');
     return;
   }
-  const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q));
+  const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q)||(p.contact_email||'').toLowerCase().includes(q));
   const el=$('pacs-wrap');
   if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()}.</p>`;return;}
   el.innerHTML=ps.map(p=>{
     const n=DB.t().filter(t=>t.pacienteId===p.id).length;
     return`<div class="prow">
       <div class="ava">${ini(p.nombre)}</div>
-      <div class="prow-info"><div class="pname">${p.nombre}</div><div class="pmeta">${p.tel||'—'} · ${n} turno${n!==1?'s':''}</div></div>
+      <div class="prow-info"><div class="pname">${p.nombre}</div><div class="pmeta">${escHtml(p.tel||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
       <button class="mb ghost" onclick="verFicha(${p.id})">Ver</button>
     </div>`;
   }).join('');
