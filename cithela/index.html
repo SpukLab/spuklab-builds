@@ -1865,7 +1865,7 @@ async function patientOpenBooking(tenantId,personId){
   }
 }
 function patientBookingSelectionChanged(){
-  const state=patientBookingState;if(!state||state.loading||patientMutationBusy)return;
+  const state=patientBookingState;if(!state||!state.catalog||patientMutationBusy)return;
   state.serviceId=$('patient-book-service')?.value||'';
   state.resourceId=$('patient-book-resource')?.value||'';
   state.date=$('patient-book-date')?.value||state.date;
@@ -1966,6 +1966,7 @@ async function patientSubmitBooking(hour){
     s.requestKey=start;s.requestId=cloudRequestId('patient-booking');
   }
   patientMutationBusy=true;
+  let reloadOnFailure=false;
   try{
     await CithelaCloud.patientBookingCreate({
       tenantId:s.tenantId,requestId:s.requestId,
@@ -1978,8 +1979,9 @@ async function patientSubmitBooking(hour){
   }catch(err){
     toast(patientActionErrorMessage(err?.message),4600);
     await patientRefreshPortal();
-    if(patientBookingState===s)await patientLoadBookingSlots();
+    reloadOnFailure=true;
   }finally{patientMutationBusy=false;}
+  if(reloadOnFailure&&patientBookingState===s)await patientLoadBookingSlots();
 }
 
 function renderPatientPortalCards(){
