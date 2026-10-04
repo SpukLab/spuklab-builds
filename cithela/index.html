@@ -2712,18 +2712,20 @@ function cloudOpenDeposit(id){
   const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
   const p=t?cloudPersonById(t.pacienteId):null;
   $('deposit-appointment-label').textContent=
-    (p?.nombre||'Cliente')+' · '+(t?.fecha||'')+' '+(t?.hora||'')+' hs';
+    (p?.nombre||'Cliente')+' · '+(t?whatsappAppointmentDateTime(t):'Turno sin fecha');
   $('deposit-status-label').textContent=depositLabel(a);
   const owner=['owner','admin'].includes(s.membership?.role||'');
   const status=a.deposit_status,active=['pending','confirmed'].includes(a.status);
   let controls='';
   if(status==='requested'&&active){
     controls+='<label class="lbl" for="deposit-method">Medio de pago comprobado</label>'+
-      '<select class="inp" id="deposit-method">'+
+      '<select class="inp" id="deposit-method" onchange="cloudDepositMethodChanged()">'+
+      '<option value="">Elegí el medio comprobado…</option>'+
       '<option value="transfer">Transferencia acreditada</option>'+
       '<option value="cash">Efectivo recibido</option>'+
       '<option value="other">Otro medio comprobado</option></select>'+
-      '<button class="btn-main" type="button" style="margin-top:12px;" onclick="cloudDepositAction(\'deposit.verify\')">Registrar cobro verificado</button>';
+      '<button class="btn-main" id="deposit-verify" type="button" disabled '+
+      'style="margin-top:12px;" onclick="cloudDepositAction(\'deposit.verify\')">Registrar cobro verificado</button>';
   }
   if(status==='requested'&&owner){
     controls+='<button class="btn-main soft" type="button" style="margin-top:10px;" onclick="cloudDepositAction(\'deposit.waive\')">Eximir seña</button>';
@@ -2737,6 +2739,11 @@ function cloudOpenDeposit(id){
     '<p class="contact-note" style="margin-top:12px;">CITHELA solo registra acciones manuales. No realiza transferencias, cobros ni devoluciones.</p>';
   openM('m-deposit');
 }
+function cloudDepositMethodChanged(){
+  const method=$('deposit-method')?.value||'';
+  const verify=$('deposit-verify');
+  if(verify)verify.disabled=!['transfer','cash','other'].includes(method);
+}
 async function cloudDepositAction(command){
   const draft=cloudDepositDraft;
   if(cloudDepositBusy||!draft||!professionalCloudWritable())return;
@@ -2748,7 +2755,9 @@ async function cloudDepositAction(command){
   let warning='',method;
   if(command==='deposit.verify'){
     method=$('deposit-method')?.value;
-    if(!['transfer','cash','other'].includes(method))return;
+    if(!['transfer','cash','other'].includes(method)){
+      toast('Elegí un medio de pago que hayas comprobado.');return;
+    }
     warning='¿Comprobaste que recibiste '+amount+'? Esta acción NO realiza ningún cobro.';
   }else if(command==='deposit.refund'){
     warning='¿Ya devolviste el importe COMPLETO de '+amount+' por fuera de CITHELA? Esta acción solo registra la devolución.';
