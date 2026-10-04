@@ -11,7 +11,7 @@ begin
   end if;
   if not exists (select 1 from pg_constraint where conrelid='public.cithela_tenants'::regclass and conname='cithela_logo_object_path_format') then
     alter table public.cithela_tenants add constraint cithela_logo_object_path_format
-      check (logo_object_path is null or logo_object_path ~ '^[0-9a-f-]{36}/logo-[0-9a-f]{32}\\.(png|jpg|jpeg|webp)$');
+      check (logo_object_path is null or logo_object_path ~ '^[0-9a-f-]{36}/logo-[0-9a-f]{32}\.(png|jpg|jpeg|webp)$');
   end if;
 end $guards$;
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
@@ -23,7 +23,7 @@ drop policy if exists cithela_branding_owner_insert on storage.objects;
 create policy cithela_branding_owner_insert on storage.objects
   for insert to authenticated with check (
     bucket_id='cithela-branding'
-    and name ~ '^[0-9a-f-]{36}/logo-[0-9a-f]{32}\\.(png|jpg|jpeg|webp)$'
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9a-f]{32}\.(png|jpg|jpeg|webp)$'
     and exists (
       select 1 from public.cithela_tenant_memberships m
       join public.cithela_tenants t on t.id=m.tenant_id
@@ -77,7 +77,7 @@ begin
     return jsonb_build_object('ok',false,'code','stale_write');
   end if;
   if v_path is not null then
-    if v_path !~ ('^'||p_tenant_id::text||'/logo-[0-9a-f]{32}\\.(png|jpg|jpeg|webp)$')
+    if v_path !~ ('^'||p_tenant_id::text||'/logo-[0-9a-f]{32}\.(png|jpg|jpeg|webp)$')
       or not exists(
         select 1 from storage.objects o where o.bucket_id='cithela-branding'
         and o.name=v_path
