@@ -159,11 +159,11 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .mb:active:not(:disabled){transform:translateY(1px);}
 .mb:focus-visible,.btn-main:focus-visible,.nav-out:focus-visible,.spill:focus-visible{outline:3px solid var(--teal2);outline-offset:3px;}
 .mb:disabled,.btn-main:disabled{opacity:.44;cursor:not-allowed;transform:none;}
-.mb.confirm{background:var(--s-ok-bg);border-color:#80b7b8;color:#215c61;}
+.mb.confirm{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal2);}
 .mb.wa{background:#f0fdf8;border-color:#91c9a9;color:#286b48;}
 .mb.cancel{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger);}
 .mb.ghost{background:var(--white);border-color:#9fb0a9;color:var(--ink2);}
-.mb.teal{background:var(--teal-light);border-color:#87bbb0;color:var(--teal2);}
+.mb.teal{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal2);}
 
 /* Patient portal: visible status and thumb-sized actions on any screen. */
 .patient-portal-content{padding:24px 20px;max-width:800px;margin:0 auto;width:100%;box-sizing:border-box;}
@@ -1113,9 +1113,11 @@ const CITHELA_BRAND_PALETTES=Object.freeze({
   sage:{label:'Teal',accent:'#398e84',dark:'#28756d',light:'#e6f2ee',mid:'#aed2c7'},
   ocean:{label:'Azul',accent:'#205f92',dark:'#174a75',light:'#e9f3fb',mid:'#b7d3e7'},
   clay:{label:'Terracota',accent:'#84472f',dark:'#683723',light:'#f8eee8',mid:'#e1bea9'},
-  plum:{label:'Ciruela',accent:'#674577',dark:'#50355e',light:'#f4edf6',mid:'#d9c3df'}
+  pink:{label:'Rosa chicle',accent:'#ba2d73',dark:'#8f1f56',light:'#fde8f1',mid:'#efb5ce'}
 });
-function cithelaBrandPalette(id){return CITHELA_BRAND_PALETTES[id]||CITHELA_BRAND_PALETTES.sage;}
+function cithelaBrandPalette(id){
+  return CITHELA_BRAND_PALETTES[id==='plum'?'pink':id]||CITHELA_BRAND_PALETTES.sage;
+}
 function applyCithelaTheme(id){
   const t=cithelaBrandPalette(id),root=document.documentElement.style;
   root.setProperty('--teal',t.accent);root.setProperty('--teal2',t.dark);
@@ -2360,6 +2362,12 @@ function patientSharedPanel(profile){
 function renderPatientPortalCards(){
   if(!me?.cloud||me?.role!=='paciente'||!patientPortalData)return;
   const el=$('patient-cloud-list'),profiles=patientPortalData.profiles||[];
+  const singleTenant=profiles.length>0&&
+    profiles.every(p=>p.tenant_id===profiles[0].tenant_id);
+  // The header and refresh button belong to one tenant only if the portal has one.
+  // On multi-tenant patient accounts, preserve neutral CITHELA chrome while
+  // each establishment keeps its own scoped palette in its workspace card.
+  applyCithelaTheme(singleTenant?profiles[0].brand_theme:'sage');
   if(!profiles.length){
     el.innerHTML='<p class="ops-note">No hay una ficha vinculada a esta cuenta. Contactá al consultorio.</p>';
     return;
@@ -3846,7 +3854,7 @@ function renderCloudBrandConfig(s){
   box.style.display=editable?'block':'none';
   if(!editable||cloudBrandBusy)return;
   if(!cloudBrandDirty){
-    cloudBrandTheme=tenant.brand_theme||'sage';
+    cloudBrandTheme=tenant.brand_theme==='plum'?'pink':tenant.brand_theme||'sage';
     cloudBrandVersion=tenant.branding_updated_at;
   }
   $('cloud-brand-palette').innerHTML=Object.entries(CITHELA_BRAND_PALETTES)
