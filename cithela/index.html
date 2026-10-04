@@ -1217,6 +1217,7 @@ const CithelaCloud=(()=>{
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
     if(typeof renderPatientLoginSession==='function')renderPatientLoginSession();
+    if(typeof me!=='undefined'&&me?.role!=='medico')applyCithelaTheme('sage');
     const loginEmail=document.getElementById('l-cloud-email');
     if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
     if(typeof me!=='undefined'&&me?.role==='medico'){
@@ -1230,6 +1231,7 @@ const CithelaCloud=(()=>{
         if(document.getElementById('p-medico-reportes')?.classList.contains('on'))renderReportSource();
         if(document.getElementById('p-medico-config')?.classList.contains('on')){
           renderAvailabilityBlocks();renderServicesConfig();renderResourcesConfig();
+          renderCloudBrandConfig(snapshot());
         }
         renderProfessionalMode();
       }
@@ -2406,9 +2408,17 @@ function renderPatientPortalCards(){
         ${picker}
       </div>`;
     };
-    return `<section class="form-card patient-workspace" style="margin-bottom:16px;">
-      <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
-      <p class="contact-note">${escHtml(profile.name)}</p>
+    const brandStyle=cithelaBrandStyle(profile.brand_theme);
+    const brandLogo=cithelaBrandLogoUrl(
+      profile.logo_object_path,profile.tenant_id,profile.branding_updated_at);
+    return `<section class="form-card patient-workspace"
+      style="margin-bottom:16px;${brandStyle}">
+      <div class="tenant-card-head">
+        ${brandLogo?`<img class="tenant-card-logo" src="${escHtml(brandLogo)}"
+          alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`:''}
+        <div><p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
+          <p class="contact-note">${escHtml(profile.name)}</p></div>
+      </div>
       <button class="btn-main patient-booking-toggle" type="button"
         onclick="patientOpenBooking('${profile.tenant_id}','${profile.person_id}')">
         ${patientBookingState?.tenantId===profile.tenant_id&&
@@ -2528,7 +2538,7 @@ async function logout(){
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
 function goMed(){applyBranding();scr('medico');renderProfessionalMode();renderCal('med');renderStats();renderAgenda();fillNT();}
 function goPac(){
-  applyBranding();
+  applyBranding();applyCithelaTheme('sage');
   if(me.cloud){
     scr('patient-cloud');
     patientRefreshPortal();
@@ -2555,6 +2565,15 @@ function tab(sc,id,btn){
 
 function renderProfessionalMode(){
   const active=professionalCloudReady();
+  const s=CithelaCloud.state(),tenant=active?s.tenant:null;
+  applyCithelaTheme(tenant?.brand_theme||'sage');
+  const logo=$('professional-tenant-logo');
+  if(logo){
+    const url=tenant?cithelaBrandLogoUrl(
+      tenant.logo_object_path,tenant.id,tenant.branding_updated_at):'';
+    logo.style.display=url?'block':'none';
+    if(url)logo.src=url;else logo.removeAttribute('src');
+  }
   const phoneLabel=document.querySelector('label[for="new-person-phone"]');
   if(phoneLabel)phoneLabel.textContent=active?'WhatsApp E.164 (obligatorio)':'WhatsApp (opcional)';
   const phoneField=$('new-person-phone');
@@ -4181,6 +4200,7 @@ renderServicesConfig();
 renderResourcesConfig();
 renderInfrastructureStatus();
 renderCloudPaymentConfig(CithelaCloud.state());
+renderCloudBrandConfig(CithelaCloud.state());
 }
 
 // Deposit amounts use integer minor units to avoid floating-point accounting errors.
