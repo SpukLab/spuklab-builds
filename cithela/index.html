@@ -237,7 +237,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 .hm{font-size:.73rem;color:var(--ink3);margin-top:2px;}
 
 /* WhatsApp draft stays operator-controlled: no automatic send or delivery claim. */
-.wa-draft-text{min-height:155px;resize:vertical;line-height:1.55;font-size:.86rem;}
+.wa-draft-text{height:min(33vh,310px);min-height:210px;max-height:40vh;resize:vertical;line-height:1.55;font-size:.86rem;}
 #wa-draft-patient{margin-bottom:15px;overflow-wrap:anywhere;}
 
 /* MODAL */
@@ -749,16 +749,22 @@ textarea.inp{resize:vertical;min-height:72px;}
     <h3 id="wa-draft-title">Aviso por WhatsApp</h3>
     <p id="wa-draft-patient" class="contact-note"></p>
     <label class="lbl" for="wa-draft-kind">Tipo de aviso</label>
-    <select class="inp" id="wa-draft-kind" onchange="refreshCloudWhatsAppDraft()"></select>
+    <select class="inp" id="wa-draft-kind" aria-describedby="wa-draft-info"
+      onchange="refreshCloudWhatsAppDraft()"><option value="" selected>Elegí el tipo de aviso…</option></select>
+    <p class="contact-note" id="wa-draft-info" role="status" aria-live="polite"
+      style="margin:-5px 0 13px;">Seleccioná el aviso para preparar el mensaje.</p>
     <label class="lbl" for="wa-draft-text">Mensaje (podés editarlo)</label>
-    <textarea class="inp wa-draft-text" id="wa-draft-text" rows="7" maxlength="1600" autocomplete="off"></textarea>
+    <textarea class="inp wa-draft-text" id="wa-draft-text" rows="7" maxlength="1600"
+      placeholder="Elegí primero el tipo de aviso" autocomplete="off" disabled></textarea>
     <p class="contact-note" style="margin:11px 0 17px;">Se abrirá WhatsApp con el mensaje preparado.
       Tendrás que pulsar Enviar allí. Abrir WhatsApp no confirma envío, recepción ni lectura.</p>
     <div class="modal-actions">
       <button class="btn-main soft" type="button" onclick="closeCloudWhatsAppDraft()">Volver</button>
-      <button class="btn-main" type="button" onclick="openCloudWhatsAppDraftChat()">Abrir WhatsApp</button>
+      <button class="btn-main" id="wa-draft-open" type="button" disabled
+        onclick="openCloudWhatsAppDraftChat()">Abrir WhatsApp</button>
     </div>
-    <button class="mb ghost" type="button" style="margin-top:10px;min-height:44px;width:100%;"
+    <button class="mb ghost" id="wa-draft-copy" type="button" disabled
+      style="margin-top:10px;min-height:44px;width:100%;"
       onclick="copyCloudWhatsAppDraftMessage()">Copiar mensaje (si no abre)</button>
   </div>
 </div>
@@ -2833,11 +2839,15 @@ function cloudWhatsAppKinds(status,id){
   if(status==='cancelado')return [['cancelled','Turno cancelado']];
   return [];
 }
+function whatsappAppointmentDateTime(t){
+  const [year,month,day]=String(t.fecha).split('-');
+  return day+'/'+month+'/'+year+' a las '+t.hora+' hs';
+}
 function cloudWhatsAppContent(t,pac,kind){
   const s=CithelaCloud.state();
   const clinic=String(s.tenant?.display_name||'CITHELA').replace(/[\r\n\t]/g,' ').trim().slice(0,90);
   const first=String(pac.nombre||'').replace(/[\r\n\t]/g,' ').trim().split(/\s+/)[0].slice(0,45);
-  const when=t.fecha+' a las '+t.hora+' hs';
+  const when=whatsappAppointmentDateTime(t);
   const hello='Hola'+(first?' '+first:'')+'. Te escribimos desde '+clinic+'.\n\n';
   let body='';
   if(kind==='booking')
@@ -2881,11 +2891,13 @@ function cloudOpenWhatsApp(id,preset){
     rowVersion:Number(raw.row_version),startsAt:raw.starts_at,
     phone:n,kind
   };
-  $('wa-draft-patient').textContent=pac.nombre+' · '+t.fecha+' '+t.hora+' hs · '+n;
-  $('wa-draft-kind').innerHTML=(kind?'':'<option value="" disabled selected>Elegí el tipo de aviso</option>')+
+  $('wa-draft-patient').textContent=pac.nombre+' · '+whatsappAppointmentDateTime(t)+' · '+n;
+  // iOS can skip disabled native <option> placeholders. Always keep a selectable
+  // empty first option and explicitly select its index before the picker opens.
+  $('wa-draft-kind').innerHTML='<option value="">Elegí el tipo de aviso…</option>'+
     kinds.map(([value,label])=>
-      '<option value="'+value+'"'+(value===kind?' selected':'')+'>'+label+'</option>').join('');
-  $('wa-draft-kind').value=kind;
+      '<option value="'+value+'">'+label+'</option>').join('');
+  $('wa-draft-kind').selectedIndex=kind?kinds.findIndex(([value])=>value===kind)+1:0;
   refreshCloudWhatsAppDraft();
   openM('m-whatsapp');
 }
@@ -2894,10 +2906,14 @@ function refreshCloudWhatsAppDraft(){
   const t=cloudAppointmentViews().find(x=>String(x.id)===String(draft.id));
   const pac=t?cloudPersonById(t.pacienteId):null;
   const kind=$('wa-draft-kind').value;
-  if(!kind){draft.kind='';$('wa-draft-text').value='';return;}
-  if(!t||!pac||!cloudWhatsAppKinds(t.estado,t.id).some(([k])=>k===kind))return;
-  draft.kind=kind;
-  $('wa-draft-text').value=cloudWhatsAppContent(t,pac,kind);
+  const valid=!!kind&&!!t&&!!pac&&cloudWhatsAppKinds(t.estado,t.id).some(([k])=>k===kind);
+  draft.kind=valid?kind:'';
+  $('wa-draft-text').value=valid?cloudWhatsAppContent(t,pac,kind):'';
+  $('wa-draft-text').disabled=!valid;
+  $('wa-draft-open').disabled=!valid;
+  $('wa-draft-copy').disabled=!valid;
+  $('wa-draft-info').textContent=valid?'Revisá el mensaje antes de abrir WhatsApp.':
+    'Seleccioná el aviso para preparar el mensaje.';
 }
 async function copyCloudWhatsAppDraftMessage(){
   if(!cloudWhatsAppDraft)return;
