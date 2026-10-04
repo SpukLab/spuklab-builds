@@ -74,6 +74,15 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .nav-brand::before{content:'';display:block;width:31px;height:31px;flex:none;background-image:url('https://raw.githubusercontent.com/SpukLab/spuklab-builds/b935ebbc0eb2cd2de7626caaad1d3442450dfe43/cithela-brand-board.png');background-repeat:no-repeat;background-size:217px 163px;background-position:-137px -59px;}
 .nav-brand .nb1{font-size:.9rem;font-weight:600;color:var(--ink);}
 .nav-brand .nb2{font-size:.62rem;color:var(--ink3);display:block;margin-top:1px;}
+.tenant-nav-logo{width:30px;height:30px;object-fit:contain;border-radius:7px;border:var(--line);background:#fff;flex:none;display:none;}
+.tenant-card-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:39px;}
+.tenant-card-logo{width:43px;height:43px;object-fit:contain;border:var(--line);border-radius:9px;background:#fff;flex:none;}
+.brand-palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 16px;}
+.brand-swatch{border:1px solid #d7e2df;background:var(--white);border-radius:10px;padding:9px 4px;cursor:pointer;font-size:.7rem;color:var(--ink2);min-height:68px;}
+.brand-swatch:focus-visible{outline:3px solid var(--ink);outline-offset:2px;}
+.brand-swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:1px;font-weight:700;}
+.brand-swatch-dot{display:block;width:25px;height:25px;border-radius:50%;margin:0 auto 5px;border:1px solid rgba(0,0,0,.10);}
+@media(max-width:340px){.brand-palette{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .pill{font-size:.6rem;font-weight:700;letter-spacing:.05em;padding:4px 11px;border-radius:20px;background:var(--teal-light);color:var(--teal2);}
 .nav-out{font-size:.74rem;font-weight:500;color:var(--ink3);background:none;border:none;cursor:pointer;}
 
@@ -354,7 +363,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 
 <div id="screen-medico" class="screen">
   <nav>
-    <div class="nav-brand"><span class="nb1 js-app-brand">CITHELA</span><span class="nb2 js-app-sub">Odontología</span></div>
+    <div class="nav-brand"><img id="professional-tenant-logo" class="tenant-nav-logo" alt="Logo del establecimiento"><div><span class="nb1 js-app-brand">CITHELA</span><span class="nb2 js-app-sub">Odontología</span></div></div>
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
@@ -514,6 +523,19 @@ textarea.inp{resize:vertical;min-height:72px;}
       <p class="contact-note" id="cloud-payment-info" role="status" style="margin-bottom:12px;">Dejá el alias vacío para solicitar la seña sin datos de transferencia.</p>
       <button class="btn-main" id="cloud-payment-save" type="button"
         onclick="saveCloudPaymentConfig()">Guardar datos de transferencia</button>
+    </div>
+
+    <p class="sh">Identidad visual</p>
+    <div class="form-card" id="cloud-brand-form" style="margin-bottom:14px;display:none;">
+      <p class="contact-note">Personalizá el color de tu establecimiento y agregá un logo para mostrarlo a tus clientes. El logo será público; no subas documentos personales.</p>
+      <label class="lbl" style="margin-top:14px;">Paleta de color</label>
+      <div class="brand-palette" id="cloud-brand-palette" role="group" aria-label="Paleta del establecimiento"></div>
+      <label class="lbl" for="cloud-brand-logo">Logo del establecimiento (opcional)</label>
+      <input class="inp" id="cloud-brand-logo" type="file" accept="image/png,image/jpeg,image/webp" onchange="selectCloudBrandLogo(this)">
+      <p class="contact-note">PNG, JPG o WebP, hasta 512 KB. Recomendado: imagen cuadrada y fondo transparente.</p>
+      <div id="cloud-brand-preview" class="contact-note" style="margin:12px 0;"></div>
+      <button class="mb ghost" id="cloud-brand-remove" type="button" onclick="removeCloudBrandLogo()" style="display:none;margin:5px 0 12px;">Quitar logo</button>
+      <button class="btn-main" id="cloud-brand-save" type="button" onclick="saveCloudBranding()">Guardar identidad visual</button>
     </div>
 
     <p class="sh">Servicios</p>
@@ -1087,6 +1109,30 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
+const CITHELA_BRAND_PALETTES=Object.freeze({
+  sage:{label:'Teal',accent:'#398e84',dark:'#28756d',light:'#e6f2ee',mid:'#aed2c7'},
+  ocean:{label:'Azul',accent:'#205f92',dark:'#174a75',light:'#e9f3fb',mid:'#b7d3e7'},
+  clay:{label:'Terracota',accent:'#84472f',dark:'#683723',light:'#f8eee8',mid:'#e1bea9'},
+  plum:{label:'Ciruela',accent:'#674577',dark:'#50355e',light:'#f4edf6',mid:'#d9c3df'}
+});
+function cithelaBrandPalette(id){return CITHELA_BRAND_PALETTES[id]||CITHELA_BRAND_PALETTES.sage;}
+function applyCithelaTheme(id){
+  const t=cithelaBrandPalette(id),root=document.documentElement.style;
+  root.setProperty('--teal',t.accent);root.setProperty('--teal2',t.dark);
+  root.setProperty('--teal-light',t.light);root.setProperty('--teal-mid',t.mid);
+}
+function cithelaBrandStyle(id){
+  const t=cithelaBrandPalette(id);
+  return '--teal:'+t.accent+';--teal2:'+t.dark+';--teal-light:'+t.light+';--teal-mid:'+t.mid+';';
+}
+function cithelaBrandLogoUrl(path,tenantId,updatedAt){
+  if(!/^[0-9a-f-]{36}$/.test(String(tenantId||'')))return '';
+  const pattern=new RegExp('^'+tenantId+'/logo-[a-f0-9]{32}[.](png|jpg|jpeg|webp)$');
+  if(!pattern.test(String(path||'')))return '';
+  return CITHELA_SUPABASE_URL+'/storage/v1/object/public/cithela-branding/'+
+    path.split('/').map(encodeURIComponent).join('/')+
+    '?v='+encodeURIComponent(String(updatedAt||''));
+}
 
 const CithelaCloud=(()=>{
   let client=null;
@@ -1171,6 +1217,7 @@ const CithelaCloud=(()=>{
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
     if(typeof renderPatientLoginSession==='function')renderPatientLoginSession();
+    if(typeof me!=='undefined'&&me?.role!=='medico')applyCithelaTheme('sage');
     const loginEmail=document.getElementById('l-cloud-email');
     if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
     if(typeof me!=='undefined'&&me?.role==='medico'){
@@ -1184,6 +1231,7 @@ const CithelaCloud=(()=>{
         if(document.getElementById('p-medico-reportes')?.classList.contains('on'))renderReportSource();
         if(document.getElementById('p-medico-config')?.classList.contains('on')){
           renderAvailabilityBlocks();renderServicesConfig();renderResourcesConfig();
+          renderCloudBrandConfig(snapshot());
         }
         renderProfessionalMode();
       }
@@ -1260,7 +1308,7 @@ const CithelaCloud=(()=>{
       }
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
-        c.from('cithela_tenants').select('id,display_name,timezone,status,transfer_alias,transfer_holder,payment_config_updated_at').eq('id',tenantId).single(),
+        c.from('cithela_tenants').select('id,display_name,timezone,status,transfer_alias,transfer_holder,payment_config_updated_at,brand_theme,logo_object_path,branding_updated_at').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active,updated_at,deposit_amount_minor,deposit_currency').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
@@ -1477,6 +1525,43 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function uploadBrandLogo({tenantId,file}){
+    if(!/^[0-9a-f-]{36}$/.test(String(tenantId||'')))throw Error('Establecimiento inválido');
+    const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[file?.type];
+    if(!ext||!file.size||file.size>524288)throw Error('Elegí PNG, JPG o WebP de hasta 512 KB.');
+    const bytes=new Uint8Array(await file.slice(0,16).arrayBuffer());
+    const png=bytes.length>=8&&[137,80,78,71,13,10,26,10].every((b,i)=>bytes[i]===b);
+    const jpeg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+    const webp=bytes.length>=12&&
+      String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&
+      String.fromCharCode(...bytes.slice(8,12))==='WEBP';
+    if(!({png,jpg:jpeg,webp})[ext])throw Error('El archivo no corresponde al formato de imagen indicado.');
+    if(!globalThis.crypto?.randomUUID)throw Error('Este dispositivo no admite la carga segura de logos.');
+    const path=tenantId+'/logo-'+crypto.randomUUID().replace(/-/g,'')+'.'+ext;
+    const c=await getClient();
+    const {error}=await c.storage.from('cithela-branding').upload(path,file,{
+      cacheControl:'3600',upsert:false,contentType:file.type
+    });
+    if(error)throw error;
+    return path;
+  }
+  async function removeBrandLogo(path){
+    const c=await getClient();
+    const {error}=await c.storage.from('cithela-branding').remove([path]);
+    if(error)throw error;
+  }
+  async function tenantBrandingUpdate({tenantId,expectedUpdatedAt,theme,logoPath}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_tenant_branding_update',{
+      p_tenant_id:tenantId,p_expected_updated_at:expectedUpdatedAt,
+      p_theme:theme,p_logo_path:logoPath
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo guardar la identidad visual.');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1610,7 +1695,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2323,9 +2408,17 @@ function renderPatientPortalCards(){
         ${picker}
       </div>`;
     };
-    return `<section class="form-card patient-workspace" style="margin-bottom:16px;">
-      <p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
-      <p class="contact-note">${escHtml(profile.name)}</p>
+    const brandStyle=cithelaBrandStyle(profile.brand_theme);
+    const brandLogo=cithelaBrandLogoUrl(
+      profile.logo_object_path,profile.tenant_id,profile.branding_updated_at);
+    return `<section class="form-card patient-workspace"
+      style="margin-bottom:16px;${brandStyle}">
+      <div class="tenant-card-head">
+        ${brandLogo?`<img class="tenant-card-logo" src="${escHtml(brandLogo)}"
+          alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`:''}
+        <div><p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
+          <p class="contact-note">${escHtml(profile.name)}</p></div>
+      </div>
       <button class="btn-main patient-booking-toggle" type="button"
         onclick="patientOpenBooking('${profile.tenant_id}','${profile.person_id}')">
         ${patientBookingState?.tenantId===profile.tenant_id&&
@@ -2445,7 +2538,7 @@ async function logout(){
 function scr(s){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$('screen-'+s).classList.add('active');}
 function goMed(){applyBranding();scr('medico');renderProfessionalMode();renderCal('med');renderStats();renderAgenda();fillNT();}
 function goPac(){
-  applyBranding();
+  applyBranding();applyCithelaTheme('sage');
   if(me.cloud){
     scr('patient-cloud');
     patientRefreshPortal();
@@ -2472,6 +2565,15 @@ function tab(sc,id,btn){
 
 function renderProfessionalMode(){
   const active=professionalCloudReady();
+  const s=CithelaCloud.state(),tenant=active?s.tenant:null;
+  applyCithelaTheme(tenant?.brand_theme||'sage');
+  const logo=$('professional-tenant-logo');
+  if(logo){
+    const url=tenant?cithelaBrandLogoUrl(
+      tenant.logo_object_path,tenant.id,tenant.branding_updated_at):'';
+    logo.style.display=url?'block':'none';
+    if(url)logo.src=url;else logo.removeAttribute('src');
+  }
   const phoneLabel=document.querySelector('label[for="new-person-phone"]');
   if(phoneLabel)phoneLabel.textContent=active?'WhatsApp E.164 (obligatorio)':'WhatsApp (opcional)';
   const phoneField=$('new-person-phone');
@@ -3731,6 +3833,99 @@ el.innerHTML=`
   <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
 }
 
+let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
+let cloudBrandFile=null,cloudBrandRemove=false,cloudBrandDirty=false,cloudBrandBusy=false;
+function renderCloudBrandConfig(s){
+  const box=$('cloud-brand-form');if(!box)return;
+  const tenant=s?.tenant,tenantId=tenant?.id||null;
+  if(cloudBrandTenantId!==tenantId){
+    cloudBrandTenantId=tenantId;cloudBrandDirty=false;cloudBrandFile=null;
+    cloudBrandRemove=false;cloudBrandVersion=null;
+  }
+  const editable=!!(tenant&&['owner','admin'].includes(s?.membership?.role||''));
+  box.style.display=editable?'block':'none';
+  if(!editable||cloudBrandBusy)return;
+  if(!cloudBrandDirty){
+    cloudBrandTheme=tenant.brand_theme||'sage';
+    cloudBrandVersion=tenant.branding_updated_at;
+  }
+  $('cloud-brand-palette').innerHTML=Object.entries(CITHELA_BRAND_PALETTES)
+    .map(([id,p])=>'<button type="button" class="brand-swatch" aria-pressed="'+
+      (cloudBrandTheme===id)+'" onclick="selectCloudBrandTheme(\''+id+'\')">'+
+      '<span class="brand-swatch-dot" style="background:'+p.accent+'"></span>'+
+      p.label+'</button>').join('');
+  const current=cloudBrandRemove?'':tenant.logo_object_path;
+  const url=cithelaBrandLogoUrl(current,tenantId,tenant.branding_updated_at);
+  $('cloud-brand-preview').innerHTML=cloudBrandFile
+    ?'Logo seleccionado: '+escHtml(cloudBrandFile.name)
+    :url?'<img class="tenant-card-logo" src="'+escHtml(url)+'" alt="Logo actual">':
+      'Se mostrará el símbolo de CITHELA hasta que cargues un logo.';
+  $('cloud-brand-remove').style.display=
+    (cloudBrandFile||tenant.logo_object_path)&&!cloudBrandRemove?'block':'none';
+}
+function selectCloudBrandTheme(id){
+  if(cloudBrandBusy||!CITHELA_BRAND_PALETTES[id])return;
+  cloudBrandTheme=id;cloudBrandDirty=true;
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+function selectCloudBrandLogo(input){
+  if(cloudBrandBusy)return;
+  const file=input?.files?.[0]||null;
+  if(file&&(!['image/png','image/jpeg','image/webp'].includes(file.type)
+    ||!file.size||file.size>524288)){
+    input.value='';toast('Elegí un logo PNG, JPG o WebP de hasta 512 KB.');return;
+  }
+  cloudBrandFile=file;cloudBrandRemove=false;cloudBrandDirty=true;
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+function removeCloudBrandLogo(){
+  if(cloudBrandBusy)return;
+  cloudBrandRemove=true;cloudBrandFile=null;cloudBrandDirty=true;
+  $('cloud-brand-logo').value='';
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+async function saveCloudBranding(){
+  if(cloudBrandBusy||!professionalCloudReady())return;
+  const s=CithelaCloud.state(),tenant=s.tenant;
+  if(!tenant||!['owner','admin'].includes(s.membership?.role||'')
+    ||cloudBrandTenantId!==tenant.id)return;
+  if(!cloudBrandVersion){toast('Esperá a que cargue la configuración.');return;}
+  if(!cloudBrandDirty)return;
+  if(!confirm('¿Guardar la identidad visual de este establecimiento?'))return;
+  const oldPath=tenant.logo_object_path||null;
+  let path=cloudBrandRemove?null:oldPath,uploaded=null;
+  cloudBrandBusy=true;$('cloud-brand-save').disabled=true;
+  try{
+    if(cloudBrandFile){
+      uploaded=await CithelaCloud.uploadBrandLogo({
+        tenantId:tenant.id,file:cloudBrandFile});
+      path=uploaded;
+    }
+    await CithelaCloud.tenantBrandingUpdate({
+      tenantId:tenant.id,expectedUpdatedAt:cloudBrandVersion,
+      theme:cloudBrandTheme,logoPath:path});
+    cloudBrandDirty=false;cloudBrandRemove=false;cloudBrandFile=null;
+    $('cloud-brand-logo').value='';
+    toast('Identidad visual guardada en CITHELA Cloud.');
+    if(oldPath&&oldPath!==path){
+      try{await CithelaCloud.removeBrandLogo(oldPath);}catch{}
+    }
+  }catch(err){
+    if(uploaded&&['stale_write','invalid_logo','forbidden','invalid_payload']
+      .includes(err?.message)){
+      try{await CithelaCloud.removeBrandLogo(uploaded);}catch{}
+    }
+    if(err?.message==='stale_write'){
+      cloudBrandDirty=false;cloudBrandFile=null;cloudBrandRemove=false;
+      await CithelaCloud.refresh();
+      toast('La identidad cambió en otro dispositivo. Revisá la configuración.',5000);
+    }else toast(err?.message||'No se pudo guardar la identidad visual.',5000);
+  }finally{
+    cloudBrandBusy=false;$('cloud-brand-save').disabled=false;
+    renderCloudBrandConfig(CithelaCloud.state());
+  }
+}
+
 let cloudPaymentEditing=false,cloudPaymentSaving=false,cloudPaymentTenantId=null;
 let cloudPaymentVersion=null;
 function renderCloudPaymentConfig(s){
@@ -4098,6 +4293,7 @@ renderServicesConfig();
 renderResourcesConfig();
 renderInfrastructureStatus();
 renderCloudPaymentConfig(CithelaCloud.state());
+renderCloudBrandConfig(CithelaCloud.state());
 }
 
 // Deposit amounts use integer minor units to avoid floating-point accounting errors.
