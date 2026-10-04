@@ -28,6 +28,7 @@
 
 - **Rendimiento (P2):** el linter de Supabase identifica seis claves foráneas sin índice de cobertura y dos índices sin uso observado. Medir volumen y consultar planes antes de incorporar índices o eliminar otros; con el volumen de prueba no constituye un fallo demostrado.
 - **UX (P2):** comprobar contraste y presentación de cada paleta, desplazamiento del formulario y logo en pantallas pequeñas; mantener el símbolo CITHELA como marca del producto y usar el logo del establecimiento en sus propios espacios.
+- **Nombre público (P1):** el portal toma el nombre del establecimiento de `cithela_tenants.display_name`; el campo local «Nombre del negocio / espacio» no lo modifica. Antes de un piloto comercial, alinear la configuración cloud del nombre público con el logo para que el paciente identifique el negocio.
 - **Comercialización (P2):** mantener contratación, organizaciones y suscripciones fuera de la interfaz operativa de CITHELA; incorporar esas funciones más adelante mediante SpukLab Hub.
 
 ## Orden recomendado
