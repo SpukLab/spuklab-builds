@@ -3833,6 +3833,99 @@ el.innerHTML=`
   <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
 }
 
+let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
+let cloudBrandFile=null,cloudBrandRemove=false,cloudBrandDirty=false,cloudBrandBusy=false;
+function renderCloudBrandConfig(s){
+  const box=$('cloud-brand-form');if(!box)return;
+  const tenant=s?.tenant,tenantId=tenant?.id||null;
+  if(cloudBrandTenantId!==tenantId){
+    cloudBrandTenantId=tenantId;cloudBrandDirty=false;cloudBrandFile=null;
+    cloudBrandRemove=false;cloudBrandVersion=null;
+  }
+  const editable=!!(tenant&&['owner','admin'].includes(s?.membership?.role||''));
+  box.style.display=editable?'block':'none';
+  if(!editable||cloudBrandBusy)return;
+  if(!cloudBrandDirty){
+    cloudBrandTheme=tenant.brand_theme||'sage';
+    cloudBrandVersion=tenant.branding_updated_at;
+  }
+  $('cloud-brand-palette').innerHTML=Object.entries(CITHELA_BRAND_PALETTES)
+    .map(([id,p])=>'<button type="button" class="brand-swatch" aria-pressed="'+
+      (cloudBrandTheme===id)+'" onclick="selectCloudBrandTheme(\''+id+'\')">'+
+      '<span class="brand-swatch-dot" style="background:'+p.accent+'"></span>'+
+      p.label+'</button>').join('');
+  const current=cloudBrandRemove?'':tenant.logo_object_path;
+  const url=cithelaBrandLogoUrl(current,tenantId,tenant.branding_updated_at);
+  $('cloud-brand-preview').innerHTML=cloudBrandFile
+    ?'Logo seleccionado: '+escHtml(cloudBrandFile.name)
+    :url?'<img class="tenant-card-logo" src="'+escHtml(url)+'" alt="Logo actual">':
+      'Se mostrará el símbolo de CITHELA hasta que cargues un logo.';
+  $('cloud-brand-remove').style.display=
+    (cloudBrandFile||tenant.logo_object_path)&&!cloudBrandRemove?'block':'none';
+}
+function selectCloudBrandTheme(id){
+  if(cloudBrandBusy||!CITHELA_BRAND_PALETTES[id])return;
+  cloudBrandTheme=id;cloudBrandDirty=true;
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+function selectCloudBrandLogo(input){
+  if(cloudBrandBusy)return;
+  const file=input?.files?.[0]||null;
+  if(file&&(!['image/png','image/jpeg','image/webp'].includes(file.type)
+    ||!file.size||file.size>524288)){
+    input.value='';toast('Elegí un logo PNG, JPG o WebP de hasta 512 KB.');return;
+  }
+  cloudBrandFile=file;cloudBrandRemove=false;cloudBrandDirty=true;
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+function removeCloudBrandLogo(){
+  if(cloudBrandBusy)return;
+  cloudBrandRemove=true;cloudBrandFile=null;cloudBrandDirty=true;
+  $('cloud-brand-logo').value='';
+  renderCloudBrandConfig(CithelaCloud.state());
+}
+async function saveCloudBranding(){
+  if(cloudBrandBusy||!professionalCloudReady())return;
+  const s=CithelaCloud.state(),tenant=s.tenant;
+  if(!tenant||!['owner','admin'].includes(s.membership?.role||'')
+    ||cloudBrandTenantId!==tenant.id)return;
+  if(!cloudBrandVersion){toast('Esperá a que cargue la configuración.');return;}
+  if(!cloudBrandDirty)return;
+  if(!confirm('¿Guardar la identidad visual de este establecimiento?'))return;
+  const oldPath=tenant.logo_object_path||null;
+  let path=cloudBrandRemove?null:oldPath,uploaded=null;
+  cloudBrandBusy=true;$('cloud-brand-save').disabled=true;
+  try{
+    if(cloudBrandFile){
+      uploaded=await CithelaCloud.uploadBrandLogo({
+        tenantId:tenant.id,file:cloudBrandFile});
+      path=uploaded;
+    }
+    await CithelaCloud.tenantBrandingUpdate({
+      tenantId:tenant.id,expectedUpdatedAt:cloudBrandVersion,
+      theme:cloudBrandTheme,logoPath:path});
+    cloudBrandDirty=false;cloudBrandRemove=false;cloudBrandFile=null;
+    $('cloud-brand-logo').value='';
+    toast('Identidad visual guardada en CITHELA Cloud.');
+    if(oldPath&&oldPath!==path){
+      try{await CithelaCloud.removeBrandLogo(oldPath);}catch{}
+    }
+  }catch(err){
+    if(uploaded&&['stale_write','invalid_logo','forbidden','invalid_payload']
+      .includes(err?.message)){
+      try{await CithelaCloud.removeBrandLogo(uploaded);}catch{}
+    }
+    if(err?.message==='stale_write'){
+      cloudBrandDirty=false;cloudBrandFile=null;cloudBrandRemove=false;
+      await CithelaCloud.refresh();
+      toast('La identidad cambió en otro dispositivo. Revisá la configuración.',5000);
+    }else toast(err?.message||'No se pudo guardar la identidad visual.',5000);
+  }finally{
+    cloudBrandBusy=false;$('cloud-brand-save').disabled=false;
+    renderCloudBrandConfig(CithelaCloud.state());
+  }
+}
+
 let cloudPaymentEditing=false,cloudPaymentSaving=false,cloudPaymentTenantId=null;
 let cloudPaymentVersion=null;
 function renderCloudPaymentConfig(s){
