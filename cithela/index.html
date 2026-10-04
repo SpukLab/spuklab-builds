@@ -501,6 +501,21 @@ textarea.inp{resize:vertical;min-height:72px;}
       <button class="btn-main" onclick="guardarConfig()">Guardar datos</button>
     </div>
 
+    <p class="sh">Cobros y señas</p>
+    <div class="form-card" id="cloud-payment-form" style="margin-bottom:14px;display:none;">
+      <p class="contact-note" style="margin-bottom:14px;">Alias del establecimiento para solicitar transferencias por WhatsApp. Solo propietario y administradores pueden modificarlo. CITHELA no cobra ni acredita pagos.</p>
+      <label class="lbl" for="cloud-transfer-alias">Alias de transferencia</label>
+      <input class="inp" id="cloud-transfer-alias" maxlength="20"
+        autocapitalize="none" autocorrect="off" autocomplete="off"
+        placeholder="ejemplo.salon" oninput="cloudPaymentEditing=true">
+      <label class="lbl" for="cloud-transfer-holder">Titular de la cuenta (opcional)</label>
+      <input class="inp" id="cloud-transfer-holder" maxlength="120" autocomplete="off"
+        placeholder="Nombre que figura en el banco" oninput="cloudPaymentEditing=true">
+      <p class="contact-note" id="cloud-payment-info" role="status" style="margin-bottom:12px;">Dejá el alias vacío para solicitar la seña sin datos de transferencia.</p>
+      <button class="btn-main" id="cloud-payment-save" type="button"
+        onclick="saveCloudPaymentConfig()">Guardar datos de transferencia</button>
+    </div>
+
     <p class="sh">Servicios</p>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Definí cada tarea con su duración. La disponibilidad del profesional se calculará con ese tiempo. Podés crear un servicio combinado, como “Corte + coloración”. Los turnos ya reservados conservan su duración original.</p>
@@ -1245,7 +1260,7 @@ const CithelaCloud=(()=>{
       }
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
-        c.from('cithela_tenants').select('id,display_name,timezone,status').eq('id',tenantId).single(),
+        c.from('cithela_tenants').select('id,display_name,timezone,status,transfer_alias,transfer_holder,payment_config_updated_at').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active,updated_at,deposit_amount_minor,deposit_currency').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
@@ -1450,6 +1465,18 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function tenantPaymentConfigUpdate({tenantId,expectedUpdatedAt,alias,holder}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_tenant_payment_config_update',{
+      p_tenant_id:tenantId,p_expected_updated_at:expectedUpdatedAt,
+      p_alias:alias,p_holder:holder
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo guardar el alias');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1583,7 +1610,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2862,9 +2889,16 @@ function cloudWhatsAppContent(t,pac,kind){
   else if(kind==='deposit'){
     const a=cloudAppointmentRaw(t.id);
     if(a?.deposit_status!=='requested'||!Number(a?.deposit_amount_minor))return '';
+    const alias=String(s.tenant?.transfer_alias||'').trim();
+    const holder=String(s.tenant?.transfer_holder||'').trim();
+    const transfer=alias
+      ?' Para transferir, usá el alias '+alias+'.'+
+        (holder?' Titular: '+holder+'.':'')+
+        ' Verificá los datos del destinatario en tu banco antes de transferir.'
+      :' Contactanos para coordinar el pago.';
     body='Para tu turno del '+when+' se solicita una seña de '+
-      depositARS(a.deposit_amount_minor)+
-      '. Contactanos para coordinar el pago. CITHELA no cobra desde su enlace.';
+      depositARS(a.deposit_amount_minor)+'.'+transfer+
+      ' CITHELA no cobra desde su enlace.';
   }
   else
     body='Te recordamos tu turno del '+when+
@@ -3689,6 +3723,56 @@ el.innerHTML=`
   <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
 }
 
+let cloudPaymentEditing=false,cloudPaymentSaving=false,cloudPaymentTenantId=null;
+let cloudPaymentVersion=null;
+function renderCloudPaymentConfig(s){
+  const box=$('cloud-payment-form');if(!box)return;
+  const tenantId=s?.tenant?.id||null;
+  if(cloudPaymentTenantId!==tenantId){
+    cloudPaymentTenantId=tenantId;cloudPaymentEditing=false;cloudPaymentVersion=null;
+  }
+  const canEdit=!!(tenantId&&['owner','admin'].includes(s?.membership?.role||''));
+  box.style.display=canEdit?'block':'none';
+  if(!canEdit||cloudPaymentEditing||cloudPaymentSaving)return;
+  $('cloud-transfer-alias').value=s.tenant.transfer_alias||'';
+  $('cloud-transfer-holder').value=s.tenant.transfer_holder||'';
+  cloudPaymentVersion=s.tenant.payment_config_updated_at;
+  $('cloud-payment-info').textContent=s.tenant.transfer_alias
+    ?'El alias se agregará a las nuevas solicitudes de seña por WhatsApp.'
+    :'No hay alias configurado: el mensaje indicará que contacten al establecimiento.';
+}
+async function saveCloudPaymentConfig(){
+  if(cloudPaymentSaving||!professionalCloudReady())return;
+  const s=CithelaCloud.state();
+  if(!['owner','admin'].includes(s.membership?.role||''))return;
+  const alias=$('cloud-transfer-alias').value.trim().toLowerCase();
+  const holder=$('cloud-transfer-holder').value.trim();
+  if(alias&&!/^[a-z0-9][a-z0-9.-]{4,18}[a-z0-9]$/.test(alias)){
+    toast('El alias debe tener de 6 a 20 caracteres: letras, números, puntos o guiones.',5300);return;
+  }
+  if(holder&&(!alias||holder.length<2||holder.length>120||/[\r\n\t]/.test(holder))){
+    toast('Ingresá un titular válido y un alias, o dejá ambos vacíos.',4500);return;
+  }
+  if(!cloudPaymentVersion){toast('Esperá a que se cargue la configuración.');return;}
+  if(!confirm(alias?'¿Guardar el alias '+alias+' para las próximas solicitudes de seña?':
+    '¿Quitar el alias de los futuros avisos de seña?'))return;
+  cloudPaymentSaving=true;$('cloud-payment-save').disabled=true;
+  try{
+    await CithelaCloud.tenantPaymentConfigUpdate({
+      tenantId:s.tenant.id,expectedUpdatedAt:cloudPaymentVersion,alias,holder
+    });
+    cloudPaymentEditing=false;
+    renderCloudPaymentConfig(CithelaCloud.state());
+    toast('Datos de transferencia guardados en CITHELA Cloud.');
+  }catch(err){
+    if(err?.message==='stale_write'){
+      cloudPaymentEditing=false;await CithelaCloud.refresh();
+      renderCloudPaymentConfig(CithelaCloud.state());
+      toast('Los datos cambiaron en otro dispositivo. Revisalos antes de guardarlos.',5200);
+    }else toast(err?.message||'No se pudo guardar el alias.',4500);
+  }finally{cloudPaymentSaving=false;$('cloud-payment-save').disabled=false;}
+}
+
 function renderCloudStatus(){
   const el=$('cloud-status');if(!el)return;
   const s=window.CithelaCloud?CithelaCloud.state():null;
@@ -3723,6 +3807,7 @@ function renderCloudStatus(){
   if(actions)actions.style.display=s.signedIn?'block':'none';
   renderCloudWorkingHours(s);
   renderCloudProbe(s);
+  renderCloudPaymentConfig(s);
 }
 
 let cloudProbeResult=null;
@@ -4001,6 +4086,7 @@ renderAvailabilityBlocks();
 renderServicesConfig();
 renderResourcesConfig();
 renderInfrastructureStatus();
+renderCloudPaymentConfig(CithelaCloud.state());
 }
 
 // Deposit amounts use integer minor units to avoid floating-point accounting errors.
