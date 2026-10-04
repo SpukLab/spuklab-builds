@@ -1109,6 +1109,30 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
+const CITHELA_BRAND_PALETTES=Object.freeze({
+  sage:{label:'Teal',accent:'#398e84',dark:'#28756d',light:'#e6f2ee',mid:'#aed2c7'},
+  ocean:{label:'Azul',accent:'#205f92',dark:'#174a75',light:'#e9f3fb',mid:'#b7d3e7'},
+  clay:{label:'Terracota',accent:'#84472f',dark:'#683723',light:'#f8eee8',mid:'#e1bea9'},
+  plum:{label:'Ciruela',accent:'#674577',dark:'#50355e',light:'#f4edf6',mid:'#d9c3df'}
+});
+function cithelaBrandPalette(id){return CITHELA_BRAND_PALETTES[id]||CITHELA_BRAND_PALETTES.sage;}
+function applyCithelaTheme(id){
+  const t=cithelaBrandPalette(id),root=document.documentElement.style;
+  root.setProperty('--teal',t.accent);root.setProperty('--teal2',t.dark);
+  root.setProperty('--teal-light',t.light);root.setProperty('--teal-mid',t.mid);
+}
+function cithelaBrandStyle(id){
+  const t=cithelaBrandPalette(id);
+  return '--teal:'+t.accent+';--teal2:'+t.dark+';--teal-light:'+t.light+';--teal-mid:'+t.mid+';';
+}
+function cithelaBrandLogoUrl(path,tenantId,updatedAt){
+  if(!/^[0-9a-f-]{36}$/.test(String(tenantId||'')))return '';
+  const pattern=new RegExp('^'+tenantId+'/logo-[a-f0-9]{32}[.](png|jpg|jpeg|webp)$');
+  if(!pattern.test(String(path||'')))return '';
+  return CITHELA_SUPABASE_URL+'/storage/v1/object/public/cithela-branding/'+
+    path.split('/').map(encodeURIComponent).join('/')+
+    '?v='+encodeURIComponent(String(updatedAt||''));
+}
 
 const CithelaCloud=(()=>{
   let client=null;
@@ -1282,7 +1306,7 @@ const CithelaCloud=(()=>{
       }
       const tenantId=membership.tenant_id;
       const [tenantQ,servicesQ,resourcesQ,peopleQ,hoursQ,appointmentsQ,blocksQ]=await Promise.all([
-        c.from('cithela_tenants').select('id,display_name,timezone,status,transfer_alias,transfer_holder,payment_config_updated_at').eq('id',tenantId).single(),
+        c.from('cithela_tenants').select('id,display_name,timezone,status,transfer_alias,transfer_holder,payment_config_updated_at,brand_theme,logo_object_path,branding_updated_at').eq('id',tenantId).single(),
         c.from('cithela_services').select('id,name,duration_min,active,updated_at,deposit_amount_minor,deposit_currency').eq('tenant_id',tenantId).order('active',{ascending:false}).order('name'),
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
