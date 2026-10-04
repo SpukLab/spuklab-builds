@@ -1523,6 +1523,43 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function uploadBrandLogo({tenantId,file}){
+    if(!/^[0-9a-f-]{36}$/.test(String(tenantId||'')))throw Error('Establecimiento inválido');
+    const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[file?.type];
+    if(!ext||!file.size||file.size>524288)throw Error('Elegí PNG, JPG o WebP de hasta 512 KB.');
+    const bytes=new Uint8Array(await file.slice(0,16).arrayBuffer());
+    const png=bytes.length>=8&&[137,80,78,71,13,10,26,10].every((b,i)=>bytes[i]===b);
+    const jpeg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+    const webp=bytes.length>=12&&
+      String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&
+      String.fromCharCode(...bytes.slice(8,12))==='WEBP';
+    if(!({png,jpg:jpeg,webp})[ext])throw Error('El archivo no corresponde al formato de imagen indicado.');
+    if(!globalThis.crypto?.randomUUID)throw Error('Este dispositivo no admite la carga segura de logos.');
+    const path=tenantId+'/logo-'+crypto.randomUUID().replace(/-/g,'')+'.'+ext;
+    const c=await getClient();
+    const {error}=await c.storage.from('cithela-branding').upload(path,file,{
+      cacheControl:'3600',upsert:false,contentType:file.type
+    });
+    if(error)throw error;
+    return path;
+  }
+  async function removeBrandLogo(path){
+    const c=await getClient();
+    const {error}=await c.storage.from('cithela-branding').remove([path]);
+    if(error)throw error;
+  }
+  async function tenantBrandingUpdate({tenantId,expectedUpdatedAt,theme,logoPath}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_tenant_branding_update',{
+      p_tenant_id:tenantId,p_expected_updated_at:expectedUpdatedAt,
+      p_theme:theme,p_logo_path:logoPath
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo guardar la identidad visual.');
+    await refresh();
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1656,7 +1693,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
