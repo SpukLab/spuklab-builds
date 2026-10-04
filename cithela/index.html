@@ -2312,7 +2312,7 @@ function renderPatientPortalCards(){
         <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
         <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
         <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
-        ${depositLabel(a)?`<p class="contact-note" style="margin-top:8px;">${escHtml(depositLabel(a))} · El establecimiento gestiona el pago.</p>`:''}
+        ${patientDepositNote(a)?`<p class="contact-note" style="margin-top:8px;">${escHtml(patientDepositNote(a))}</p>`:''}
         <div class="aitem-foot patient-appointment-foot"><span class="tag ${sm.cls}">${escHtml(sm.label)}</span>
           ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
             ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
@@ -4123,6 +4123,13 @@ const depositStateNames={
   not_required:'Sin seña',requested:'Seña pendiente',verified:'Cobro verificado manualmente',
   waived:'Seña eximida',refunded:'Devolución registrada manualmente'
 };
+function patientDepositNote(a){
+  if(!Number(a?.deposit_amount_minor))return '';
+  if(a.deposit_status==='waived')return 'Seña eximida · No tenés que pagar esta seña.';
+  if(a.deposit_status==='verified')return 'Seña recibida · El establecimiento verificó el pago.';
+  if(a.deposit_status==='refunded')return 'Seña devuelta · El establecimiento registró la devolución.';
+  return depositLabel(a)+' · El establecimiento gestiona el pago.';
+}
 function depositLabel(a){
   const amount=Number(a?.deposit_amount_minor)||0;
   if(!amount)return '';
