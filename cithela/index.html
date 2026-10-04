@@ -419,6 +419,8 @@ textarea.inp{resize:vertical;min-height:72px;}
           onclick="ntGoNextWorkingDay()">Próximo día de atención</button>
         <button class="mb ghost" id="nt-config-hours" type="button"
           onclick="ntGoToHoursConfig()">Configurar horarios</button>
+        <button class="mb teal" id="nt-retry-slots" type="button"
+          onclick="fillNTHoras()">Reintentar consulta</button>
       </div>
       <label class="lbl">Motivo (opcional)</label>
       <input class="inp" id="nt-motivo" placeholder="Motivo del turno">
@@ -3483,12 +3485,13 @@ function fillNT(){
 }
 let ntAvailabilitySequence=0;
 let ntAvailabilityContext=null;
-function ntSlotMessage(message,{next=false,config=false}={}){
+function ntSlotMessage(message,{next=false,config=false,retry=false}={}){
   const label=$('nt-slot-info'),actions=$('nt-slot-actions');
   if(label)label.textContent=message;
-  if(actions)actions.style.display=next||config?'flex':'none';
+  if(actions)actions.style.display=next||config||retry?'flex':'none';
   if($('nt-next-open'))$('nt-next-open').style.display=next?'':'none';
   if($('nt-config-hours'))$('nt-config-hours').style.display=config?'':'none';
+  if($('nt-retry-slots'))$('nt-retry-slots').style.display=retry?'':'none';
 }
 function ntWorkingPeriods(fecha,resourceId,source){
   const weekday=((dp(fecha).getDay()+6)%7)+1;
@@ -3572,7 +3575,7 @@ async function fillNTHoras(){
       slot.innerHTML='<option value="">No se pudo consultar</option>';
       ntSlotMessage(err?.message==='invalid_date'?'La fecha elegida ya pasó. Seleccioná una futura.':
         'Error al consultar la nube. No significa que la agenda esté completa; intentá nuevamente.',
-        {next:false,config:false});
+        {retry:err?.message!=='invalid_date'});
       toast(err?.message||'No se pudo consultar disponibilidad',3900);
     }
     return;
