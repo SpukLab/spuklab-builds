@@ -1658,6 +1658,11 @@ function dayDistance(fecha){
   const a=dp(today()),b=dp(fecha);
   return Math.round((b-a)/86400000);
 }
+function queueTurnoDateTime(fecha,hora){
+  const d=dayDistance(fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
+  const [year,month,day]=fecha.split('-');
+  return `${when} · ${day}/${month}/${year} · ${hora} hs`;
+}
 function reminderDays(){
   const n=Number(getCfg().reminderDays);
   return Number.isFinite(n)&&n>=0&&n<=7?n:1;
@@ -2510,14 +2515,14 @@ function renderOpsQueue(){
     const items=all.slice(0,12);
     el.innerHTML=items.map(t=>{
       const p=cloudPersonById(t.pacienteId)||{nombre:'—',tel:''};
-      const d=dayDistance(t.fecha),when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
+      const d=dayDistance(t.fecha);
       const wa=normalizePhone(p.tel),pending=t.estado==='pendiente';
       const appt=cloudAppointmentRaw(t.id);
       const depositDue=Number(appt?.deposit_amount_minor)>0&&appt?.deposit_status==='requested';
       const kind=pending&&d>reminderDays()?'booking':
         (!pending&&depositDue&&d>reminderDays()?'deposit':'reminder');
       return`<div class="aitem" style="padding:13px 15px;">
-        <div class="aitem-time">${when} · ${t.hora} hs</div>
+        <div class="aitem-time">${escHtml(queueTurnoDateTime(t.fecha,t.hora))}</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
         <div class="ops-note">${pending?'Pendiente de confirmación':depositDue?'Confirmado · seña pendiente':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
         ${depositDue?`<div class="ops-note">Seña pendiente: ${escHtml(depositARS(appt.deposit_amount_minor))}</div>`:''}
@@ -2540,12 +2545,10 @@ function renderOpsQueue(){
   if(!items.length){el.innerHTML='';return;}
   el.innerHTML=items.map(t=>{
     const p=pacs.find(x=>x.id===t.pacienteId)||{nombre:'—',tel:''};
-    const d=dayDistance(t.fecha);
-    const when=d===0?'Hoy':d===1?'Mañana':`En ${d} días`;
     const state=t.recordatorioAt?'Recordado · esperando confirmación':'Recordatorio pendiente';
     const waN=normalizePhone(p.tel);
     return`<div class="aitem" style="padding:13px 15px;">
-      <div class="aitem-time">${when} · ${t.hora} hs</div>
+      <div class="aitem-time">${escHtml(queueTurnoDateTime(t.fecha,t.hora))}</div>
       <div class="aitem-name">${escHtml(p.nombre)}</div>
       <div class="${t.recordatorioAt?'contact-note':'ops-note'}">${state}</div>
       <div class="aitem-actions" style="margin-top:9px;">
