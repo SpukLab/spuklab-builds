@@ -1964,8 +1964,10 @@ function renderPatientLoginSession(){
   if(!note||!button)return;
   const session=CithelaCloud.state(),email=String(session.email||'').trim();
   const hint=$('patient-invite-hint');
+  const target=pendingPatientInviteEmail();
   if(hint)hint.textContent=pendingPatientInvite()
-    ?'Invitación detectada. Verificá el correo de la invitación para vincular tu ficha.'
+    ?'Invitación detectada'+(target?' para '+target:'')+
+      '. Verificá ese correo para vincular tu ficha.'
     :'Si recibiste una invitación por WhatsApp, abrí su enlace. El código manual es opcional.';
   if(role!=='paciente'||!session.signedIn||!email){
     note.style.display='none';button.style.display='none';return;
@@ -2027,6 +2029,11 @@ async function patientEnter(){
       toast('La sesión pertenece a otro correo. Cerrá sesión y volvé a ingresar.',4700);return;
     }
     const code=$('l-patient-invite').value.trim()||pendingPatientInvite();
+    const invitedEmail=pendingPatientInviteEmail();
+    if(code&&invitedEmail&&invitedEmail!==String(s.email||'').toLowerCase()){
+      toast('La invitación es para otro correo. Tocá Cambiar de cuenta.',4700);
+      return;
+    }
     if(code){
       await CithelaCloud.redeemPatientInvite(code);
       $('l-patient-invite').value='';
@@ -2554,12 +2561,13 @@ async function resumeCloudSession(){
   const s=CithelaCloud.state();
   if(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK){
     setRole('paciente');
+    const target=pendingPatientInviteEmail();
+    $('l-patient-email').value=target||s.email||'';
+    renderPatientLoginSession();
     if(s.signedIn&&s.email){
-      $('l-patient-email').value=s.email;
-      // An existing staff session may belong to another person.
-      // Require an explicit account switch instead of redeeming in its name.
-      if(s.membership){
-        toast('Hay una sesión profesional abierta. Cambiá de cuenta si la invitación es para otra persona.',5500);
+      // Never attempt to redeem a patient's invite in another user's session.
+      if(target&&target!==String(s.email).toLowerCase()){
+        toast('La invitación es para otra cuenta. Tocá Cambiar de cuenta.',5500);
         return;
       }
       await patientEnter();
@@ -3422,7 +3430,7 @@ async function cloudIssueInvite(personId){
     el.innerHTML=`<div class="form-card" style="padding:12px;margin:0;">
       <p class="contact-note" style="margin:0 0 9px;">Enlace personal para ${escHtml(r.email)}, válido durante 48 horas y utilizable una sola vez.</p>
       <label class="lbl" for="cloud-invite-link">Enlace para el paciente</label>
-      <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code))}">
+      <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code,r.email))}">
       <button type="button" class="btn-main soft" onclick="copyPatientInviteLink()">Copiar enlace</button>
       ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar enlace por WhatsApp</button>`:''}
       <details style="margin-top:12px;"><summary class="contact-note" style="cursor:pointer;">Código manual (solo si falla el enlace)</summary>
