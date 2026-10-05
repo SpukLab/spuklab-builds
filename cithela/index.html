@@ -1116,9 +1116,12 @@ const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
 const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
 const CITHELA_PENDING_INVITE_TTL=30*60*1000;
-function patientInviteLink(code){
-  if(!/^[0-9a-f]{48}$/i.test(String(code||'')))return '';
-  return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase();
+function patientInviteLink(code,email){
+  const addr=String(email||'').trim().toLowerCase();
+  if(!/^[0-9a-f]{48}$/i.test(String(code||''))||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)||addr.length>254)return '';
+  return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase()+
+    '&email='+encodeURIComponent(addr);
 }
 function pendingPatientInvite(){
   try{
@@ -1130,15 +1133,28 @@ function pendingPatientInvite(){
   }catch{try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}}
   return '';
 }
+function pendingPatientInviteEmail(){
+  if(!pendingPatientInvite())return '';
+  try{
+    const value=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
+    return typeof value?.email==='string'&&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)
+      ?value.email:'';
+  }catch{return '';}
+}
 function clearPendingPatientInvite(){
   try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}
 }
 function capturePatientInviteFromLink(){
-  const match=/^#invite=([0-9a-f]{48})$/i.exec(String(location.hash||''));
-  if(!match)return false;
-  const code=match[1].toLowerCase();
+  if(!String(location.hash||'').startsWith('#invite='))return false;
+  const params=new URLSearchParams(location.hash.slice(1));
+  const code=String(params.get('invite')||'').toLowerCase();
+  const email=String(params.get('email')||'').toLowerCase();
+  if(!/^[0-9a-f]{48}$/.test(code)||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||
+    [...params.keys()].length!==2)return false;
   try{localStorage.setItem(CITHELA_PENDING_INVITE_KEY,JSON.stringify({
-    code,savedAt:Date.now()
+    code,email,savedAt:Date.now()
   }));}catch{
     const field=document.getElementById('l-patient-invite');
     if(field)field.value=code;
