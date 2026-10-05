@@ -1448,6 +1448,10 @@ const CithelaCloud=(()=>{
     const c=await getClient();
     const {error}=await c.auth.signInWithPassword({email,password});
     if(error)throw error;
+    // Supabase emits SIGNED_IN and schedules its own workspace refresh.
+    // Yield once so the explicit refresh below becomes the authoritative/latest
+    // request instead of returning a transient snapshot without membership.
+    await new Promise(resolve=>setTimeout(resolve,0));
     return refresh();
   }
 
@@ -2695,7 +2699,10 @@ async function professionalPasswordLogin(){
   if(button?.disabled)return;
   if(button)button.disabled=true;
   try{
-    const s=await CithelaCloud.signIn(email,password);
+    let s=await CithelaCloud.signIn(email,password);
+    // A membership can exist while an overlapping auth refresh is still settling.
+    // Confirm once before treating the account as unassigned.
+    if(s.signedIn&&(!s.membership||!s.tenant))s=await CithelaCloud.refresh();
     if(!s.membership||!s.tenant){
       await CithelaCloud.signOut();
       toast('Esta cuenta no tiene un espacio CITHELA profesional asignado.',4800);
