@@ -3353,13 +3353,17 @@ async function cloudIssueInvite(personId){
     const p=cloudPersonById(personId);
     const whatsapp=p?.tel?normalizePhone(p.tel):'';
     el.innerHTML=`<div class="form-card" style="padding:12px;margin:0;">
-      <p class="contact-note" style="margin:0 0 9px;">Código para ${escHtml(r.email)}. Se muestra una sola vez y caduca en 48 horas.</p>
-      <label class="lbl">Código de invitación</label>
-      <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="font-size:.75rem;letter-spacing:0.02em;">
-      <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
-      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar invitación por WhatsApp</button>`:''}
+      <p class="contact-note" style="margin:0 0 9px;">Enlace personal para ${escHtml(r.email)}, válido durante 48 horas y utilizable una sola vez.</p>
+      <label class="lbl" for="cloud-invite-link">Enlace para el paciente</label>
+      <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code))}">
+      <button type="button" class="btn-main soft" onclick="copyPatientInviteLink()">Copiar enlace</button>
+      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar enlace por WhatsApp</button>`:''}
+      <details style="margin-top:12px;"><summary class="contact-note" style="cursor:pointer;">Código manual (solo si falla el enlace)</summary>
+        <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="margin-top:8px;font-size:.75rem;">
+        <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
+      </details>
     </div>`;
-    toast('Invitación generada. Compartí el código con el paciente.',4600);
+    toast('Enlace generado. Enviáselo al correo verificado del paciente.',4600);
   }catch(err){
     const messages={invalid_email:'Ingresá un correo válido',
       already_linked:'La ficha ya tiene una cuenta vinculada',
@@ -3367,6 +3371,14 @@ async function cloudIssueInvite(personId){
     el.innerHTML='';
     toast(messages[err?.message]||err?.message||'No se pudo generar el acceso',4600);
   }
+}
+async function copyPatientInviteLink(){
+  const inp=$('cloud-invite-link');if(!inp)return;
+  try{
+    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(inp.value);
+    else{inp.focus();inp.select();if(!document.execCommand('copy'))throw Error('copy unavailable');}
+    toast('Enlace copiado.');
+  }catch{inp.focus();inp.select();toast('Seleccioná y copiá el enlace.');}
 }
 async function copyPatientInviteCode(){
   const inp=$('cloud-invite-code');if(!inp)return;
@@ -3377,14 +3389,18 @@ async function copyPatientInviteCode(){
   }catch{inp.focus();inp.select();toast('Seleccioná y copiá el código manualmente');}
 }
 function sharePatientInviteWhatsApp(personId){
-  const inp=$('cloud-invite-code');if(!inp||!professionalCloudReady())return;
+  const link=$('cloud-invite-link')?.value;
+  if(!link||!professionalCloudReady())return;
   const p=cloudPersonById(personId),n=normalizePhone(p?.tel||'');
   if(!n){toast('La persona no tiene WhatsApp válido');return;}
   const email=$('cloud-invite-email')?.value.trim();
-  const msg=`Acceso a CITHELA: abrí ${CITHELA_PUBLIC_URL} y elegí Paciente.
-Solicitá tu enlace mágico con el correo ${email}.
-Tu código de invitación (válido durante 48 horas): ${inp.value}
-Tras abrir el enlace del correo, ingresá el código para consultar tus turnos.`;
+  const msg=`Te invitamos a CITHELA para consultar y gestionar tus turnos.
+Abrí este enlace personal (válido durante 48 horas):
+${link}
+
+Solicitá el acceso con tu correo ${email} y abrí el enlace que recibirás por email.
+Si el correo se abre en otro navegador, volvé a tocar esta invitación.
+Nunca compartas esta invitación con otras personas.`;
   openWhatsAppMessage(n,msg);
 }
 
