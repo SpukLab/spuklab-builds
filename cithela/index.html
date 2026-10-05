@@ -316,20 +316,21 @@ textarea.inp{resize:vertical;min-height:72px;}
       <button class="seg-btn on" id="rb-med" onclick="setRole('medico');return false;">Profesional</button>
       <button class="seg-btn js-person-singular" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
     </div>
-    <div id="login-name-wrap">
+    <div id="login-name-wrap" style="display:none;">
       <label class="lbl">Nombre completo</label>
       <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
     </div>
     <div id="f-medico">
-      <label class="lbl">Clave</label>
-      <input class="inp" id="l-clave" type="password" placeholder="••••••">
-    <p class="hint">Clave inicial: <b>1234</b></p>
-      <div style="margin-top:14px;padding-top:14px;border-top:var(--line);">
-        <label class="lbl">Acceso cloud</label>
+      <div id="professional-demo-credentials" style="display:none;">
+        <label class="lbl">Clave de demostración local</label>
+        <input class="inp" id="l-clave" type="password" placeholder="Clave de demostración">
+      </div>
+      <div>
+        <label class="lbl" for="l-cloud-email">Correo profesional</label>
         <input class="inp" id="l-cloud-email" type="email" autocomplete="email" placeholder="tu@email.com">
         <button class="btn-main soft" type="button" onclick="requestLoginMagicLink()">Enviar enlace mágico</button>
-        <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="loginWithCloudSession()">Continuar con sesión cloud</button>
-        <p class="hint" style="margin:8px 0 0;">Si abriste el enlace recibido por email, volvé acá y continuá con la sesión cloud.</p>
+        <button class="btn-main soft" id="professional-session-continue" style="display:none;margin-top:8px;" type="button" onclick="loginWithCloudSession()">Entrar con mi sesión</button>
+        <p class="hint" style="margin:8px 0 0;">Abrí el correo de CITHELA. El enlace te permitirá acceder sin contraseña.</p>
       </div>
     </div>
     <div id="f-pac" style="display:none">
@@ -338,12 +339,15 @@ textarea.inp{resize:vertical;min-height:72px;}
       <p id="patient-session-state" class="contact-note" role="status" style="display:none;margin:8px 0;"></p>
       <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
       <button class="btn-main soft" type="button" onclick="patientSendMagicLink()">Enviar enlace mágico</button>
-      <label class="lbl" style="margin-top:16px;">Código de invitación del establecimiento (solo la primera vez)</label>
-      <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Código recibido por WhatsApp">
-      <p class="contact-note">Abrí el enlace del correo y regresá aquí. Ingresá el código que te facilitó el consultorio; después no tendrás que repetirlo.</p>
-      <button class="btn-main" type="button" onclick="patientEnter()">Ver mis turnos cloud</button>
-      <div style="margin-top:16px;border-top:var(--line);padding-top:12px;">
-        <button class="mb ghost" type="button" onclick="togglePatientDemo()">Mostrar demostración local</button>
+      <p id="patient-invite-hint" class="contact-note" role="status" style="margin:12px 0;">Si recibiste una invitación por WhatsApp, abrí el enlace que te enviaron. Después verificá tu correo.</p>
+      <details style="margin:12px 0;">
+        <summary class="mb ghost" style="cursor:pointer;">Tengo un código de invitación</summary>
+        <label class="lbl" style="margin-top:14px;" for="l-patient-invite">Código de invitación (alternativa)</label>
+        <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Pegá el código si no tenés el enlace">
+      </details>
+      <button class="btn-main" type="button" onclick="patientEnter()">Ver mis turnos</button>
+      <div id="patient-demo-controls" style="display:none;margin-top:16px;border-top:var(--line);padding-top:12px;">
+        <button class="mb ghost" type="button" onclick="togglePatientDemo()">Demostración local</button>
         <div id="patient-demo-form" style="display:none;margin-top:12px;">
           <p class="ops-note">Demostración sin datos reales ni sincronización con el consultorio.</p>
           <label class="lbl">Nombre de prueba</label>
@@ -354,7 +358,7 @@ textarea.inp{resize:vertical;min-height:72px;}
         </div>
       </div>
     </div>
-    <button class="btn-main" id="professional-login-button" onclick="doLogin()">Ingresar</button>
+    <button class="btn-main" id="professional-login-button" style="display:none;" onclick="doLogin()">Ingresar a demostración local</button>
     <div class="byline" style="border:none;margin-top:24px;padding-bottom:0;"><p>by <span>SpukLab</span></p></div>
   </div>
 </div>
@@ -822,7 +826,8 @@ textarea.inp{resize:vertical;min-height:72px;}
 <script>
 // CITHELA PRODUCT SHELL / TURNOS DOMAIN: standalone prototype. No DAHZEA runtime dependency; WhatsApp remains an external channel adapter.
 let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
-const PASS='1234';
+const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud session.
+const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -1109,6 +1114,57 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
+const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
+const CITHELA_PENDING_INVITE_TTL=30*60*1000;
+function patientInviteLink(code,email){
+  const addr=String(email||'').trim().toLowerCase();
+  if(!/^[0-9a-f]{48}$/i.test(String(code||''))||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)||addr.length>254)return '';
+  return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase()+
+    '&email='+encodeURIComponent(addr);
+}
+function pendingPatientInvite(){
+  try{
+    const obj=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
+    if(obj&&/^[0-9a-f]{48}$/.test(obj.code)&&
+      Date.now()-obj.savedAt>=0&&Date.now()-obj.savedAt<CITHELA_PENDING_INVITE_TTL)
+      return obj.code;
+    localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);
+  }catch{try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}}
+  return '';
+}
+function pendingPatientInviteEmail(){
+  if(!pendingPatientInvite())return '';
+  try{
+    const value=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
+    return typeof value?.email==='string'&&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)
+      ?value.email:'';
+  }catch{return '';}
+}
+function clearPendingPatientInvite(){
+  try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}
+}
+function capturePatientInviteFromLink(){
+  if(!String(location.hash||'').startsWith('#invite='))return false;
+  const params=new URLSearchParams(location.hash.slice(1));
+  const code=String(params.get('invite')||'').toLowerCase();
+  const email=String(params.get('email')||'').toLowerCase();
+  if(!/^[0-9a-f]{48}$/.test(code)||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||
+    [...params.keys()].length!==2)return false;
+  try{localStorage.setItem(CITHELA_PENDING_INVITE_KEY,JSON.stringify({
+    code,email,savedAt:Date.now()
+  }));}catch{
+    const field=document.getElementById('l-patient-invite');
+    if(field)field.value=code;
+  }
+  // The fragment is never sent to GitHub Pages. Remove it immediately so
+  // screenshots, history and links copied from the address bar omit the token.
+  history.replaceState(history.state,'',location.pathname+location.search);
+  return true;
+}
+const CITHELA_INVITE_FROM_LINK=capturePatientInviteFromLink();
 const CITHELA_BRAND_PALETTES=Object.freeze({
   sage:{label:'Teal',accent:'#398e84',dark:'#28756d',light:'#e6f2ee',mid:'#aed2c7'},
   ocean:{label:'Azul',accent:'#205f92',dark:'#174a75',light:'#e9f3fb',mid:'#b7d3e7'},
@@ -1219,7 +1275,14 @@ const CithelaCloud=(()=>{
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
     if(typeof renderPatientLoginSession==='function')renderPatientLoginSession();
-    if(typeof me!=='undefined'&&me?.role!=='medico')applyCithelaTheme('sage');
+    if(typeof me!=='undefined'&&me?.role==='paciente'&&me?.cloud&&
+      patientPortalData?.profiles?.length){
+      const profiles=patientPortalData.profiles;
+      applyCithelaTheme(profiles.every(p=>p.tenant_id===profiles[0].tenant_id)
+        ?profiles[0].brand_theme:'sage');
+    }else if(typeof me!=='undefined'&&me?.role!=='medico'){
+      applyCithelaTheme('sage');
+    }
     const loginEmail=document.getElementById('l-cloud-email');
     if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
     if(typeof me!=='undefined'&&me?.role==='medico'){
@@ -1768,13 +1831,17 @@ function applyTerminology(){
   document.querySelectorAll('.js-person-plural').forEach(el=>el.textContent=t.plural);
 }
 function applyBranding(){
-  const c=consultorioInfo();
-  document.title=c.brand;
-  document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=c.brand);
-  document.querySelectorAll('.js-app-sub').forEach(el=>el.textContent=c.consultorio);
+  const c=consultorioInfo(),cloud=!CITHELA_DEMO_MODE;
+  const business=cloud?(CithelaCloud.state().tenant?.display_name||'Agenda profesional'):c.consultorio;
+  const product=cloud?'CITHELA':c.brand;
+  document.title=product;
+  document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=product);
+  document.querySelectorAll('#screen-medico .js-app-sub')
+    .forEach(el=>el.textContent=business);
   const lb=$('login-brand'),lm=$('login-meta');
-  if(lb)lb.textContent=c.brand;
-  if(lm)lm.innerHTML=[c.consultorio,c.nombre,c.dir].filter(Boolean).map(escHtml).join('<br>')||'Agenda · Organiza · Conecta';
+  if(lb)lb.textContent=product;
+  if(lm)lm.textContent=cloud?'Agenda · Organiza · Conecta':
+    [c.consultorio,c.nombre,c.dir].filter(Boolean).join(' · ')||'Agenda · Organiza · Conecta';
   applyTerminology();
 }
 function dayDistance(fecha){
@@ -1896,6 +1963,12 @@ function renderPatientLoginSession(){
   const button=$('patient-switch-account');
   if(!note||!button)return;
   const session=CithelaCloud.state(),email=String(session.email||'').trim();
+  const hint=$('patient-invite-hint');
+  const target=pendingPatientInviteEmail();
+  if(hint)hint.textContent=pendingPatientInvite()
+    ?'Invitación detectada'+(target?' para '+target:'')+
+      '. Verificá ese correo para vincular tu ficha.'
+    :'Si recibiste una invitación por WhatsApp, abrí su enlace. El código manual es opcional.';
   if(role!=='paciente'||!session.signedIn||!email){
     note.style.display='none';button.style.display='none';return;
   }
@@ -1938,8 +2011,7 @@ async function patientSendMagicLink(){
     return;
   }
   if(s.signedIn&&s.email&&s.email.toLowerCase()===email.toLowerCase()){
-    toast('Ya tenés sesión con este correo. Ingresá el código y elegí Ver mis turnos cloud.',4600);
-    return;
+    await patientEnter();return;
   }
   try{
     await CithelaCloud.sendPatientMagicLink(email);
@@ -1956,10 +2028,16 @@ async function patientEnter(){
     if(typedEmail&&typedEmail!==String(s.email||'').toLowerCase()){
       toast('La sesión pertenece a otro correo. Cerrá sesión y volvé a ingresar.',4700);return;
     }
-    const code=$('l-patient-invite').value.trim();
+    const code=$('l-patient-invite').value.trim()||pendingPatientInvite();
+    const invitedEmail=pendingPatientInviteEmail();
+    if(code&&invitedEmail&&invitedEmail!==String(s.email||'').toLowerCase()){
+      toast('La invitación es para otro correo. Tocá Cambiar de cuenta.',4700);
+      return;
+    }
     if(code){
       await CithelaCloud.redeemPatientInvite(code);
       $('l-patient-invite').value='';
+      clearPendingPatientInvite();
     }
     const result=await CithelaCloud.patientPortal();
     if(!result.profiles?.length){
@@ -1970,6 +2048,8 @@ async function patientEnter(){
     me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
     goPac();
   }catch(err){
+    if(['invalid_invite','already_linked'].includes(err?.message))
+      clearPendingPatientInvite();
     const map={invalid_invite:'Invitación inválida, vencida o destinada a otro correo.',
       email_not_verified:'Primero confirmá el correo con el enlace mágico.',
       already_linked:'La ficha ya está vinculada a otra cuenta. Contactá al consultorio.'};
@@ -2477,6 +2557,39 @@ async function patientRefreshPortal(){
   }
 }
 
+async function resumeCloudSession(){
+  const s=CithelaCloud.state();
+  if(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK){
+    setRole('paciente');
+    const target=pendingPatientInviteEmail();
+    $('l-patient-email').value=target||s.email||'';
+    renderPatientLoginSession();
+    if(s.signedIn&&s.email){
+      // Never attempt to redeem a patient's invite in another user's session.
+      if(target&&target!==String(s.email).toLowerCase()){
+        toast('La invitación es para otra cuenta. Tocá Cambiar de cuenta.',5500);
+        return;
+      }
+      await patientEnter();
+    }
+    return;
+  }
+  if(!s.signedIn)return;
+  if(s.membership&&s.tenant){
+    await loginWithCloudSession();return;
+  }
+  // Patient accounts do not receive tenant memberships. A linked account
+  // may resume its own portal without re-entering any invitation.
+  const result=await CithelaCloud.patientPortal();
+  setRole('paciente');$('l-patient-email').value=s.email||'';
+  if(result?.profiles?.length){
+    patientPortalData=result;
+    me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
+    goPac();
+  }else{
+    toast('Sesión verificada. Abrí el enlace personal de WhatsApp para vincular tus turnos.',4900);
+  }
+}
 async function requestLoginMagicLink(){
   const email=$('l-cloud-email')?.value.trim();
   if(!email){toast('Ingresá tu correo cloud');return;}
@@ -2498,8 +2611,13 @@ function setRole(r){
   $('rb-pac').classList.toggle('on',r==='paciente');
   $('f-medico').style.display=r==='medico'?'block':'none';
   $('f-pac').style.display=r==='paciente'?'block':'none';
-  $('login-name-wrap').style.display=r==='medico'?'block':'none';
-  $('professional-login-button').style.display=r==='medico'?'block':'none';
+  $('login-name-wrap').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('professional-demo-credentials').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('professional-login-button').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('patient-demo-controls').style.display=r==='paciente'&&CITHELA_DEMO_MODE?'block':'none';
+  const s=CithelaCloud.state();
+  $('professional-session-continue').style.display=r==='medico'&&s.signedIn&&
+    s.membership&&s.tenant?'block':'none';
   renderPatientLoginSession();
 }
 
@@ -2509,7 +2627,9 @@ function doLogin(){
     if(s.signedIn&&s.membership&&s.tenant){
       loginWithCloudSession();return;
     }
+    if(!CITHELA_DEMO_MODE){requestLoginMagicLink();return;}
   }
+  if(!CITHELA_DEMO_MODE){patientEnter();return;}
   const nom=$('l-nombre').value.trim();
   if(!nom){toast('Ingresá tu nombre');return;}
   if(role==='medico'){
@@ -2532,7 +2652,7 @@ async function logout(){
   patientSharedDrafts.clear();patientSharedOpen.clear();
   hideVisiblePasswords();
   me={};
-  scr('login');
+  scr('login');applyCithelaTheme('sage');applyBranding();
   if(CithelaCloud.state().signedIn){
     try{await CithelaCloud.signOut();}
     catch(err){
@@ -2575,6 +2695,8 @@ function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
   applyCithelaTheme(tenant?.brand_theme||'sage');
+  const businessName=document.querySelector('#screen-medico .js-app-sub');
+  if(businessName&&tenant)businessName.textContent=tenant.display_name||'Establecimiento';
   const logo=$('professional-tenant-logo');
   if(logo){
     const url=tenant?cithelaBrandLogoUrl(
@@ -3306,13 +3428,17 @@ async function cloudIssueInvite(personId){
     const p=cloudPersonById(personId);
     const whatsapp=p?.tel?normalizePhone(p.tel):'';
     el.innerHTML=`<div class="form-card" style="padding:12px;margin:0;">
-      <p class="contact-note" style="margin:0 0 9px;">Código para ${escHtml(r.email)}. Se muestra una sola vez y caduca en 48 horas.</p>
-      <label class="lbl">Código de invitación</label>
-      <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="font-size:.75rem;letter-spacing:0.02em;">
-      <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
-      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar invitación por WhatsApp</button>`:''}
+      <p class="contact-note" style="margin:0 0 9px;">Enlace personal para ${escHtml(r.email)}, válido durante 48 horas y utilizable una sola vez.</p>
+      <label class="lbl" for="cloud-invite-link">Enlace para el paciente</label>
+      <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code,r.email))}">
+      <button type="button" class="btn-main soft" onclick="copyPatientInviteLink()">Copiar enlace</button>
+      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar enlace por WhatsApp</button>`:''}
+      <details style="margin-top:12px;"><summary class="contact-note" style="cursor:pointer;">Código manual (solo si falla el enlace)</summary>
+        <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="margin-top:8px;font-size:.75rem;">
+        <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
+      </details>
     </div>`;
-    toast('Invitación generada. Compartí el código con el paciente.',4600);
+    toast('Enlace generado. Enviáselo al correo verificado del paciente.',4600);
   }catch(err){
     const messages={invalid_email:'Ingresá un correo válido',
       already_linked:'La ficha ya tiene una cuenta vinculada',
@@ -3320,6 +3446,14 @@ async function cloudIssueInvite(personId){
     el.innerHTML='';
     toast(messages[err?.message]||err?.message||'No se pudo generar el acceso',4600);
   }
+}
+async function copyPatientInviteLink(){
+  const inp=$('cloud-invite-link');if(!inp)return;
+  try{
+    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(inp.value);
+    else{inp.focus();inp.select();if(!document.execCommand('copy'))throw Error('copy unavailable');}
+    toast('Enlace copiado.');
+  }catch{inp.focus();inp.select();toast('Seleccioná y copiá el enlace.');}
 }
 async function copyPatientInviteCode(){
   const inp=$('cloud-invite-code');if(!inp)return;
@@ -3330,14 +3464,18 @@ async function copyPatientInviteCode(){
   }catch{inp.focus();inp.select();toast('Seleccioná y copiá el código manualmente');}
 }
 function sharePatientInviteWhatsApp(personId){
-  const inp=$('cloud-invite-code');if(!inp||!professionalCloudReady())return;
+  const link=$('cloud-invite-link')?.value;
+  if(!link||!professionalCloudReady())return;
   const p=cloudPersonById(personId),n=normalizePhone(p?.tel||'');
   if(!n){toast('La persona no tiene WhatsApp válido');return;}
   const email=$('cloud-invite-email')?.value.trim();
-  const msg=`Acceso a CITHELA: abrí ${CITHELA_PUBLIC_URL} y elegí Paciente.
-Solicitá tu enlace mágico con el correo ${email}.
-Tu código de invitación (válido durante 48 horas): ${inp.value}
-Tras abrir el enlace del correo, ingresá el código para consultar tus turnos.`;
+  const msg=`Te invitamos a CITHELA para consultar y gestionar tus turnos.
+Abrí este enlace personal (válido durante 48 horas):
+${link}
+
+Solicitá el acceso con tu correo ${email} y abrí el enlace que recibirás por email.
+Si el correo se abre en otro navegador, volvé a tocar esta invitación.
+Nunca compartas esta invitación con otras personas.`;
   openWhatsAppMessage(n,msg);
 }
 
@@ -4994,7 +5132,10 @@ ensureServices();
 ensureResources();
 initPasswordVisibility();
 applyBranding();
-CithelaCloud.init().catch(()=>{});
+setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
+CithelaCloud.init().then(resumeCloudSession).catch(()=>{
+  // Keep the login form available when session recovery fails.
+});
 </script>
 
 </body>
