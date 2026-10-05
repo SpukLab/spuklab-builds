@@ -1259,7 +1259,14 @@ const CithelaCloud=(()=>{
     if(typeof renderCloudStatus==='function')renderCloudStatus();
     if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
     if(typeof renderPatientLoginSession==='function')renderPatientLoginSession();
-    if(typeof me!=='undefined'&&me?.role!=='medico')applyCithelaTheme('sage');
+    if(typeof me!=='undefined'&&me?.role==='paciente'&&me?.cloud&&
+      patientPortalData?.profiles?.length){
+      const profiles=patientPortalData.profiles;
+      applyCithelaTheme(profiles.every(p=>p.tenant_id===profiles[0].tenant_id)
+        ?profiles[0].brand_theme:'sage');
+    }else if(typeof me!=='undefined'&&me?.role!=='medico'){
+      applyCithelaTheme('sage');
+    }
     const loginEmail=document.getElementById('l-cloud-email');
     if(loginEmail&&state.session?.user?.email&&!loginEmail.value)loginEmail.value=state.session.user.email;
     if(typeof me!=='undefined'&&me?.role==='medico'){
@@ -1808,13 +1815,17 @@ function applyTerminology(){
   document.querySelectorAll('.js-person-plural').forEach(el=>el.textContent=t.plural);
 }
 function applyBranding(){
-  const c=consultorioInfo();
-  document.title=c.brand;
-  document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=c.brand);
-  document.querySelectorAll('.js-app-sub').forEach(el=>el.textContent=c.consultorio);
+  const c=consultorioInfo(),cloud=!CITHELA_DEMO_MODE;
+  const business=cloud?(CithelaCloud.state().tenant?.display_name||'Agenda profesional'):c.consultorio;
+  const product=cloud?'CITHELA':c.brand;
+  document.title=product;
+  document.querySelectorAll('.js-app-brand').forEach(el=>el.textContent=product);
+  document.querySelectorAll('#screen-medico .js-app-sub')
+    .forEach(el=>el.textContent=business);
   const lb=$('login-brand'),lm=$('login-meta');
-  if(lb)lb.textContent=c.brand;
-  if(lm)lm.innerHTML=[c.consultorio,c.nombre,c.dir].filter(Boolean).map(escHtml).join('<br>')||'Agenda · Organiza · Conecta';
+  if(lb)lb.textContent=product;
+  if(lm)lm.textContent=cloud?'Agenda · Organiza · Conecta':
+    [c.consultorio,c.nombre,c.dir].filter(Boolean).join(' · ')||'Agenda · Organiza · Conecta';
   applyTerminology();
 }
 function dayDistance(fecha){
@@ -2546,11 +2557,13 @@ async function resumeCloudSession(){
   // Patient accounts do not receive tenant memberships. A linked account
   // may resume its own portal without re-entering any invitation.
   const result=await CithelaCloud.patientPortal();
+  setRole('paciente');$('l-patient-email').value=s.email||'';
   if(result?.profiles?.length){
-    setRole('paciente');$('l-patient-email').value=s.email||'';
     patientPortalData=result;
     me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
     goPac();
+  }else{
+    toast('Sesión verificada. Abrí el enlace personal de WhatsApp para vincular tus turnos.',4900);
   }
 }
 async function requestLoginMagicLink(){
@@ -2615,7 +2628,7 @@ async function logout(){
   patientSharedDrafts.clear();patientSharedOpen.clear();
   hideVisiblePasswords();
   me={};
-  scr('login');
+  scr('login');applyCithelaTheme('sage');applyBranding();
   if(CithelaCloud.state().signedIn){
     try{await CithelaCloud.signOut();}
     catch(err){
@@ -2658,6 +2671,8 @@ function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
   applyCithelaTheme(tenant?.brand_theme||'sage');
+  const businessName=document.querySelector('#screen-medico .js-app-sub');
+  if(businessName&&tenant)businessName.textContent=tenant.display_name||'Establecimiento';
   const logo=$('professional-tenant-logo');
   if(logo){
     const url=tenant?cithelaBrandLogoUrl(
