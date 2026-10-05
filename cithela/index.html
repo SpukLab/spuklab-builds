@@ -50,6 +50,23 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .lbl{font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px;display:block;}
 .inp{width:100%;background:var(--bg);border:1.5px solid transparent;border-radius:var(--r-sm);padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;margin-bottom:14px;transition:border .18s;}
 .inp:focus{border-color:var(--teal-mid);background:var(--white);}
+/* Keep Safari/iOS autofill inside the CITHELA palette instead of the native yellow fill. */
+.inp:-webkit-autofill,
+.inp:-webkit-autofill:hover,
+.inp:-webkit-autofill:active{
+  -webkit-text-fill-color:var(--ink)!important;
+  caret-color:var(--ink);
+  -webkit-box-shadow:0 0 0 1000px var(--bg) inset!important;
+  box-shadow:0 0 0 1000px var(--bg) inset!important;
+  transition:background-color 9999s ease-out 0s;
+}
+.inp:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--ink)!important;
+  -webkit-box-shadow:0 0 0 1000px var(--white) inset!important;
+  box-shadow:0 0 0 1000px var(--white) inset!important;
+}
+.patient-login-guidance{font-size:.76rem;line-height:1.45;color:var(--ink2);margin:0 0 14px;}
+.patient-login-email[hidden]{display:none!important;}
 .password-field{position:relative;width:100%;margin-bottom:14px;min-width:0;}
 .password-field>.inp{display:block;width:100%;min-width:0;box-sizing:border-box;margin-bottom:0;padding-right:58px;}
 .password-visibility{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:transparent;color:var(--ink2);cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -334,18 +351,20 @@ textarea.inp{resize:vertical;min-height:72px;}
       </div>
     </div>
     <div id="f-pac" style="display:none">
-      <label class="lbl">Tu correo verificado</label>
-      <input class="inp" id="l-patient-email" type="email" autocomplete="email" placeholder="tu@correo.com" oninput="renderPatientLoginSession()">
+      <p id="patient-access-copy" class="patient-login-guidance">Abrí el enlace que recibiste por WhatsApp para acceder a tus turnos.</p>
+      <div id="patient-email-wrap" class="patient-login-email">
+        <label class="lbl" for="l-patient-email">Correo</label>
+        <input class="inp" id="l-patient-email" type="email" autocomplete="email" placeholder="tu@correo.com" oninput="renderPatientLoginSession()">
+      </div>
       <p id="patient-session-state" class="contact-note" role="status" style="display:none;margin:8px 0;"></p>
       <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
-      <button class="btn-main soft" type="button" onclick="patientSendMagicLink()">Enviar enlace mágico</button>
-      <p id="patient-invite-hint" class="contact-note" role="status" style="margin:12px 0;">Si recibiste una invitación por WhatsApp, abrí el enlace que te enviaron. Después verificá tu correo.</p>
+      <p id="patient-invite-hint" class="contact-note" role="status" style="margin:0 0 12px;">Si ya usaste CITHELA en este dispositivo, podés entrar directamente.</p>
+      <button id="patient-primary-access" class="btn-main" type="button" onclick="patientPrimaryAccess()">Continuar</button>
       <details style="margin:12px 0;">
         <summary class="mb ghost" style="cursor:pointer;">Tengo un código de invitación</summary>
         <label class="lbl" style="margin-top:14px;" for="l-patient-invite">Código de invitación (alternativa)</label>
         <input class="inp" id="l-patient-invite" type="text" inputmode="text" autocapitalize="none" autocorrect="off" autocomplete="off" placeholder="Pegá el código si no tenés el enlace">
       </details>
-      <button class="btn-main" type="button" onclick="patientEnter()">Ver mis turnos</button>
       <div id="patient-demo-controls" style="display:none;margin-top:16px;border-top:var(--line);padding-top:12px;">
         <button class="mb ghost" type="button" onclick="togglePatientDemo()">Demostración local</button>
         <div id="patient-demo-form" style="display:none;margin-top:12px;">
@@ -1965,18 +1984,29 @@ function renderPatientLoginSession(){
   const session=CithelaCloud.state(),email=String(session.email||'').trim();
   const hint=$('patient-invite-hint');
   const target=pendingPatientInviteEmail();
-  if(hint)hint.textContent=pendingPatientInvite()
-    ?'Invitación detectada'+(target?' para '+target:'')+
-      '. Verificá ese correo para vincular tu ficha.'
-    :'Si recibiste una invitación por WhatsApp, abrí su enlace. El código manual es opcional.';
+  const hasInvite=Boolean(pendingPatientInvite());
+  const emailWrap=$('patient-email-wrap');
+  const copy=$('patient-access-copy');
+  const primary=$('patient-primary-access');
+  if(target&&!$('l-patient-email').value)$('l-patient-email').value=target;
+  if(emailWrap)emailWrap.hidden=hasInvite||Boolean(session.signedIn&&email);
+  if(copy)copy.textContent=hasInvite
+    ?'Invitación detectada. Tocá Continuar y CITHELA te guiará al acceso de tus turnos.'
+    :(session.signedIn&&email
+      ?'Tu acceso ya está activo en este dispositivo.'
+      :'Ingresá tu correo solo si querés recuperar un acceso anterior.');
+  if(hint)hint.textContent=hasInvite
+    ?'No necesitás copiar ningún código. El código manual queda solo como respaldo.'
+    :'Si es tu primera vez, usá el enlace personal que te enviaron por WhatsApp.';
+  if(primary)primary.textContent=session.signedIn&&email?'Ver mis turnos':'Continuar';
   if(role!=='paciente'||!session.signedIn||!email){
     note.style.display='none';button.style.display='none';return;
   }
   const entered=String($('l-patient-email')?.value||'').trim().toLowerCase();
   note.style.display='block';
   note.textContent=entered&&entered!==email.toLowerCase()
-    ?'Sesión activa: '+email+'. Es distinta del correo indicado; cambiá de cuenta para continuar.'
-    :'Sesión cloud activa en este dispositivo: '+email+'.';
+    ?'Hay otra cuenta activa en este dispositivo. Cambiá de cuenta para continuar.'
+    :'Acceso verificado.';
   button.style.display='inline-flex';
 }
 async function patientSwitchAccount(){
@@ -1995,12 +2025,28 @@ async function patientSwitchAccount(){
     me={};
     setRole('paciente');
     renderPatientLoginSession();
-    toast('Sesión cerrada en este dispositivo. Solicitá el enlace mágico de tu correo.',4600);
+    toast('Sesión cerrada. Abrí tu enlace personal o continuá con tu correo.',4600);
   }catch(err){
     toast(err?.message||'No se pudo cambiar de cuenta',4200);
   }finally{
     if(button)button.disabled=false;
   }
+}
+async function patientPrimaryAccess(){
+  const s=CithelaCloud.state();
+  if(s.signedIn){
+    await patientEnter();
+    return;
+  }
+  const target=pendingPatientInviteEmail();
+  const field=$('l-patient-email');
+  if(target&&field)field.value=target;
+  const email=String(field?.value||'').trim();
+  if(!email){
+    toast('Abrí tu enlace personal de WhatsApp o ingresá tu correo.',4400);
+    return;
+  }
+  await patientSendMagicLink();
 }
 async function patientSendMagicLink(){
   const email=$('l-patient-email').value.trim();
@@ -2041,7 +2087,7 @@ async function patientEnter(){
     }
     const result=await CithelaCloud.patientPortal();
     if(!result.profiles?.length){
-      toast('Tu correo está autenticado. Necesitás el código de invitación del establecimiento.',4700);
+      toast('Acceso verificado. Abrí el enlace personal que recibiste por WhatsApp.',4700);
       return;
     }
     patientPortalData=result;
