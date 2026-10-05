@@ -826,7 +826,8 @@ textarea.inp{resize:vertical;min-height:72px;}
 <script>
 // CITHELA PRODUCT SHELL / TURNOS DOMAIN: standalone prototype. No DAHZEA runtime dependency; WhatsApp remains an external channel adapter.
 let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
-const PASS='1234';
+const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud session.
+const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -1113,6 +1114,41 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
+const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
+const CITHELA_PENDING_INVITE_TTL=30*60*1000;
+function patientInviteLink(code){
+  if(!/^[0-9a-f]{48}$/i.test(String(code||'')))return '';
+  return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase();
+}
+function pendingPatientInvite(){
+  try{
+    const obj=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
+    if(obj&&/^[0-9a-f]{48}$/.test(obj.code)&&
+      Date.now()-obj.savedAt>=0&&Date.now()-obj.savedAt<CITHELA_PENDING_INVITE_TTL)
+      return obj.code;
+    localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);
+  }catch{try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}}
+  return '';
+}
+function clearPendingPatientInvite(){
+  try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}
+}
+function capturePatientInviteFromLink(){
+  const match=/^#invite=([0-9a-f]{48})$/i.exec(String(location.hash||''));
+  if(!match)return false;
+  const code=match[1].toLowerCase();
+  try{localStorage.setItem(CITHELA_PENDING_INVITE_KEY,JSON.stringify({
+    code,savedAt:Date.now()
+  }));}catch{
+    const field=document.getElementById('l-patient-invite');
+    if(field)field.value=code;
+  }
+  // The fragment is never sent to GitHub Pages. Remove it immediately so
+  // screenshots, history and links copied from the address bar omit the token.
+  history.replaceState(history.state,'',location.pathname+location.search);
+  return true;
+}
+const CITHELA_INVITE_FROM_LINK=capturePatientInviteFromLink();
 const CITHELA_BRAND_PALETTES=Object.freeze({
   sage:{label:'Teal',accent:'#398e84',dark:'#28756d',light:'#e6f2ee',mid:'#aed2c7'},
   ocean:{label:'Azul',accent:'#205f92',dark:'#174a75',light:'#e9f3fb',mid:'#b7d3e7'},
@@ -2502,8 +2538,13 @@ function setRole(r){
   $('rb-pac').classList.toggle('on',r==='paciente');
   $('f-medico').style.display=r==='medico'?'block':'none';
   $('f-pac').style.display=r==='paciente'?'block':'none';
-  $('login-name-wrap').style.display=r==='medico'?'block':'none';
-  $('professional-login-button').style.display=r==='medico'?'block':'none';
+  $('login-name-wrap').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('professional-demo-credentials').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('professional-login-button').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('patient-demo-controls').style.display=r==='paciente'&&CITHELA_DEMO_MODE?'block':'none';
+  const s=CithelaCloud.state();
+  $('professional-session-continue').style.display=r==='medico'&&s.signedIn&&
+    s.membership&&s.tenant?'block':'none';
   renderPatientLoginSession();
 }
 
@@ -2513,7 +2554,9 @@ function doLogin(){
     if(s.signedIn&&s.membership&&s.tenant){
       loginWithCloudSession();return;
     }
+    if(!CITHELA_DEMO_MODE){requestLoginMagicLink();return;}
   }
+  if(!CITHELA_DEMO_MODE){patientEnter();return;}
   const nom=$('l-nombre').value.trim();
   if(!nom){toast('Ingresá tu nombre');return;}
   if(role==='medico'){
