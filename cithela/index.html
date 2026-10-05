@@ -371,6 +371,11 @@ textarea.inp{resize:vertical;min-height:72px;}
       <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
       <p id="patient-invite-hint" class="contact-note" role="status" style="margin:0 0 12px;">Si ya usaste CITHELA en este dispositivo, podés entrar directamente.</p>
       <button id="patient-primary-access" class="btn-main" type="button" onclick="patientPrimaryAccess()">Continuar</button>
+      <div id="patient-whatsapp-otp" style="display:none;margin-top:14px;">
+        <label class="lbl" for="l-patient-otp">Código recibido por WhatsApp</label>
+        <input class="inp" id="l-patient-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
+        <button class="btn-main soft" type="button" onclick="patientVerifyWhatsAppOtp()">Verificar código</button>
+      </div>
       <details style="margin:12px 0;">
         <summary class="mb ghost" style="cursor:pointer;">Tengo un código de invitación</summary>
         <label class="lbl" style="margin-top:14px;" for="l-patient-invite">Código de invitación (alternativa)</label>
@@ -1152,24 +1157,36 @@ function patientInviteLink(code,email){
   return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase()+
     '&email='+encodeURIComponent(addr);
 }
-function pendingPatientInvite(){
+function patientPhoneInviteLink(code,phone){
+  const value=String(phone||'').trim();
+  if(!/^[0-9a-f]{48}$/i.test(String(code||''))||
+    !/^\+[1-9][0-9]{7,14}$/.test(value))return '';
+  return CITHELA_PUBLIC_URL+'#invite='+String(code).toLowerCase()+
+    '&phone='+encodeURIComponent(value);
+}
+function pendingPatientInviteRecord(){
   try{
     const obj=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
     if(obj&&/^[0-9a-f]{48}$/.test(obj.code)&&
       Date.now()-obj.savedAt>=0&&Date.now()-obj.savedAt<CITHELA_PENDING_INVITE_TTL)
-      return obj.code;
+      return obj;
     localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);
   }catch{try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}}
-  return '';
+  return null;
+}
+function pendingPatientInvite(){
+  return pendingPatientInviteRecord()?.code||'';
 }
 function pendingPatientInviteEmail(){
-  if(!pendingPatientInvite())return '';
-  try{
-    const value=JSON.parse(localStorage.getItem(CITHELA_PENDING_INVITE_KEY)||'null');
-    return typeof value?.email==='string'&&
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)
-      ?value.email:'';
-  }catch{return '';}
+  const value=pendingPatientInviteRecord();
+  return typeof value?.email==='string'&&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)
+    ?value.email:'';
+}
+function pendingPatientInvitePhone(){
+  const value=pendingPatientInviteRecord();
+  return typeof value?.phone==='string'&&/^\+[1-9][0-9]{7,14}$/.test(value.phone)
+    ?value.phone:'';
 }
 function clearPendingPatientInvite(){
   try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}
@@ -1179,17 +1196,22 @@ function capturePatientInviteFromLink(){
   const params=new URLSearchParams(location.hash.slice(1));
   const code=String(params.get('invite')||'').toLowerCase();
   const email=String(params.get('email')||'').toLowerCase();
-  if(!/^[0-9a-f]{48}$/.test(code)||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||
-    [...params.keys()].length!==2)return false;
-  try{localStorage.setItem(CITHELA_PENDING_INVITE_KEY,JSON.stringify({
-    code,email,savedAt:Date.now()
-  }));}catch{
+  const phone=String(params.get('phone')||'').trim();
+  const keys=[...params.keys()];
+  const validCode=/^[0-9a-f]{48}$/.test(code);
+  const validEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&email.length<=254;
+  const validPhone=/^\+[1-9][0-9]{7,14}$/.test(phone);
+  if(!validCode||keys.length!==2||validEmail===validPhone)return false;
+  const payload={code,savedAt:Date.now()};
+  if(validEmail)payload.email=email;
+  else payload.phone=phone;
+  try{localStorage.setItem(CITHELA_PENDING_INVITE_KEY,JSON.stringify(payload));}
+  catch{
     const field=document.getElementById('l-patient-invite');
     if(field)field.value=code;
   }
   // The fragment is never sent to GitHub Pages. Remove it immediately so
-  // screenshots, history and links copied from the address bar omit the token.
+  // screenshots, history and copied links omit the bearer token.
   history.replaceState(history.state,'',location.pathname+location.search);
   return true;
 }
@@ -1236,6 +1258,7 @@ const CithelaCloud=(()=>{
       sdk:state.sdk,checked:state.checked,realtimeStatus:state.realtimeStatus,
       signedIn:!!state.session,
       email:state.session?.user?.email||null,
+      phone:state.session?.user?.phone||null,
       passwordRecovery:!!state.passwordRecovery,
       membership:state.membership?{...state.membership}:null,
       tenant:state.tenant?{...state.tenant}:null,
@@ -1511,6 +1534,35 @@ const CithelaCloud=(()=>{
     });
     if(error)throw error;
     return {ok:true};
+  }
+  async function sendPatientWhatsAppOtp(phone){
+    const c=await getClient();
+    const clean=String(phone||'').trim();
+    if(!/^\+[1-9][0-9]{7,14}$/.test(clean))throw Error('WhatsApp inválido');
+    const {error}=await c.auth.signInWithOtp({
+      phone:clean,
+      options:{channel:'whatsapp',shouldCreateUser:true}
+    });
+    if(error)throw error;
+    return {ok:true,phone:clean};
+  }
+  async function verifyPatientPhoneOtp(phone,token){
+    const c=await getClient();
+    const clean=String(phone||'').trim(),code=String(token||'').trim();
+    if(!/^\+[1-9][0-9]{7,14}$/.test(clean)||!/^\d{6}$/.test(code))
+      throw Error('Código inválido');
+    const {error}=await c.auth.verifyOtp({phone:clean,token:code,type:'sms'});
+    if(error)throw error;
+    return refresh();
+  }
+  async function issuePatientPhoneInvite({tenantId,personId,phone}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_patient_invite_issue_phone',{
+      p_tenant_id:tenantId,p_person_id:personId,p_phone:phone
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo crear la invitación');
+    return data;
   }
   async function issuePatientInvite({tenantId,personId,email}){
     const c=await getClient();
@@ -1821,7 +1873,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2002,6 +2054,7 @@ function openPatientWhatsApp(patientId){
 }
 
 let patientPortalData=null,patientPortalRequest=0;
+let patientWhatsappOtpSent=false;
 
 function togglePatientDemo(){
   const el=$('patient-demo-form');
@@ -2023,30 +2076,40 @@ function renderPatientLoginSession(){
   const note=$('patient-session-state');
   const button=$('patient-switch-account');
   if(!note||!button)return;
-  const session=CithelaCloud.state(),email=String(session.email||'').trim();
+  const session=CithelaCloud.state();
+  const email=String(session.email||'').trim();
+  const phone=String(session.phone||'').trim();
   const hint=$('patient-invite-hint');
-  const target=pendingPatientInviteEmail();
+  const targetEmail=pendingPatientInviteEmail();
+  const targetPhone=pendingPatientInvitePhone();
   const hasInvite=Boolean(pendingPatientInvite());
   const emailWrap=$('patient-email-wrap');
   const copy=$('patient-access-copy');
   const primary=$('patient-primary-access');
-  if(target&&!$('l-patient-email').value)$('l-patient-email').value=target;
-  if(emailWrap)emailWrap.hidden=hasInvite||Boolean(session.signedIn&&email);
-  if(copy)copy.textContent=hasInvite
-    ?'Invitación detectada. Tocá Continuar y CITHELA te guiará al acceso de tus turnos.'
-    :(session.signedIn&&email
-      ?'Tu acceso ya está activo en este dispositivo.'
-      :'Ingresá tu correo solo si querés recuperar un acceso anterior.');
-  if(hint)hint.textContent=hasInvite
-    ?'No necesitás copiar ningún código. El código manual queda solo como respaldo.'
-    :'Si es tu primera vez, usá el enlace personal que te enviaron por WhatsApp.';
-  if(primary)primary.textContent=session.signedIn&&email?'Ver mis turnos':'Continuar';
-  if(role!=='paciente'||!session.signedIn||!email){
+  const otpWrap=$('patient-whatsapp-otp');
+  if(targetEmail&&!$('l-patient-email').value)$('l-patient-email').value=targetEmail;
+  if(emailWrap)emailWrap.hidden=Boolean(targetPhone)||hasInvite||Boolean(session.signedIn);
+  if(otpWrap)otpWrap.style.display=targetPhone&&patientWhatsappOtpSent&&!session.signedIn?'block':'none';
+  if(copy)copy.textContent=targetPhone
+    ?'Acceso por WhatsApp detectado. CITHELA verificará este número con un código de 6 dígitos.'
+    :(hasInvite
+      ?'Invitación detectada. Tocá Continuar para acceder a tus turnos.'
+      :(session.signedIn
+        ?'Tu acceso ya está activo en este dispositivo.'
+        :'Ingresá tu correo solo para recuperar un acceso anterior.'));
+  if(hint)hint.textContent=targetPhone
+    ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
+    :(hasInvite
+      ?'No necesitás copiar ningún código. El código manual queda solo como respaldo.'
+      :'Si es tu primera vez, usá el enlace personal que te enviaron por WhatsApp.');
+  if(primary)primary.textContent=session.signedIn?'Ver mis turnos':
+    (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
+  if(role!=='paciente'||!session.signedIn){
     note.style.display='none';button.style.display='none';return;
   }
   const entered=String($('l-patient-email')?.value||'').trim().toLowerCase();
   note.style.display='block';
-  note.textContent=entered&&entered!==email.toLowerCase()
+  note.textContent=email&&entered&&entered!==email.toLowerCase()
     ?'Hay otra cuenta activa en este dispositivo. Cambiá de cuenta para continuar.'
     :'Acceso verificado.';
   button.style.display='inline-flex';
@@ -2063,21 +2126,42 @@ async function patientSwitchAccount(){
     patientBookingState=null;
     patientRescheduleState=null;
     patientPortalData=null;
+    patientWhatsappOtpSent=false;
+    if($('l-patient-otp'))$('l-patient-otp').value='';
     patientSharedDrafts.clear();patientSharedOpen.clear();
     me={};
     setRole('paciente');
     renderPatientLoginSession();
-    toast('Sesión cerrada. Abrí tu enlace personal o continuá con tu correo.',4600);
+    toast('Sesión cerrada. Abrí tu enlace personal para volver a ingresar.',4600);
   }catch(err){
     toast(err?.message||'No se pudo cambiar de cuenta',4200);
   }finally{
     if(button)button.disabled=false;
   }
 }
+function patientWhatsAppAuthMessage(err){
+  const message=String(err?.message||'');
+  if(/provider|phone provider|unsupported|whatsapp/i.test(message))
+    return 'La verificación por WhatsApp todavía no está habilitada. Pedí acceso por correo.';
+  if(/rate limit|too many/i.test(message))
+    return 'Esperá un momento antes de pedir otro código.';
+  return message||'No se pudo enviar el código por WhatsApp';
+}
 async function patientPrimaryAccess(){
   const s=CithelaCloud.state();
   if(s.signedIn){
     await patientEnter();
+    return;
+  }
+  const targetPhone=pendingPatientInvitePhone();
+  if(targetPhone){
+    try{
+      await CithelaCloud.sendPatientWhatsAppOtp(targetPhone);
+      patientWhatsappOtpSent=true;
+      renderPatientLoginSession();
+      $('l-patient-otp')?.focus();
+      toast('Te enviamos un código de 6 dígitos por WhatsApp.',4800);
+    }catch(err){toast(patientWhatsAppAuthMessage(err),5200);}
     return;
   }
   const target=pendingPatientInviteEmail();
@@ -2089,6 +2173,21 @@ async function patientPrimaryAccess(){
     return;
   }
   await patientSendMagicLink();
+}
+async function patientVerifyWhatsAppOtp(){
+  const phone=pendingPatientInvitePhone();
+  const token=String($('l-patient-otp')?.value||'').replace(/\D/g,'');
+  if(!phone){toast('Volvé a abrir tu invitación de WhatsApp.',4200);return;}
+  if(!/^\d{6}$/.test(token)){toast('Ingresá los 6 dígitos del código.',3600);return;}
+  try{
+    await CithelaCloud.verifyPatientPhoneOtp(phone,token);
+    patientWhatsappOtpSent=false;
+    $('l-patient-otp').value='';
+    await patientEnter();
+  }catch(err){
+    const message=String(err?.message||'');
+    toast(/expired|invalid/i.test(message)?'El código es inválido o venció. Pedí uno nuevo.':message||'No se pudo verificar el código',4800);
+  }
 }
 async function patientSendMagicLink(){
   const email=$('l-patient-email').value.trim();
@@ -2110,16 +2209,23 @@ async function patientEnter(){
   try{
     const s=await CithelaCloud.refresh();
     if(!s.signedIn){
-      toast('Primero abrí el enlace mágico enviado a tu correo',4300);return;
+      toast(pendingPatientInvitePhone()
+        ?'Primero verificá el código enviado por WhatsApp.'
+        :'Primero verificá tu acceso.',4300);return;
     }
     const typedEmail=$('l-patient-email').value.trim().toLowerCase();
-    if(typedEmail&&typedEmail!==String(s.email||'').toLowerCase()){
+    if(typedEmail&&s.email&&typedEmail!==String(s.email).toLowerCase()){
       toast('La sesión pertenece a otro correo. Cerrá sesión y volvé a ingresar.',4700);return;
     }
     const code=$('l-patient-invite').value.trim()||pendingPatientInvite();
     const invitedEmail=pendingPatientInviteEmail();
+    const invitedPhone=pendingPatientInvitePhone();
     if(code&&invitedEmail&&invitedEmail!==String(s.email||'').toLowerCase()){
       toast('La invitación es para otro correo. Tocá Cambiar de cuenta.',4700);
+      return;
+    }
+    if(code&&invitedPhone&&invitedPhone!==String(s.phone||'')){
+      toast('La invitación es para otro WhatsApp. Tocá Cambiar de cuenta.',4700);
       return;
     }
     if(code){
@@ -2138,9 +2244,10 @@ async function patientEnter(){
   }catch(err){
     if(['invalid_invite','already_linked'].includes(err?.message))
       clearPendingPatientInvite();
-    const map={invalid_invite:'Invitación inválida, vencida o destinada a otro correo.',
-      email_not_verified:'Primero confirmá el correo con el enlace mágico.',
-      already_linked:'La ficha ya está vinculada a otra cuenta. Contactá al consultorio.'};
+    const map={invalid_invite:'Invitación inválida, vencida o destinada a otra identidad.',
+      email_not_verified:'Primero confirmá el correo con el enlace recibido.',
+      phone_not_verified:'Primero verificá el código recibido por WhatsApp.',
+      already_linked:'La ficha ya está vinculada a otra cuenta. Contactá al establecimiento.'};
     toast(map[err?.message]||err?.message||'No se pudo ingresar al portal',4800);
   }
 }
@@ -2654,13 +2761,18 @@ async function resumeCloudSession(){
   }
   if(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK){
     setRole('paciente');
-    const target=pendingPatientInviteEmail();
-    $('l-patient-email').value=target||s.email||'';
+    const targetEmail=pendingPatientInviteEmail();
+    const targetPhone=pendingPatientInvitePhone();
+    $('l-patient-email').value=targetEmail||s.email||'';
     renderPatientLoginSession();
-    if(s.signedIn&&s.email){
+    if(s.signedIn){
       // Never attempt to redeem a patient's invite in another user's session.
-      if(target&&target!==String(s.email).toLowerCase()){
+      if(targetEmail&&targetEmail!==String(s.email||'').toLowerCase()){
         toast('La invitación es para otra cuenta. Tocá Cambiar de cuenta.',5500);
+        return;
+      }
+      if(targetPhone&&targetPhone!==String(s.phone||'')){
+        toast('La invitación es para otro WhatsApp. Tocá Cambiar de cuenta.',5500);
         return;
       }
       await patientEnter();
@@ -2800,6 +2912,7 @@ async function logout(){
   patientBookingState=null;
   patientRescheduleState=null;
   patientPortalData=null;
+  patientWhatsappOtpSent=false;
   patientSharedDrafts.clear();patientSharedOpen.clear();
   hideVisiblePasswords();
   me={};
@@ -3564,6 +3677,57 @@ function renderPacs(){
   }).join('');
 }
 
+async function cloudIssuePhoneInvite(personId){
+  if(!professionalCloudWritable())return;
+  const p=cloudPersonById(personId);
+  const phone=String(p?.tel||'').trim();
+  const el=$('cloud-whatsapp-invite-result');
+  if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){
+    toast('Guardá primero un WhatsApp válido en formato internacional.');return;
+  }
+  if(el)el.innerHTML='<p class="contact-note">Preparando acceso por WhatsApp…</p>';
+  try{
+    const s=CithelaCloud.state();
+    const r=await CithelaCloud.issuePatientPhoneInvite({
+      tenantId:s.tenant.id,personId,phone
+    });
+    if(!professionalCloudReady()||CithelaCloud.state().tenant?.id!==s.tenant.id)return;
+    const link=patientPhoneInviteLink(r.invite_code,r.phone);
+    if(!link)throw Error('No se pudo construir el enlace de acceso');
+    if(el)el.innerHTML=`<div class="form-card" style="padding:12px;margin:0;">
+      <p class="contact-note" style="margin:0 0 9px;">Acceso personal para ${escHtml(r.phone)}, válido durante 48 horas y de un solo uso.</p>
+      <input class="inp" id="cloud-whatsapp-invite-link" readonly autocomplete="off" value="${escHtml(link)}">
+      <button type="button" class="btn-main soft" onclick="sharePatientPhoneInviteWhatsApp('${personId}')">Abrir WhatsApp nuevamente</button>
+    </div>`;
+    sharePatientPhoneInviteWhatsApp(personId);
+    toast('Acceso preparado. Enviá el mensaje por WhatsApp.',4200);
+  }catch(err){
+    if(el)el.innerHTML='';
+    const messages={
+      invalid_phone:'El WhatsApp de la ficha no es válido.',
+      phone_mismatch:'El WhatsApp cambió. Guardá la ficha antes de enviar el acceso.',
+      already_linked:'La ficha ya tiene una cuenta vinculada.',
+      rate_limited:'Se alcanzó el límite de invitaciones por hora.'
+    };
+    toast(messages[err?.message]||err?.message||'No se pudo preparar el acceso',4800);
+  }
+}
+function sharePatientPhoneInviteWhatsApp(personId){
+  const link=$('cloud-whatsapp-invite-link')?.value;
+  if(!link||!professionalCloudReady())return;
+  const p=cloudPersonById(personId),n=normalizePhone(p?.tel||'');
+  if(!n){toast('La persona no tiene WhatsApp válido');return;}
+  const first=String(p?.nombre||'').trim().split(/\s+/)[0];
+  const clinic=String(CithelaCloud.state().tenant?.display_name||'CITHELA').trim();
+  const msg=`Hola${first?' '+first:''}. Te enviamos tu acceso a *${clinic}* en CITHELA.
+
+Abrí este enlace personal:
+${link}
+
+CITHELA verificará tu número con un código de 6 dígitos por WhatsApp. El enlace vence en 48 horas y no debe compartirse.`;
+  openWhatsAppMessage(n,msg);
+}
+
 async function cloudIssueInvite(personId){
   if(!professionalCloudWritable())return;
   const email=$('cloud-invite-email')?.value.trim();
@@ -3589,7 +3753,7 @@ async function cloudIssueInvite(personId){
         <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
       </details>
     </div>`;
-    toast('Enlace generado. Enviáselo al correo verificado del paciente.',4600);
+    toast('Acceso por correo generado.',3600);
   }catch(err){
     const messages={invalid_email:'Ingresá un correo válido',
       already_linked:'La ficha ya tiene una cuenta vinculada',
@@ -3736,12 +3900,20 @@ async function cloudVerFicha(id){
       ${editForm}
       <hr class="divider">
       ${professionalCloudWritable()?`<div style="margin:14px 0 18px;">
-        <p class="sh" style="margin:0 0 8px;">Acceso seguro del paciente</p>
-        <p class="contact-note">Ingresá el correo del paciente para generar una invitación que caduca a las 48 horas.</p>
-        <label class="lbl">Correo del paciente</label>
-        <input class="inp" type="email" autocomplete="off" id="cloud-invite-email" placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
-        <button type="button" class="btn-main soft" onclick="cloudIssueInvite('${p.id}')">Generar invitación</button>
-        <div id="cloud-invite-result" style="margin-top:10px;"></div>
+        <p class="sh" style="margin:0 0 8px;">Acceso del paciente</p>
+        ${wa?`<p class="contact-note" style="margin-bottom:8px;">WhatsApp · ${phone}</p>
+          <button type="button" class="btn-main" onclick="cloudIssuePhoneInvite('${p.id}')">Enviar acceso por WhatsApp</button>
+          <div id="cloud-whatsapp-invite-result" style="margin-top:10px;"></div>`
+        :`<p class="contact-note">Agregá un WhatsApp válido a la ficha para usar el acceso principal.</p>`}
+        <details style="margin-top:14px;">
+          <summary class="mb ghost" style="cursor:pointer;width:100%;">Usar correo como alternativa</summary>
+          <div style="padding-top:14px;">
+            <label class="lbl">Correo del paciente</label>
+            <input class="inp" type="email" autocomplete="off" id="cloud-invite-email" placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
+            <button type="button" class="btn-main soft" onclick="cloudIssueInvite('${p.id}')">Generar acceso por correo</button>
+            <div id="cloud-invite-result" style="margin-top:10px;"></div>
+          </div>
+        </details>
       </div><hr class="divider">`:''}
       <p class="sh">Últimos turnos (${appointments.length}${appointments.length===50?'+':''})</p>
       ${appointments.length?rows:'<p class="contact-note">Todavía no hay turnos registrados.</p>'}
