@@ -1936,6 +1936,10 @@ function renderPatientLoginSession(){
   const button=$('patient-switch-account');
   if(!note||!button)return;
   const session=CithelaCloud.state(),email=String(session.email||'').trim();
+  const hint=$('patient-invite-hint');
+  if(hint)hint.textContent=pendingPatientInvite()
+    ?'Invitación detectada. Verificá el correo de la invitación para vincular tu ficha.'
+    :'Si recibiste una invitación por WhatsApp, abrí su enlace. El código manual es opcional.';
   if(role!=='paciente'||!session.signedIn||!email){
     note.style.display='none';button.style.display='none';return;
   }
@@ -1978,8 +1982,7 @@ async function patientSendMagicLink(){
     return;
   }
   if(s.signedIn&&s.email&&s.email.toLowerCase()===email.toLowerCase()){
-    toast('Ya tenés sesión con este correo. Ingresá el código y elegí Ver mis turnos cloud.',4600);
-    return;
+    await patientEnter();return;
   }
   try{
     await CithelaCloud.sendPatientMagicLink(email);
@@ -1996,10 +1999,11 @@ async function patientEnter(){
     if(typedEmail&&typedEmail!==String(s.email||'').toLowerCase()){
       toast('La sesión pertenece a otro correo. Cerrá sesión y volvé a ingresar.',4700);return;
     }
-    const code=$('l-patient-invite').value.trim();
+    const code=$('l-patient-invite').value.trim()||pendingPatientInvite();
     if(code){
       await CithelaCloud.redeemPatientInvite(code);
       $('l-patient-invite').value='';
+      clearPendingPatientInvite();
     }
     const result=await CithelaCloud.patientPortal();
     if(!result.profiles?.length){
@@ -2010,6 +2014,8 @@ async function patientEnter(){
     me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
     goPac();
   }catch(err){
+    if(['invalid_invite','already_linked'].includes(err?.message))
+      clearPendingPatientInvite();
     const map={invalid_invite:'Invitación inválida, vencida o destinada a otro correo.',
       email_not_verified:'Primero confirmá el correo con el enlace mágico.',
       already_linked:'La ficha ya está vinculada a otra cuenta. Contactá al consultorio.'};
@@ -2517,6 +2523,36 @@ async function patientRefreshPortal(){
   }
 }
 
+async function resumeCloudSession(){
+  const s=CithelaCloud.state();
+  if(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK){
+    setRole('paciente');
+    if(s.signedIn&&s.email){
+      $('l-patient-email').value=s.email;
+      // An existing staff session may belong to another person.
+      // Require an explicit account switch instead of redeeming in its name.
+      if(s.membership){
+        toast('Hay una sesión profesional abierta. Cambiá de cuenta si la invitación es para otra persona.',5500);
+        return;
+      }
+      await patientEnter();
+    }
+    return;
+  }
+  if(!s.signedIn)return;
+  if(s.membership&&s.tenant){
+    await loginWithCloudSession();return;
+  }
+  // Patient accounts do not receive tenant memberships. A linked account
+  // may resume its own portal without re-entering any invitation.
+  const result=await CithelaCloud.patientPortal();
+  if(result?.profiles?.length){
+    setRole('paciente');$('l-patient-email').value=s.email||'';
+    patientPortalData=result;
+    me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
+    goPac();
+  }
+}
 async function requestLoginMagicLink(){
   const email=$('l-cloud-email')?.value.trim();
   if(!email){toast('Ingresá tu correo cloud');return;}
@@ -5057,7 +5093,10 @@ ensureServices();
 ensureResources();
 initPasswordVisibility();
 applyBranding();
-CithelaCloud.init().catch(()=>{});
+setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
+CithelaCloud.init().then(resumeCloudSession).catch(()=>{
+  // Keep the login form available when session recovery fails.
+});
 </script>
 
 </body>
