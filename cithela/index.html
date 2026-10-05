@@ -2239,7 +2239,9 @@ async function patientEnter(){
       return;
     }
     patientPortalData=result;
-    me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
+    me={role:'paciente',cloud:true,email:s.email||null,phone:s.phone||null,
+      identity:s.phone?'phone:'+s.phone:'email:'+String(s.email||'').toLowerCase(),
+      nombre:result.profiles[0].name};
     goPac();
   }catch(err){
     if(['invalid_invite','already_linked'].includes(err?.message))
@@ -2255,9 +2257,13 @@ let patientRescheduleState=null;
 let patientSlotRequest=0;
 let patientMutationBusy=false;
 
+function patientCloudIdentity(){
+  const s=CithelaCloud.state();
+  return s.phone?'phone:'+s.phone:(s.email?'email:'+String(s.email).toLowerCase():'');
+}
 function patientOwnAppointment(tenantId,appointmentId){
   if(!me?.cloud||me?.role!=='paciente'||!patientPortalData?.profiles)return null;
-  if(String(CithelaCloud.state().email||'').toLowerCase()!==String(me.email||'').toLowerCase())return null;
+  if(!me.identity||patientCloudIdentity()!==me.identity)return null;
   const profile=patientPortalData.profiles.find(p=>p.tenant_id===tenantId);
   const appointment=profile?.appointments?.find(a=>a.id===appointmentId);
   return profile&&appointment?{profile,appointment}:null;
@@ -2273,6 +2279,7 @@ function patientActionErrorMessage(code){
     outside_working_hours:'Ese horario está fuera de la jornada del profesional.',
     same_slot:'Elegí un horario diferente.',
     email_not_verified:'Primero verificá tu correo.',
+    phone_not_verified:'Primero verificá tu WhatsApp.',
     appointment_not_found:'El turno no está disponible para tu cuenta.',
     inactive_service_or_resource:'El servicio o profesional ya no está disponible.',
     tenant_inactive:'El consultorio no está disponible para reservas.',
@@ -2394,7 +2401,7 @@ let patientBookingRequest=0;
 
 function patientBookingProfile(tenantId,personId){
   if(!me?.cloud||me?.role!=='paciente')return null;
-  if(String(CithelaCloud.state().email||'').toLowerCase()!==String(me.email||'').toLowerCase())return null;
+  if(!me.identity||patientCloudIdentity()!==me.identity)return null;
   return patientPortalData?.profiles?.find(p=>p.tenant_id===tenantId&&p.person_id===personId)||null;
 }
 function patientBookingDateShift(date,days){
@@ -2729,7 +2736,7 @@ async function patientRefreshPortal(){
     const result=await CithelaCloud.patientPortal();
     if(request!==patientPortalRequest||!me?.cloud)return;
     patientPortalData=result;
-    $('patient-cloud-identity').textContent=me.email||'Cuenta verificada';
+    $('patient-cloud-identity').textContent=me.phone||me.email||'Cuenta verificada';
     if(patientBookingState&&!patientBookingProfile(
       patientBookingState.tenantId,patientBookingState.personId)){
       patientBookingState=null;++patientBookingRequest;
@@ -2789,7 +2796,9 @@ async function resumeCloudSession(){
   setRole('paciente');$('l-patient-email').value=s.email||'';
   if(result?.profiles?.length){
     patientPortalData=result;
-    me={role:'paciente',cloud:true,email:s.email,nombre:result.profiles[0].name};
+    me={role:'paciente',cloud:true,email:s.email||null,phone:s.phone||null,
+      identity:s.phone?'phone:'+s.phone:'email:'+String(s.email||'').toLowerCase(),
+      nombre:result.profiles[0].name};
     goPac();
   }else{
     toast('Sesión verificada. Abrí el enlace personal de WhatsApp para vincular tus turnos.',4900);
