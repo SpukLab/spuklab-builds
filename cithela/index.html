@@ -338,16 +338,27 @@ textarea.inp{resize:vertical;min-height:72px;}
       <input class="inp" id="l-nombre" type="text" placeholder="Ej: María González">
     </div>
     <div id="f-medico">
-      <div id="professional-demo-credentials" style="display:none;">
+      <div id="professional-login-fields">
+        <label class="lbl" for="l-cloud-email">Correo profesional</label>
+        <input class="inp" id="l-cloud-email" type="email" autocomplete="username" placeholder="tu@email.com">
+        <label class="lbl" for="l-cloud-password">Contraseña</label>
+        <input class="inp" id="l-cloud-password" type="password" autocomplete="current-password" placeholder="Tu contraseña">
+        <button class="btn-main" id="professional-login-button" type="button" onclick="professionalPasswordLogin()">Ingresar</button>
+        <button class="mb ghost" type="button" style="width:100%;margin-top:10px;" onclick="requestProfessionalPasswordReset()">Olvidé mi contraseña</button>
+        <p class="hint" style="margin:10px 0 0;">La sesión queda iniciada en este dispositivo.</p>
+      </div>
+      <div id="professional-password-recovery" style="display:none;">
+        <p class="patient-login-guidance">Creá una nueva contraseña para tu cuenta profesional.</p>
+        <label class="lbl" for="l-new-password">Nueva contraseña</label>
+        <input class="inp" id="l-new-password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+        <label class="lbl" for="l-new-password-confirm">Repetir contraseña</label>
+        <input class="inp" id="l-new-password-confirm" type="password" autocomplete="new-password" placeholder="Repetí la contraseña">
+        <button class="btn-main" type="button" onclick="saveProfessionalPassword()">Guardar contraseña</button>
+      </div>
+      <div id="professional-demo-credentials" style="display:none;margin-top:18px;padding-top:18px;border-top:var(--line);">
         <label class="lbl">Clave de demostración local</label>
         <input class="inp" id="l-clave" type="password" placeholder="Clave de demostración">
-      </div>
-      <div>
-        <label class="lbl" for="l-cloud-email">Correo profesional</label>
-        <input class="inp" id="l-cloud-email" type="email" autocomplete="email" placeholder="tu@email.com">
-        <button class="btn-main soft" type="button" onclick="requestLoginMagicLink()">Enviar enlace mágico</button>
-        <button class="btn-main soft" id="professional-session-continue" style="display:none;margin-top:8px;" type="button" onclick="loginWithCloudSession()">Entrar con mi sesión</button>
-        <p class="hint" style="margin:8px 0 0;">Abrí el correo de CITHELA. El enlace te permitirá acceder sin contraseña.</p>
+        <button class="btn-main soft" id="professional-demo-login-button" style="display:none;" type="button" onclick="doLogin()">Ingresar a demostración local</button>
       </div>
     </div>
     <div id="f-pac" style="display:none">
@@ -377,7 +388,6 @@ textarea.inp{resize:vertical;min-height:72px;}
         </div>
       </div>
     </div>
-    <button class="btn-main" id="professional-login-button" style="display:none;" onclick="doLogin()">Ingresar a demostración local</button>
     <div class="byline" style="border:none;margin-top:24px;padding-bottom:0;"><p>by <span>SpukLab</span></p></div>
   </div>
 </div>
@@ -1217,7 +1227,7 @@ const CithelaCloud=(()=>{
   let refreshSerial=0;
   let realtimeChannel=null,realtimeTenantId=null,realtimeDebounceTimer=null;
   const state={
-    sdk:false,checked:false,session:null,membership:null,tenant:null,
+    sdk:false,checked:false,session:null,membership:null,tenant:null,passwordRecovery:false,
     services:[],serviceCatalog:[],resources:[],people:[],workingHours:[],appointments:[],availabilityBlocks:[],realtimeStatus:'IDLE',error:null
   };
 
@@ -1226,6 +1236,7 @@ const CithelaCloud=(()=>{
       sdk:state.sdk,checked:state.checked,realtimeStatus:state.realtimeStatus,
       signedIn:!!state.session,
       email:state.session?.user?.email||null,
+      passwordRecovery:!!state.passwordRecovery,
       membership:state.membership?{...state.membership}:null,
       tenant:state.tenant?{...state.tenant}:null,
       serviceCount:state.services.length,
@@ -1344,14 +1355,22 @@ const CithelaCloud=(()=>{
     client=lib.createClient(CITHELA_SUPABASE_URL,CITHELA_SUPABASE_PUBLISHABLE_KEY,{
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     });
-    client.auth.onAuthStateChange((_event,session)=>{
+    client.auth.onAuthStateChange((event,session)=>{
       state.session=session||null;
+      if(event==='PASSWORD_RECOVERY')state.passwordRecovery=true;
       if(!session){
         ++refreshSerial;
+        state.passwordRecovery=false;
         resetWorkspace();
         state.checked=true;
         state.error=null;
         notify();
+      }else if(event==='PASSWORD_RECOVERY'){
+        setTimeout(()=>{
+          if(typeof scr==='function')scr('login');
+          if(typeof setRole==='function')setRole('medico');
+          else if(typeof showProfessionalPasswordRecovery==='function')showProfessionalPasswordRecovery();
+        },0);
       }
       setTimeout(()=>refresh().catch(()=>{}),0);
     });
@@ -1446,6 +1465,25 @@ const CithelaCloud=(()=>{
       email:data?.user?.email||email,
       requiresConfirmation:!data?.session
     };
+  }
+
+  async function resetProfessionalPassword(email){
+    const c=await getClient();
+    const clean=String(email||'').trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean))throw Error('Ingresá un correo válido');
+    const {error}=await c.auth.resetPasswordForEmail(clean,{redirectTo:CITHELA_PUBLIC_URL});
+    if(error)throw error;
+    return {ok:true};
+  }
+
+  async function updateProfessionalPassword(password){
+    const c=await getClient();
+    const value=String(password||'');
+    if(value.length<8)throw Error('La contraseña debe tener al menos 8 caracteres');
+    const {error}=await c.auth.updateUser({password:value});
+    if(error)throw error;
+    state.passwordRecovery=false;
+    return refresh();
   }
 
   async function sendMagicLink(email){
@@ -1779,7 +1817,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2605,6 +2643,11 @@ async function patientRefreshPortal(){
 
 async function resumeCloudSession(){
   const s=CithelaCloud.state();
+  if(s.passwordRecovery){
+    setRole('medico');
+    showProfessionalPasswordRecovery();
+    return;
+  }
   if(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK){
     setRole('paciente');
     const target=pendingPatientInviteEmail();
@@ -2636,6 +2679,69 @@ async function resumeCloudSession(){
     toast('Sesión verificada. Abrí el enlace personal de WhatsApp para vincular tus turnos.',4900);
   }
 }
+function showProfessionalPasswordRecovery(){
+  const login=$('professional-login-fields'),recovery=$('professional-password-recovery');
+  if(login)login.style.display='none';
+  if(recovery)recovery.style.display='block';
+  const first=$('l-new-password');
+  if(first)setTimeout(()=>first.focus(),0);
+}
+
+async function professionalPasswordLogin(){
+  const email=String($('l-cloud-email')?.value||'').trim();
+  const password=String($('l-cloud-password')?.value||'');
+  if(!email||!password){toast('Ingresá correo y contraseña');return;}
+  const button=$('professional-login-button');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  try{
+    const s=await CithelaCloud.signIn(email,password);
+    if(!s.membership||!s.tenant){
+      await CithelaCloud.signOut();
+      toast('Esta cuenta no tiene un espacio CITHELA profesional asignado.',4800);
+      return;
+    }
+    $('l-cloud-password').value='';
+    await loginWithCloudSession();
+  }catch(err){
+    const message=String(err?.message||'');
+    const friendly=/invalid login credentials/i.test(message)
+      ?'Correo o contraseña incorrectos.'
+      :(/email not confirmed/i.test(message)?'Primero confirmá tu correo.':message||'No se pudo ingresar');
+    toast(friendly,4600);
+  }finally{
+    if(button)button.disabled=false;
+  }
+}
+
+async function requestProfessionalPasswordReset(){
+  const email=String($('l-cloud-email')?.value||'').trim();
+  if(!email){toast('Ingresá tu correo profesional');return;}
+  try{
+    await CithelaCloud.resetProfessionalPassword(email);
+    toast('Te enviamos un correo para crear o recuperar tu contraseña.',5200);
+  }catch(err){toast(err?.message||'No se pudo enviar la recuperación',4600);}
+}
+
+async function saveProfessionalPassword(){
+  const first=String($('l-new-password')?.value||'');
+  const second=String($('l-new-password-confirm')?.value||'');
+  if(first.length<8){toast('Usá una contraseña de al menos 8 caracteres');return;}
+  if(first!==second){toast('Las contraseñas no coinciden');return;}
+  try{
+    const s=await CithelaCloud.updateProfessionalPassword(first);
+    $('l-new-password').value='';$('l-new-password-confirm').value='';
+    if(!s.membership||!s.tenant){
+      toast('Contraseña guardada, pero esta cuenta no tiene un espacio profesional asignado.',5000);
+      return;
+    }
+    $('professional-password-recovery').style.display='none';
+    $('professional-login-fields').style.display='block';
+    toast('Contraseña guardada.',2600);
+    await loginWithCloudSession();
+  }catch(err){toast(err?.message||'No se pudo guardar la contraseña',4600);}
+}
+
 async function requestLoginMagicLink(){
   const email=$('l-cloud-email')?.value.trim();
   if(!email){toast('Ingresá tu correo cloud');return;}
@@ -2659,23 +2765,15 @@ function setRole(r){
   $('f-pac').style.display=r==='paciente'?'block':'none';
   $('login-name-wrap').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
   $('professional-demo-credentials').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
-  $('professional-login-button').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
+  $('professional-demo-login-button').style.display=r==='medico'&&CITHELA_DEMO_MODE?'block':'none';
   $('patient-demo-controls').style.display=r==='paciente'&&CITHELA_DEMO_MODE?'block':'none';
   const s=CithelaCloud.state();
-  $('professional-session-continue').style.display=r==='medico'&&s.signedIn&&
-    s.membership&&s.tenant?'block':'none';
+  if(r==='medico'&&s.passwordRecovery)showProfessionalPasswordRecovery();
   renderPatientLoginSession();
 }
 
 function doLogin(){
-  if(role==='medico'){
-    const s=CithelaCloud.state();
-    if(s.signedIn&&s.membership&&s.tenant){
-      loginWithCloudSession();return;
-    }
-    if(!CITHELA_DEMO_MODE){requestLoginMagicLink();return;}
-  }
-  if(!CITHELA_DEMO_MODE){patientEnter();return;}
+  if(!CITHELA_DEMO_MODE)return;
   const nom=$('l-nombre').value.trim();
   if(!nom){toast('Ingresá tu nombre');return;}
   if(role==='medico'){
