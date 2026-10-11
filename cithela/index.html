@@ -4686,7 +4686,15 @@ async function cloudApplyWeeklyPreset(){
   if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||'')){
     toast('Necesitás permisos de administración');return;
   }
-  if(!confirm('¿Aplicar el horario semanal de prueba? Se cambiarán los horarios de atención, pero los turnos existentes se conservarán.'))return;
+  const existingHours=Array.isArray(s.workingHours)?s.workingHours:[];
+  const advancedDays=CLOUD_WEEKDAYS.filter(([day])=>
+    existingHours.filter(w=>Number(w.weekday)===day&&!w.resource_id).length>2
+  );
+  if(advancedDays.length){
+    toast('Hay días con más de dos tramos. Editalos individualmente antes de aplicar la plantilla.',5200);
+    return;
+  }
+  if(!confirm('¿Aplicar el horario semanal de prueba? Se cambiarán los horarios generales de atención, pero los turnos existentes se conservarán.'))return;
   const preset=Object.fromEntries(CLOUD_WEEKDAYS.map(([day])=>[day,
     day===7?[]:day===6?[{start:'09:00',end:'13:00'}]:
     [{start:'09:00',end:'13:00'},{start:'14:00',end:'18:00'}]
@@ -4720,6 +4728,9 @@ async function cloudSaveWorkingHours(day){
     toast('Completá inicio y fin de cada tramo');return;
   }
   const periods=pairs.filter(p=>p.start&&p.end).sort((a,b)=>a.start.localeCompare(b.start));
+  if(periods.some((p,i)=>p.start>=p.end||(i>0&&p.start<periods[i-1].end))){
+    toast('Revisá los tramos: deben tener inicio anterior al fin y no superponerse.');return;
+  }
   try{
     await CithelaCloud.setWorkingHours({
       tenantId:s.tenant.id,
