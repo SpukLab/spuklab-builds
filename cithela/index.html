@@ -732,6 +732,8 @@ textarea.inp{resize:vertical;min-height:72px;}
           <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
           <p class="contact-note" style="margin-top:12px;">Borrador para revisión:</p>
           <div id="cloud-wa-preview" role="status" aria-live="polite" style="white-space:pre-wrap;word-break:break-word;font-size:.8rem;line-height:1.5;"></div>
+          <button class="btn-main" id="cloud-wa-send" type="button" style="display:none;margin-top:12px;" onclick="cloudSendWhatsappDraft()">Aprobar y enviar por WhatsApp</button>
+          <p id="cloud-wa-send-status" role="status" class="contact-note" style="display:none;margin-top:8px;"></p>
         </div>
       </details>
       <div id="cloud-probe-form" style="display:none;margin-top:18px;">
@@ -1793,6 +1795,18 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function whatsappSend(payload){
+    const c=await getClient();
+    const {data,error}=await c.functions.invoke('cithela-whatsapp-send',{body:payload});
+    if(error){
+      let code='send_failed';
+      try{const response=await error.context?.json?.();if(response?.code)code=response.code;}catch{}
+      throw new Error(code);
+    }
+    if(!data?.ok)throw new Error(data?.code||'send_failed');
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1926,7 +1940,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -4512,10 +4526,19 @@ async function saveCloudPaymentConfig(){
 }
 
 let cloudWaBusy=false;
+let cloudWaPendingDraft=null;
+function cloudWaResetApproval(){
+  cloudWaPendingDraft=null;
+  const button=$('cloud-wa-send'),status=$('cloud-wa-send-status');
+  if(button){button.style.display='none';button.disabled=false;}
+  if(status){status.style.display='none';status.textContent='';}
+}
+
 async function cloudLoadWhatsappInbox(){
   if(cloudWaBusy)return;
   const s=CithelaCloud.state(),list=$('cloud-wa-list'),preview=$('cloud-wa-preview');
   if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  cloudWaResetApproval();
   cloudWaBusy=true;if(list)list.textContent='Consultando mensajes...';if(preview)preview.textContent='';
   try{
     const data=await CithelaCloud.whatsappReview({action:'list',tenant_id:s.tenant.id});
@@ -4537,12 +4560,47 @@ async function cloudPrepareWhatsappDraft(eventId){
   if(cloudWaBusy||!/^[0-9a-f-]{36}$/i.test(String(eventId||'')))return;
   const s=CithelaCloud.state(),preview=$('cloud-wa-preview');
   if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  cloudWaResetApproval();
   cloudWaBusy=true;if(preview)preview.textContent='Consultando servicios y disponibilidad...';
   try{
     const data=await CithelaCloud.whatsappReview({action:'prepare',tenant_id:s.tenant.id,event_id:eventId});
     if(preview)preview.textContent=data.draft||'Revisión manual necesaria.';
+    if(typeof data.draft==='string'&&['needs_service','slots_preview','no_slots'].includes(data.code)){
+      cloudWaPendingDraft={tenant_id:s.tenant.id,event_id:eventId,draft:data.draft};
+      const send=$('cloud-wa-send');if(send)send.style.display='block';
+    }
   }catch(err){if(preview)preview.textContent=err?.message||'No fue posible generar el borrador.';}
   finally{cloudWaBusy=false;}
+}
+
+async function cloudSendWhatsappDraft(){
+  const p=cloudWaPendingDraft;
+  const s=CithelaCloud.state();
+  if(cloudWaBusy||!p||!s?.signedIn||!s.tenant||
+    !['owner','admin'].includes(s.membership?.role||'')||p.tenant_id!==s.tenant.id)return;
+  if(!confirm('¿Enviar este texto por WhatsApp al contacto que lo solicitó? No se creará ningún turno.'))return;
+  cloudWaBusy=true;
+  const send=$('cloud-wa-send'),status=$('cloud-wa-send-status');
+  if(send)send.disabled=true;
+  if(status){status.style.display='block';status.textContent='Enviando respuesta aprobada a Meta...';}
+  try{
+    await CithelaCloud.whatsappSend({action:'send',...p});
+    cloudWaPendingDraft=null;
+    if(send)send.style.display='none';
+    if(status)status.textContent='Meta recibió la solicitud de envío. La entrega al destinatario aún debe confirmarse.';
+  }catch(err){
+    const descriptions={
+      conversation_window_expired:'La ventana de WhatsApp venció. El paciente debe escribir nuevamente antes de responder.',
+      already_attempted:'Este mensaje ya tuvo un intento de envío. No se repetirá para evitar duplicados.',
+      stale_or_unsupported_draft:'El borrador cambió o perdió vigencia. Volvé a tocar Preparar.',
+      sender_not_configured:'El número remitente o las credenciales Meta no están configurados.',
+      delivery_unconfirmed:'Meta no confirmó el envío. No reintentes este mensaje sin revisar el estado.',
+    };
+    if(status)status.textContent=descriptions[err?.message]||'No se pudo completar el envío. Código: '+(err?.message||'desconocido');
+    if(['already_attempted','delivery_unconfirmed','conversation_window_expired'].includes(err?.message)){
+      cloudWaPendingDraft=null;if(send)send.style.display='none';
+    }else if(send)send.disabled=false;
+  }finally{cloudWaBusy=false;}
 }
 
 function renderCloudStatus(){
