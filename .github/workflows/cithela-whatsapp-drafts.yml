@@ -1,0 +1,26 @@
+name: CITHELA WhatsApp draft checks
+on:
+  pull_request:
+    paths:
+      - 'cithela/whatsapp-*.mjs'
+      - '.github/workflows/cithela-whatsapp-drafts.yml'
+  push:
+    paths:
+      - 'cithela/whatsapp-*.mjs'
+      - '.github/workflows/cithela-whatsapp-drafts.yml'
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate WhatsApp modules
+        run: |
+          node --check cithela/whatsapp-slot-proposals.mjs
+          node --check cithela/whatsapp-draft-orchestrator.mjs
+      - name: Test WhatsApp proposal behavior
+        run: node --test cithela/whatsapp-slot-proposals.test.mjs cithela/whatsapp-draft-orchestrator.test.mjs
