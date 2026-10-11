@@ -724,6 +724,16 @@ textarea.inp{resize:vertical;min-height:72px;}
         <button class="btn-main soft" type="button" onclick="cloudCheck()">Probar conexión</button>
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignOut()">Cerrar sesión cloud</button>
       </div>
+      <details class="cithela-weekly-preset" id="cloud-wa-pilot" style="display:none;margin-top:18px;">
+        <summary>Asistente WhatsApp · prueba supervisada ▾</summary>
+        <div style="padding:4px 2px 14px;">
+          <p class="contact-note">Solo el propietario o un administrador puede revisar estos mensajes. No se envían respuestas ni se crean turnos.</p>
+          <button class="btn-main soft" type="button" onclick="cloudLoadWhatsappInbox()">Ver mensajes recibidos</button>
+          <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
+          <p class="contact-note" style="margin-top:12px;">Borrador para revisión:</p>
+          <div id="cloud-wa-preview" role="status" aria-live="polite" style="white-space:pre-wrap;word-break:break-word;font-size:.8rem;line-height:1.5;"></div>
+        </div>
+      </details>
       <div id="cloud-probe-form" style="display:none;margin-top:18px;">
         <p class="sh" style="margin-top:0;">Prueba multi-dispositivo</p>
         <p class="contact-note">Crea un turno únicamente en el backend cloud para comprobar que dos dispositivos conectados al mismo workspace ven el mismo estado. No se mezcla todavía con la agenda local.</p>
@@ -1775,6 +1785,14 @@ const CithelaCloud=(()=>{
     return data;
   }
 
+  async function whatsappReview(payload){
+    const c=await getClient();
+    const {data,error}=await c.functions.invoke('cithela-whatsapp-review',{body:payload});
+    if(error)throw new Error('No se pudo consultar el asistente de WhatsApp.');
+    if(!data?.ok)throw new Error(data?.code||'No se pudo preparar la respuesta.');
+    return data;
+  }
+
   async function setWorkingHours({tenantId,requestId,weekday,periods}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_configuration_command',{
@@ -1908,7 +1926,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -4493,6 +4511,40 @@ async function saveCloudPaymentConfig(){
   }
 }
 
+let cloudWaBusy=false;
+async function cloudLoadWhatsappInbox(){
+  if(cloudWaBusy)return;
+  const s=CithelaCloud.state(),list=$('cloud-wa-list'),preview=$('cloud-wa-preview');
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  cloudWaBusy=true;if(list)list.textContent='Consultando mensajes...';if(preview)preview.textContent='';
+  try{
+    const data=await CithelaCloud.whatsappReview({action:'list',tenant_id:s.tenant.id});
+    if(!list)return;
+    const items=(data.items||[]).filter(x=>/^[0-9a-f-]{36}$/i.test(x.id));
+    if(!items.length){list.textContent='Todavía no hay mensajes recibidos.';return;}
+    list.innerHTML=items.map(x=>{
+      const time=x.received_at?new Date(x.received_at).toLocaleString('es-AR'):'';
+      return '<div class="block-row"><div class="block-main">'+
+        '<div class="block-title">'+escHtml(x.sender_name||'Contacto WhatsApp')+'</div>'+
+        '<div class="block-meta">'+escHtml(x.text_body||'Mensaje no textual')+'</div>'+
+        '<div class="contact-note">'+escHtml(time)+'</div>'+
+        '</div><button class="mb ghost" type="button" onclick="cloudPrepareWhatsappDraft(\''+x.id+'\')">Preparar</button></div>';
+    }).join('');
+  }catch(err){if(list)list.textContent=err?.message||'No fue posible recuperar los mensajes.';}
+  finally{cloudWaBusy=false;}
+}
+async function cloudPrepareWhatsappDraft(eventId){
+  if(cloudWaBusy||!/^[0-9a-f-]{36}$/i.test(String(eventId||'')))return;
+  const s=CithelaCloud.state(),preview=$('cloud-wa-preview');
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  cloudWaBusy=true;if(preview)preview.textContent='Consultando servicios y disponibilidad...';
+  try{
+    const data=await CithelaCloud.whatsappReview({action:'prepare',tenant_id:s.tenant.id,event_id:eventId});
+    if(preview)preview.textContent=data.draft||'Revisión manual necesaria.';
+  }catch(err){if(preview)preview.textContent=err?.message||'No fue posible generar el borrador.';}
+  finally{cloudWaBusy=false;}
+}
+
 function renderCloudStatus(){
   const el=$('cloud-status');if(!el)return;
   const s=window.CithelaCloud?CithelaCloud.state():null;
@@ -4525,6 +4577,8 @@ function renderCloudStatus(){
     if(name&&!name.value)name.value=getCfg().consultorio||getCfg().brand||'CITHELA';
   }
   if(actions)actions.style.display=s.signedIn?'block':'none';
+  const waPilot=$('cloud-wa-pilot');
+  if(waPilot)waPilot.style.display=s.signedIn&&s.tenant&&['owner','admin'].includes(s.membership?.role||'')?'block':'none';
   renderCloudWorkingHours(s);
   renderCloudProbe(s);
   renderCloudPaymentConfig(s);

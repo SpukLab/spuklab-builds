@@ -1,0 +1,38 @@
+name: CITHELA WhatsApp supervised review
+on:
+  pull_request:
+    paths:
+      - 'cithela/edge/cithela-whatsapp-review/**'
+      - 'cithela/index.html'
+      - '.github/workflows/cithela-whatsapp-review.yml'
+  push:
+    paths:
+      - 'cithela/edge/cithela-whatsapp-review/**'
+      - 'cithela/index.html'
+      - '.github/workflows/cithela-whatsapp-review.yml'
+permissions:
+  contents: read
+jobs:
+  review-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Edge Function syntax
+        run: node --check --input-type=module < cithela/edge/cithela-whatsapp-review/index.ts
+      - name: Validate HTML application JavaScript
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('cithela/index.html','utf8');
+          const match=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!match)throw new Error('Main JS not found');
+          new Function(match[1]);
+          const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
+          const duplicate=ids.find((id,i)=>ids.indexOf(id)!==i);
+          if(duplicate)throw new Error('Duplicate HTML id: '+duplicate);
+          NODE
+      - name: Test permissions and draft safety
+        run: node --test cithela/edge/cithela-whatsapp-review/review.test.mjs
