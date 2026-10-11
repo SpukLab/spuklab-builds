@@ -319,6 +319,8 @@ textarea.inp{resize:vertical;min-height:72px;}
 .patient-shared-panel .btn-main{margin-top:12px;min-height:44px;}
 
 .cithela-config-group{border:1px solid #d6e4e0;border-radius:13px;background:var(--white);margin-bottom:12px;overflow:hidden}.cithela-config-group>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:16px;font-weight:600;list-style:none}.cithela-config-group>summary::-webkit-details-marker,.cithela-day>summary::-webkit-details-marker{display:none}.cithela-config-group[open]>summary span{transform:rotate(180deg)}.cithela-config-group>.form-card{margin:0 12px 14px!important}.cithela-day{border-bottom:1px solid #dce8e6}.cithela-day>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 0;cursor:pointer;list-style:none}.cithela-day>.day-editor{padding:8px 0 12px}.cithela-day .tag{font-size:.67rem;max-width:70%;text-align:right;white-space:normal}
+
+.cithela-weekly-preset{margin:8px 0 14px;border:1px solid #dbe8e5;border-radius:10px;padding:0 12px}.cithela-weekly-preset>summary{cursor:pointer;padding:12px 2px;list-style:none;font-weight:600;font-size:.82rem;color:var(--teal2)}.cithela-weekly-preset>summary::-webkit-details-marker{display:none}
 </style>
 
 </head>
@@ -659,8 +661,24 @@ textarea.inp{resize:vertical;min-height:72px;}
     </div>
 
     </details>
+    <details class="cithela-config-group" id="cfg-section-hours">
+      <summary>Horarios de atención<span aria-hidden="true">⌄</span></summary>
+      <div class="form-card" style="margin-bottom:14px;">
+      <div id="cloud-hours-form" style="display:none;margin-top:18px;">
+        <p class="contact-note" style="margin-bottom:8px;">Activá los días de trabajo y modificá sus franjas horarias cuando lo necesites.</p>
+        
+        <details class="cithela-weekly-preset"><summary>Aplicar un horario predeterminado ▾</summary>
+          <strong style="font-size:.85rem;">Configuración rápida de la semana</strong>
+          <p class="contact-note">Lunes a viernes 09:00–13:00 / 14:00–18:00; sábado 09:00–13:00. Domingo cerrado. Podés editar cada día después.</p>
+          <button class="btn-main soft" type="button" onclick="cloudApplyWeeklyPreset()">Aplicar horario semanal</button>
+          <p class="contact-note">Solo cambia los horarios futuros de atención. Los turnos existentes no se cancelan ni se mueven.</p>
+        </details>
+        <div id="cloud-hours-list"></div>
+      </div>
+      </div>
+    </details>
     <details class="cithela-config-group" id="cfg-section-availability" open>
-      <summary>Disponibilidad<span aria-hidden="true">⌄</span></summary>
+      <summary>Ausencias y bloqueos<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Bloqueá un día completo o un horario puntual. Los turnos existentes no se eliminan: el bloqueo solo impide nuevas reservas y reprogramaciones.</p>
       <div class="inline-grid">
@@ -683,7 +701,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 
     </details>
     <details class="cithela-config-group" id="cfg-section-cloud">
-      <summary>Nube CITHELA<span aria-hidden="true">⌄</span></summary>
+      <summary>Cuenta y conexión<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="cloud-status"></div>
       <div id="cloud-auth-form" style="margin-top:14px;">
@@ -705,17 +723,6 @@ textarea.inp{resize:vertical;min-height:72px;}
       <div id="cloud-actions" style="display:none;margin-top:14px;">
         <button class="btn-main soft" type="button" onclick="cloudCheck()">Probar conexión</button>
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignOut()">Cerrar sesión cloud</button>
-      </div>
-      <div id="cloud-hours-form" style="display:none;margin-top:18px;">
-        <p class="sh" style="margin-top:0;">Horarios cloud</p>
-        <p class="contact-note">Horarios generales del workspace remoto. Admiten hasta dos tramos por día desde esta pantalla; los horarios específicos por profesional/recurso se conservan aparte.</p>
-        <div style="padding:12px;border:1px solid #d7e7e2;border-radius:12px;margin:12px 0;">
-          <strong style="font-size:.85rem;">Configuración rápida de la semana</strong>
-          <p class="contact-note">Lunes a viernes 09:00–13:00 / 14:00–18:00; sábado 09:00–13:00. Domingo cerrado. Podés editar cada día después.</p>
-          <button class="btn-main soft" type="button" onclick="cloudApplyWeeklyPreset()">Aplicar horario semanal</button>
-          <p class="contact-note">Solo cambia los horarios futuros de atención. Los turnos existentes no se cancelan ni se mueven.</p>
-        </div>
-        <div id="cloud-hours-list"></div>
       </div>
       <div id="cloud-probe-form" style="display:none;margin-top:18px;">
         <p class="sh" style="margin-top:0;">Prueba multi-dispositivo</p>
@@ -4178,7 +4185,7 @@ function ntGoToHoursConfig(){
   const button=document.querySelector('#screen-medico .tabs .tab:last-child');
   if(!button)return;
   tab('medico','config',button);
-  $('cfg-section-cloud')?.setAttribute('open','');
+  $('cfg-section-hours')?.setAttribute('open','');
   $('cloud-hours-form')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function ntGoNextWorkingDay(){
