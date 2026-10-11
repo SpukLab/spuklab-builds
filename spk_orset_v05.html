@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Spk_OrSet v0.5</title>
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden;
+  background: linear-gradient(155deg,#13111f,#1b1726);
+  color: #fff; font-family: Inter,-apple-system,sans-serif; font-size: 13px;
+}
+button {
+  font-family: Inter,sans-serif; font-size: 12px; color: #fff;
+  background: rgba(153,68,255,.07); border: 1px solid rgba(153,68,255,.18);
+  border-radius: 5px; padding: 5px 11px; cursor: pointer;
+}
+button:disabled { opacity: .35; }
+button.active { background: rgba(153,68,255,.22); border-color: rgba(153,68,255,.5); }
+select, input[type=number] {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(153,68,255,.18);
+  color: #fff; border-radius: 4px; padding: 3px 6px; font-size: 12px;
+}
+input[type=range] { accent-color: #9944ff; }
+input[type=file]  { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.lbl { font-size: 11px; color: rgba(255,255,255,.42); }
+
+/* ---- TOP BAR ---- */
+#topBar {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 7px 14px; border-bottom: 1px solid rgba(153,68,255,.14);
+  background: rgba(13,11,31,.7); position: sticky; top: 0; z-index: 10; height: 52px;
+}
+.logoSpk   { font-weight: 800; font-size: 20px; }
+.logoOrset { font-weight: 300; font-size: 20px; color: #00ffff; margin-right: 5px; }
+.topSec    { display: flex; align-items: center; gap: 5px; }
+#statusBar { font-size: 11px; color: rgba(255,255,255,.42); flex: 1; min-width: 60px; overflow: hidden; white-space: nowrap; }
+
+/* ---- LAYOUT ---- */
+#layout { display: flex; height: calc(100vh - 52px); overflow: hidden; }
+
+/* ---- LEFT PANEL ---- */
+#leftPanel {
+  width: 186px; flex-shrink: 0;
+  background: rgba(153,68,255,.04); border-right: 1px solid rgba(153,68,255,.12);
+  display: flex; flex-direction: column; overflow-y: auto;
+}
+.pSec { padding: 9px 11px; border-bottom: 1px solid rgba(153,68,255,.07); }
+.pSec h4 { font-size: 10px; color: rgba(255,255,255,.32); letter-spacing: 1.2px; margin-bottom: 7px; }
+.pRow { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
+#matInfo { font-size: 11px; color: rgba(0,255,255,.75); margin-top: 2px; }
+
+/* ROLES */
+.rRow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+.rName { font-size: 11px; font-weight: 700; min-width: 52px; }
+.rBtn  { width: 22px; height: 22px; padding: 0; font-size: 10px; font-weight: 700; }
+.rBtn.rs { background: rgba(153,68,255,.28); border-color: #b580ff; }
+.rBtn.rm { background: rgba(255,80,80,.22); border-color: #ff5050; }
+.r-voice   { color: #c080ff; } .r-texture { color: #00ffff; }
+.r-rhythm  { color: #ff88ff; } .r-noise   { color: #aaa; } .r-field { color: #00ff88; }
+
+/* SCENES */
+.sBtns { display: flex; gap: 4px; }
+.sBtn { flex: 1; font-size: 12px; font-weight: 700; padding: 5px 4px; position: relative; }
+.sBtn.saved::after {
+  content: ''; position: absolute; top: 3px; right: 3px;
+  width: 4px; height: 4px; border-radius: 50%; background: #00ffff;
+}
+.sBtn.sel { background: rgba(0,255,255,.12); border-color: rgba(0,255,255,.4); }
+.sActions { display: flex; gap: 4px; margin-top: 5px; }
+.sActions button { flex: 1; font-size: 11px; padding: 4px 6px; }
+
+/* MORPH */
+.morphRow { display: flex; align-items: center; gap: 4px; }
+.morphSel { font-size: 11px; padding: 3px 4px; }
+#morphProgress {
+  height: 3px; background: rgba(153,68,255,.15);
+  border-radius: 2px; overflow: hidden; margin-top: 5px; display: none;
+}
+#morphBar { height: 100%; width: 0%; background: linear-gradient(90deg,#9944ff,#00ffff); transition: none; }
+
+/* ---- ENTITY GRID ---- */
+#entityGrid {
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 7px; padding: 8px; overflow-y: auto; align-content: start;
+}
+
+.entityCard {
+  background: rgba(153,68,255,.06); border: 1px solid rgba(153,68,255,.18);
+  border-radius: 8px; display: flex; flex-direction: column;
+  min-height: 240px; transition: border-color .07s;
+}
+.entityCard.triggered { border-color: rgba(0,255,255,.6); }
+
+/* CARD HEADER */
+.cHead {
+  display: flex; align-items: center; gap: 5px; padding: 7px 9px;
+  border-bottom: 1px solid rgba(153,68,255,.1); flex-wrap: wrap;
+}
+.cName {
+  font-weight: 700; font-size: 12px; min-width: 52px;
+  outline: none; cursor: text; flex: 1;
+}
+.cName:focus { color: #00ffff; }
+.rTag {
+  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+  cursor: pointer; white-space: nowrap;
+}
+.rt-voice   { background: rgba(153,68,255,.2); color: #d0a0ff; }
+.rt-texture { background: rgba(0,255,255,.12);  color: #00ffff; }
+.rt-rhythm  { background: rgba(255,0,136,.12);  color: #ff88ff; }
+.rt-noise   { background: rgba(180,180,180,.1); color: #aaa; }
+.rt-field   { background: rgba(0,255,136,.12);  color: #00ff88; }
+.vSel { font-size: 11px; padding: 2px 4px; }
+.bMs, .bRnd {
+  width: 23px; height: 23px; padding: 0; font-size: 10px; font-weight: 700;
+}
+.bMs.muted  { background: rgba(255,80,80,.25); border-color: #ff5050; color: #ffb0b0; }
+.bMs.soloed { background: rgba(153,68,255,.3); border-color: #b580ff; }
+.bRnd { color: #00ffff; border-color: rgba(0,255,255,.3); font-style: italic; }
+
+/* CARD PARAMS */
+.cParams, .cVParams {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 3px; padding: 5px 9px;
+}
+.pGrp { display: flex; flex-direction: column; gap: 1px; }
+.pGrp .lbl { font-size: 9px; }
+.pGrp input[type=range] { width: 100%; }
+
+/* WAVE CANVAS — the gesture zone */
+.waveCanvas {
+  display: block; flex: 1; width: 100%;
+  cursor: crosshair; touch-action: none; user-select: none;
+  border-top: 1px solid rgba(153,68,255,.08);
+  border-bottom-left-radius: 7px; border-bottom-right-radius: 7px;
+  min-height: 80px;
+}
+
+/* MORPH PROGRESS FLASH */
+.entityCard.morphing { border-color: rgba(0,255,255,.3); }
+
+/* START OVERLAY */
+#startOverlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(13,11,31,.92); z-index: 100;
+}
+#btnInit { font-size: 16px; padding: 18px 32px; background: rgba(153,68,255,.15); border-color: rgba(153,68,255,.5); }
+</style>
+</head>
+<body>
+
+<!-- ===========================================================
+     SPK_ORSET v0.5
+     + Waveform real por entidad (canvas con playhead, region freeze, slices, grain pos)
+     + Multi-touch con PointerEvent API (entidades simultaneas en iPad)
+     + Randomize por entidad (mantiene la vista, aleatorixa params)
+     + Scene Morph: interpolacion lineal A→B en N segundos
+     =========================================================== -->
+
+<div id="startOverlay">
+  <button id="btnInit">INICIAR AUDIO</button>
+</div>
+
+<div id="topBar">
+  <span class="logoSpk">SPK</span><span class="logoOrset">_ORSET</span>
+
+  <div class="topSec">
+    <button id="btnPlay" disabled>PLAY</button>
+    <button id="btnStop" disabled>STOP</button>
+  </div>
+
+  <div class="topSec">
+    <span class="lbl">BPM</span>
+    <input type="number" id="bpmInput" min="40" max="220" value="120" style="width:48px;">
+  </div>
+
+  <div class="topSec">
+    <span class="lbl">FOCUS</span>
+    <select id="focusTarget" style="font-size:11px;">
+      <option value="none">— ninguno</option>
+      <optgroup label="ROLES">
+        <option value="voice">voice</option>
+        <option value="texture">texture</option>
+        <option value="rhythm">rhythm</option>
+        <option value="noise">noise</option>
+        <option value="field">field</option>
+      </optgroup>
+      <optgroup id="focusEntityGroup" label="ENTITIES"></optgroup>
+    </select>
+    <input type="range" id="focusAmount" min="0" max="100" value="0" style="width:72px;">
+  </div>
+
+  <div class="topSec">
+    <span class="lbl">CMPLX</span>
+    <input type="range" id="complexity" min="0" max="100" value="40" style="width:72px;">
+  </div>
+
+  <div class="topSec">
+    <span class="lbl">REVERB</span>
+    <input type="range" id="reverbAmount" min="0" max="100" value="15" style="width:56px;">
+  </div>
+
+  <span id="statusBar">presiona INICIAR AUDIO</span>
+</div>
+
+<div id="layout">
+
+  <div id="leftPanel">
+
+    <!-- MATERIAL -->
+    <div class="pSec">
+      <h4 class="mono">MATERIAL</h4>
+      <div class="pRow">
+        <button id="btnLoadMaterial" style="font-size:11px;padding:4px 8px;">cargar</button>
+        <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_material">
+      </div>
+      <div id="matInfo">sintetico — 5.0s</div>
+      <div class="pRow" style="margin-top:6px;">
+        <span class="lbl">N</span>
+        <input type="number" id="fixedN" min="2" max="32" value="8" style="width:42px;">
+        <button id="btnBuild" style="font-size:11px;padding:4px 7px;">BUILD</button>
+      </div>
+      <div id="segInfo" class="lbl">8 regiones</div>
+    </div>
+
+    <!-- ROLES -->
+    <div class="pSec">
+      <h4 class="mono">ROLES</h4>
+      <div id="rolesPanel"></div>
+    </div>
+
+    <!-- SCENES + MORPH -->
+    <div class="pSec">
+      <h4 class="mono">SCENES</h4>
+      <div class="sBtns" id="sceneBtns">
+        <button class="sBtn" data-scene="A">A</button>
+        <button class="sBtn" data-scene="B">B</button>
+        <button class="sBtn" data-scene="C">C</button>
+        <button class="sBtn" data-scene="D">D</button>
+      </div>
+      <div class="sActions">
+        <button id="btnSaveScene">SAVE</button>
+        <button id="btnRecallScene">LOAD</button>
+      </div>
+      <div id="sceneStatus" class="lbl" style="margin-top:4px;">— selecciona A-D</div>
+    </div>
+
+    <!-- MORPH -->
+    <div class="pSec">
+      <h4 class="mono">MORPH</h4>
+      <div class="morphRow">
+        <select class="morphSel" id="morphFrom">
+          <option>A</option><option>B</option><option>C</option><option>D</option>
+        </select>
+        <span class="lbl">→</span>
+        <select class="morphSel" id="morphTo">
+          <option>B</option><option>A</option><option>C</option><option>D</option>
+        </select>
+        <input type="number" id="morphDur" min="1" max="60" value="4" style="width:34px;">s
+      </div>
+      <button id="btnMorph" style="width:100%;margin-top:5px;font-size:11px;">MORPH</button>
+      <div id="morphProgress"><div id="morphBar"></div></div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="pSec">
+      <h4 class="mono">STATE</h4>
+      <button id="btnExport" style="font-size:11px;padding:4px 8px;width:100%;">EXPORT JSON</button>
+    </div>
+
+  </div>
+
+  <div id="entityGrid"></div>
+
+</div>
+
+<script>
+// ===========================================================
+// SPK_ORSET v0.5
+// ===========================================================
+
+// --- helpers ---
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function lerp(a,b,t) { return a+(b-a)*t; }
+function note2rate(st){ return Math.pow(2, st/12); }
+function filterNormToHz(n){ return 200*Math.pow(100,n); }
+
+function randExp(rate){
+  var r = Math.random();
+  if(r<0.000001){ r=0.000001; }
+  return -Math.log(1-r)/rate;
+}
+
+// --- state ---
+var state = { complexity:40, focusTarget:null, focusAmount:0, bpm:120 };
+
+// --- material ---
+var material = { buffer:null, duration:0, segments:[] };
+
+// --- waveform cache (pre-rendered offscreen canvas, shared por ser un solo buffer) ---
+var waveformCache = null;
+
+function buildWaveformCache(buffer){
+  var W=600, H=100;
+  var c = document.createElement('canvas');
+  c.width=W; c.height=H;
+  var ctx = c.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // Centerline
+  ctx.strokeStyle='rgba(255,255,255,.06)';
+  ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+
+  // Waveform: sample buffer → min/max per pixel column
+  var numCh = buffer.numberOfChannels;
+  var numSmp = buffer.length;
+  var spp = numSmp/W;
+
+  ctx.strokeStyle='rgba(153,68,255,.7)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+
+  var x=0;
+  while(x<W){
+    var s0=Math.floor(x*spp), s1=Math.min(Math.floor((x+1)*spp), numSmp);
+    var mn=0, mx=0, s, ch, v;
+    for(s=s0;s<s1;s++){
+      v=0; ch=0;
+      while(ch<numCh){ v+=buffer.getChannelData(ch)[s]; ch++; }
+      v/=numCh;
+      if(v<mn){ mn=v; } if(v>mx){ mx=v; }
+    }
+    var yMin=(0.5-mx*0.48)*H;
+    var yMax=(0.5-mn*0.48)*H;
+    if(yMax<=yMin){ yMax=yMin+1; }
+    ctx.moveTo(x+.5, yMin); ctx.lineTo(x+.5, yMax);
+    x++;
+  }
+  ctx.stroke();
+
+  // Subtle fill below waveform
+  ctx.fillStyle='rgba(153,68,255,.07)';
+  x=0;
+  while(x<W){
+    var s0b=Math.floor(x*spp), s1b=Math.min(Math.floor((x+1)*spp),numSmp);
+    var mxb=0, sb, chb, vb;
+    for(sb=s0b;sb<s1b;sb++){
+      vb=0; chb=0;
+      while(chb<numCh){ vb+=Math.abs(buffer.getChannelData(chb)[sb]); chb++; }
+      vb/=numCh;
+      if(vb>mxb){ mxb=vb; }
+    }
+    var h2=mxb*0.48*H;
+    ctx.fillRect(x, H/2-h2, 1, h2*2);
+    x++;
+  }
+
+  waveformCache=c;
+}
+
+function drawEntityCanvas(entity){
+  var canvas=document.getElementById('wv_'+entity.id);
+  if(!canvas){ return; }
+  var W=canvas.width, H=canvas.height;
+  var ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // Waveform from cache (scaled to canvas size)
+  if(waveformCache){
+    ctx.drawImage(waveformCache,0,0,W,H);
+  } else {
+    ctx.fillStyle='rgba(153,68,255,.08)';
+    ctx.fillRect(0,0,W,H);
+  }
+
+  var dur=material.duration||1;
+
+  // --- View overlays ---
+  if(entity.view==='freeze'){
+    var fp=entity.param1;
+    var ls=freezeLoopSzFor(entity)/dur;
+    ctx.fillStyle='rgba(0,255,255,.16)';
+    ctx.fillRect(fp*W, 0, clamp(ls*W,1,W), H);
+    ctx.strokeStyle='#00ffff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(fp*W,0); ctx.lineTo(fp*W,H); ctx.stroke();
+
+  } else if(entity.view==='loop'){
+    var lp=entity.param1;
+    ctx.fillStyle='rgba(153,68,255,.1)';
+    ctx.fillRect(lp*W, 0, W-lp*W, H);
+    ctx.strokeStyle='rgba(180,128,255,.85)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(lp*W,0); ctx.lineTo(lp*W,H); ctx.stroke();
+
+  } else if(entity.view==='slice'){
+    var segs=material.segments;
+    ctx.strokeStyle='rgba(255,0,255,.45)'; ctx.lineWidth=1;
+    var si=1;
+    while(si<segs.length){
+      var sx=(segs[si].start/dur)*W;
+      ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,H); ctx.stroke();
+      si++;
+    }
+    // Highlight active segment if phrase/echo
+    if(entity.phraseIdx>=0 && entity.phraseIdx<segs.length){
+      var aS=segs[entity.phraseIdx];
+      ctx.fillStyle='rgba(255,0,255,.12)';
+      ctx.fillRect((aS.start/dur)*W,0,((aS.end-aS.start)/dur)*W,H);
+    }
+
+  } else if(entity.view==='grain'){
+    if(entity.param1>=0.04){
+      ctx.strokeStyle='rgba(0,255,255,.55)'; ctx.lineWidth=1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(entity.param1*W,0); ctx.lineTo(entity.param1*W,H); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // --- Crosshair cursor ---
+  var cx=entity.param1*W, cy=(1-entity.param2)*H;
+  ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1;
+  ctx.setLineDash([2,6]);
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H);
+  ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // --- Animated playhead (for running continuous views) ---
+  if(running && entity.startTime!==null && entity.startTime!==undefined){
+    var ph=estimatePlayhead(entity);
+    if(ph!==null){
+      ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(ph*W,0); ctx.lineTo(ph*W,H); ctx.stroke();
+    }
+  }
+
+  // --- View label ---
+  ctx.fillStyle='rgba(255,255,255,.2)';
+  ctx.font='9px "JetBrains Mono",monospace';
+  ctx.textAlign='left';
+  ctx.fillText(entity.view.toUpperCase(), 6, H-5);
+}
+
+function estimatePlayhead(entity){
+  if(!audioCtx||!entity.buffer||entity.startTime===null){ return null; }
+  var elapsed=audioCtx.currentTime-entity.startTime;
+  var dur=entity.buffer.duration;
+
+  if(entity.view==='loop'){
+    var startPos=entity.param1*dur;
+    var loopDur=dur-startPos;
+    if(loopDur<=0){ return null; }
+    var pos=startPos+(elapsed*loopSpeedFor(entity))%loopDur;
+    return pos/dur;
+
+  } else if(entity.view==='freeze'){
+    var fp=entity.param1*dur;
+    var ls=freezeLoopSzFor(entity);
+    if(ls<=0){ return null; }
+    var pos2=fp+(elapsed*note2rate(entity.pitch))%ls;
+    return pos2/dur;
+
+  } else if(entity.view==='drift'){
+    return ((elapsed*note2rate(entity.pitch))%dur)/dur;
+  }
+  return null;
+}
+
+// --- RAF animation loop ---
+var rafId=null;
+
+function startAnimLoop(){
+  if(rafId){ return; }
+  function frame(){
+    tickMorph();
+    var i=0;
+    while(i<entities.length){ drawEntityCanvas(entities[i]); i++; }
+    rafId=requestAnimationFrame(frame);
+  }
+  rafId=requestAnimationFrame(frame);
+}
+
+function stopAnimLoop(){
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+}
+
+// --- roles ---
+var roles={
+  voice:{mute:false,solo:false}, texture:{mute:false,solo:false},
+  rhythm:{mute:false,solo:false}, noise:{mute:false,solo:false}, field:{mute:false,solo:false}
+};
+var roleOrder=['voice','texture','rhythm','noise','field'];
+
+// --- scenes & morph ---
+var scenes={A:null,B:null,C:null,D:null};
+var selScene=null;
+var morph={ active:false, from:null, to:null, duration:4, startTime:0 };
+
+function captureScene(){
+  return {
+    focusTarget:state.focusTarget, focusAmount:state.focusAmount,
+    complexity:state.complexity, bpm:state.bpm,
+    entities:entities.map(function(e){
+      return {
+        id:e.id, name:e.name, role:e.role, view:e.view,
+        level:e.level, pitch:e.pitch, pan:e.pan,
+        filterNorm:e.filterNorm, param1:e.param1, param2:e.param2,
+        mute:e.mute, solo:e.solo, weight:e.weight
+      };
+    })
+  };
+}
+
+function applyScene(scene){
+  if(!scene){ return; }
+  state.focusTarget=scene.focusTarget;
+  state.focusAmount=scene.focusAmount;
+  state.complexity=scene.complexity;
+  state.bpm=scene.bpm;
+  var ft=document.getElementById('focusTarget');
+  var fa=document.getElementById('focusAmount');
+  var cx=document.getElementById('complexity');
+  var bp=document.getElementById('bpmInput');
+  if(ft){ ft.value=scene.focusTarget||'none'; }
+  if(fa){ fa.value=scene.focusAmount; }
+  if(cx){ cx.value=scene.complexity; }
+  if(bp){ bp.value=scene.bpm; }
+
+  var i=0;
+  while(i<scene.entities.length && i<entities.length){
+    var se=scene.entities[i], e=entities[i];
+    var viewChanged=(se.view!==e.view);
+    var wasCont=e.contActive;
+    e.name=se.name; e.role=se.role; e.view=se.view;
+    e.level=se.level; e.pitch=se.pitch; e.pan=se.pan;
+    e.filterNorm=se.filterNorm; e.param1=se.param1; e.param2=se.param2;
+    e.mute=se.mute; e.solo=se.solo; e.weight=se.weight;
+    if(e.filterNode){ e.filterNode.frequency.value=filterNormToHz(e.filterNorm); }
+    if(e.panNode){ e.panNode.pan.value=e.pan; }
+    refreshEntityGain(e);
+    if(viewChanged||wasCont){ applyViewChange(e); }
+    i++;
+  }
+  refreshAllGains();
+  renderEntityCards();
+  bindCanvasGestures();
+}
+
+function tickMorph(){
+  if(!morph.active){ return; }
+  var t=(performance.now()-morph.startTime)/(morph.duration*1000);
+  if(t>=1){ t=1; morph.active=false; document.getElementById('morphProgress').style.display='none'; }
+
+  var bar=document.getElementById('morphBar');
+  if(bar){ bar.style.width=(t*100)+'%'; }
+
+  var from=morph.from, to=morph.to;
+  state.complexity  = Math.round(lerp(from.complexity, to.complexity, t));
+  state.focusAmount = Math.round(lerp(from.focusAmount||0, to.focusAmount||0, t));
+
+  var cx=document.getElementById('complexity');
+  var fa=document.getElementById('focusAmount');
+  if(cx){ cx.value=state.complexity; }
+  if(fa){ fa.value=state.focusAmount; }
+
+  var i=0;
+  while(i<entities.length && i<from.entities.length && i<to.entities.length){
+    var e=entities[i], fe=from.entities[i], te=to.entities[i];
+    e.level     = lerp(fe.level, te.level, t);
+    e.pan       = lerp(fe.pan, te.pan, t);
+    e.filterNorm= lerp(fe.filterNorm, te.filterNorm, t);
+    e.param1    = lerp(fe.param1, te.param1, t);
+    e.param2    = lerp(fe.param2, te.param2, t);
+    if(e.panNode)    { e.panNode.pan.setTargetAtTime(e.pan, audioCtx.currentTime, 0.03); }
+    if(e.filterNode) { e.filterNode.frequency.setTargetAtTime(filterNormToHz(e.filterNorm), audioCtx.currentTime, 0.03); }
+    refreshEntityGain(e);
+    updateContinuousParams(e);
+    // Sync sliders silently
+    syncEntitySliders(e);
+    i++;
+  }
+  refreshAllGains();
+}
+
+// --- entities ---
+var viewParamLabels={
+  grain:['POS','SIZE','FLT'], slice:['RATE','MOD','FLT'],
+  loop:['START','SPEED','FLT'], freeze:['POINT','SIZE','FLT'], drift:['RATE','DEPTH','FLT']
+};
+var viewNames=['grain','slice','loop','freeze','drift'];
+var roleNames=['voice','texture','rhythm','noise','field'];
+
+function makeEntity(id,name,role,view){
+  return {
+    id:id, name:name, role:role, view:view,
+    buffer:null, level:0.82, pitch:0, pan:0, filterNorm:1.0,
+    param1:0.5, param2:0.5, mute:false, solo:false, weight:80,
+    gainNode:null, filterNode:null, panNode:null,
+    srcNode:null, modOsc:null, modDepth:null, baseGain:null,
+    contActive:false, startTime:null,
+    nextTime:0, phraseIdx:-1, phraseDir:1, echoMem:[]
+  };
+}
+
+var entities=[
+  makeEntity('e0','VOICE A','voice','grain'),
+  makeEntity('e1','VOICE B','voice','slice'),
+  makeEntity('e2','TEXTURE','texture','drift'),
+  makeEntity('e3','RHYTHM','rhythm','loop')
+];
+
+function getEntity(id){
+  var i=0;
+  while(i<entities.length){ if(entities[i].id===id){ return entities[i]; } i++; }
+  return null;
+}
+
+// --- audio ---
+var audioCtx=null, masterMix=null, convolver=null, wetGain=null, limiter=null;
+var running=false, lookahead=0.13, schedInterval=null;
+
+function initAudio(){
+  if(audioCtx){ return; }
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  audioCtx.resume();
+
+  masterMix=audioCtx.createGain(); masterMix.gain.value=0.8;
+  convolver=audioCtx.createConvolver(); convolver.buffer=buildReverbIR(audioCtx);
+  wetGain=audioCtx.createGain(); wetGain.gain.value=0.15;
+  limiter=audioCtx.createDynamicsCompressor();
+  limiter.threshold.value=-3; limiter.knee.value=0; limiter.ratio.value=20;
+  limiter.attack.value=0.001; limiter.release.value=0.12;
+
+  masterMix.connect(limiter);
+  masterMix.connect(convolver); convolver.connect(wetGain); wetGain.connect(limiter);
+  limiter.connect(audioCtx.destination);
+
+  var i=0;
+  while(i<entities.length){ buildEntityGraph(entities[i]); i++; }
+  buildBuffers();
+}
+
+function buildEntityGraph(entity){
+  entity.filterNode=audioCtx.createBiquadFilter();
+  entity.filterNode.type='lowpass';
+  entity.filterNode.frequency.value=filterNormToHz(entity.filterNorm);
+  entity.filterNode.Q.value=0.8;
+  entity.panNode=audioCtx.createStereoPanner();
+  entity.panNode.pan.value=entity.pan;
+  entity.gainNode=audioCtx.createGain();
+  entity.gainNode.gain.value=entity.level;
+  entity.filterNode.connect(entity.panNode);
+  entity.panNode.connect(entity.gainNode);
+  entity.gainNode.connect(masterMix);
+}
+
+function buildReverbIR(ctx){
+  var sr=ctx.sampleRate, dur=2.5, len=Math.floor(sr*dur);
+  var ir=ctx.createBuffer(2,len,sr);
+  var i=0;
+  while(i<2){
+    var ch=ir.getChannelData(i), j=0;
+    while(j<len){ var t=j/sr; ch[j]=(Math.random()*2-1)*Math.exp(-t*3.5); j++; }
+    i++;
+  }
+  return ir;
+}
+
+// --- synthetic buffers ---
+function buildVoiceBuffer(ctx,callback){
+  var dur=5.0, sr=ctx.sampleRate, frames=Math.floor(sr*dur);
+  try {
+    var offline=new OfflineAudioContext(1,frames,sr);
+    var noiseBuf=offline.createBuffer(1,frames,sr);
+    var nd=noiseBuf.getChannelData(0), i=0;
+    while(i<nd.length){ nd[i]=(Math.random()*2-1); i++; }
+    var src=offline.createBufferSource(); src.buffer=noiseBuf;
+    var f1=offline.createBiquadFilter(); f1.type='bandpass'; f1.Q.value=9;
+    f1.frequency.setValueAtTime(350,0); f1.frequency.linearRampToValueAtTime(700,dur*.35);
+    f1.frequency.linearRampToValueAtTime(280,dur*.7); f1.frequency.linearRampToValueAtTime(520,dur);
+    var f2=offline.createBiquadFilter(); f2.type='bandpass'; f2.Q.value=6;
+    f2.frequency.setValueAtTime(1100,0); f2.frequency.linearRampToValueAtTime(2200,dur*.35);
+    f2.frequency.linearRampToValueAtTime(880,dur*.7); f2.frequency.linearRampToValueAtTime(1600,dur);
+    var m1=offline.createGain(); m1.gain.value=0.5;
+    var m2=offline.createGain(); m2.gain.value=0.5;
+    var ev=offline.createGain();
+    ev.gain.setValueAtTime(0.0001,0); ev.gain.linearRampToValueAtTime(.9,.5);
+    ev.gain.setValueAtTime(.9,dur*.5); ev.gain.linearRampToValueAtTime(0.0001,dur);
+    src.connect(f1); f1.connect(m1); m1.connect(ev);
+    src.connect(f2); f2.connect(m2); m2.connect(ev);
+    ev.connect(offline.destination); src.start(0);
+    offline.startRendering().then(function(r){ callback(r); }).catch(function(){ callback(buildFallback(ctx,5)); });
+  } catch(e){ callback(buildFallback(ctx,5)); }
+}
+
+function buildFallback(ctx,dur){
+  var sr=ctx.sampleRate, len=Math.floor(sr*dur);
+  var buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0), ph=0, i=0;
+  while(i<len){
+    var t=i/sr, fr=300+Math.sin(t*.4)*200;
+    var en=Math.min(1,t*1.5)*Math.min(1,(dur-t)*1.5)*.6;
+    ph+=2*Math.PI*fr/sr; d[i]=Math.sin(ph)*en; i++;
+  }
+  return buf;
+}
+
+function buildBuffers(){
+  setStatus('preparando material...');
+  buildVoiceBuffer(audioCtx,function(rendered){
+    applyNewBuffer(rendered,'sintetico');
+    document.getElementById('btnPlay').disabled=false;
+    document.getElementById('btnStop').disabled=false;
+    setStatus('listo — toca el waveform o presiona PLAY');
+    startAnimLoop();
+  });
+}
+
+function applyNewBuffer(decoded,label){
+  material.buffer=decoded; material.duration=decoded.duration;
+  var i=0;
+  while(i<entities.length){
+    entities[i].buffer=decoded;
+    if(entities[i].contActive){ stopContinuousView(entities[i]); if(running){ startContinuousView(entities[i]); } }
+    i++;
+  }
+  buildWaveformCache(decoded);
+  buildSegments();
+  var el=document.getElementById('matInfo');
+  if(el){ el.textContent=label+' ('+decoded.duration.toFixed(1)+'s)'; }
+}
+
+function buildSegments(){
+  if(!material.buffer){ return; }
+  var N=parseInt(document.getElementById('fixedN').value,10)||8;
+  var dur=material.buffer.duration, seg=dur/N;
+  material.segments=[]; var i=0;
+  while(i<N){ material.segments.push({start:i*seg,end:(i+1)*seg,index:i}); i++; }
+  var el=document.getElementById('segInfo');
+  if(el){ el.textContent=N+' regiones ('+seg.toFixed(2)+'s c/u)'; }
+  var j=0;
+  while(j<entities.length){ entities[j].phraseIdx=-1; entities[j].echoMem=[]; j++; }
+}
+
+// --- activity ---
+function activityMultiplier(entity){
+  if(entity.mute){ return 0; }
+  if(roles[entity.role]&&roles[entity.role].mute){ return 0; }
+  var anyES=false, i=0;
+  while(i<entities.length){ if(entities[i].solo){ anyES=true; break; } i++; }
+  var anyRS=false, rk;
+  for(rk in roles){ if(roles[rk].solo){ anyRS=true; break; } }
+  if(anyES||anyRS){
+    var isSoloed=entity.solo||(roles[entity.role]&&roles[entity.role].solo);
+    if(!isSoloed){ return 0; }
+  }
+  var base=1.0;
+  if(state.focusTarget&&state.focusTarget!=='none'){
+    var focused=(state.focusTarget===entity.id)||(state.focusTarget===entity.role);
+    if(focused){ base=1.0+(state.focusAmount/100)*0.35; }
+    else        { base=1.0-(state.focusAmount/100)*0.75; }
+  }
+  return clamp(base,0,1.35);
+}
+
+function refreshEntityGain(entity){
+  if(!entity.gainNode||!audioCtx){ return; }
+  entity.gainNode.gain.setTargetAtTime(entity.level*activityMultiplier(entity), audioCtx.currentTime, 0.08);
+}
+
+function refreshAllGains(){
+  var i=0; while(i<entities.length){ refreshEntityGain(entities[i]); i++; }
+}
+
+// --- complexity-derived params ---
+function grainSizeFor(e)   { return lerp(0.018, 0.32, e.param2); }
+function grainPosFor(e)    { return e.param1<0.04 ? -1 : e.param1*(e.buffer?e.buffer.duration:1); }
+function grainRateFor(e)   { return lerp(0.4,9.0,state.complexity/100)*(0.5+e.param1); }
+function sliceRateFor(e)   { return lerp(0.15,3.5,e.param1); }
+function loopSpeedFor(e)   { return lerp(0.25,4.0,e.param2)*note2rate(e.pitch); }
+function freezePointFor(e) { return e.param1*(e.buffer?e.buffer.duration:0); }
+function freezeLoopSzFor(e){ return lerp(0.004,0.7,e.param2); }
+function driftFreqFor(e)   { return lerp(0.025,0.65,e.param1); }
+function driftDepthFor(e)  { return lerp(0.12,0.88,e.param2); }
+
+// --- continuous views ---
+function isContinuousView(view){ return view==='loop'||view==='freeze'||view==='drift'; }
+
+function startContinuousView(entity){
+  if(!entity.buffer||!audioCtx){ return; }
+  stopContinuousView(entity);
+
+  if(entity.view==='loop'){
+    var src=audioCtx.createBufferSource();
+    src.buffer=entity.buffer; src.loop=true;
+    var sp=entity.param1*entity.buffer.duration;
+    src.loopStart=sp; src.loopEnd=entity.buffer.duration;
+    src.playbackRate.value=loopSpeedFor(entity);
+    src.connect(entity.filterNode); src.start(0,sp);
+    entity.srcNode=src; entity.startTime=audioCtx.currentTime;
+
+  } else if(entity.view==='freeze'){
+    var buf=entity.buffer;
+    var fp=freezePointFor(entity);
+    var ls=freezeLoopSzFor(entity);
+    var le=Math.min(buf.duration,fp+ls); if(le<=fp){ le=Math.min(buf.duration,fp+0.01); }
+    var src2=audioCtx.createBufferSource();
+    src2.buffer=buf; src2.loop=true;
+    src2.loopStart=fp; src2.loopEnd=le;
+    src2.playbackRate.value=note2rate(entity.pitch);
+    src2.connect(entity.filterNode); src2.start(0,fp);
+    entity.srcNode=src2; entity.startTime=audioCtx.currentTime;
+
+  } else if(entity.view==='drift'){
+    var src3=audioCtx.createBufferSource();
+    src3.buffer=entity.buffer; src3.loop=true;
+    src3.playbackRate.value=note2rate(entity.pitch);
+    entity.baseGain=audioCtx.createGain(); entity.baseGain.gain.value=0.55;
+    entity.modOsc=audioCtx.createOscillator(); entity.modOsc.type='sine';
+    entity.modOsc.frequency.value=driftFreqFor(entity);
+    entity.modDepth=audioCtx.createGain(); entity.modDepth.gain.value=driftDepthFor(entity)*0.42;
+    entity.modOsc.connect(entity.modDepth); entity.modDepth.connect(entity.baseGain.gain);
+    src3.connect(entity.baseGain); entity.baseGain.connect(entity.filterNode);
+    src3.start(0); entity.modOsc.start();
+    entity.srcNode=src3; entity.startTime=audioCtx.currentTime;
+  }
+
+  entity.contActive=true;
+  refreshEntityGain(entity);
+}
+
+function stopContinuousView(entity){
+  if(entity.srcNode)  { try{ entity.srcNode.stop(); }  catch(e){} entity.srcNode=null;  }
+  if(entity.modOsc)   { try{ entity.modOsc.stop(); }   catch(e){} entity.modOsc=null;   }
+  entity.modDepth=null; entity.baseGain=null;
+  entity.contActive=false; entity.startTime=null;
+}
+
+function updateContinuousParams(entity){
+  if(!entity.contActive){ return; }
+  if(entity.view==='loop'&&entity.srcNode){
+    entity.srcNode.playbackRate.setTargetAtTime(loopSpeedFor(entity),audioCtx.currentTime,0.06);
+  } else if(entity.view==='freeze'){
+    stopContinuousView(entity); startContinuousView(entity);
+  } else if(entity.view==='drift'){
+    if(entity.modOsc)   { entity.modOsc.frequency.setTargetAtTime(driftFreqFor(entity),audioCtx.currentTime,0.3); }
+    if(entity.modDepth) { entity.modDepth.gain.setTargetAtTime(driftDepthFor(entity)*0.42,audioCtx.currentTime,0.1); }
+  }
+}
+
+function applyViewChange(entity){
+  stopContinuousView(entity);
+  if(isContinuousView(entity.view)){ if(running){ startContinuousView(entity); } }
+  else { entity.nextTime=audioCtx?audioCtx.currentTime+0.05:0; }
+  updateViewParamsUI(entity);
+}
+
+// --- event views ---
+function schedulerTick(){
+  if(!audioCtx){ return; }
+  var until=audioCtx.currentTime+lookahead, i=0;
+  while(i<entities.length){
+    var e=entities[i];
+    if(!isContinuousView(e.view)&&!e.mute){
+      if(e.view==='grain')      { tickGrain(e,until); }
+      else if(e.view==='slice') { tickSlice(e,until); }
+    }
+    i++;
+  }
+}
+
+function tickGrain(entity,until){
+  while(entity.nextTime<until){
+    var act=activityMultiplier(entity);
+    if(act>0.02&&entity.buffer){ playGrain(entity,entity.nextTime,act); scheduleFlash(entity.id,entity.nextTime); }
+    var rate=Math.max(0.12,grainRateFor(entity)*Math.max(act,0.12));
+    entity.nextTime+=randExp(rate);
+  }
+}
+
+function playGrain(entity,time,act){
+  var buf=entity.buffer, gs=grainSizeFor(entity);
+  var pos=grainPosFor(entity);
+  if(pos<0){ pos=Math.random()*Math.max(0.01,buf.duration-gs); }
+  var offs=clamp(pos,0,Math.max(0.001,buf.duration-gs-0.001));
+  var src=audioCtx.createBufferSource();
+  src.buffer=buf; src.playbackRate.value=note2rate(entity.pitch);
+  var env=audioCtx.createGain();
+  var fade=Math.min(gs*0.35,0.04);
+  env.gain.setValueAtTime(0.0001,time);
+  env.gain.linearRampToValueAtTime(act,time+fade);
+  env.gain.linearRampToValueAtTime(0.0001,time+gs);
+  src.connect(env); env.connect(entity.filterNode);
+  src.start(time,offs,gs); src.stop(time+gs+0.06);
+}
+
+function tickSlice(entity,until){
+  var segs=material.segments;
+  while(entity.nextTime<until){
+    var act=activityMultiplier(entity);
+    if(act>0.02&&entity.buffer&&segs.length>0){
+      var idx=nextSliceIndex(entity,segs);
+      playSlice(entity,segs[idx],entity.nextTime,act);
+      scheduleFlash(entity.id,entity.nextTime);
+    }
+    var rate=Math.max(0.1,sliceRateFor(entity)*Math.max(act,0.1));
+    entity.nextTime+=randExp(rate);
+  }
+}
+
+function nextSliceIndex(entity,segs){
+  var n=segs.length;
+  // param2: 0-0.35=scatter, 0.35-0.70=phrase, 0.70-1=echo
+  if(entity.param2<0.35){
+    return Math.floor(Math.random()*n);
+  } else if(entity.param2<0.70){
+    if(entity.phraseIdx<0){ entity.phraseIdx=Math.floor(Math.random()*n); }
+    if(Math.random()<(state.complexity/100)*0.4){ entity.phraseIdx=Math.floor(Math.random()*n); }
+    else {
+      if(Math.random()<0.07){ entity.phraseDir=-entity.phraseDir; }
+      entity.phraseIdx=(entity.phraseIdx+entity.phraseDir+n)%n;
+    }
+    return entity.phraseIdx;
+  } else {
+    var repeatProb=lerp(0.82,0.25,state.complexity/100);
+    var memSz=Math.max(1,Math.round(lerp(2,6,state.complexity/100)));
+    var idx;
+    if(entity.echoMem.length>0&&Math.random()<repeatProb){
+      var avail=Math.min(entity.echoMem.length,memSz);
+      idx=entity.echoMem[entity.echoMem.length-1-Math.floor(Math.random()*avail)];
+    } else { idx=Math.floor(Math.random()*n); }
+    entity.echoMem.push(idx); if(entity.echoMem.length>8){ entity.echoMem.shift(); }
+    return idx;
+  }
+}
+
+function playSlice(entity,region,time,act){
+  var dur=region.end-region.start; if(dur<=0.005){ return; }
+  var src=audioCtx.createBufferSource();
+  src.buffer=entity.buffer; src.playbackRate.value=note2rate(entity.pitch);
+  var fade=Math.min(dur*0.14,0.07);
+  var env=audioCtx.createGain();
+  env.gain.setValueAtTime(0.0001,time);
+  env.gain.linearRampToValueAtTime(act*0.9,time+fade);
+  env.gain.linearRampToValueAtTime(0.0001,time+dur);
+  src.connect(env); env.connect(entity.filterNode);
+  src.start(time,region.start,dur);
+}
+
+function triggerOneShot(entity){
+  if(!entity.buffer||!audioCtx){ return; }
+  var act=activityMultiplier(entity); if(act<0.02){ return; }
+  audioCtx.resume();
+  var time=audioCtx.currentTime+0.01;
+  if(entity.view==='grain')       { playGrain(entity,time,act); }
+  else if(entity.view==='slice'&&material.segments.length>0) {
+    var idx=nextSliceIndex(entity,material.segments);
+    playSlice(entity,material.segments[idx],time,act);
+  } else {
+    var gs=0.1, pos=entity.param1*(entity.buffer.duration||1);
+    var src=audioCtx.createBufferSource();
+    src.buffer=entity.buffer; src.playbackRate.value=note2rate(entity.pitch);
+    var env=audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001,time); env.gain.linearRampToValueAtTime(act,time+0.01);
+    env.gain.linearRampToValueAtTime(0.0001,time+gs);
+    src.connect(env); env.connect(entity.filterNode);
+    src.start(time,clamp(pos,0,entity.buffer.duration-gs-0.001),gs);
+  }
+  scheduleFlash(entity.id,time);
+}
+
+// --- randomize ---
+function randomizeEntity(entity){
+  entity.param1     = Math.random();
+  entity.param2     = Math.random();
+  entity.pan        = (Math.random()*2-1);
+  entity.filterNorm = 0.4+Math.random()*0.6;
+  entity.pitch      = Math.round(Math.random()*24-12);
+  if(entity.panNode)    { entity.panNode.pan.setTargetAtTime(entity.pan,audioCtx.currentTime,0.05); }
+  if(entity.filterNode) { entity.filterNode.frequency.setTargetAtTime(filterNormToHz(entity.filterNorm),audioCtx.currentTime,0.05); }
+  updateContinuousParams(entity);
+  syncEntitySliders(entity);
+}
+
+// --- transport ---
+function startTransport(){
+  if(!audioCtx){ return; }
+  var now=audioCtx.currentTime+0.05, i=0;
+  while(i<entities.length){
+    var e=entities[i];
+    if(isContinuousView(e.view)){ startContinuousView(e); }
+    else { e.nextTime=now+i*0.02; }
+    i++;
+  }
+  if(schedInterval){ clearInterval(schedInterval); }
+  schedInterval=setInterval(schedulerTick,25);
+  running=true; updateTransportUI();
+}
+
+function stopTransport(){
+  if(schedInterval){ clearInterval(schedInterval); }
+  schedInterval=null; running=false;
+  var i=0; while(i<entities.length){ if(isContinuousView(entities[i].view)){ stopContinuousView(entities[i]); } i++; }
+  updateTransportUI();
+}
+
+// --- param handling ---
+function setEntityParam(entity,param,rawVal){
+  if(!entity){ return; }
+  if(param==='level'){
+    entity.level=rawVal/100; refreshEntityGain(entity);
+  } else if(param==='pitch'){
+    entity.pitch=rawVal;
+    if(entity.srcNode&&entity.srcNode.playbackRate){
+      var rate=entity.view==='loop'?loopSpeedFor(entity):note2rate(entity.pitch);
+      entity.srcNode.playbackRate.setTargetAtTime(rate,audioCtx.currentTime,0.05);
+    }
+  } else if(param==='pan'){
+    entity.pan=rawVal/100;
+    if(entity.panNode){ entity.panNode.pan.setTargetAtTime(entity.pan,audioCtx.currentTime,0.05); }
+  } else if(param==='filter'){
+    entity.filterNorm=rawVal/100;
+    if(entity.filterNode){ entity.filterNode.frequency.setTargetAtTime(filterNormToHz(entity.filterNorm),audioCtx.currentTime,0.05); }
+  } else if(param==='param1'){
+    entity.param1=rawVal/100; updateContinuousParams(entity);
+  } else if(param==='param2'){
+    entity.param2=rawVal/100; updateContinuousParams(entity);
+  }
+}
+
+function syncEntitySliders(entity){
+  var sliders=document.querySelectorAll('[data-entity="'+entity.id+'"]');
+  var i=0;
+  while(i<sliders.length){
+    var s=sliders[i];
+    var p=s.getAttribute('data-param');
+    if(!p){ i++; continue; }
+    if(p==='level')  { s.value=Math.round(entity.level*100); }
+    if(p==='pitch')  { s.value=entity.pitch; }
+    if(p==='pan')    { s.value=Math.round(entity.pan*100); }
+    if(p==='filter') { s.value=Math.round(entity.filterNorm*100); }
+    if(p==='param1') { s.value=Math.round(entity.param1*100); }
+    if(p==='param2') { s.value=Math.round(entity.param2*100); }
+    i++;
+  }
+}
+
+// --- flash ---
+function scheduleFlash(entityId,time){
+  if(!audioCtx){ return; }
+  var delay=Math.max(0,(time-audioCtx.currentTime)*1000);
+  setTimeout(function(){
+    var card=document.getElementById('card_'+entityId);
+    if(!card){ return; }
+    card.classList.add('triggered');
+    setTimeout(function(){ card.classList.remove('triggered'); },80);
+  },delay);
+}
+
+// --- UI helpers ---
+function setStatus(msg){ var el=document.getElementById('statusBar'); if(el){ el.textContent=msg; } }
+function updateTransportUI(){
+  document.getElementById('btnPlay').disabled=running;
+  document.getElementById('btnStop').disabled=!running;
+}
+
+// --- card rendering ---
+function renderEntityCards(){
+  var grid=document.getElementById('entityGrid');
+  if(!grid){ return; }
+  grid.innerHTML='';
+  var feg=document.getElementById('focusEntityGroup');
+  if(feg){ feg.innerHTML=''; }
+  var i=0;
+  while(i<entities.length){
+    grid.appendChild(buildCard(entities[i]));
+    if(feg){
+      var op=document.createElement('option');
+      op.value=entities[i].id; op.textContent=entities[i].id+': '+entities[i].name;
+      feg.appendChild(op);
+    }
+    i++;
+  }
+}
+
+function buildCard(entity){
+  var e=entity;
+  var card=document.createElement('div');
+  card.className='entityCard'; card.id='card_'+e.id;
+
+  // HEAD
+  var head=document.createElement('div'); head.className='cHead';
+
+  var cName=document.createElement('span');
+  cName.className='cName'; cName.contentEditable='true';
+  cName.textContent=e.name; cName.id='cname_'+e.id;
+
+  var rTag=document.createElement('span');
+  rTag.className='rTag rt-'+e.role; rTag.textContent=e.role.toUpperCase();
+  rTag.id='rtag_'+e.id; rTag.title='click = siguiente rol';
+
+  var vSel=document.createElement('select');
+  vSel.className='vSel'; vSel.setAttribute('data-entity',e.id); vSel.id='vsel_'+e.id;
+  var vi=0;
+  while(vi<viewNames.length){
+    var op=document.createElement('option'); op.value=viewNames[vi]; op.textContent=viewNames[vi];
+    if(viewNames[vi]===e.view){ op.selected=true; }
+    vSel.appendChild(op); vi++;
+  }
+
+  var bRnd=document.createElement('button');
+  bRnd.className='bRnd'; bRnd.textContent='R'; bRnd.setAttribute('data-entity',e.id); bRnd.setAttribute('data-btn','rnd');
+  bRnd.title='Randomize';
+
+  var bM=document.createElement('button');
+  bM.className='bMs'+(e.mute?' muted':''); bM.textContent='M';
+  bM.setAttribute('data-entity',e.id); bM.setAttribute('data-btn','mute');
+
+  var bS=document.createElement('button');
+  bS.className='bMs'+(e.solo?' soloed':''); bS.textContent='S';
+  bS.setAttribute('data-entity',e.id); bS.setAttribute('data-btn','solo');
+
+  head.appendChild(cName); head.appendChild(rTag); head.appendChild(vSel);
+  head.appendChild(bRnd); head.appendChild(bM); head.appendChild(bS);
+
+  // MAIN PARAMS
+  var cP=document.createElement('div'); cP.className='cParams';
+  cP.appendChild(makePG(e,'LVL','level',0,100,Math.round(e.level*100)));
+  cP.appendChild(makePG(e,'PCH','pitch',-24,24,e.pitch));
+  cP.appendChild(makePG(e,'PAN','pan',-100,100,Math.round(e.pan*100)));
+
+  // VIEW PARAMS
+  var cVP=document.createElement('div'); cVP.className='cVParams'; cVP.id='vp_'+e.id;
+  rebuildViewParams(cVP,e);
+
+  // WAVE CANVAS (gesture zone)
+  var canvas=document.createElement('canvas');
+  canvas.className='waveCanvas'; canvas.id='wv_'+e.id;
+  canvas.width=600; canvas.height=100;
+  canvas.setAttribute('data-entity',e.id);
+
+  card.appendChild(head); card.appendChild(cP); card.appendChild(cVP); card.appendChild(canvas);
+  return card;
+}
+
+function makePG(entity,label,param,min,max,value){
+  var g=document.createElement('div'); g.className='pGrp';
+  var l=document.createElement('span'); l.className='lbl'; l.textContent=label;
+  var s=document.createElement('input'); s.type='range';
+  s.min=min; s.max=max; s.value=value; s.className='pSlider';
+  s.setAttribute('data-entity',entity.id); s.setAttribute('data-param',param);
+  g.appendChild(l); g.appendChild(s); return g;
+}
+
+function rebuildViewParams(container,entity){
+  var labels=viewParamLabels[entity.view]||['P1','P2','FLT'];
+  container.innerHTML='';
+  container.appendChild(makePG(entity,labels[0],'param1',0,100,Math.round(entity.param1*100)));
+  container.appendChild(makePG(entity,labels[1],'param2',0,100,Math.round(entity.param2*100)));
+  container.appendChild(makePG(entity,'FLT','filter',0,100,Math.round(entity.filterNorm*100)));
+}
+
+function updateViewParamsUI(entity){
+  var vp=document.getElementById('vp_'+entity.id);
+  if(vp){ rebuildViewParams(vp,entity); }
+  var vs=document.getElementById('vsel_'+entity.id);
+  if(vs){ vs.value=entity.view; }
+}
+
+// --- POINTER EVENT (multi-touch per entity) ---
+var gestures={};
+
+function bindCanvasGestures(){
+  var i=0;
+  while(i<entities.length){ bindCanvasGesture(entities[i]); i++; }
+}
+
+function bindCanvasGesture(entity){
+  var canvas=document.getElementById('wv_'+entity.id);
+  if(!canvas){ return; }
+
+  var gs={ active:false, pointerId:null, sx:0, sy:0, t0:0, lx:0, ly:0 };
+  gestures[entity.id]=gs;
+
+  function relPos(ev){
+    var r=canvas.getBoundingClientRect();
+    return { x:(ev.clientX-r.left)/r.width, y:(ev.clientY-r.top)/r.height };
+  }
+
+  function onDown(ev){
+    if(gs.active){ return; }
+    var p=relPos(ev);
+    gs.active=true; gs.pointerId=ev.pointerId;
+    gs.sx=p.x; gs.sy=p.y; gs.lx=p.x; gs.ly=p.y;
+    gs.t0=Date.now();
+    if(audioCtx){ audioCtx.resume(); }
+    try{ canvas.setPointerCapture(ev.pointerId); } catch(e2){}
+  }
+
+  function onMove(ev){
+    if(!gs.active||gs.pointerId!==ev.pointerId){ return; }
+    var p=relPos(ev);
+    entity.param1=clamp(p.x,0,1);
+    entity.param2=clamp(1-p.y,0,1);
+    updateContinuousParams(entity);
+    // Sync param sliders
+    var s1=document.querySelector('[data-entity="'+entity.id+'"][data-param="param1"]');
+    var s2=document.querySelector('[data-entity="'+entity.id+'"][data-param="param2"]');
+    if(s1){ s1.value=Math.round(entity.param1*100); }
+    if(s2){ s2.value=Math.round(entity.param2*100); }
+    gs.lx=p.x; gs.ly=p.y;
+  }
+
+  function onUp(ev){
+    if(!gs.active||gs.pointerId!==ev.pointerId){ return; }
+    gs.active=false;
+    var dt=Date.now()-gs.t0;
+    var dx=Math.abs(gs.lx-gs.sx), dy=Math.abs(gs.ly-gs.sy);
+    if(dt<230&&dx<0.06&&dy<0.06){ triggerOneShot(entity); }
+  }
+
+  // Remove existing listeners by cloning and replacing
+  var newCanvas=canvas.cloneNode(false);
+  canvas.parentNode.replaceChild(newCanvas,canvas);
+  canvas=newCanvas; // update reference
+
+  canvas.addEventListener('pointerdown',onDown,false);
+  canvas.addEventListener('pointermove',onMove,false);
+  canvas.addEventListener('pointerup',onUp,false);
+  canvas.addEventListener('pointercancel',function(ev){
+    if(gs.pointerId===ev.pointerId){ gs.active=false; }
+  },false);
+}
+
+// --- entity grid event delegation ---
+function bindEntityGrid(){
+  var grid=document.getElementById('entityGrid');
+  if(!grid){ return; }
+
+  grid.addEventListener('input',function(ev){
+    var t=ev.target;
+    if(!t.classList.contains('pSlider')){ return; }
+    var e=getEntity(t.getAttribute('data-entity'));
+    var p=t.getAttribute('data-param');
+    if(e){ setEntityParam(e,p,parseInt(t.value,10)); }
+  });
+
+  grid.addEventListener('change',function(ev){
+    var t=ev.target;
+    if(t.classList.contains('vSel')){
+      var e=getEntity(t.getAttribute('data-entity'));
+      if(e){ e.view=t.value; applyViewChange(e); }
+    }
+  });
+
+  grid.addEventListener('click',function(ev){
+    var t=ev.target;
+    var btn=t.getAttribute('data-btn');
+    var eid=t.getAttribute('data-entity');
+    if(!btn||!eid){ return; }
+    var e=getEntity(eid); if(!e){ return; }
+    if(btn==='mute'){
+      e.mute=!e.mute;
+      t.classList.toggle('muted',e.mute);
+      refreshAllGains();
+    }
+    if(btn==='solo'){
+      e.solo=!e.solo;
+      t.classList.toggle('soloed',e.solo);
+      refreshAllGains();
+    }
+    if(btn==='rnd'){
+      if(audioCtx){ randomizeEntity(e); }
+    }
+    // Role tag cycle
+    if(t.classList.contains('rTag')){
+      var idx=roleNames.indexOf(e.role);
+      e.role=roleNames[(idx+1)%roleNames.length];
+      t.className='rTag rt-'+e.role; t.textContent=e.role.toUpperCase();
+    }
+  });
+
+  grid.addEventListener('blur',function(ev){
+    var t=ev.target;
+    if(t.classList.contains('cName')){
+      var eid=t.id.replace('cname_','');
+      var e=getEntity(eid);
+      if(e){ e.name=t.textContent.trim().toUpperCase()||e.name; }
+    }
+  },true);
+}
+
+// --- roles panel ---
+function buildRolesPanel(){
+  var panel=document.getElementById('rolesPanel'); if(!panel){ return; }
+  panel.innerHTML='';
+  var i=0;
+  while(i<roleOrder.length){
+    var rk=roleOrder[i], role=roles[rk];
+    var row=document.createElement('div'); row.className='rRow';
+    var nm=document.createElement('span'); nm.className='rName r-'+rk; nm.textContent=rk.toUpperCase();
+    var bs=document.createElement('button'); bs.className='rBtn'+(role.solo?' rs':'');
+    bs.textContent='S'; bs.setAttribute('data-role',rk); bs.setAttribute('data-raction','solo');
+    var bm=document.createElement('button'); bm.className='rBtn'+(role.mute?' rm':'');
+    bm.textContent='M'; bm.setAttribute('data-role',rk); bm.setAttribute('data-raction','mute');
+    row.appendChild(nm); row.appendChild(bs); row.appendChild(bm);
+    panel.appendChild(row); i++;
+  }
+}
+
+function bindRolesPanel(){
+  var panel=document.getElementById('rolesPanel'); if(!panel){ return; }
+  panel.addEventListener('click',function(ev){
+    var t=ev.target, rk=t.getAttribute('data-role'), act=t.getAttribute('data-raction');
+    if(!rk||!act){ return; }
+    if(act==='solo'){ roles[rk].solo=!roles[rk].solo; t.classList.toggle('rs',roles[rk].solo); }
+    if(act==='mute'){ roles[rk].mute=!roles[rk].mute; t.classList.toggle('rm',roles[rk].mute); }
+    refreshAllGains();
+  });
+}
+
+// --- scenes ---
+function bindScenes(){
+  var sBtns=document.getElementById('sceneBtns');
+  if(sBtns){
+    sBtns.addEventListener('click',function(ev){
+      var key=ev.target.getAttribute('data-scene'); if(!key){ return; }
+      selScene=key;
+      sBtns.querySelectorAll('.sBtn').forEach(function(b){ b.classList.toggle('sel',b.getAttribute('data-scene')===key); });
+      var el=document.getElementById('sceneStatus');
+      if(el){ el.textContent='scene '+key+(scenes[key]?' (guardada)':' (vacia)'); }
+    });
+  }
+  document.getElementById('btnSaveScene').addEventListener('click',function(){
+    if(!selScene){ setStatus('selecciona escena A-D primero'); return; }
+    scenes[selScene]=captureScene();
+    var btn=document.querySelector('[data-scene="'+selScene+'"]');
+    if(btn){ btn.classList.add('saved'); }
+    var el=document.getElementById('sceneStatus');
+    if(el){ el.textContent='scene '+selScene+' guardada'; }
+  });
+  document.getElementById('btnRecallScene').addEventListener('click',function(){
+    if(!selScene){ setStatus('selecciona escena A-D primero'); return; }
+    if(!scenes[selScene]){ setStatus('scene '+selScene+' vacia'); return; }
+    applyScene(scenes[selScene]); bindCanvasGestures();
+  });
+}
+
+function bindMorph(){
+  document.getElementById('btnMorph').addEventListener('click',function(){
+    var fromKey=document.getElementById('morphFrom').value;
+    var toKey=document.getElementById('morphTo').value;
+    var dur=Math.max(0.5,parseFloat(document.getElementById('morphDur').value)||4);
+    if(!scenes[fromKey]||!scenes[toKey]){
+      setStatus('guarda las escenas '+fromKey+' y '+toKey+' primero'); return;
+    }
+    if(fromKey===toKey){ setStatus('escenas origen y destino deben ser distintas'); return; }
+    morph.from=scenes[fromKey]; morph.to=scenes[toKey];
+    morph.duration=dur; morph.startTime=performance.now(); morph.active=true;
+    document.getElementById('morphProgress').style.display='block';
+    document.getElementById('morphBar').style.width='0%';
+    setStatus('MORPH '+fromKey+' → '+toKey+' ('+dur+'s)');
+  });
+}
+
+// --- DNA center ---
+function bindDnaCenter(){
+  document.getElementById('focusTarget').addEventListener('change',function(ev){
+    var v=ev.target.value; state.focusTarget=(v==='none')?null:v; refreshAllGains();
+  });
+  document.getElementById('focusAmount').addEventListener('input',function(ev){
+    state.focusAmount=parseInt(ev.target.value,10); refreshAllGains();
+  });
+  document.getElementById('complexity').addEventListener('input',function(ev){
+    state.complexity=parseInt(ev.target.value,10);
+  });
+  document.getElementById('bpmInput').addEventListener('change',function(ev){
+    var v=parseInt(ev.target.value,10); if(!isNaN(v)&&v>=40&&v<=220){ state.bpm=v; }
+  });
+  document.getElementById('reverbAmount').addEventListener('input',function(ev){
+    if(wetGain){ wetGain.gain.setTargetAtTime(parseInt(ev.target.value,10)/100,audioCtx.currentTime,0.1); }
+  });
+}
+
+// --- material loading ---
+function bindMaterial(){
+  document.getElementById('btnLoadMaterial').addEventListener('click',function(){
+    if(audioCtx){ audioCtx.resume(); }
+    document.getElementById('file_material').click();
+  });
+  document.getElementById('file_material').addEventListener('change',function(ev){
+    var file=ev.target.files[0]; if(!file){ return; }
+    setStatus('decodificando '+file.name+'...');
+    var reader=new FileReader();
+    reader.onload=function(le){
+      var ab=le.target.result.slice(0);
+      audioCtx.decodeAudioData(ab,function(decoded){
+        applyNewBuffer(decoded,file.name);
+        setStatus(file.name+' ('+decoded.duration.toFixed(1)+'s)');
+      },function(){ setStatus('error al decodificar'); });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  document.getElementById('btnBuild').addEventListener('click',function(){
+    buildSegments();
+  });
+}
+
+// --- export ---
+function bindExport(){
+  document.getElementById('btnExport').addEventListener('click',function(){
+    var data=JSON.stringify({state:state,entities:captureScene().entities,scenes:scenes},null,2);
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(data).then(function(){ setStatus('JSON exportado al portapapeles'); })
+        .catch(function(){ setStatus('clipboard no disponible'); });
+    } else { setStatus('clipboard no disponible en este contexto'); }
+  });
+}
+
+// --- visibility ---
+function onVisibilityChange(){
+  if(audioCtx&&document.visibilityState==='visible'&&audioCtx.state==='suspended'){ audioCtx.resume(); }
+}
+
+// --- INIT ---
+window.onload=function(){
+  renderEntityCards();
+  buildRolesPanel();
+  bindEntityGrid();
+  bindRolesPanel();
+  bindScenes();
+  bindMorph();
+  bindDnaCenter();
+  bindMaterial();
+  bindExport();
+
+  document.getElementById('btnInit').addEventListener('click',function(){
+    document.getElementById('startOverlay').style.display='none';
+    initAudio();
+    setStatus('preparando material...');
+  });
+  document.getElementById('btnPlay').addEventListener('click',function(){
+    if(audioCtx){ startTransport(); }
+  });
+  document.getElementById('btnStop').addEventListener('click',function(){
+    stopTransport();
+  });
+  document.addEventListener('visibilitychange',onVisibilityChange);
+};
+
+</script>
+</body>
+</html>

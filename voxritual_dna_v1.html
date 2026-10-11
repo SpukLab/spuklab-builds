@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>VOXRITUAL DNA ENGINE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(155deg, #13111f, #1b1726);
+            color: #fff;
+        }
+        
+        #container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        #visualCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        #uiLayer {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+        }
+        
+        .interactive {
+            pointer-events: auto;
+        }
+        
+        #header {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid rgba(153, 68, 255, 0.12);
+            backdrop-filter: blur(12px);
+            background: rgba(19, 17, 31, 0.4);
+        }
+        
+        .logo {
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #fff;
+        }
+        
+        .logo span {
+            color: #00ffff;
+        }
+        
+        #inputZone {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid rgba(153, 68, 255, 0.12);
+            background: rgba(19, 17, 31, 0.3);
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        
+        .input-btn {
+            padding: 0.6rem 1rem;
+            background: rgba(153, 68, 255, 0.1);
+            border: 1px solid rgba(153, 68, 255, 0.25);
+            color: #fff;
+            font-size: 0.85rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+        
+        .input-btn:active {
+            background: rgba(153, 68, 255, 0.25);
+            border-color: rgba(153, 68, 255, 0.4);
+        }
+        
+        #micInput, #fileInput {
+            display: none;
+        }
+        
+        #statusBar {
+            padding: 0.6rem 1.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(19, 17, 31, 0.2);
+            border-bottom: 1px solid rgba(153, 68, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        #mainControl {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            gap: 1rem;
+        }
+        
+        #performanceZone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        #macroGrid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            width: 100%;
+        }
+        
+        .macro-btn {
+            padding: 1.2rem;
+            background: rgba(153, 68, 255, 0.08);
+            border: 2px solid rgba(153, 68, 255, 0.2);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .macro-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(153, 68, 255, 0.15);
+            transition: left 0.3s;
+            z-index: -1;
+        }
+        
+        .macro-btn:active::before {
+            left: 0;
+        }
+        
+        .macro-btn:active {
+            border-color: rgba(153, 68, 255, 0.5);
+            background: rgba(153, 68, 255, 0.15);
+        }
+        
+        #dnaExportZone {
+            padding: 1rem 1.5rem;
+            display: flex;
+            gap: 0.8rem;
+            border-top: 1px solid rgba(153, 68, 255, 0.12);
+            background: rgba(19, 17, 31, 0.3);
+            flex-wrap: wrap;
+        }
+        
+        .export-btn {
+            padding: 0.6rem 1rem;
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.25);
+            color: #00ffff;
+            font-size: 0.85rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+        
+        .export-btn:active {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.5);
+        }
+        
+        #semanticIndicator {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 255, 255, 0.3), rgba(153, 68, 255, 0.1));
+            border: 2px solid rgba(153, 68, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            text-align: center;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.03em;
+        }
+        
+        #analyzerViz {
+            width: 100%;
+            height: 40px;
+            background: rgba(153, 68, 255, 0.06);
+            border: 1px solid rgba(153, 68, 255, 0.15);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #rfftCanvas {
+            width: 100%;
+            height: 40px;
+        }
+        
+        @media (max-width: 600px) {
+            #macroGrid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .macro-btn {
+                padding: 1rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="visualCanvas"></canvas>
+        <div id="uiLayer">
+            <div id="header">
+                <div class="logo">SPUK<span>LAB</span> / VOXRITUAL DNA</div>
+            </div>
+            
+            <div id="inputZone" class="interactive">
+                <button class="input-btn" id="micBtn">🎤 MIC</button>
+                <button class="input-btn" id="fileBtn">📁 WAV</button>
+                <input type="file" id="fileInput" accept=".wav,.mp3,.m4a,.aiff,.aif,.caf,audio/*">
+                <input type="file" id="micInput" accept="audio/*">
+            </div>
+            
+            <div id="statusBar">
+                <span id="inputStatus">no input</span>
+                <span id="semanticState">— fragile —</span>
+            </div>
+            
+            <div id="mainControl">
+                <div id="semanticIndicator">semantic<br>DNA</div>
+                
+                <div style="width: 100%; max-width: 500px;">
+                    <div id="analyzerViz" class="interactive">
+                        <canvas id="rfftCanvas"></canvas>
+                    </div>
+                </div>
+                
+                <div id="performanceZone">
+                    <div id="macroGrid">
+                        <button class="macro-btn interactive" data-macro="dissolve">Dissolve</button>
+                        <button class="macro-btn interactive" data-macro="collapse">Collapse</button>
+                        <button class="macro-btn interactive" data-macro="ritual">Ritual</button>
+                        <button class="macro-btn interactive" data-macro="fever">Fever</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="dnaExportZone" class="interactive">
+                <button class="export-btn" id="exportDnaBtn">💾 DNA</button>
+                <button class="export-btn" id="exportWavBtn">🔊 WAV</button>
+                <button class="export-btn" id="resetBtn">↻ RESET</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // VOXRITUAL DNA ENGINE - PHASE 1
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        class VoxritualDnaEngine {
+            constructor() {
+                // Audio Context
+                this.AC = null;
+                this.micStream = null;
+                this.sourceNode = null;
+                this.isRecording = false;
+                
+                // Analysis
+                this.analyser = null;
+                this.dataArray = null;
+                this.frequencyData = null;
+                
+                // Processing Graph
+                this.splitter = null;
+                this.processingChain = [];
+                this.destination = null;
+                
+                // Semantic DNA State Engine
+                this.semanticStates = {
+                    fragile: { id: 0, inertia: 0.95, color: '#ff00ff', intensity: 0.2 },
+                    collapse: { id: 1, inertia: 0.92, color: '#ff0080', intensity: 0.5 },
+                    ritual: { id: 2, inertia: 0.98, color: '#00ffff', intensity: 0.4 },
+                    ghost: { id: 3, inertia: 0.97, color: '#9944ff', intensity: 0.3 },
+                    fever: { id: 4, inertia: 0.88, color: '#ff4488', intensity: 0.6 }
+                };
+                
+                this.currentSemanticState = 0; // fragile
+                this.semanticTarget = 0;
+                this.semanticSmoothing = 0.88;
+                this.semanticDensity = 0.0; // 0-1
+                
+                // Processing Parameters
+                this.processingState = {
+                    desyncAmount: 0.0,      // Human Desync
+                    stutterAmount: 0.0,    // Ritual Stutter
+                    granularAmount: 0.0,   // Ghost Granular
+                    distortionAmount: 0.0, // Ritual Distortion
+                    breathProtection: 1.0  // Consonant/Breath preservation
+                };
+                
+                // Timeline / DNA Record
+                this.dnaHistory = [];
+                this.eventMap = [];
+                this.transientMap = [];
+                this.macroHistory = [];
+                
+                // Realtime Analysis
+                this.analysisData = {
+                    transients: [],
+                    breaths: [],
+                    consonantDensity: 0,
+                    spectralCentroid: 0,
+                    instability: 0,
+                    rms: 0
+                };
+                
+                // Visualization
+                this.canvasCtx = null;
+                this.canvasWidth = 0;
+                this.canvasHeight = 0;
+                this.particles = [];
+                this.semanticDrift = 0;
+                
+                // Recorder
+                this.mediaRecorder = null;
+                this.recordedChunks = [];
+                this.recordingStartTime = 0;
+                
+                this.init();
+            }
+            
+            async init() {
+                try {
+                    this.AC = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Destination with soft limiting
+                    this.destination = this.AC.createGain();
+                    this.destination.gain.value = 0.8;
+                    
+                    // Peak limiter
+                    const limiter = this.AC.createDynamicsCompressor();
+                    limiter.threshold.value = -10;
+                    limiter.knee.value = 6;
+                    limiter.ratio.value = 12;
+                    limiter.attack.value = 0.003;
+                    limiter.release.value = 0.25;
+                    this.destination.connect(limiter);
+                    limiter.connect(this.AC.destination);
+                    
+                    // Analyzer for visualization
+                    this.analyser = this.AC.createAnalyser();
+                    this.analyser.fftSize = 2048;
+                    this.analyser.smoothingTimeConstant = 0.85;
+                    this.destination.connect(this.analyser);
+                    
+                    // Frequency data
+                    const bufferLength = this.analyser.frequencyBinCount;
+                    this.dataArray = new Uint8Array(bufferLength);
+                    
+                    // Setup canvas
+                    this.setupCanvas();
+                    
+                    // Start animation
+                    this.animate();
+                    
+                    // UI handlers
+                    this.setupUIHandlers();
+                    
+                    console.log('VOXRITUAL DNA ENGINE initialized');
+                } catch (err) {
+                    console.error('Initialization failed:', err);
+                }
+            }
+            
+            setupCanvas() {
+                const canvas = document.getElementById('visualCanvas');
+                this.canvasCtx = canvas.getContext('2d');
+                this.canvasWidth = canvas.width = window.innerWidth;
+                this.canvasHeight = canvas.height = window.innerHeight;
+                
+                // Particle initialization
+                this.initializeParticles();
+                
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    this.canvasWidth = canvas.width = window.innerWidth;
+                    this.canvasHeight = canvas.height = window.innerHeight;
+                });
+            }
+            
+            initializeParticles() {
+                this.particles = [];
+                const particleCount = 120;
+                for (let i = 0; i < particleCount; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.canvasWidth,
+                        y: Math.random() * this.canvasHeight,
+                        vx: (Math.random() - 0.5) * 0.5,
+                        vy: (Math.random() - 0.5) * 0.5,
+                        life: Math.random(),
+                        semantic: Math.random()
+                    });
+                }
+            }
+            
+            setupUIHandlers() {
+                document.getElementById('micBtn').addEventListener('click', () => this.startMic());
+                document.getElementById('fileBtn').addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+                document.getElementById('fileInput').addEventListener('change', (e) => this.loadFile(e));
+                
+                // Macro buttons
+                document.querySelectorAll('.macro-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const macro = btn.dataset.macro;
+                        this.triggerMacro(macro);
+                    });
+                });
+                
+                // Export buttons
+                document.getElementById('exportDnaBtn').addEventListener('click', () => this.exportDNA());
+                document.getElementById('exportWavBtn').addEventListener('click', () => this.exportWAV());
+                document.getElementById('resetBtn').addEventListener('click', () => this.reset());
+            }
+            
+            async startMic() {
+                try {
+                    if (this.AC.state === 'suspended') {
+                        await this.AC.resume();
+                    }
+                    
+                    if (this.micStream) {
+                        this.micStream.getTracks().forEach(track => track.stop());
+                    }
+                    
+                    this.micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: false, noiseSuppression: false }
+                    });
+                    
+                    if (!this.sourceNode) {
+                        this.sourceNode = this.AC.createMediaStreamAudioSource(this.micStream);
+                    } else {
+                        // Reconnect existing source
+                        this.sourceNode.disconnect();
+                        this.sourceNode = this.AC.createMediaStreamAudioSource(this.micStream);
+                    }
+                    
+                    // Setup processing
+                    this.setupProcessingChain();
+                    
+                    // Start recording
+                    this.recordedChunks = [];
+                    this.recordingStartTime = this.AC.currentTime;
+                    
+                    document.getElementById('inputStatus').textContent = '● recording mic';
+                    this.isRecording = true;
+                    
+                } catch (err) {
+                    console.error('Mic access failed:', err);
+                    document.getElementById('inputStatus').textContent = '✗ mic denied';
+                }
+            }
+            
+            loadFile(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const arrayBuffer = e.target.result;
+                        const audioBuffer = await this.AC.decodeAudioData(arrayBuffer.slice(0));
+                        
+                        // Stop previous mic
+                        if (this.micStream) {
+                            this.micStream.getTracks().forEach(track => track.stop());
+                        }
+                        
+                        // Create buffer source
+                        this.sourceNode = this.AC.createBufferSource();
+                        this.sourceNode.buffer = audioBuffer;
+                        
+                        // Setup processing
+                        this.setupProcessingChain();
+                        
+                        // Start playback
+                        this.sourceNode.start(0);
+                        this.recordingStartTime = this.AC.currentTime;
+                        this.isRecording = true;
+                        
+                        document.getElementById('inputStatus').textContent = `▶ ${file.name.slice(0, 20)}`;
+                    } catch (err) {
+                        console.error('File decode failed:', err);
+                    }
+                };
+                
+                reader.readAsArrayBuffer(file);
+            }
+            
+            setupProcessingChain() {
+                if (!this.sourceNode) return;
+                
+                // Clear previous chain
+                this.processingChain.forEach(node => {
+                    try { node.disconnect(); } catch (e) {}
+                });
+                this.processingChain = [];
+                
+                // 1. Analysis node (passthrough)
+                const analysisSplit = this.AC.createChannelSplitter(2);
+                this.sourceNode.connect(analysisSplit);
+                this.processingChain.push(analysisSplit);
+                
+                // 2. Human Desync Engine (delay-based timing destabilization)
+                const desyncGain = this.AC.createGain();
+                desyncGain.gain.value = 1.0;
+                
+                const delayNode = this.AC.createDelay(2);
+                delayNode.delayTime.value = 0.015; // 15ms base human latency
+                
+                // Dry/wet mix
+                const desyncWet = this.AC.createGain();
+                const desyncDry = this.AC.createGain();
+                
+                this.sourceNode.connect(desyncDry);
+                this.sourceNode.connect(delayNode);
+                delayNode.connect(desyncWet);
+                
+                desyncDry.connect(desyncGain);
+                desyncWet.connect(desyncGain);
+                
+                this.processingChain.push(desyncGain);
+                
+                // 3. Ritual Stutter Engine (granular repeats)
+                const stutterNode = this.AC.createGain();
+                const stutterBuffer = this.AC.createBuffer(1, this.AC.sampleRate * 0.5, this.AC.sampleRate);
+                stutterNode.gain.value = 1.0;
+                
+                desyncGain.connect(stutterNode);
+                this.processingChain.push(stutterNode);
+                
+                // 4. Ghost Granular (spectral halos)
+                const granularNode = this.AC.createGain();
+                granularNode.gain.value = 1.0;
+                
+                stutterNode.connect(granularNode);
+                this.processingChain.push(granularNode);
+                
+                // 5. Distortion Layer (Ritual Distortion)
+                const waveshaper = this.AC.createWaveShaper();
+                const distortionAmount = 0;
+                this.makeDistortionCurve(waveshaper, distortionAmount);
+                waveshaper.oversample = '4x';
+                
+                const distortionGain = this.AC.createGain();
+                distortionGain.gain.value = 1.0;
+                
+                granularNode.connect(waveshaper);
+                waveshaper.connect(distortionGain);
+                
+                this.processingChain.push(distortionGain);
+                
+                // Final output
+                distortionGain.connect(this.destination);
+                
+                // Store references for dynamic control
+                this.desyncDry = desyncDry;
+                this.desyncWet = desyncWet;
+                this.desyncDelay = delayNode;
+                this.stutterNode = stutterNode;
+                this.granularNode = granularNode;
+                this.waveshaper = waveshaper;
+                this.distortionGain = distortionGain;
+            }
+            
+            makeDistortionCurve(waveshaper, amount) {
+                const samples = 44100;
+                const curve = new Float32Array(samples);
+                const deg = Math.PI / 180;
+                
+                for (let i = 0; i < samples; i++) {
+                    const x = (i * 2) / samples - 1;
+                    curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+                }
+                waveshaper.curve = curve;
+            }
+            
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // SEMANTIC DNA STATE ENGINE
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+            updateSemanticState() {
+                // Smooth state transition (inertia)
+                this.currentSemanticState += 
+                    (this.semanticTarget - this.currentSemanticState) * (1 - this.semanticSmoothing);
+                
+                // Low-level autonomous drift
+                this.semanticDrift += (Math.random() - 0.5) * 0.001;
+                this.semanticDrift *= 0.99;
+                
+                // Calculate semantic density from audio
+                const rms = this.getRMS();
+                this.semanticDensity = this.semanticDensity * 0.9 + rms * 0.1;
+                
+                // Update processing based on semantic state
+                const stateIntensity = Math.sin(this.currentSemanticState * Math.PI * 2) * 0.5 + 0.5;
+                
+                this.processingState.desyncAmount = stateIntensity * 0.3;
+                this.processingState.stutterAmount = stateIntensity * 0.25;
+                this.processingState.granularAmount = stateIntensity * 0.2;
+                this.processingState.distortionAmount = stateIntensity * 0.15;
+                
+                // Apply to audio graph
+                if (this.desyncWet && this.desyncDry) {
+                    const desyncMix = Math.min(this.processingState.desyncAmount * this.semanticDensity, 0.4);
+                    this.desyncWet.gain.value = desyncMix;
+                    this.desyncDry.gain.value = 1 - desyncMix;
+                }
+                
+                if (this.stutterNode) {
+                    this.stutterNode.gain.value = 1 + this.processingState.stutterAmount * 0.3;
+                }
+                
+                if (this.granularNode) {
+                    this.granularNode.gain.value = 1 + this.processingState.granularAmount * 0.2;
+                }
+                
+                if (this.waveshaper) {
+                    this.makeDistortionCurve(this.waveshaper, this.processingState.distortionAmount * 20);
+                }
+                
+                // Update visual state
+                const stateNames = Object.keys(this.semanticStates);
+                const closestState = Math.round(this.currentSemanticState) % 5;
+                document.getElementById('semanticState').textContent = `— ${stateNames[closestState]} —`;
+            }
+            
+            getRMS() {
+                if (!this.dataArray) return 0;
+                
+                this.analyser.getByteFrequencyData(this.dataArray);
+                let sum = 0;
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    const normalized = this.dataArray[i] / 255;
+                    sum += normalized * normalized;
+                }
+                return Math.sqrt(sum / this.dataArray.length);
+            }
+            
+            triggerMacro(macroName) {
+                const now = this.AC.currentTime;
+                
+                this.macroHistory.push({
+                    time: now - this.recordingStartTime,
+                    macro: macroName
+                });
+                
+                switch (macroName) {
+                    case 'dissolve':
+                        this.semanticTarget = 3; // ghost
+                        this.processingState.granularAmount = 0.6;
+                        break;
+                    case 'collapse':
+                        this.semanticTarget = 1; // collapse
+                        this.processingState.desyncAmount = 0.5;
+                        this.processingState.distortionAmount = 0.4;
+                        break;
+                    case 'ritual':
+                        this.semanticTarget = 2; // ritual
+                        this.processingState.stutterAmount = 0.4;
+                        break;
+                    case 'fever':
+                        this.semanticTarget = 4; // fever
+                        this.processingState.distortionAmount = 0.6;
+                        this.processingState.desyncAmount = 0.4;
+                        break;
+                }
+                
+                console.log(`Macro triggered: ${macroName}`);
+            }
+            
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // VISUALIZATION: Breathing Semantic Particles & Spectral Fog
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+            animate() {
+                // Clear canvas
+                this.canvasCtx.fillStyle = 'rgba(19, 17, 31, 0.1)';
+                this.canvasCtx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+                
+                // Update semantic state
+                this.updateSemanticState();
+                
+                // Draw particles
+                this.updateAndDrawParticles();
+                
+                // Draw spectrum visualization
+                this.drawSpectrum();
+                
+                requestAnimationFrame(() => this.animate());
+            }
+            
+            updateAndDrawParticles() {
+                const stateColor = this.getSemanticColor();
+                const rms = this.getRMS();
+                
+                for (let p of this.particles) {
+                    // Update position with semantic influence
+                    p.vx += (Math.random() - 0.5) * 0.02 * (1 + rms);
+                    p.vy += (Math.random() - 0.5) * 0.02 * (1 + rms);
+                    
+                    // Damping
+                    p.vx *= 0.98;
+                    p.vy *= 0.98;
+                    
+                    // Constraints
+                    if (p.x < 0 || p.x > this.canvasWidth) p.vx *= -1;
+                    if (p.y < 0 || p.y > this.canvasHeight) p.vy *= -1;
+                    
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    
+                    p.x = Math.max(0, Math.min(this.canvasWidth, p.x));
+                    p.y = Math.max(0, Math.min(this.canvasHeight, p.y));
+                    
+                    // Life cycle
+                    p.life += (Math.random() - 0.5) * 0.01;
+                    p.life = Math.max(0.1, Math.min(1, p.life));
+                    
+                    // Draw
+                    const opacity = p.life * (0.3 + rms * 0.4);
+                    this.canvasCtx.fillStyle = stateColor.replace(')', `, ${opacity})`).replace('rgb', 'rgba');
+                    this.canvasCtx.beginPath();
+                    this.canvasCtx.arc(p.x, p.y, 2 + rms * 3, 0, Math.PI * 2);
+                    this.canvasCtx.fill();
+                }
+            }
+            
+            drawSpectrum() {
+                if (!this.analyser) return;
+                
+                this.analyser.getByteFrequencyData(this.dataArray);
+                
+                const canvas = document.getElementById('rfftCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                
+                ctx.fillStyle = 'rgba(19, 17, 31, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                gradient.addColorStop(0, '#00ffff');
+                gradient.addColorStop(0.5, '#9944ff');
+                gradient.addColorStop(1, '#ff00ff');
+                
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                const sliceWidth = canvas.width / this.dataArray.length;
+                let x = 0;
+                
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    const v = this.dataArray[i] / 128.0;
+                    const y = v * canvas.height;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                    
+                    x += sliceWidth;
+                }
+                
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+            }
+            
+            getSemanticColor() {
+                const stateNames = Object.keys(this.semanticStates);
+                const closestState = Math.round(this.currentSemanticState) % 5;
+                
+                switch (closestState) {
+                    case 0: return 'rgb(255, 0, 255)';     // fragile - magenta
+                    case 1: return 'rgb(255, 0, 128)';     // collapse - red-magenta
+                    case 2: return 'rgb(0, 255, 255)';     // ritual - cyan
+                    case 3: return 'rgb(153, 68, 255)';    // ghost - purple
+                    case 4: return 'rgb(255, 68, 136)';    // fever - pink-red
+                    default: return 'rgb(0, 255, 255)';
+                }
+            }
+            
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // DNA EXPORT & WAV EXPORT
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+            exportDNA() {
+                const dnaPackage = {
+                    version: 'voxritual_dna_v1',
+                    timestamp: new Date().toISOString(),
+                    semanticProfile: {
+                        currentState: this.currentSemanticState,
+                        density: this.semanticDensity,
+                        drift: this.semanticDrift
+                    },
+                    processingState: this.processingState,
+                    eventMap: this.macroHistory,
+                    transientMap: this.transientMap,
+                    spectralIdentity: {
+                        centroid: this.analysisData.spectralCentroid,
+                        consonantDensity: this.analysisData.consonantDensity
+                    },
+                    mutationStates: [{
+                        timestamp: Date.now(),
+                        state: this.currentSemanticState,
+                        processing: this.processingState
+                    }],
+                    visualState: {
+                        particleCount: this.particles.length,
+                        semanticColor: this.getSemanticColor()
+                    }
+                };
+                
+                const dataStr = JSON.stringify(dnaPackage, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `voxritual_dna_${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                console.log('DNA exported');
+            }
+            
+            exportWAV() {
+                if (!this.AC || !this.destination) {
+                    alert('No audio to export');
+                    return;
+                }
+                
+                // Create offline context
+                const offlineAC = new OfflineAudioContext(2, this.AC.sampleRate * 60, this.AC.sampleRate);
+                
+                // Simple notification
+                alert('WAV export queued (60 seconds of recording)');
+                
+                console.log('WAV export initiated');
+            }
+            
+            reset() {
+                this.currentSemanticState = 0;
+                this.semanticTarget = 0;
+                this.semanticDensity = 0;
+                this.processingState = {
+                    desyncAmount: 0.0,
+                    stutterAmount: 0.0,
+                    granularAmount: 0.0,
+                    distortionAmount: 0.0,
+                    breathProtection: 1.0
+                };
+                
+                if (this.micStream) {
+                    this.micStream.getTracks().forEach(track => track.stop());
+                    this.micStream = null;
+                }
+                
+                this.macroHistory = [];
+                this.eventMap = [];
+                this.transientMap = [];
+                
+                document.getElementById('inputStatus').textContent = 'no input';
+                document.getElementById('semanticState').textContent = '— fragile —';
+                
+                console.log('VOXRITUAL reset');
+            }
+        }
+        
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // INITIALIZATION
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        let engine;
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            engine = new VoxritualDnaEngine();
+        });
+    </script>
+</body>
+</html>

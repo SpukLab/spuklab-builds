@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VOXRITUAL DNA v5</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#090714;color:#fff;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px}
+
+/* ── APP ────────────────────────────────────────────────────────────────── */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+/* ── HEADER ────────────────────────────────────────────────────────────── */
+#hdr{height:38px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 .9rem;background:rgba(9,7,20,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(153,68,255,.1);flex-shrink:0}
+.logo{font-size:.78rem;font-weight:800;letter-spacing:.08em}
+.logo span{color:#00ffff}
+#semInfo{display:flex;align-items:center;gap:.45rem}
+#semOrb{width:8px;height:8px;border-radius:50%;background:#ff00ff;
+  box-shadow:0 0 5px #ff00ff;transition:background .4s,box-shadow .4s}
+#semName{font-size:.66rem;color:rgba(255,255,255,.28);letter-spacing:.06em;min-width:4rem;text-align:right}
+#acStatus{font-size:.62rem;color:rgba(255,255,255,.18);letter-spacing:.04em}
+
+/* ── CATEGORY BAR ──────────────────────────────────────────────────────── */
+#catBar{height:32px;display:flex;align-items:center;gap:.28rem;padding:0 .7rem;
+  overflow-x:auto;flex-shrink:0;background:rgba(9,7,20,.6);
+  border-bottom:1px solid rgba(153,68,255,.08);scrollbar-width:none}
+#catBar::-webkit-scrollbar{display:none}
+.cat{padding:.25rem .62rem;background:rgba(153,68,255,.05);border:1px solid rgba(153,68,255,.1);
+  color:rgba(255,255,255,.38);font-size:.68rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px;white-space:nowrap;flex-shrink:0;transition:all .1s}
+.cat.on{background:rgba(153,68,255,.17);border-color:rgba(153,68,255,.38);color:#fff}
+
+/* ── LIBRARY ───────────────────────────────────────────────────────────── */
+#library{flex:1;overflow-y:auto;min-height:0;
+  scrollbar-width:thin;scrollbar-color:rgba(153,68,255,.15) transparent}
+#library::-webkit-scrollbar{width:2px}
+#library::-webkit-scrollbar-thumb{background:rgba(153,68,255,.18)}
+
+.sRow{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;
+  border-bottom:1px solid rgba(153,68,255,.05);cursor:pointer;position:relative;
+  transition:background .1s}
+.sRow:active{background:rgba(153,68,255,.07)}
+.sRow.on{background:rgba(153,68,255,.09);border-left:2px solid rgba(153,68,255,.45)}
+.sWave{width:48px;height:20px;flex-shrink:0;border-radius:1px}
+.sInfo{flex:1;min-width:0}
+.sName{font-size:.75rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sTags{display:flex;gap:.22rem;margin-top:.14rem;flex-wrap:wrap}
+.sTag{font-size:.61rem;padding:.07rem .28rem;border-radius:1px;
+  background:rgba(153,68,255,.09);color:rgba(255,255,255,.4)}
+.sTag.sem{background:rgba(0,255,255,.06);color:rgba(0,255,255,.5)}
+.sRight{flex-shrink:0;text-align:right}
+.sDur{font-size:.65rem;color:rgba(255,255,255,.25);font-family:'Courier New',monospace}
+.sScr{font-size:.59rem;color:rgba(153,68,255,.55);margin-top:.1rem}
+.sPlaying{position:absolute;left:0;top:0;bottom:0;width:2px;background:rgba(0,255,255,.8)}
+.libEmpty{padding:1.5rem .9rem;text-align:center;color:rgba(255,255,255,.16);
+  font-size:.74rem;line-height:1.9;letter-spacing:.04em}
+
+/* ── WORKSPACE TOGGLE ───────────────────────────────────────────────────── */
+#wsDivider{height:24px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 .8rem;background:rgba(9,7,20,.7);border-top:1px solid rgba(153,68,255,.08);
+  border-bottom:1px solid rgba(153,68,255,.06);flex-shrink:0;cursor:pointer}
+#wsTitle{font-size:.66rem;color:rgba(255,255,255,.3);letter-spacing:.07em}
+#wsToggle{font-size:.66rem;color:rgba(153,68,255,.4)}
+
+/* ── WORKSPACE ─────────────────────────────────────────────────────────── */
+#ws{max-height:0;overflow:hidden;transition:max-height .22s ease;flex-shrink:0;overflow-y:auto}
+#ws.open{max-height:240px}
+#wsBody{padding:.55rem .8rem;display:flex;flex-direction:column;gap:.4rem}
+
+#wsWave{width:100%;height:32px;display:block;border-radius:1px}
+#wsPhrase{display:flex;gap:.2rem;flex-wrap:wrap;min-height:16px}
+.ph{padding:.12rem .36rem;border-radius:1px;font-size:.59rem;font-weight:700;
+  letter-spacing:.03em;cursor:pointer;border:1px solid transparent}
+.ph.phrase{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);
+  color:rgba(255,255,255,.35)}
+.ph.breath{background:rgba(153,68,255,.09);border-color:rgba(153,68,255,.22);
+  color:rgba(153,68,255,.7)}
+.ph.consonant{background:rgba(0,255,255,.06);border-color:rgba(0,255,255,.18);
+  color:rgba(0,255,255,.65)}
+.ph.silence{background:transparent;border-color:rgba(255,255,255,.06);color:rgba(255,255,255,.18)}
+
+.wsLabel{font-size:.62rem;color:rgba(255,255,255,.22);letter-spacing:.08em}
+
+/* Mutation strip */
+#mutStrip{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;padding-bottom:.05rem}
+#mutStrip::-webkit-scrollbar{display:none}
+.mBtn{padding:.4rem .7rem;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.17);
+  color:rgba(255,255,255,.6);font-size:.71rem;font-weight:700;letter-spacing:.04em;
+  cursor:pointer;border-radius:2px;flex-shrink:0;transition:all .1s;white-space:nowrap}
+.mBtn:active{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.42);color:#fff}
+.mBtn.on{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.48);color:#b580ff}
+.mBtn.cm{border-color:rgba(0,255,255,.22);color:rgba(0,255,255,.6)}
+.mBtn.cm:active{background:rgba(0,255,255,.12)}
+
+/* Snapshots */
+#snapStrip{display:flex;gap:.28rem;overflow-x:auto;scrollbar-width:none;align-items:center}
+#snapStrip::-webkit-scrollbar{display:none}
+.snapChip{padding:.24rem .55rem;background:rgba(0,255,255,.04);border:1px solid rgba(0,255,255,.13);
+  color:rgba(0,255,255,.55);font-size:.63rem;font-weight:700;cursor:pointer;border-radius:2px;
+  flex-shrink:0;white-space:nowrap}
+.snapChip:active{background:rgba(0,255,255,.12)}
+.snapChip.add{border-color:rgba(153,68,255,.18);color:rgba(153,68,255,.5)}
+.noSnap{font-size:.64rem;color:rgba(255,255,255,.16)}
+
+/* History tree */
+#histRow{display:flex;align-items:center;gap:.22rem;overflow-x:auto;scrollbar-width:none;flex-wrap:wrap}
+#histRow::-webkit-scrollbar{display:none}
+.hNode{padding:.22rem .5rem;background:rgba(153,68,255,.05);border:1px solid rgba(153,68,255,.13);
+  color:rgba(255,255,255,.48);font-size:.62rem;font-weight:700;cursor:pointer;border-radius:2px;
+  flex-shrink:0;white-space:nowrap}
+.hNode:active,.hNode.on{background:rgba(153,68,255,.17);border-color:rgba(153,68,255,.38);color:#fff}
+.hNode.root{border-color:rgba(0,255,255,.18);color:rgba(0,255,255,.55)}
+.hArrow{color:rgba(255,255,255,.13);font-size:.68rem;flex-shrink:0}
+
+/* Recompose */
+#recompWrap{display:flex;flex-direction:column;gap:.35rem}
+#phraseBlocks{display:flex;gap:.25rem;flex-wrap:wrap}
+.pbBlock{padding:.28rem .55rem;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);
+  color:rgba(255,255,255,.55);font-size:.64rem;cursor:pointer;border-radius:2px;font-weight:700}
+.pbBlock.off{background:rgba(153,68,255,.02);border-color:rgba(153,68,255,.06);
+  color:rgba(255,255,255,.2);text-decoration:line-through}
+.pbRender{padding:.36rem .75rem;background:rgba(0,255,255,.06);border:1px solid rgba(0,255,255,.18);
+  color:rgba(0,255,255,.65);font-size:.7rem;font-weight:700;cursor:pointer;border-radius:2px;
+  align-self:flex-start}
+.recompToggle{font-size:.62rem;color:rgba(255,255,255,.22);letter-spacing:.08em;cursor:pointer}
+.recompToggle:active{color:rgba(153,68,255,.6)}
+
+/* ── TRANSPORT ─────────────────────────────────────────────────────────── */
+#transport{height:38px;display:flex;align-items:center;gap:.38rem;padding:0 .75rem;
+  border-top:1px solid rgba(153,68,255,.1);background:rgba(9,7,20,.78);flex-shrink:0}
+.tb{padding:.32rem .65rem;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.17);
+  color:rgba(255,255,255,.55);font-size:.7rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px;transition:all .1s}
+.tb:active,.tb.on{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.4);color:#fff}
+#tlWrap{flex:1;position:relative;height:24px;cursor:pointer}
+#tlCanvas{width:100%;height:24px;display:block;border-radius:1px}
+#tlPos{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  font-size:.62rem;color:rgba(255,255,255,.25);font-family:'Courier New',monospace;pointer-events:none}
+
+/* ── SEM BAR ───────────────────────────────────────────────────────────── */
+#semBar{height:18px;display:flex;align-items:center;gap:.45rem;padding:0 .8rem;
+  background:rgba(9,7,20,.6);border-top:1px solid rgba(153,68,255,.06);flex-shrink:0}
+#semDots{display:flex;gap:.16rem;flex-shrink:0}
+.dot{width:5px;height:5px;border-radius:50%;background:rgba(153,68,255,.12)}
+.dot.on{background:rgba(153,68,255,.72);box-shadow:0 0 3px rgba(153,68,255,.45)}
+#specMini{flex:1;height:12px;overflow:hidden;border-radius:1px}
+#specC{width:100%;height:12px;display:block}
+
+/* ── ACTION BAR ────────────────────────────────────────────────────────── */
+#actionBar{height:40px;display:flex;align-items:center;gap:.35rem;padding:0 .75rem;
+  border-top:1px solid rgba(153,68,255,.1);background:rgba(9,7,20,.88);flex-shrink:0;
+  overflow-x:auto;scrollbar-width:none}
+#actionBar::-webkit-scrollbar{display:none}
+.ab{padding:.35rem .7rem;border-radius:2px;font-size:.7rem;font-weight:700;
+  letter-spacing:.05em;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all .1s}
+.ab.cap{background:rgba(255,68,68,.07);border:1px solid rgba(255,68,68,.2);
+  color:rgba(255,68,68,.7)}
+.ab.cap.on{background:rgba(255,68,68,.16);border-color:rgba(255,68,68,.5);color:#ff4444}
+.ab.neu{background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.17);
+  color:rgba(255,255,255,.55)}
+.ab.neu:active{background:rgba(153,68,255,.17);color:#fff}
+.ab.xp{background:rgba(0,255,255,.05);border:1px solid rgba(0,255,255,.16);
+  color:rgba(0,255,255,.6)}
+.ab.xp:active{background:rgba(0,255,255,.13);color:#00ffff}
+#capTime{font-size:.68rem;color:rgba(255,68,68,.5);font-family:'Courier New',monospace;min-width:2rem}
+
+#fInput{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <input type="file" id="fInput" accept=".wav,.mp3,.m4a,.aiff,.aif,.caf,audio/*">
+
+  <div id="hdr">
+    <div class="logo">SPUK<span>LAB</span> / VOXRITUAL DNA</div>
+    <div id="semInfo">
+      <div id="acStatus">ready</div>
+      <div id="semOrb"></div>
+      <div id="semName">fragile</div>
+    </div>
+  </div>
+
+  <div id="catBar">
+    <button class="cat on" data-c="all">ALL</button>
+    <button class="cat" data-c="captures">CAPTURES</button>
+    <button class="cat" data-c="spoken">SPOKEN</button>
+    <button class="cat" data-c="whispers">WHISPERS</button>
+    <button class="cat" data-c="breaths">BREATHS</button>
+    <button class="cat" data-c="hooks">HOOKS</button>
+    <button class="cat" data-c="fragments">FRAGMENTS</button>
+    <button class="cat" data-c="corrupted">CORRUPTED</button>
+    <button class="cat" data-c="textures">TEXTURES</button>
+    <button class="cat" data-c="ritual">RITUAL</button>
+  </div>
+
+  <div id="library">
+    <div class="libEmpty">VOXRITUAL DNA<br><br>CAPTURE A PHRASE OR LOAD A FILE<br>TAP ANY SAMPLE TO PLAY</div>
+  </div>
+
+  <div id="wsDivider">
+    <div id="wsTitle">WORKSPACE — select a sample</div>
+    <div id="wsToggle">▼</div>
+  </div>
+
+  <div id="ws">
+    <div id="wsBody">
+      <canvas id="wsWave"></canvas>
+      <div id="wsPhrase"></div>
+
+      <div class="wsLabel">MUTATIONS — tap to preview · COMMIT to save</div>
+      <div id="mutStrip">
+        <button class="mBtn on"  data-m="source">SOURCE</button>
+        <button class="mBtn"     data-m="dissolve">DISSOLVE</button>
+        <button class="mBtn"     data-m="collapse">COLLAPSE</button>
+        <button class="mBtn"     data-m="ritual">RITUAL</button>
+        <button class="mBtn"     data-m="fever">FEVER</button>
+        <button class="mBtn cm"  id="commitBtn">COMMIT +</button>
+      </div>
+
+      <div class="wsLabel">SNAPSHOTS</div>
+      <div id="snapStrip">
+        <button class="snapChip add" id="snapAddBtn">+ SNAP</button>
+        <span class="noSnap" id="noSnapMsg">none</span>
+      </div>
+
+      <div class="wsLabel">HISTORY TREE</div>
+      <div id="histRow"></div>
+
+      <div class="recompToggle" id="recompToggle">RECOMPOSE ▶</div>
+      <div id="recompWrap" style="display:none">
+        <div id="phraseBlocks"></div>
+        <button class="pbRender" id="pbRenderBtn">RENDER RECOMPOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="transport">
+    <button class="tb" id="tPlay">PLAY</button>
+    <button class="tb" id="tStop">STOP</button>
+    <button class="tb" id="tLoop">LOOP</button>
+    <div id="tlWrap">
+      <canvas id="tlCanvas"></canvas>
+      <div id="tlPos">0:00</div>
+    </div>
+  </div>
+
+  <div id="semBar">
+    <div id="semDots">
+      <div class="dot on"></div><div class="dot on"></div>
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div id="specMini"><canvas id="specC"></canvas></div>
+  </div>
+
+  <div id="actionBar">
+    <button class="ab cap" id="cap5">5s</button>
+    <button class="ab cap" id="cap10">10s</button>
+    <button class="ab cap" id="capLive">CAPTURE</button>
+    <button class="ab cap" id="capStop" style="display:none">STOP REC</button>
+    <div id="capTime"></div>
+    <button class="ab neu" id="loadBtn">LOAD</button>
+    <button class="ab xp"  id="adnBtn">ADN PACK</button>
+    <button class="ab xp"  id="wavBtn">WAV</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// VOXRITUAL DNA ENGINE v5
+// Changes from v4:
+//   · Boot overlay removed — lazy AC unlock on first audio action
+//   · COLLAPSE rebuilt: broken transmission (behavior, not intensity)
+//   · FEVER rebuilt: sleep deprivation tremor (LFO + wobble + asymmetry)
+//   · Mutation weighting architecture (WEIGHTS constant, silent)
+//   · Macro philosophy: behavior mutation, not gain escalation
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── MUTATION WEIGHTING ARCHITECTURE ────────────────────────────────────
+// Foundation for future semantic routing. Currently informs DSP parameter
+// selection but not yet exposed in UI.
+// Format: { dimension: 0-1 weight }
+const WEIGHTS = {
+  source:   { timing:0,   spectral:0,   distort:0,   instability:0,   drift:0   },
+  dissolve: { timing:0.1, spectral:0.7, distort:0.05, instability:0.3, drift:0.5 },
+  collapse: { timing:0.4, spectral:0.3, distort:0.25, instability:0.7, drift:0.2 },
+  ritual:   { timing:0.6, spectral:0.2, distort:0,   instability:0.2, drift:0.4 },
+  fever:    { timing:0.3, spectral:0.2, distort:0.15, instability:0.9, drift:0.7 }
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────
+const A = {
+  AC: null, analyser: null, freqData: null,
+  db: null, samples: [], cat:'all',
+  selectedId: null, semState:'fragile',
+  snapshots: [],
+  cap: { stream:null, recorder:null, chunks:[], timer:null, startMs:0, msrc:null }
+};
+
+const STATES  = ['fragile','collapse','ritual','ghost','fever'];
+const SCOLORS = ['#ff00ff','#ff0055','#00ffff','#9944ff','#ff4488'];
+
+// Transport state (separate object for clarity)
+const TP = {
+  state: 'stopped', looping: false,
+  startedAt: 0, offsetSec: 0, duration: 0
+};
+
+// ─── LIVE MUTATION ENGINE ─────────────────────────────────────────────────
+// The core identity system. Tap → immediate audio via real-time DSP.
+const LME = {
+  src: null,
+  mutType: 'source',
+  instabilityIntervals: [], // timers for fever/collapse modulation
+
+  play(buf, type, offset) {
+    this.stop();
+    if (!buf || !A.AC) return;
+
+    this.mutType = type;
+    const chain = buildLiveChain(type);
+    const src = A.AC.createBufferSource();
+    src.buffer = buf;
+    src.loop = TP.looping;
+
+    src.connect(chain.input);
+    chain.output.connect(A.analyser);
+    A.analyser.connect(A.AC.destination);
+
+    const off = Math.max(0, Math.min(offset || 0, buf.duration * 0.998));
+    TP.startedAt = A.AC.currentTime - off;
+    TP.duration  = buf.duration;
+    TP.state     = 'playing';
+
+    src.start(A.AC.currentTime, off);
+    this.src   = src;
+    this.chain = chain;
+
+    // Instability modulation (FEVER / COLLAPSE behavior loops)
+    this.startInstability(type, chain);
+
+    src.onended = () => {
+      if (TP.state === 'playing' && !TP.looping) {
+        TP.state = 'stopped'; updateTransportUI();
+      }
+    };
+    updateTransportUI();
+  },
+
+  stop() {
+    this.clearInstability();
+    if (this.src) {
+      if (TP.state === 'playing' && this.src.buffer) {
+        const dur = this.src.buffer.duration;
+        TP.offsetSec = Math.min(
+          (A.AC.currentTime - TP.startedAt) % dur, dur * 0.998
+        );
+      }
+      try { this.src.stop(); this.src.disconnect(); } catch(e) {}
+      this.src = null;
+    }
+    if (this.chain?.output) {
+      try { this.chain.output.disconnect(); } catch(e) {}
+    }
+    TP.state = 'stopped';
+  },
+
+  startInstability(type, chain) {
+    const w = WEIGHTS[type] || WEIGHTS.source;
+    if (!chain || w.instability < 0.1) return;
+
+    if (type === 'fever') {
+      // Nervous tremor: gain LFO ~7Hz (sleep-deprived nervous system)
+      if (!chain.tremGain) return;
+      const tremFn = () => {
+        const now = A.AC.currentTime;
+        const phase = (now * 7.3) % (Math.PI * 2);
+        // Asymmetric tremor (not clean sine — more biological)
+        const v = 0.82 + Math.sin(phase) * 0.10 + Math.sin(phase * 2.1) * 0.04;
+        chain.tremGain.gain.setTargetAtTime(Math.max(0.5, v), now, 0.02);
+        // Delay wobble: random jumps in delay time every 300–900ms
+        if (chain.wobDelay && Math.random() < 0.08) {
+          const newDt = 0.008 + Math.random() * 0.035;
+          chain.wobDelay.delayTime.setTargetAtTime(newDt, now, 0.12);
+        }
+      };
+      const tid = setInterval(tremFn, 35); // ~28fps modulation
+      this.instabilityIntervals.push(tid);
+
+    } else if (type === 'collapse') {
+      // Transient dropout: random micro-silences (broken transmission)
+      const dropFn = () => {
+        if (!chain.dropGain) return;
+        const now = A.AC.currentTime;
+        if (Math.random() < 0.12) {
+          // Drop to near-silence for 30–120ms
+          const dur = 0.03 + Math.random() * 0.09;
+          chain.dropGain.gain.setTargetAtTime(0.05, now, 0.005);
+          chain.dropGain.gain.setTargetAtTime(1.0, now + dur, 0.015);
+        }
+        // Filter frequency drift (broken circuit resonance)
+        if (chain.instFilt && Math.random() < 0.2) {
+          const freq = 600 + Math.random() * 2400;
+          chain.instFilt.frequency.setTargetAtTime(freq, now, 0.08);
+        }
+      };
+      const tid = setInterval(dropFn, 80);
+      this.instabilityIntervals.push(tid);
+    }
+  },
+
+  clearInstability() {
+    this.instabilityIntervals.forEach(clearInterval);
+    this.instabilityIntervals = [];
+  },
+
+  currentPos() {
+    if (!this.src?.buffer || TP.state !== 'playing') return TP.offsetSec;
+    return (A.AC.currentTime - TP.startedAt) % this.src.buffer.duration;
+  }
+};
+
+// ─── LIVE CHAIN BUILDER ───────────────────────────────────────────────────
+// Each chain: { input, output, ...named nodes for instability access }
+// Philosophy: macros change BEHAVIOR, not INTENSITY.
+function buildLiveChain(type) {
+  const AC = A.AC;
+  const chain = {};
+  const input = AC.createGain();
+  chain.input = input;
+  let last = input;
+
+  switch(type) {
+
+    case 'dissolve': {
+      // Ghost: two-tap sparse delay → spectral fog. No distortion.
+      // weight: spectral:0.7, drift:0.5
+      const d1 = AC.createDelay(2); d1.delayTime.value = 0.031;
+      const d2 = AC.createDelay(2); d2.delayTime.value = 0.088;
+      const d3 = AC.createDelay(2); d3.delayTime.value = 0.210;
+      const w1 = AC.createGain(); w1.gain.value = 0.22;
+      const w2 = AC.createGain(); w2.gain.value = 0.13;
+      const w3 = AC.createGain(); w3.gain.value = 0.06;
+      const dry = AC.createGain(); dry.gain.value = 0.88;
+      const mix = AC.createGain(); mix.gain.value = 0.92;
+      input.connect(dry);
+      input.connect(d1); d1.connect(w1);
+      input.connect(d2); d2.connect(w2);
+      input.connect(d3); d3.connect(w3);
+      dry.connect(mix); w1.connect(mix); w2.connect(mix); w3.connect(mix);
+      last = mix; break;
+    }
+
+    case 'collapse': {
+      // Broken transmission: mild saturation + unstable bandpass filter +
+      // transient dropout (dropout managed by instability interval above)
+      // weight: timing:0.4, instability:0.7 — behavior not intensity
+      const hpf = AC.createBiquadFilter();
+      hpf.type = 'highpass'; hpf.frequency.value = 180; hpf.Q.value = 0.7;
+
+      const instFilt = AC.createBiquadFilter();
+      instFilt.type = 'bandpass';
+      instFilt.frequency.value = 1800; // starts mid — will drift in instability loop
+      instFilt.Q.value = 1.4;
+      chain.instFilt = instFilt;
+
+      // Mild saturation — NOT full-scale distortion
+      const sat = AC.createWaveShaper();
+      sat.curve = dCurve(28); // very gentle tape saturation character
+      sat.oversample = '2x';
+
+      const dropGain = AC.createGain(); dropGain.gain.value = 1.0;
+      chain.dropGain = dropGain;
+
+      const outG = AC.createGain(); outG.gain.value = 0.78; // slightly reduced
+
+      // Dry path: hpf → instFilt (filter-only, no sat)
+      // Sat path: mild saturation, blended under
+      const satG = AC.createGain(); satG.gain.value = 0.18; // saturation very subtle
+      const dryG = AC.createGain(); dryG.gain.value = 0.85;
+      const mix  = AC.createGain();
+
+      input.connect(hpf);
+      hpf.connect(instFilt);
+      instFilt.connect(dryG); dryG.connect(mix);
+      instFilt.connect(sat); sat.connect(satG); satG.connect(mix);
+      mix.connect(dropGain); dropGain.connect(outG);
+      last = outG; break;
+    }
+
+    case 'ritual': {
+      // Slow memory: long feedback delay + gentle low-shelf filter
+      // weight: timing:0.6 — phrase behavior
+      const lpf = AC.createBiquadFilter();
+      lpf.type = 'lowshelf'; lpf.frequency.value = 3200; lpf.gain.value = -4;
+
+      const d = AC.createDelay(2); d.delayTime.value = 0.195;
+      const fb = AC.createGain(); fb.gain.value = 0.27;
+      const wet = AC.createGain(); wet.gain.value = 0.30;
+      const dry = AC.createGain(); dry.gain.value = 0.84;
+      const mix = AC.createGain(); mix.gain.value = 0.88;
+
+      input.connect(lpf); lpf.connect(dry);
+      input.connect(d); d.connect(fb); fb.connect(d); d.connect(wet);
+      dry.connect(mix); wet.connect(mix);
+      last = mix; break;
+    }
+
+    case 'fever': {
+      // Sleep deprivation: nervous tremor LFO + delay wobble + stereo asymmetry
+      // NO heavy distortion — instability and drift only
+      // weight: instability:0.9, drift:0.7
+
+      // Tremor gain — modulated by interval in startInstability
+      const tremGain = AC.createGain(); tremGain.gain.value = 0.88;
+      chain.tremGain = tremGain;
+
+      // Delay wobble (short, random)
+      const wobDelay = AC.createDelay(0.5); wobDelay.delayTime.value = 0.012;
+      chain.wobDelay = wobDelay;
+      const wobMix = AC.createGain(); wobMix.gain.value = 0.25;
+      const wobDry = AC.createGain(); wobDry.gain.value = 0.82;
+      const wobOut = AC.createGain();
+      input.connect(wobDry); input.connect(wobDelay);
+      wobDelay.connect(wobMix);
+      wobDry.connect(wobOut); wobMix.connect(wobOut);
+
+      // Stereo asymmetry via split/merge (slight L/R level difference)
+      const split = AC.createChannelSplitter(2);
+      const merge = AC.createChannelMerger(2);
+      const lGain = AC.createGain(); lGain.gain.value = 1.0;
+      const rGain = AC.createGain(); rGain.gain.value = 0.82; // slight R reduction
+      wobOut.connect(split);
+      split.connect(lGain, 0); lGain.connect(merge, 0, 0);
+      split.connect(rGain, 1); rGain.connect(merge, 0, 1);
+
+      merge.connect(tremGain);
+      const outG = AC.createGain(); outG.gain.value = 0.82;
+      tremGain.connect(outG);
+      last = outG; break;
+    }
+    // 'source': passthrough, last = input
+  }
+
+  // Soft limiter — keeps all mutations controlled
+  const lim = AC.createDynamicsCompressor();
+  lim.threshold.value = -9; lim.knee.value = 3;
+  lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.1;
+  last.connect(lim);
+  chain.output = lim;
+  return chain;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LAZY AUDIO CONTEXT — unlock on first audio action
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureAC() {
+  if (A.AC) {
+    if (A.AC.state === 'suspended') await A.AC.resume();
+    return true;
+  }
+  A.AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+  await A.AC.resume();
+
+  A.analyser = A.AC.createAnalyser();
+  A.analyser.fftSize = 512;
+  A.analyser.smoothingTimeConstant = 0.86;
+  A.freqData = new Uint8Array(A.analyser.frequencyBinCount);
+
+  document.getElementById('acStatus').textContent = 'live';
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STARTUP — immediate, no boot screen
+// ═══════════════════════════════════════════════════════════════════════════
+async function startup() {
+  // DB first (no audio needed)
+  try {
+    A.db = await openDB();
+    A.samples = await dbAll();
+  } catch(e) { A.samples = []; }
+
+  // Load snapshots
+  try { A.snapshots = JSON.parse(localStorage.getItem('vr5_snaps') || '[]'); }
+  catch(e) { A.snapshots = []; }
+
+  renderLibrary();
+  startViz();
+
+  // Restore last session (no audio, just UI state)
+  try {
+    const sess = JSON.parse(localStorage.getItem('vr5_sess') || '{}');
+    if (sess.cat) setCat(sess.cat);
+    if (sess.semState) setSemState(sess.semState);
+    if (sess.selectedId && A.samples.find(s => s.id === sess.selectedId)) {
+      selectSample(sess.selectedId, false); // UI restore, no audio
+    }
+    if (sess.looping) {
+      TP.looping = true;
+      document.getElementById('tLoop').classList.add('on');
+    }
+  } catch(e) {}
+}
+
+window.addEventListener('DOMContentLoaded', startup);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDEXEDDB
+// ═══════════════════════════════════════════════════════════════════════════
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('voxritual_v5', 1);
+    req.onerror = () => rej(req.error);
+    req.onsuccess = () => res(req.result);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('samples')) {
+        const s = db.createObjectStore('samples', { keyPath:'id' });
+        s.createIndex('cat','cat'); s.createIndex('parentId','parentId');
+      }
+    };
+  });
+}
+const dbPut   = d  => idbOp('readwrite', s => s.put(d));
+const dbDel   = id => idbOp('readwrite', s => s.delete(id));
+const dbAll   = () => idbOp('readonly',  s => s.getAll());
+const dbClear = () => idbOp('readwrite', s => s.clear());
+
+function idbOp(mode, fn) {
+  return new Promise((res,rej) => {
+    const tx = A.db.transaction('samples', mode);
+    const req = fn(tx.objectStore('samples'));
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPTURE — harvest (capture → immediate stream close)
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('cap5').addEventListener('click',    () => startCap(5));
+document.getElementById('cap10').addEventListener('click',   () => startCap(10));
+document.getElementById('capLive').addEventListener('click', () => startCap(null));
+document.getElementById('capStop').addEventListener('click', stopCap);
+
+async function startCap(maxSec) {
+  if (A.cap.stream) return;
+  await ensureAC(); // lazy unlock
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+    A.cap.stream = stream; A.cap.chunks = []; A.cap.startMs = Date.now();
+
+    // Mic → analyser for spectrum during capture
+    const msrc = A.AC.createMediaStreamSource(stream);
+    msrc.connect(A.analyser);
+    A.AC.createGain().connect(A.AC.destination); // keep AC alive on iOS
+    A.cap.msrc = msrc;
+
+    const mr = new MediaRecorder(stream, { mimeType: bestMime() });
+    mr.ondataavailable = e => { if (e.data.size > 0) A.cap.chunks.push(e.data); };
+    mr.onstop = finishCap;
+    mr.start(100);
+    A.cap.recorder = mr;
+
+    setCapUI(true, maxSec);
+    let elapsed = 0;
+    A.cap.timer = setInterval(() => {
+      elapsed = (Date.now() - A.cap.startMs) / 1000;
+      document.getElementById('capTime').textContent = elapsed.toFixed(1) + 's';
+      if (maxSec && elapsed >= maxSec) stopCap();
+    }, 100);
+
+  } catch(e) {
+    setCT('denied'); setTimeout(() => setCT(''), 2000);
+  }
+}
+
+function stopCap() {
+  if (!A.cap.stream) return;
+  clearInterval(A.cap.timer);
+  A.cap.recorder.stop();
+  A.cap.stream.getTracks().forEach(t => t.stop()); // RELEASE MIC IMMEDIATELY
+  A.cap.stream = null;
+  if (A.cap.msrc) { try { A.cap.msrc.disconnect(); } catch(e){} A.cap.msrc = null; }
+  setCapUI(false);
+  setCT('…');
+}
+
+async function finishCap() {
+  if (!A.cap.chunks.length) { setCT(''); return; }
+  const blob = new Blob(A.cap.chunks, { type: A.cap.chunks[0].type });
+  let buf;
+  try { buf = await A.AC.decodeAudioData((await blob.arrayBuffer()).slice(0)); }
+  catch(e) { setCT('decode err'); return; }
+  const sample = await buildRecord(buf, { name:`cap_${stamp()}`, cat:'captures', parentId:null });
+  await dbPut(sample); A.samples.push(sample);
+  renderLibrary(); selectSample(sample.id, true);
+  setCT(buf.duration.toFixed(1)+'s');
+  setTimeout(() => setCT(''), 3000);
+}
+
+function setCapUI(on, maxSec) {
+  const stop = document.getElementById('capStop');
+  stop.style.display = on ? 'inline-block' : 'none';
+  ['cap5','cap10','capLive'].forEach(id =>
+    document.getElementById(id).classList.toggle('on', on));
+}
+const setCT = t => { document.getElementById('capTime').textContent = t; };
+
+// ── FILE LOAD ─────────────────────────────────────────────────────────────
+document.getElementById('loadBtn').addEventListener('click', () =>
+  document.getElementById('fInput').click());
+
+document.getElementById('fInput').addEventListener('change', async function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  await ensureAC(); setCT('…');
+  try {
+    const buf = await A.AC.decodeAudioData((await file.arrayBuffer()).slice(0));
+    const sample = await buildRecord(buf, {
+      name: file.name.replace(/\.[^.]+$/,''), cat:'spoken', parentId:null });
+    await dbPut(sample); A.samples.push(sample);
+    renderLibrary(); selectSample(sample.id, true); setCT('');
+  } catch(e) { setCT('err'); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SAMPLE RECORD BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildRecord(buf, meta) {
+  const analysis = analyze(buf);
+  const channelData = [];
+  for (let c = 0; c < buf.numberOfChannels; c++)
+    channelData.push(buf.getChannelData(c).slice());
+  return {
+    id: uid(), name: meta.name || 'fragment',
+    cat: meta.cat || 'fragments', parentId: meta.parentId || null,
+    mutationOf: meta.mutationOf || null,
+    sampleRate: buf.sampleRate, numberOfChannels: buf.numberOfChannels,
+    length: buf.length, duration: buf.duration,
+    channelData, analysis, scores: score(buf, analysis),
+    semState: A.semState, createdAt: Date.now()
+  };
+}
+
+function analyze(buf) {
+  const data = buf.getChannelData(0), rate = buf.sampleRate;
+  const win = Math.floor(rate * 0.010);
+  let transients=[], breaths=[], silences=[], phrases=[];
+  let prevE=0, silStart=-1, phraseStart=-1;
+  for (let i = 0; i < data.length; i += win) {
+    let e=0; const end=Math.min(i+win,data.length);
+    for (let j=i;j<end;j++) e+=data[j]*data[j];
+    e=Math.sqrt(e/(end-i)); const t=i/rate;
+    if (e>prevE*1.72&&e>0.016) transients.push({t,e,type:e>0.055?'consonant':'onset'});
+    if (e<0.004) {
+      if (silStart<0) silStart=t;
+      if (phraseStart>=0&&t-phraseStart>0.12) { phrases.push({t0:phraseStart,t1:t}); phraseStart=-1; }
+    } else {
+      if (silStart>=0&&t-silStart>0.04) {
+        silences.push({t0:silStart,t1:t});
+        if (e<0.022) breaths.push({t,dur:t-silStart});
+      }
+      silStart=-1; if (phraseStart<0) phraseStart=t;
+    }
+    prevE=e;
+  }
+  if (phraseStart>=0) phrases.push({t0:phraseStart,t1:buf.duration});
+  return { transients, breaths, silences, phrases };
+}
+
+function score(buf, a) {
+  const silDur = a.silences.reduce((s,x)=>s+x.t1-x.t0,0);
+  const fragility = Math.min(100,Math.round(silDur/buf.duration*100+a.breaths.length*5));
+  const ghost = Math.min(100,Math.round(Math.max(0,100-(a.transients.length/buf.duration)*8)));
+  return { fragility, ghost };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRARY
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.cat').forEach(b =>
+  b.addEventListener('click', () => setCat(b.dataset.c)));
+
+function setCat(c) {
+  A.cat = c;
+  document.querySelectorAll('.cat').forEach(b => b.classList.toggle('on', b.dataset.c===c));
+  renderLibrary(); saveSession();
+}
+
+function renderLibrary() {
+  const lib = document.getElementById('library');
+  const list = A.cat==='all' ? A.samples : A.samples.filter(s=>s.cat===A.cat);
+  if (!list.length) {
+    lib.innerHTML='<div class="libEmpty">VOXRITUAL DNA v5<br><br>CAPTURE A PHRASE OR LOAD A FILE</div>';
+    return;
+  }
+  lib.innerHTML = list.map(s => {
+    const dN = A.samples.filter(x=>x.parentId===s.id).length;
+    return `<div class="sRow${A.selectedId===s.id?' on':''}" data-id="${s.id}">
+      ${A.selectedId===s.id&&TP.state==='playing'?'<div class="sPlaying"></div>':''}
+      <canvas class="sWave" data-id="${s.id}" width="48" height="20"></canvas>
+      <div class="sInfo">
+        <div class="sName">${s.name}${s.mutationOf?` ↳${s.mutationOf}`:''}</div>
+        <div class="sTags">
+          <span class="sTag">${s.cat}</span>
+          <span class="sTag sem">${s.semState}</span>
+          ${dN?`<span class="sTag">${dN}d</span>`:''}
+        </div>
+      </div>
+      <div class="sRight">
+        <div class="sDur">${fmt(s.duration)}</div>
+        <div class="sScr">f${s.scores.fragility} g${s.scores.ghost}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  lib.querySelectorAll('.sRow').forEach(el =>
+    el.addEventListener('click', () => selectSample(el.dataset.id, true)));
+  lib.querySelectorAll('.sWave').forEach(c => {
+    const s = A.samples.find(x=>x.id===c.dataset.id);
+    if (s) miniWave(c, s);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECT + PLAY — tap → immediate audio
+// ═══════════════════════════════════════════════════════════════════════════
+async function selectSample(id, autoPlay) {
+  A.selectedId = id;
+  const s = A.samples.find(x=>x.id===id);
+  if (!s) return;
+  setSemState(s.semState);
+  openWorkspace(s);
+  if (autoPlay) {
+    await ensureAC();
+    LME.play(toAB(s), LME.mutType, 0);
+    renderTimeline(s);
+  }
+  renderLibrary(); saveSession();
+}
+
+function openWorkspace(s) {
+  const ws = document.getElementById('ws');
+  ws.classList.add('open');
+  document.getElementById('wsTitle').textContent = `WORKSPACE — ${s.name}`;
+  document.getElementById('wsToggle').textContent = '▲';
+  drawWSWave(s); drawPhraseMap(s); drawHistTree(s);
+  renderSnaps(); renderRecomp(s);
+}
+
+document.getElementById('wsDivider').addEventListener('click', () => {
+  const ws = document.getElementById('ws');
+  const open = ws.classList.toggle('open');
+  document.getElementById('wsToggle').textContent = open ? '▲' : '▼';
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MUTATION BUTTONS — tap = instant DSP preview
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.mBtn[data-m]').forEach(btn => {
+  let holdTimer = null;
+
+  btn.addEventListener('click', async () => {
+    const type = btn.dataset.m;
+    const s = A.samples.find(x=>x.id===A.selectedId);
+    if (!s) return;
+    document.querySelectorAll('.mBtn[data-m]').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    await ensureAC();
+    LME.play(toAB(s), type, LME.currentPos());
+    setSemState(semForMut(type));
+  });
+
+  // Long press = commit
+  btn.addEventListener('touchstart', () => { holdTimer = setTimeout(() => commitVariant(btn.dataset.m), 550); });
+  btn.addEventListener('touchend',   () => clearTimeout(holdTimer));
+  btn.addEventListener('touchmove',  () => clearTimeout(holdTimer));
+});
+
+document.getElementById('commitBtn').addEventListener('click', () => commitVariant(LME.mutType));
+
+async function commitVariant(type) {
+  if (type === 'source') return;
+  const src = A.samples.find(s=>s.id===A.selectedId);
+  if (!src) return;
+  const cb = document.getElementById('commitBtn');
+  cb.textContent = 'RENDERING…';
+  try {
+    const rendered = await offlineRender(toAB(src), type);
+    const catMap = { dissolve:'textures', collapse:'corrupted', ritual:'ritual', fever:'corrupted' };
+    const child = await buildRecord(rendered, {
+      name:`${src.name}_${type}`, cat:catMap[type]||'fragments',
+      parentId:src.id, mutationOf:type
+    });
+    child.semState = semForMut(type);
+    await dbPut(child); A.samples.push(child);
+    renderLibrary();
+    const cur = A.samples.find(s=>s.id===A.selectedId);
+    if (cur) drawHistTree(cur);
+    cb.textContent = `+ ${type} saved`;
+  } catch(e) { console.error(e); }
+  setTimeout(() => { cb.textContent = 'COMMIT +'; }, 2200);
+}
+
+// ─── OFFLINE RENDER ───────────────────────────────────────────────────────
+async function offlineRender(srcBuf, type) {
+  const len=srcBuf.length, rate=srcBuf.sampleRate;
+  const offAC = new OfflineAudioContext(2, len, rate);
+  const stereo = offAC.createBuffer(2,len,rate);
+  for (let c=0;c<2;c++)
+    stereo.copyToChannel(srcBuf.getChannelData(Math.min(c,srcBuf.numberOfChannels-1)),c);
+  const src = offAC.createBufferSource(); src.buffer = stereo;
+  let last = src;
+
+  switch(type) {
+    case 'dissolve': {
+      const d1=offAC.createDelay(2); d1.delayTime.value=0.031;
+      const d2=offAC.createDelay(2); d2.delayTime.value=0.088;
+      const d3=offAC.createDelay(2); d3.delayTime.value=0.210;
+      const w1=offAC.createGain();w1.gain.value=0.22;
+      const w2=offAC.createGain();w2.gain.value=0.13;
+      const w3=offAC.createGain();w3.gain.value=0.06;
+      const dry=offAC.createGain();dry.gain.value=0.88;
+      const mix=offAC.createGain();mix.gain.value=0.92;
+      src.connect(dry); src.connect(d1);d1.connect(w1);
+      src.connect(d2);d2.connect(w2); src.connect(d3);d3.connect(w3);
+      dry.connect(mix);w1.connect(mix);w2.connect(mix);w3.connect(mix);
+      last=mix; break;
+    }
+    case 'collapse': {
+      const hpf=offAC.createBiquadFilter(); hpf.type='highpass';hpf.frequency.value=180;hpf.Q.value=0.7;
+      const bp=offAC.createBiquadFilter(); bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=1.4;
+      const sat=offAC.createWaveShaper(); sat.curve=dCurve(28); sat.oversample='2x';
+      const satG=offAC.createGain();satG.gain.value=0.18;
+      const dryG=offAC.createGain();dryG.gain.value=0.85;
+      const mix=offAC.createGain();
+      const outG=offAC.createGain();outG.gain.value=0.78;
+      src.connect(hpf);hpf.connect(bp);
+      bp.connect(dryG);dryG.connect(mix);
+      bp.connect(sat);sat.connect(satG);satG.connect(mix);
+      mix.connect(outG); last=outG; break;
+    }
+    case 'ritual': {
+      const lpf=offAC.createBiquadFilter();lpf.type='lowshelf';lpf.frequency.value=3200;lpf.gain.value=-4;
+      const d=offAC.createDelay(2);d.delayTime.value=0.195;
+      const fb=offAC.createGain();fb.gain.value=0.27;
+      const wet=offAC.createGain();wet.gain.value=0.30;
+      const dry=offAC.createGain();dry.gain.value=0.84;
+      const mix=offAC.createGain();mix.gain.value=0.88;
+      src.connect(lpf);lpf.connect(dry);
+      src.connect(d);d.connect(fb);fb.connect(d);d.connect(wet);
+      dry.connect(mix);wet.connect(mix); last=mix; break;
+    }
+    case 'fever': {
+      // Offline version: baked-in asymmetry + slight pitch drift
+      src.playbackRate.value = 1 + (Math.random()*0.015 - 0.007); // ±0.7% pitch wander
+      const split=offAC.createChannelSplitter(2);
+      const merge=offAC.createChannelMerger(2);
+      const lG=offAC.createGain();lG.gain.value=1.0;
+      const rG=offAC.createGain();rG.gain.value=0.84;
+      // Subtle tremolo: bake in a gain oscillation via automation
+      const tremG=offAC.createGain();tremG.gain.value=0.9;
+      const step=0.025, dur=srcBuf.duration;
+      for (let t=0;t<dur;t+=step) {
+        const v=0.82+Math.sin(t*7.3*Math.PI*2)*0.10+Math.sin(t*15.1*Math.PI*2)*0.03;
+        tremG.gain.setValueAtTime(Math.max(0.55,v), t);
+      }
+      src.connect(split);
+      split.connect(lG,0);lG.connect(merge,0,0);
+      split.connect(rG,1);rG.connect(merge,0,1);
+      merge.connect(tremG);
+      const outG=offAC.createGain();outG.gain.value=0.82;
+      tremG.connect(outG); last=outG; break;
+    }
+  }
+  const lim=offAC.createDynamicsCompressor();
+  lim.threshold.value=-9;lim.knee.value=3;lim.ratio.value=12;
+  lim.attack.value=0.002;lim.release.value=0.1;
+  last.connect(lim);lim.connect(offAC.destination);
+  src.start(0); return offAC.startRendering();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SNAPSHOTS
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('snapAddBtn').addEventListener('click', () => {
+  if (!A.selectedId) return;
+  const snap={ id:uid(), name:`${LME.mutType}_${stamp()}`,
+    sourceId:A.selectedId, mutType:LME.mutType, semState:A.semState, ts:Date.now() };
+  A.snapshots.push(snap);
+  if (A.snapshots.length>20) A.snapshots.shift();
+  localStorage.setItem('vr5_snaps', JSON.stringify(A.snapshots));
+  renderSnaps();
+});
+
+function renderSnaps() {
+  const strip=document.getElementById('snapStrip');
+  const noMsg=document.getElementById('noSnapMsg');
+  const rel=A.snapshots.filter(s=>s.sourceId===A.selectedId);
+  noMsg.style.display=rel.length?'none':'inline';
+  strip.querySelectorAll('.snapChip:not(.add)').forEach(c=>c.remove());
+  rel.slice(-8).forEach(snap=>{
+    const c=document.createElement('button');c.className='snapChip';c.textContent=snap.name;
+    c.addEventListener('click',()=>recallSnap(snap));strip.appendChild(c);
+  });
+}
+
+async function recallSnap(snap) {
+  const s=A.samples.find(x=>x.id===snap.sourceId); if(!s) return;
+  if (A.selectedId!==snap.sourceId) selectSample(snap.sourceId,false);
+  setSemState(snap.semState);
+  document.querySelectorAll('.mBtn[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===snap.mutType));
+  await ensureAC();
+  LME.play(toAB(s), snap.mutType, LME.currentPos());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HISTORY TREE
+// ═══════════════════════════════════════════════════════════════════════════
+function drawHistTree(sample) {
+  const row=document.getElementById('histRow');row.innerHTML='';
+  const chain=ancestorChain(sample);
+  const desc=A.samples.filter(s=>s.parentId===sample.id);
+  chain.forEach((s,i)=>{
+    if(i>0){const a=document.createElement('div');a.className='hArrow';a.textContent='→';row.appendChild(a);}
+    const n=document.createElement('button');
+    n.className=`hNode${s.id===sample.id?' on':i===0?' root':''}`;
+    n.textContent=s.mutationOf||s.name.slice(0,8);
+    n.addEventListener('click',()=>selectSample(s.id,true));
+    row.appendChild(n);
+  });
+  if (desc.length) {
+    const a=document.createElement('div');a.className='hArrow';a.textContent='(';row.appendChild(a);
+    desc.forEach((d,i)=>{
+      if(i>0){const x=document.createElement('div');x.className='hArrow';x.textContent='|';row.appendChild(x);}
+      const n=document.createElement('button');n.className='hNode';
+      n.textContent=d.mutationOf||d.name.slice(0,8);
+      n.addEventListener('click',()=>selectSample(d.id,true));
+      row.appendChild(n);
+    });
+    const b=document.createElement('div');b.className='hArrow';b.textContent=')';row.appendChild(b);
+  }
+}
+
+function ancestorChain(s) {
+  const chain=[s]; let cur=s;
+  for(let i=0;i<8;i++){
+    if(!cur.parentId) break;
+    const p=A.samples.find(x=>x.id===cur.parentId);if(!p) break;
+    chain.unshift(p);cur=p;
+  }
+  return chain;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECOMPOSE
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('recompToggle').addEventListener('click',()=>{
+  const p=document.getElementById('recompWrap');
+  p.style.display=p.style.display==='none'?'flex':'none';
+});
+
+function renderRecomp(sample) {
+  const blocks=document.getElementById('phraseBlocks');
+  blocks.innerHTML=(sample.analysis.phrases||[]).slice(0,20).map((p,i)=>
+    `<button class="pbBlock" data-i="${i}" data-t0="${p.t0}" data-t1="${p.t1}">
+      P${i+1} ${(p.t1-p.t0).toFixed(1)}s
+    </button>`
+  ).join('');
+  blocks.querySelectorAll('.pbBlock').forEach(b=>b.addEventListener('click',()=>{
+    b.classList.toggle('off');
+    if (!b.classList.contains('off')) previewPhrase(b);
+  }));
+}
+
+async function previewPhrase(b) {
+  const s=A.samples.find(x=>x.id===A.selectedId);if(!s) return;
+  const t0=parseFloat(b.dataset.t0),t1=parseFloat(b.dataset.t1);
+  await ensureAC(); LME.stop();
+  const src=A.AC.createBufferSource();src.buffer=toAB(s);
+  src.connect(A.analyser);A.analyser.connect(A.AC.destination);
+  src.start(0,t0,t1-t0);LME.src=src;
+  TP.state='playing';TP.startedAt=A.AC.currentTime-t0;TP.duration=s.duration;
+  updateTransportUI();
+}
+
+document.getElementById('pbRenderBtn').addEventListener('click',async()=>{
+  const s=A.samples.find(x=>x.id===A.selectedId);if(!s) return;
+  const active=Array.from(document.querySelectorAll('.pbBlock:not(.off)'));if(!active.length) return;
+  document.getElementById('pbRenderBtn').textContent='RENDERING…';
+  const srcBuf=toAB(s);
+  const segs=active.map(b=>({
+    t0:parseFloat(b.dataset.t0),t1:parseFloat(b.dataset.t1),
+    frames:Math.floor((parseFloat(b.dataset.t1)-parseFloat(b.dataset.t0))*srcBuf.sampleRate)
+  }));
+  const total=segs.reduce((a,g)=>a+g.frames,0);
+  const newBuf=A.AC.createBuffer(srcBuf.numberOfChannels,total,srcBuf.sampleRate);
+  let off=0;
+  for(const seg of segs){
+    const sf=Math.floor(seg.t0*srcBuf.sampleRate);
+    for(let c=0;c<srcBuf.numberOfChannels;c++){
+      const src=srcBuf.getChannelData(c),dst=newBuf.getChannelData(c);
+      for(let i=0;i<seg.frames;i++) dst[off+i]=src[sf+i]||0;
+    }
+    off+=seg.frames;
+  }
+  const child=await buildRecord(newBuf,{name:`${s.name}_rc`,cat:'fragments',parentId:s.id,mutationOf:'recompose'});
+  await dbPut(child);A.samples.push(child);
+  renderLibrary();selectSample(child.id,true);
+  document.getElementById('pbRenderBtn').textContent='RENDER RECOMPOSE';
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRANSPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('tPlay').addEventListener('click',async()=>{
+  const s=A.samples.find(x=>x.id===A.selectedId);if(!s) return;
+  await ensureAC();
+  LME.play(toAB(s), LME.mutType, TP.state==='stopped'?0:TP.offsetSec);
+});
+document.getElementById('tStop').addEventListener('click',()=>{ LME.stop();updateTransportUI(); });
+document.getElementById('tLoop').addEventListener('click',function(){
+  TP.looping=!TP.looping;this.classList.toggle('on',TP.looping);
+  if(LME.src) LME.src.loop=TP.looping;
+  saveSession();
+});
+
+document.getElementById('tlWrap').addEventListener('click',async function(e){
+  const s=A.samples.find(x=>x.id===A.selectedId);if(!s) return;
+  const frac=(e.clientX-this.getBoundingClientRect().left)/this.offsetWidth;
+  const sec=Math.max(0,Math.min(1,frac))*s.duration;
+  await ensureAC();
+  LME.play(toAB(s),LME.mutType,sec);
+});
+
+function updateTransportUI() {
+  document.getElementById('tPlay').classList.toggle('on', TP.state==='playing');
+  renderLibrary(); // refresh playing indicator
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUALIZATION — minimal, functional
+// ═══════════════════════════════════════════════════════════════════════════
+function startViz() { vizLoop(); }
+
+function vizLoop() {
+  drawSpec(); drawTimeline();
+  requestAnimationFrame(vizLoop);
+}
+
+function drawSpec() {
+  const c=document.getElementById('specC');if(!c||!A.analyser) return;
+  const ctx=c.getContext('2d'),W=c.offsetWidth||100,H=12;
+  if(c.width!==W){c.width=W;c.height=H;}
+  ctx.clearRect(0,0,W,H);
+  A.analyser.getByteFrequencyData(A.freqData);
+  const col=SCOLORS[STATES.indexOf(A.semState)]||'#9944ff';
+  const [r,g,b]=hexRGB(col);
+  const step=A.freqData.length/W;
+  for(let x=0;x<W;x++){
+    const v=A.freqData[Math.floor(x*step)]/255;
+    ctx.fillStyle=`rgba(${r},${g},${b},0.62)`;
+    ctx.fillRect(x,H-v*H,1,v*H);
+  }
+}
+
+function drawTimeline() {
+  const c=document.getElementById('tlCanvas');
+  if(!c||!LME.src?.buffer) return;
+  const W=c.width,H=c.height;if(!W) return;
+  const pos=LME.currentPos()/LME.src.buffer.duration;
+  const x=pos*W;
+  ctx2d(c).fillStyle='rgba(0,255,255,.85)';
+  ctx2d(c).fillRect(Math.max(0,x-1),0,2,H);
+  document.getElementById('tlPos').textContent=fmt(LME.currentPos());
+}
+
+function renderTimeline(s) {
+  const c=document.getElementById('tlCanvas');if(!c) return;
+  c.width=c.offsetWidth||300;c.height=24;
+  const ctx=c.getContext('2d'),W=c.width,H=24;
+  ctx.fillStyle='rgba(153,68,255,.05)';ctx.fillRect(0,0,W,H);
+  const data=s.channelData[0],step=Math.max(1,Math.floor(data.length/W)),mid=H/2;
+  ctx.strokeStyle='rgba(153,68,255,.32)';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<W;x++){
+    let mx=0;const b=x*step;
+    for(let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0?ctx.moveTo(x,mid-mx*mid*.8):ctx.lineTo(x,mid-mx*mid*.8);
+  }
+  ctx.stroke();
+  ctx.beginPath();ctx.strokeStyle='rgba(153,68,255,.18)';
+  for(let x=0;x<W;x++){
+    let mx=0;const b=x*step;
+    for(let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0?ctx.moveTo(x,mid+mx*mid*.8):ctx.lineTo(x,mid+mx*mid*.8);
+  }
+  ctx.stroke();
+}
+
+// ── Workspace waveform ────────────────────────────────────────────────────
+function drawWSWave(s) {
+  const c=document.getElementById('wsWave');
+  c.width=c.offsetWidth||300;c.height=32;
+  const ctx=c.getContext('2d'),W=c.width,H=32;
+  ctx.fillStyle='rgba(153,68,255,.04)';ctx.fillRect(0,0,W,H);
+  const data=s.channelData[0],step=Math.max(1,Math.floor(data.length/W)),mid=H/2;
+  ctx.strokeStyle='rgba(153,68,255,.48)';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<W;x++){
+    let mx=0;const b=x*step;
+    for(let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0?ctx.moveTo(x,mid-mx*mid*.85):ctx.lineTo(x,mid-mx*mid*.85);
+  }
+  ctx.stroke();
+  ctx.beginPath();ctx.strokeStyle='rgba(153,68,255,.25)';
+  for(let x=0;x<W;x++){
+    let mx=0;const b=x*step;
+    for(let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0?ctx.moveTo(x,mid+mx*mid*.85):ctx.lineTo(x,mid+mx*mid*.85);
+  }
+  ctx.stroke();
+  // Transients
+  ctx.fillStyle='rgba(0,255,255,.45)';
+  for(const t of s.analysis.transients.slice(0,60))
+    ctx.fillRect((t.t/s.duration)*W-.5,0,1,t.type==='consonant'?H*.55:H*.32);
+  ctx.fillStyle='rgba(153,68,255,.55)';
+  for(const b of s.analysis.breaths.slice(0,30))
+    ctx.fillRect((b.t/s.duration)*W-.5,H*.7,1,H*.3);
+}
+
+function drawPhraseMap(s) {
+  const pm=document.getElementById('wsPhrase');
+  const {transients,breaths,silences,phrases}=s.analysis;
+  let segs=[];
+  breaths.forEach(b=>segs.push({t:b.t,type:'breath',label:'BR'}));
+  transients.filter(t=>t.type==='consonant').slice(0,10).forEach(t=>segs.push({t:t.t,type:'consonant',label:'CX'}));
+  silences.slice(0,8).forEach(s=>segs.push({t:s.t0,type:'silence',label:'—'}));
+  phrases.slice(0,10).forEach(p=>segs.push({t:p.t0,type:'phrase',label:`${(p.t1-p.t0).toFixed(1)}s`}));
+  segs.sort((a,b)=>a.t-b.t);
+  pm.innerHTML=segs.slice(0,20).map(s=>`<span class="ph ${s.type}">${s.label}</span>`).join('');
+}
+
+function miniWave(canvas,s) {
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  ctx.fillStyle='rgba(153,68,255,.05)';ctx.fillRect(0,0,W,H);
+  const data=s.channelData[0],step=Math.max(1,Math.floor(data.length/W)),mid=H/2;
+  ctx.strokeStyle='rgba(153,68,255,.48)';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<W;x++){
+    let mx=0;const b=x*step;
+    for(let j=b;j<b+step&&j<data.length;j++) if(Math.abs(data[j])>mx) mx=Math.abs(data[j]);
+    x===0?ctx.moveTo(x,mid-mx*mid*.82):ctx.lineTo(x,mid-mx*mid*.82);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEMANTIC STATE
+// ═══════════════════════════════════════════════════════════════════════════
+function setSemState(state) {
+  A.semState=state;
+  const idx=STATES.indexOf(state),col=SCOLORS[Math.max(0,idx)];
+  const orb=document.getElementById('semOrb');
+  orb.style.background=col;orb.style.boxShadow=`0 0 6px ${col}`;
+  document.getElementById('semName').textContent=state;
+  document.querySelectorAll('#semDots .dot').forEach((d,i)=>d.classList.toggle('on',i<=Math.max(0,idx)));
+}
+
+const semForMut=t=>({source:'fragile',dissolve:'ghost',collapse:'collapse',ritual:'ritual',fever:'fever'}[t]||'fragile');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('adnBtn').addEventListener('click',()=>{
+  const pkg={
+    version:'voxritual_adn_v1',ts:new Date().toISOString(),semState:A.semState,
+    samples:A.samples.map(s=>({id:s.id,name:s.name,cat:s.cat,parentId:s.parentId,
+      mutationOf:s.mutationOf,duration:s.duration,sampleRate:s.sampleRate,
+      semState:s.semState,scores:s.scores,
+      analysis:{
+        transientCount:s.analysis.transients.length,
+        breathCount:s.analysis.breaths.length,
+        phraseCount:s.analysis.phrases.length,
+        transients:s.analysis.transients.slice(0,50),
+        breaths:s.analysis.breaths.slice(0,30),
+        phrases:s.analysis.phrases.slice(0,20)
+      },createdAt:s.createdAt})),
+    descendantTree:A.samples.filter(s=>!s.parentId).map(r=>({
+      id:r.id,name:r.name,
+      descendants:A.samples.filter(d=>d.parentId===r.id).map(d=>({
+        id:d.id,name:d.name,mutationOf:d.mutationOf,semState:d.semState
+      }))
+    })),
+    mutationWeights:WEIGHTS,
+    snapshots:A.snapshots
+  };
+  dl(JSON.stringify(pkg,null,2),'application/json',`voxritual_adn_${Date.now()}.json`);
+});
+
+document.getElementById('wavBtn').addEventListener('click',()=>{
+  const s=A.samples.find(x=>x.id===A.selectedId);
+  if(!s){alert('Select a sample first');return;}
+  const buf=toAB(s);
+  const interleaved=new Float32Array(buf.length*buf.numberOfChannels);
+  for(let i=0;i<buf.length;i++)
+    for(let c=0;c<buf.numberOfChannels;c++)
+      interleaved[i*buf.numberOfChannels+c]=buf.getChannelData(c)[i];
+  dl(buildWAV(interleaved,buf.sampleRate,buf.numberOfChannels),'audio/wav',`${s.name}_${Date.now()}.wav`);
+});
+
+function buildWAV(samples,rate,ch) {
+  const dl2=samples.length*2,buf=new ArrayBuffer(44+dl2),v=new DataView(buf);
+  const ws=(o,s)=>s.split('').forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  ws(0,'RIFF');v.setUint32(4,36+dl2,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*ch*2,true);v.setUint16(32,ch*2,true);
+  v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,dl2,true);
+  let off=44;
+  for(let i=0;i<samples.length;i++,off+=2){
+    const s=Math.max(-1,Math.min(1,samples[i]));v.setInt16(off,s<0?s*32768:s*32767,true);
+  }
+  return buf;
+}
+
+function dl(data,mime,name) {
+  const blob=new Blob([data],{type:mime}),url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION PERSISTENCE
+// ═══════════════════════════════════════════════════════════════════════════
+function saveSession() {
+  localStorage.setItem('vr5_sess',JSON.stringify({
+    selectedId:A.selectedId,semState:A.semState,cat:A.cat,
+    mutType:LME.mutType,looping:TP.looping
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+function toAB(s) {
+  const buf=A.AC.createBuffer(s.numberOfChannels,s.length,s.sampleRate);
+  for(let c=0;c<s.numberOfChannels;c++) buf.copyToChannel(new Float32Array(s.channelData[c]),c);
+  return buf;
+}
+
+function dCurve(amount) {
+  const n=512,c=new Float32Array(n);
+  for(let i=0;i<n;i++){const x=(i*2)/n-1;
+    c[i]=amount<1?x:(Math.PI+amount)*x/(Math.PI+amount*Math.abs(x));}
+  return c;
+}
+
+function bestMime() {
+  for(const t of['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg'])
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+
+function fmt(s) { const m=Math.floor(s/60);return `${m}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
+function stamp() { const d=new Date();return `${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}${d.getSeconds().toString().padStart(2,'0')}`; }
+function uid() { return Math.random().toString(36).slice(2,8)+Date.now().toString(36); }
+function hexRGB(hex) { const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)]:[153,68,255]; }
+function ctx2d(c) { return c.getContext('2d'); }
+</script>
+</body>
+</html>

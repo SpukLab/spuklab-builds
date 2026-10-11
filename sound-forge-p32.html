@@ -1,0 +1,2576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOUND FORGE 3 — SpukLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@0,400;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   SOUND FORGE — Phase 3
+   Sonic Sculpting Engine
+   SpukLab 2025
+═══════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:linear-gradient(155deg,#13111f 0%,#1b1726 100%);
+  --violet:#9944ff;--vdim:rgba(153,68,255,.16);--vglow:rgba(153,68,255,.06);
+  --vact:rgba(153,68,255,.20);--cyan:#00ffff;--mag:#ff00ff;
+  --white:#fff;--gray:rgba(255,255,255,.36);--mono:'JetBrains Mono',monospace;
+  --o0:#ff4422;--o0d:rgba(255,68,34,.18);--o0b:rgba(255,68,34,.06);
+  --o1:#ffaa00;--o1d:rgba(255,170,0,.18);--o1b:rgba(255,170,0,.05);
+  --o2:#8866ff;--o2d:rgba(136,102,255,.20);--o2b:rgba(136,102,255,.06);
+  --org-accent:var(--o0);--org-dim:var(--o0d);--org-bg:var(--o0b);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d0b18;color:var(--white);
+  font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;touch-action:none;}
+#app{width:100%;height:100%;display:flex;flex-direction:column;background:var(--bg);}
+
+/* HEADER */
+header{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid var(--vdim);
+  background:rgba(8,6,18,.72);flex-shrink:0;gap:10px;min-height:42px;}
+.logo .sp{font-weight:800;font-size:15px;color:var(--white);letter-spacing:.04em;}
+.logo .lb{font-weight:300;font-size:15px;color:var(--cyan);letter-spacing:.04em;}
+.sep{width:1px;height:18px;background:var(--vdim);flex-shrink:0;}
+.appid{display:flex;flex-direction:column;line-height:1.1;}
+.appid-n{font-family:var(--mono);font-style:italic;font-weight:700;font-size:11px;
+  color:var(--violet);letter-spacing:.14em;}
+.appid-p{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;}
+.hsp{flex:1;}
+.hstrip{display:flex;align-items:center;gap:11px;}
+.hi{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;}
+.hl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.08em;}
+.hv{font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan);}
+.hv.warn{color:#ffcc00;}.hv.danger{color:#ff3333;}
+.hv.ph{font-size:11px;padding-top:2px;}
+.ph-intro{color:var(--gray)!important;}.ph-build{color:#88aaff!important;}
+.ph-peak{color:var(--cyan)!important;}.ph-tension{color:#ffcc00!important;}
+.ph-rupture{color:var(--mag)!important;}.ph-recovery{color:#44ff99!important;}
+.ph-void{color:rgba(80,80,140,.7)!important;}.ph-aftershock{color:#ff6600!important;}
+
+/* MAIN */
+main{flex:1;display:flex;overflow:hidden;min-height:0;}
+
+/* CANVAS PANEL */
+.cvp{flex:1.3;position:relative;border-right:1px solid var(--vdim);
+  background:#050310;overflow:hidden;}
+#scope{display:block;width:100%;height:100%;}
+.cov{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+.cl{position:absolute;font-family:var(--mono);font-size:11px;letter-spacing:.11em;}
+.cl.mat{top:6px;left:11px;color:rgba(0,255,255,.28);}
+.cl.osc{top:22%;left:11px;color:rgba(153,68,255,.3);}
+.cl.fft{bottom:7px;left:11px;color:rgba(153,68,255,.28);}
+.cl.pack{top:6px;right:11px;color:rgba(0,255,255,.22);font-style:italic;}
+.vgrid{position:absolute;bottom:24px;right:9px;
+  display:grid;grid-template-columns:repeat(8,8px);gap:3px;}
+.vdot{width:6px;height:6px;border-radius:50%;
+  background:rgba(153,68,255,.1);border:1px solid rgba(153,68,255,.15);transition:background .07s;}
+.vdot.active{background:rgba(0,255,255,.7);border-color:rgba(0,255,255,.5);}
+.vdot.hot{background:rgba(255,0,255,.7);border-color:rgba(255,0,255,.5);}
+/* Influence strip */
+.infstrip{position:absolute;top:22%;right:11px;
+  display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:11px;}
+.infitem{color:rgba(153,68,255,.35);transition:color .25s,opacity .4s;opacity:.4;}
+.infitem.on{color:var(--cyan);opacity:1;}
+/* Drift badge */
+.driftbadge{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:11px;color:rgba(255,200,0,.6);
+  letter-spacing:.1em;opacity:0;transition:opacity .3s;pointer-events:none;}
+.driftbadge.show{opacity:1;}
+/* Generation badge */
+.gen-badge{position:absolute;top:6px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:11px;color:rgba(255,150,0,.55);
+  letter-spacing:.1em;pointer-events:none;}
+
+/* CONTROLS PANEL */
+.cpanel{width:316px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;}
+
+/* MODE BAR */
+.modebar{display:flex;flex-shrink:0;border-bottom:1px solid var(--vdim);
+  background:rgba(8,6,18,.5);}
+.mbtn{flex:1;padding:8px 2px;background:none;border:none;
+  border-right:1px solid var(--vdim);color:var(--gray);
+  font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.1em;
+  cursor:pointer;text-align:center;transition:background .1s,color .1s;
+  -webkit-tap-highlight-color:transparent;}
+.mbtn:last-child{border-right:none;}
+.mbtn.active{background:var(--vact);color:var(--cyan);}
+
+/* PANES */
+.pane{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px;gap:8px;
+  display:none;flex-direction:column;}
+.pane.visible{display:flex;}
+.pane::-webkit-scrollbar{width:2px;}
+.pane::-webkit-scrollbar-thumb{background:var(--vdim);}
+
+/* SECTIONS */
+.sec{border:1px solid var(--vdim);border-radius:5px;padding:9px 10px;
+  background:rgba(153,68,255,.04);}
+.st{font-family:var(--mono);font-style:italic;font-size:11px;letter-spacing:.12em;
+  color:var(--violet);text-transform:uppercase;margin-bottom:7px;
+  padding-bottom:4px;border-bottom:1px solid var(--vdim);}
+.st.accent{color:var(--org-accent);border-color:var(--org-dim);transition:color .3s;}
+
+/* ORGANISM SELECTOR */
+.orgsel{display:flex;gap:4px;}
+.obtn{flex:1;padding:7px 4px;border-radius:4px;color:var(--gray);
+  font-family:var(--mono);font-style:italic;font-size:11px;cursor:pointer;
+  text-align:center;transition:all .12s;-webkit-tap-highlight-color:transparent;}
+.obtn[data-org="0"]{background:rgba(255,68,34,.07);border:1px solid rgba(255,68,34,.2);}
+.obtn[data-org="1"]{background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.18);}
+.obtn[data-org="2"]{background:rgba(136,102,255,.07);border:1px solid rgba(136,102,255,.2);}
+.obtn[data-org="0"].active{background:rgba(255,68,34,.2);border-color:var(--o0);color:var(--o0);}
+.obtn[data-org="1"].active{background:rgba(255,170,0,.18);border-color:var(--o1);color:var(--o1);}
+.obtn[data-org="2"].active{background:rgba(136,102,255,.2);border-color:var(--o2);color:var(--o2);}
+
+/* ═══ MATERIAL PANE ═══ */
+.mat-drop-zone{width:100%;padding:18px 12px;border:1px dashed rgba(0,255,255,.25);
+  border-radius:5px;background:rgba(0,255,255,.03);text-align:center;
+  position:relative;overflow:hidden; /* input sits inside */
+  transition:background .12s,border-color .12s;}
+.mat-drop-zone:active,.mat-drop-zone.drag{background:rgba(0,255,255,.08);border-color:rgba(0,255,255,.5);}
+/* File input covers entire drop zone — user taps it directly, no .click() needed */
+.mat-drop-zone input[type=file]{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer;font-size:0;
+  -webkit-tap-highlight-color:transparent;}
+.mat-drop-label{font-family:var(--mono);font-style:italic;font-size:12px;
+  color:rgba(0,255,255,.55);letter-spacing:.12em;margin-bottom:3px;}
+.mat-drop-sub{font-family:var(--mono);font-size:11px;color:var(--gray);}
+.mat-status{font-family:var(--mono);font-size:11px;color:var(--cyan);
+  font-style:italic;margin-top:4px;min-height:14px;}
+/* Material profile grid */
+.mat-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.mgi{padding:5px 7px;background:rgba(0,255,255,.04);
+  border:1px solid rgba(0,255,255,.12);border-radius:3px;}
+.mgi-k{font-family:var(--mono);font-size:11px;color:rgba(0,255,255,.5);letter-spacing:.06em;}
+.mgi-v{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--white);}
+/* Material waveform mini (in material pane) */
+.mat-wave-wrap{height:40px;background:#040210;border:1px solid var(--vdim);
+  border-radius:3px;overflow:hidden;margin-bottom:4px;}
+#mat-wave-mini{display:block;width:100%;height:100%;}
+
+/* ═══ FORGE PANE ═══ */
+/* Perceptual control row */
+.fctrl{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
+.fctrl:last-child{margin-bottom:0;}
+.flbl{font-family:var(--mono);font-size:11px;letter-spacing:.07em;
+  color:var(--gray);width:80px;flex-shrink:0;}
+.ftrack{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;cursor:pointer;position:relative;touch-action:none;}
+.ffill{height:100%;border-radius:2px;position:absolute;left:0;top:0;
+  background:var(--org-accent);transition:width .08s,background .3s;}
+.fval{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:var(--white);width:32px;text-align:right;flex-shrink:0;}
+/* Sub core display */
+.sub-display{display:flex;justify-content:space-between;align-items:center;
+  padding:6px 8px;background:rgba(153,68,255,.05);border:1px solid var(--vdim);border-radius:3px;}
+.sub-label{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;}
+.sub-val{font-family:var(--mono);font-style:italic;font-size:13px;color:var(--cyan);}
+
+/* ═══ SCULPT PANE ═══ */
+/* Processor chain */
+.proc-chain{display:flex;flex-direction:column;gap:4px;}
+.proc-node{display:flex;align-items:center;gap:7px;padding:6px 8px;
+  background:rgba(153,68,255,.04);border:1px solid var(--vdim);border-radius:3px;
+  cursor:pointer;transition:background .1s;-webkit-tap-highlight-color:transparent;}
+.proc-node.active{background:rgba(153,68,255,.12);border-color:rgba(153,68,255,.3);}
+.proc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  background:rgba(153,68,255,.3);border:1px solid rgba(153,68,255,.4);transition:background .15s;}
+.proc-node.active .proc-dot{background:var(--cyan);border-color:var(--cyan);}
+.proc-name{font-family:var(--mono);font-size:11px;letter-spacing:.07em;
+  color:var(--gray);flex:1;transition:color .15s;}
+.proc-node.active .proc-name{color:var(--white);}
+.proc-int-track{width:60px;height:5px;background:rgba(255,255,255,.06);
+  border-radius:2px;overflow:hidden;cursor:pointer;flex-shrink:0;touch-action:none;}
+.proc-int-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .1s;}
+.proc-int-val{font-family:var(--mono);font-size:11px;color:var(--gray);
+  width:26px;text-align:right;flex-shrink:0;}
+/* Saturation DNA */
+.sat-chips{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:4px;}
+.sat-chip{padding:6px 4px;border-radius:3px;text-align:center;cursor:pointer;
+  background:rgba(153,68,255,.06);border:1px solid var(--vdim);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.sat-chip.active{background:rgba(153,68,255,.22);border-color:var(--violet);}
+.sat-chip-name{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.05em;transition:color .1s;}
+.sat-chip.active .sat-chip-name{color:var(--cyan);}
+/* Saturation curve preview */
+#sat-curve-canvas{display:block;width:100%;height:40px;
+  background:#040210;border:1px solid var(--vdim);border-radius:3px;margin-bottom:6px;}
+/* Spectral carving */
+.carve-ctrl{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.carve-ctrl:last-child{margin-bottom:0;}
+.clbl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;
+  width:86px;flex-shrink:0;}
+.ctrack{flex:1;height:3px;background:rgba(255,255,255,.06);
+  border-radius:2px;overflow:hidden;cursor:pointer;position:relative;touch-action:none;}
+.cfill{height:100%;border-radius:2px;position:absolute;left:0;top:0;transition:width .08s;}
+.cfill.hollow{background:#8899ff;}.cfill.pressure{background:#ff6633;}
+.cfill.air{background:#88ffaa;}.cfill.mud{background:#ffaa00;}
+.cfill.metal{background:#00ffcc;}.cfill.ghost{background:#cc88ff;}
+.cfill.cavity{background:#4488ff;}
+.cval{font-family:var(--mono);font-style:italic;font-size:11px;
+  color:var(--white);width:26px;text-align:right;flex-shrink:0;}
+
+/* ═══ SURFACE CHIPS + GLUE ═══ */
+.surface-chips{display:flex;gap:3px;margin-bottom:7px;}
+.surf-chip{flex:1;padding:5px 2px;border-radius:3px;text-align:center;cursor:pointer;
+  background:rgba(0,255,255,.03);border:1px solid rgba(0,255,255,.10);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.surf-chip.active{background:rgba(0,255,255,.11);border-color:rgba(0,255,255,.38);}
+.surf-chip span{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.04em;transition:color .1s;}
+.surf-chip.active span{color:var(--cyan);}
+/* glue controls reuse .tone-ctrl / .tlbl / .ttrack / .tfill / .tval */
+.tfill.glue{background:#bb88ff;}.tfill.airabs{background:#88aaff;}
+.tfill.distance{background:#aaffdd;}.tfill.mass{background:#ff9944;}
+.tfill.decaysft{background:#ffcc66;}
+
+/* ═══ RESAMPLE PANE ═══ */
+.gen-counter{text-align:center;padding:10px;
+  border:1px solid rgba(255,150,0,.2);border-radius:5px;
+  background:rgba(255,150,0,.04);}
+.gen-num{font-family:var(--mono);font-style:italic;font-weight:700;
+  font-size:32px;color:#ff9900;letter-spacing:.04em;line-height:1;}
+.gen-label{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.1em;margin-top:2px;}
+.resample-wave-wrap{height:44px;background:#040210;border:1px solid var(--vdim);
+  border-radius:3px;overflow:hidden;}
+#resample-wave{display:block;width:100%;height:100%;}
+.render-progress{height:2px;background:rgba(255,255,255,.05);border-radius:1px;overflow:hidden;}
+.render-bar{height:100%;width:0%;border-radius:1px;
+  background:linear-gradient(90deg,var(--violet),var(--cyan));transition:width .35s ease;}
+.render-log{font-family:var(--mono);font-size:11px;color:rgba(153,68,255,.6);
+  line-height:1.55;min-height:48px;}
+.render-log .rl{opacity:0;animation:fadeRl .3s ease forwards;}
+@keyframes fadeRl{to{opacity:1;}}
+.resample-btns{display:flex;gap:6px;}
+.rsb{flex:1;padding:10px 4px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+  font-style:italic;font-size:12px;letter-spacing:.1em;text-align:center;
+  -webkit-tap-highlight-color:transparent;transition:background .1s;}
+.rsb.render{background:rgba(153,68,255,.1);border:1px solid var(--violet);color:var(--white);}
+.rsb.render:active{background:rgba(153,68,255,.28);}
+.rsb.reload{background:rgba(255,150,0,.08);border:1px solid rgba(255,150,0,.35);color:#ff9900;}
+.rsb.reload:active{background:rgba(255,150,0,.18);}
+.rsb:disabled{opacity:.3;cursor:default;}
+
+/* ═══ DNA PANE ═══ */
+.pack-header{margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid var(--vdim);}
+.pack-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.1em;margin-bottom:2px;}
+.pack-nm{font-family:var(--mono);font-style:italic;font-weight:700;font-size:17px;color:var(--white);}
+.dna-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.dgi{padding:5px 7px;background:rgba(153,68,255,.04);border:1px solid var(--vdim);border-radius:3px;}
+.dgi-k{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.06em;margin-bottom:1px;}
+.dgi-v{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--cyan);}
+.forge-dna-btn{width:100%;padding:13px;background:rgba(153,68,255,.1);
+  border:1px solid var(--violet);border-radius:5px;color:var(--white);
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:14px;
+  letter-spacing:.17em;cursor:pointer;text-align:center;
+  transition:background .12s;-webkit-tap-highlight-color:transparent;}
+.forge-dna-btn:active{background:rgba(153,68,255,.28);}
+
+/* ═══ LAYER BUILDER ═══ */
+.layer-builder{display:flex;flex-direction:column;gap:4px;}
+.layer-row{display:flex;align-items:center;gap:7px;padding:5px 8px;
+  background:rgba(0,255,255,.03);border:1px solid rgba(0,255,255,.10);border-radius:3px;
+  cursor:pointer;transition:background .1s,border-color .1s;-webkit-tap-highlight-color:transparent;}
+.layer-row.active{background:rgba(0,255,255,.09);border-color:rgba(0,255,255,.36);}
+.layer-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  background:rgba(0,255,255,.15);border:1px solid rgba(0,255,255,.25);transition:background .15s;}
+.layer-row.active .layer-dot{background:var(--cyan);border-color:var(--cyan);}
+.layer-name{font-family:var(--mono);font-size:11px;letter-spacing:.07em;
+  color:var(--gray);flex:1;transition:color .15s;}
+.layer-row.active .layer-name{color:var(--cyan);}
+.layer-int-track{width:55px;height:4px;background:rgba(255,255,255,.06);
+  border-radius:2px;overflow:hidden;flex-shrink:0;touch-action:none;cursor:pointer;}
+.layer-int-fill{height:100%;background:rgba(0,255,255,.60);border-radius:2px;transition:width .1s;}
+.layer-int-val{font-family:var(--mono);font-size:11px;color:var(--gray);
+  width:26px;text-align:right;flex-shrink:0;}
+/* Preview button */
+.preview-btn{width:100%;padding:8px;background:rgba(0,255,255,.03);
+  border:1px dashed rgba(0,255,255,.2);border-radius:4px;
+  color:rgba(0,255,255,.55);font-family:var(--mono);font-style:italic;font-size:11px;
+  letter-spacing:.14em;cursor:pointer;text-align:center;
+  transition:background .1s,opacity .12s;-webkit-tap-highlight-color:transparent;}
+.preview-btn:active{background:rgba(0,255,255,.12);}
+.preview-btn.no-mat{opacity:.28;pointer-events:none;}
+/* Chain bypass toggle */
+.chain-bypass-row{display:flex;align-items:center;justify-content:space-between;
+  padding:5px 8px;border:1px solid var(--vdim);border-radius:3px;
+  background:rgba(153,68,255,.03);cursor:pointer;margin-bottom:6px;
+  -webkit-tap-highlight-color:transparent;transition:background .1s,border-color .1s;}
+.chain-bypass-row.bypassed{background:rgba(255,200,0,.05);border-color:rgba(255,200,0,.28);}
+.chain-bypass-label{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--gray);transition:color .1s;}
+.chain-bypass-row.bypassed .chain-bypass-label{color:#ffcc00;}
+.chain-bypass-status{font-family:var(--mono);font-style:italic;font-size:11px;color:var(--violet);transition:color .1s;}
+.chain-bypass-row.bypassed .chain-bypass-status{color:#ffcc00;}
+
+/* ═══ TONE SHAPE ═══ */
+.tone-ctrl{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.tone-ctrl:last-child{margin-bottom:0;}
+.tlbl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;width:72px;flex-shrink:0;}
+.ttrack{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;cursor:pointer;position:relative;touch-action:none;}
+.tfill{height:100%;border-radius:2px;position:absolute;left:0;top:0;transition:width .08s;}
+.tfill.soften{background:#7799ff;}.tfill.warmth{background:#ffaa44;}
+.tfill.smooth{background:#66ffcc;}.tfill.dust{background:#bbaa77;}.tfill.focus{background:#ff8899;}
+.tval{font-family:var(--mono);font-style:italic;font-size:11px;color:var(--white);
+  width:26px;text-align:right;flex-shrink:0;}
+
+/* ═══ IMPACT SHAPE CHIPS ═══ */
+.imp-shapes{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;}
+.imp-chip{flex:1;min-width:0;padding:4px 2px;border-radius:3px;text-align:center;cursor:pointer;
+  background:rgba(153,68,255,.06);border:1px solid var(--vdim);
+  transition:all .1s;-webkit-tap-highlight-color:transparent;}
+.imp-chip.active{background:rgba(153,68,255,.22);border-color:var(--violet);}
+.imp-chip-name{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.04em;transition:color .1s;}
+.imp-chip.active .imp-chip-name{color:var(--cyan);}
+
+/* ═══ QUICK FILTER STRIP ═══ */
+.qfs{display:flex;flex-shrink:0;border-bottom:1px solid var(--vdim);
+  background:rgba(8,6,18,.45);padding:5px 10px;gap:8px;align-items:center;}
+.qf-item{flex:1;display:flex;flex-direction:column;gap:3px;}
+.qf-lbl{font-family:var(--mono);font-size:11px;color:var(--gray);
+  letter-spacing:.07em;text-align:center;}
+.qf-track{height:3px;background:rgba(255,255,255,.06);border-radius:2px;
+  overflow:hidden;cursor:pointer;position:relative;touch-action:none;}
+.qf-fill{height:100%;border-radius:2px;position:absolute;left:0;top:0;transition:width .08s;}
+.qf-fill.lowcut{background:#44aaff;}.qf-fill.air{background:#66ffcc;}
+.qf-fill.presence{background:#ffcc44;}.qf-fill.darken{background:#9966ff;}
+
+/* ═══ WAV EXPORT ═══ */
+.wav-btns{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;}
+.wav-btn{padding:9px 4px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+  font-style:italic;font-size:11px;letter-spacing:.08em;text-align:center;
+  background:rgba(0,255,180,.05);border:1px solid rgba(0,255,180,.22);
+  color:rgba(0,255,180,.72);transition:background .1s;-webkit-tap-highlight-color:transparent;}
+.wav-btn:active{background:rgba(0,255,180,.16);}
+.wav-btn:disabled{opacity:.3;cursor:default;}
+.wav-status{font-family:var(--mono);font-size:11px;color:rgba(0,255,180,.45);
+  min-height:14px;margin-top:4px;font-style:italic;text-align:center;}
+
+/* PARAM ROWS (Forge stats display) */
+.prow{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+.prow:last-child{margin-bottom:0;}
+.plbl{font-family:var(--mono);font-size:11px;color:var(--gray);width:64px;flex-shrink:0;}
+.ptr{flex:1;height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;position:relative;}
+.pf{height:100%;border-radius:2px;position:absolute;left:0;top:0;transition:width .14s;}
+.pf.fat{background:linear-gradient(90deg,#44ff99,#ff3300);}
+.pf.tens{background:linear-gradient(90deg,var(--violet),var(--mag));}
+.pf.ener{background:linear-gradient(90deg,#0055ff,var(--cyan));}
+.pf.dens{background:linear-gradient(90deg,#44ff99,var(--cyan));}
+.pval{font-family:var(--mono);font-style:italic;font-size:11px;color:var(--white);
+  width:34px;text-align:right;flex-shrink:0;}
+.srow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+.srow:last-child{margin-bottom:0;}
+.slbl{font-family:var(--mono);font-size:11px;color:var(--gray);letter-spacing:.07em;}
+.sval{font-family:var(--mono);font-style:italic;font-size:12px;color:var(--cyan);}
+.sval.warn{color:#ffcc00;}.sval.danger{color:#ff3333;}
+.gspd{margin-top:5px;text-align:center;font-family:var(--mono);font-style:italic;
+  font-size:12px;color:var(--violet);letter-spacing:.12em;transition:color .5s;}
+
+/* FOOTER */
+footer{flex-shrink:0;display:flex;border-top:1px solid var(--vdim);
+  background:rgba(8,6,18,.72);height:72px;}
+#tbtn{flex:1;background:rgba(153,68,255,.09);border:none;
+  border-right:1px solid var(--vdim);color:var(--white);
+  font-family:var(--mono);font-style:italic;font-weight:700;font-size:24px;
+  letter-spacing:.22em;cursor:pointer;transition:background .06s;
+  -webkit-tap-highlight-color:transparent;}
+#tbtn.fire{background:rgba(153,68,255,.36);}
+.fstats{width:175px;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;gap:4px;padding:9px;}
+.frow{display:flex;align-items:center;gap:6px;}
+.flbx{font-family:var(--mono);font-size:11px;color:var(--gray);}
+.fval-x{font-family:var(--mono);font-style:italic;font-size:14px;color:var(--cyan);}
+#fdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#44ff99;transition:background .5s;}
+#flbl{font-family:var(--mono);font-size:11px;color:var(--gray);}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<header>
+  <div class="logo"><span class="sp">SPUK</span><span class="lb">LAB</span></div>
+  <div class="sep"></div>
+  <div class="appid">
+    <span class="appid-n">SOUND FORGE</span>
+    <span class="appid-p">PHASE 3 — SONIC SCULPTING ENGINE</span>
+  </div>
+  <div class="hsp"></div>
+  <div class="hstrip">
+    <div class="hi"><span class="hl">TENSION</span><span class="hv" id="h-t">0.00</span></div>
+    <div class="hi"><span class="hl">ENERGY</span><span class="hv" id="h-e">0.00</span></div>
+    <div class="hi"><span class="hl">PHASE</span><span class="hv ph" id="h-ph">intro</span></div>
+    <div class="hi"><span class="hl">FPS</span><span class="hv" id="h-fps">--</span></div>
+    <div class="hi"><span class="hl">V</span><span class="hv" id="h-vc">0</span></div>
+  </div>
+</header>
+
+<main>
+
+<!-- CANVAS -->
+<div class="cvp">
+  <canvas id="scope"></canvas>
+  <div class="cov">
+    <span class="cl mat">MATERIAL</span>
+    <span class="cl osc">OSC</span>
+    <span class="cl fft">FFT</span>
+    <span class="cl pack" id="cl-pk">rust_ritual</span>
+    <div class="infstrip">
+      <span class="infitem" id="inf-kg">K→GHOST</span>
+      <span class="infitem" id="inf-td">T→DEBRIS</span>
+      <span class="infitem" id="inf-ds">D→SAT</span>
+    </div>
+    <div class="vgrid" id="vgrid"></div>
+    <span class="gen-badge" id="gen-badge"></span>
+    <div class="driftbadge" id="driftbadge"></div>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="cpanel">
+
+  <!-- MODE BAR -->
+  <div class="modebar">
+    <button class="mbtn active" id="mb-mat">MATERIAL</button>
+    <button class="mbtn" id="mb-forge">FORGE</button>
+    <button class="mbtn" id="mb-sculpt">SCULPT</button>
+    <button class="mbtn" id="mb-resample">RESAMPLE</button>
+    <button class="mbtn" id="mb-dna">DNA</button>
+  </div>
+
+  <!-- QUICK FILTER STRIP — always visible -->
+  <div class="qfs">
+    <div class="qf-item">
+      <span class="qf-lbl">LOW CUT</span>
+      <div class="qf-track" data-qf="lowCut"><div class="qf-fill lowcut" style="width:0%"></div></div>
+    </div>
+    <div class="qf-item">
+      <span class="qf-lbl">AIR</span>
+      <div class="qf-track" data-qf="air"><div class="qf-fill air" style="width:0%"></div></div>
+    </div>
+    <div class="qf-item">
+      <span class="qf-lbl">PRESENCE</span>
+      <div class="qf-track" data-qf="presence"><div class="qf-fill presence" style="width:0%"></div></div>
+    </div>
+    <div class="qf-item">
+      <span class="qf-lbl">DARKEN</span>
+      <div class="qf-track" data-qf="darken"><div class="qf-fill darken" style="width:0%"></div></div>
+    </div>
+    <div class="qf-item">
+      <span class="qf-lbl">SOFTEN</span>
+      <div class="qf-track" data-qf="softenT"><div class="qf-fill" style="width:0%;background:#ff8866;"></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ MATERIAL PANE ═══ -->
+  <div class="pane visible" id="pane-mat">
+
+    <div class="orgsel">
+      <button class="obtn active" data-org="0">SLOT A</button>
+      <button class="obtn"        data-org="1">SLOT B</button>
+      <button class="obtn"        data-org="2">SLOT C</button>
+    </div>
+
+    <div class="mat-drop-zone" id="mat-drop">
+      <input type="file" id="mat-file-input"
+        accept=".wav,.aif,.aiff,.mp3,.m4a,.caf,audio/*">
+      <div class="mat-drop-label">LOAD MATERIAL</div>
+      <div class="mat-drop-sub">WAV · AIFF · MP3 · M4A</div>
+      <div class="mat-status" id="mat-status"></div>
+    </div>
+
+    <button class="preview-btn no-mat" id="preview-btn">PREVIEW CLEAN</button>
+
+    <canvas class="mat-wave-wrap" id="mat-wave-mini" height="40"></canvas>
+
+    <div class="sec">
+      <div class="st">MATERIAL PROFILE</div>
+      <div class="mat-grid">
+        <div class="mgi"><div class="mgi-k">DURATION</div><div class="mgi-v" id="mat-dur">--</div></div>
+        <div class="mgi"><div class="mgi-k">TRANSIENT</div><div class="mgi-v" id="mat-trans">--</div></div>
+        <div class="mgi"><div class="mgi-k">SPECTRAL</div><div class="mgi-v" id="mat-spec">--</div></div>
+        <div class="mgi"><div class="mgi-k">PHYSICALITY</div><div class="mgi-v" id="mat-phys">--</div></div>
+        <div class="mgi"><div class="mgi-k">NOISE FLOOR</div><div class="mgi-v" id="mat-noise">--</div></div>
+        <div class="mgi"><div class="mgi-k">GENERATION</div><div class="mgi-v" id="mat-gen">0</div></div>
+        <div class="mgi"><div class="mgi-k">DAMAGE</div><div class="mgi-v" id="mat-dmg">0%</div></div>
+        <div class="mgi"><div class="mgi-k">AIR CONTENT</div><div class="mgi-v" id="mat-air">--</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">SYNTHESIS FALLBACK</div>
+      <div class="srow"><span class="slbl">ORGANISM</span><span class="sval" id="sf-org">RUST KICK</span></div>
+      <div class="prow" style="margin-top:4px;">
+        <span class="plbl">FATIGUE</span>
+        <div class="ptr"><div class="pf fat" id="pf-fat"></div></div>
+        <span class="pval" id="pv-fat">0.00</span>
+      </div>
+      <div class="srow" style="margin-top:3px;"><span class="slbl">PLAY COUNT</span><span class="sval" id="st-cnt">0</span></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ FORGE PANE ═══ -->
+  <div class="pane" id="pane-forge">
+
+    <div class="sec">
+      <div class="st accent" id="forge-st-title">TRANSIENT FORGE</div>
+      <div class="fctrl" id="fc-impact"><span class="flbl">IMPACT HARDNESS</span><div class="ftrack" data-p="impactHardness"><div class="ffill"></div></div><span class="fval">0.72</span></div>
+      <div class="fctrl" id="fc-body"><span class="flbl">BODY WEIGHT</span><div class="ftrack" data-p="bodyWeight"><div class="ffill"></div></div><span class="fval">0.60</span></div>
+      <div class="fctrl" id="fc-cone"><span class="flbl">CONE STRESS</span><div class="ftrack" data-p="coneStress"><div class="ffill"></div></div><span class="fval">0.35</span></div>
+      <div class="fctrl" id="fc-erosion"><span class="flbl">TRANSIENT EROSION</span><div class="ftrack" data-p="transientErosion"><div class="ffill"></div></div><span class="fval">0.20</span></div>
+      <div class="fctrl" id="fc-pressure"><span class="flbl">PRESSURE</span><div class="ftrack" data-p="pressure"><div class="ffill"></div></div><span class="fval">0.50</span></div>
+      <div class="fctrl" id="fc-speaker"><span class="flbl">SPEAKER DAMAGE</span><div class="ftrack" data-p="speakerDamage"><div class="ffill"></div></div><span class="fval">0.15</span></div>
+      <div class="fctrl" id="fc-air"><span class="flbl">AIR PUSH</span><div class="ftrack" data-p="airPush"><div class="ffill"></div></div><span class="fval">0.40</span></div>
+      <div class="fctrl" id="fc-punch"><span class="flbl">PUNCH LENGTH</span><div class="ftrack" data-p="punchLength"><div class="ffill"></div></div><span class="fval">0.55</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="st">SUB CORE</div>
+      <div class="sub-display">
+        <span class="sub-label">SUB FREQ</span><span class="sub-val" id="sub-freq">52hz</span>
+      </div>
+      <div style="margin-top:6px;" class="sub-display">
+        <span class="sub-label">SUB GAIN</span><span class="sub-val" id="sub-gain">0.60</span>
+      </div>
+      <div style="margin-top:6px;" class="sub-display">
+        <span class="sub-label">MATERIAL</span><span class="sub-val" id="sub-mat-status">synthesis</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">GLOBAL STATE</div>
+      <div class="prow"><span class="plbl">TENSION</span><div class="ptr"><div class="pf tens" id="gf-t"></div></div></div>
+      <div class="prow"><span class="plbl">ENERGY</span><div class="ptr"><div class="pf ener" id="gf-e"></div></div></div>
+      <div class="prow"><span class="plbl">DENSITY</span><div class="ptr"><div class="pf dens" id="gf-d"></div></div></div>
+      <div class="gspd">NARRATIVE: <span id="gs-ph">INTRO</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="st">LAYER BUILDER</div>
+      <div class="layer-builder">
+        <div class="layer-row" id="layer-sub" data-layer="sub">
+          <div class="layer-dot"></div>
+          <span class="layer-name">SUB REINF.</span>
+          <div class="layer-int-track" id="layer-int-sub"><div class="layer-int-fill" style="width:55%"></div></div>
+          <span class="layer-int-val" id="layer-val-sub">0.55</span>
+        </div>
+        <div class="layer-row" id="layer-impact" data-layer="impact">
+          <div class="layer-dot"></div>
+          <span class="layer-name">IMPACT TRANSIENT</span>
+          <div class="layer-int-track" id="layer-int-impact"><div class="layer-int-fill" style="width:50%"></div></div>
+          <span class="layer-int-val" id="layer-val-impact">0.50</span>
+        </div>
+        <div class="imp-shapes">
+          <div class="imp-chip active" data-shape="physical"><span class="imp-chip-name">PHYSICAL</span></div>
+          <div class="imp-chip" data-shape="tight"><span class="imp-chip-name">TIGHT</span></div>
+          <div class="imp-chip" data-shape="soft"><span class="imp-chip-name">SOFT</span></div>
+          <div class="imp-chip" data-shape="cracked"><span class="imp-chip-name">CRACKED</span></div>
+          <div class="imp-chip" data-shape="fatigued"><span class="imp-chip-name">FATIGUED</span></div>
+        </div>
+        <div class="layer-row" id="layer-air" data-layer="air">
+          <div class="layer-dot"></div>
+          <span class="layer-name">AIR LAYER</span>
+          <div class="layer-int-track" id="layer-int-air"><div class="layer-int-fill" style="width:40%"></div></div>
+          <span class="layer-int-val" id="layer-val-air">0.40</span>
+        </div>
+        <div class="layer-row" id="layer-texture" data-layer="texture">
+          <div class="layer-dot"></div>
+          <span class="layer-name">TEXTURE LAYER</span>
+          <div class="layer-int-track" id="layer-int-texture"><div class="layer-int-fill" style="width:30%"></div></div>
+          <span class="layer-int-val" id="layer-val-texture">0.30</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ SCULPT PANE ═══ -->
+  <div class="pane" id="pane-sculpt">
+
+    <div class="sec">
+      <div class="st">MATERIAL PROCESSOR</div>
+      <div class="chain-bypass-row" id="chain-bypass-row">
+        <span class="chain-bypass-label">PROCESSOR CHAIN</span>
+        <span class="chain-bypass-status" id="chain-bypass-status">ACTIVE</span>
+      </div>
+      <div class="proc-chain">
+        <div class="proc-node active" data-proc="tapeFatigue">
+          <div class="proc-dot"></div><span class="proc-name">TAPE FATIGUE</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:30%"></div></div>
+          <span class="proc-int-val">0.30</span>
+        </div>
+        <div class="proc-node" data-proc="oxideCollapse">
+          <div class="proc-dot"></div><span class="proc-name">OXIDE COLLAPSE</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:0%"></div></div>
+          <span class="proc-int-val">0.00</span>
+        </div>
+        <div class="proc-node" data-proc="transientSmear">
+          <div class="proc-dot"></div><span class="proc-name">TRANSIENT SMEAR</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:0%"></div></div>
+          <span class="proc-int-val">0.00</span>
+        </div>
+        <div class="proc-node" data-proc="harmonicCollapse">
+          <div class="proc-dot"></div><span class="proc-name">HARMONIC COLLAPSE</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:0%"></div></div>
+          <span class="proc-int-val">0.00</span>
+        </div>
+        <div class="proc-node" data-proc="spectralHollow">
+          <div class="proc-dot"></div><span class="proc-name">SPECTRAL HOLLOW</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:0%"></div></div>
+          <span class="proc-int-val">0.00</span>
+        </div>
+        <div class="proc-node" data-proc="pressureSat">
+          <div class="proc-dot"></div><span class="proc-name">PRESSURE SAT</span>
+          <div class="proc-int-track"><div class="proc-int-fill" style="width:0%"></div></div>
+          <span class="proc-int-val">0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">SATURATION DNA</div>
+      <canvas id="sat-curve-canvas" height="40"></canvas>
+      <div class="sat-chips">
+        <div class="sat-chip active" data-sat="rust"><span class="sat-chip-name">RUST</span></div>
+        <div class="sat-chip" data-sat="magnetic"><span class="sat-chip-name">MAGNETIC</span></div>
+        <div class="sat-chip" data-sat="burned"><span class="sat-chip-name">BURNED</span></div>
+        <div class="sat-chip" data-sat="collapsing"><span class="sat-chip-name">COLLAPSE</span></div>
+        <div class="sat-chip" data-sat="toxic"><span class="sat-chip-name">TOXIC</span></div>
+        <div class="sat-chip" data-sat="overloaded"><span class="sat-chip-name">OVERLOAD</span></div>
+        <div class="sat-chip" data-sat="exhausted"><span class="sat-chip-name">EXHAUST</span></div>
+        <div class="sat-chip" data-sat="cracked"><span class="sat-chip-name">CRACKED</span></div>
+      </div>
+      <div class="fctrl" style="margin-top:5px;">
+        <span class="flbl" style="width:50px;">DRIVE</span>
+        <div class="ftrack" data-p="satDrive"><div class="ffill"></div></div>
+        <span class="fval" id="sat-drive-val">1.50</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="st">SPECTRAL CARVING</div>
+      <div class="carve-ctrl"><span class="clbl">HOLLOW</span><div class="ctrack" data-c="hollow"><div class="cfill hollow"></div></div><span class="cval" id="cv-hollow">0.00</span></div>
+      <div class="carve-ctrl"><span class="clbl">PRESSURE</span><div class="ctrack" data-c="pressure"><div class="cfill pressure"></div></div><span class="cval" id="cv-pressure">0.00</span></div>
+      <div class="carve-ctrl"><span class="clbl">AIR REMOVAL</span><div class="ctrack" data-c="air"><div class="cfill air"></div></div><span class="cval" id="cv-air">0.00</span></div>
+      <div class="carve-ctrl"><span class="clbl">MUD EXTRACT</span><div class="ctrack" data-c="mud"><div class="cfill mud"></div></div><span class="cval" id="cv-mud">0.00</span></div>
+      <div class="carve-ctrl"><span class="clbl">METALLIC</span><div class="ctrack" data-c="metal"><div class="cfill metal"></div></div><span class="cval" id="cv-metal">0.00</span></div>
+      <div class="carve-ctrl"><span class="clbl">GHOST RESON.</span><div class="ctrack" data-c="ghost"><div class="cfill ghost"></div></div><span class="cval" id="cv-ghost">0.00</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="st">TONE SHAPE</div>
+      <div class="tone-ctrl"><span class="tlbl">SOFTEN</span><div class="ttrack" data-t="soften"><div class="tfill soften" style="width:0%"></div></div><span class="tval" id="tv-soften">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">WARMTH</span><div class="ttrack" data-t="warmth"><div class="tfill warmth" style="width:0%"></div></div><span class="tval" id="tv-warmth">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">SMOOTH</span><div class="ttrack" data-t="smooth"><div class="tfill smooth" style="width:0%"></div></div><span class="tval" id="tv-smooth">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">DUST</span><div class="ttrack" data-t="dust"><div class="tfill dust" style="width:0%"></div></div><span class="tval" id="tv-dust">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">FOCUS</span><div class="ttrack" data-t="focus"><div class="tfill focus" style="width:0%"></div></div><span class="tval" id="tv-focus">0.00</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="st">GLUE / PHYSICALITY</div>
+      <div class="tone-ctrl"><span class="tlbl">GLUE</span><div class="ttrack" data-g="glue"><div class="tfill glue" style="width:0%"></div></div><span class="tval" id="gv-glue">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">AIR ABSORB</span><div class="ttrack" data-g="airAbsorption"><div class="tfill airabs" style="width:0%"></div></div><span class="tval" id="gv-airAbsorption">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">DISTANCE</span><div class="ttrack" data-g="distance"><div class="tfill distance" style="width:0%"></div></div><span class="tval" id="gv-distance">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">MASS</span><div class="ttrack" data-g="mass"><div class="tfill mass" style="width:0%"></div></div><span class="tval" id="gv-mass">0.00</span></div>
+      <div class="tone-ctrl"><span class="tlbl">DECAY SOFT</span><div class="ttrack" data-g="decaySoftness"><div class="tfill decaysft" style="width:0%"></div></div><span class="tval" id="gv-decaySoftness">0.00</span></div>
+      <div style="margin-top:6px;"><div class="st" style="margin-bottom:4px;">SURFACE</div>
+        <div class="surface-chips">
+          <div class="surf-chip active" data-surf="wood"><span>WOOD</span></div>
+          <div class="surf-chip" data-surf="metal"><span>METAL</span></div>
+          <div class="surf-chip" data-surf="concrete"><span>CONCRETE</span></div>
+          <div class="surf-chip" data-surf="fabric"><span>FABRIC</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ RESAMPLE PANE ═══ -->
+  <div class="pane" id="pane-resample">
+
+    <div class="gen-counter">
+      <div class="gen-num" id="gen-num">0</div>
+      <div class="gen-label">GENERATION</div>
+    </div>
+
+    <div class="resample-wave-wrap">
+      <canvas id="resample-wave" height="44"></canvas>
+    </div>
+
+    <div class="sec">
+      <div class="st">RENDER PASS</div>
+      <div class="render-log" id="render-log"></div>
+      <div class="render-progress" style="margin-top:6px;">
+        <div class="render-bar" id="render-bar"></div>
+      </div>
+    </div>
+
+    <div class="resample-btns">
+      <button class="rsb render" id="rsb-render">RENDER PASS</button>
+      <button class="rsb reload" id="rsb-reload" disabled>RELOAD</button>
+    </div>
+
+    <div class="sec">
+      <div class="st">PIPELINE STATUS</div>
+      <div class="srow"><span class="slbl">PASSES DONE</span><span class="sval" id="rs-passes">0</span></div>
+      <div class="srow"><span class="slbl">DAMAGE ACCU.</span><span class="sval" id="rs-damage">0%</span></div>
+      <div class="srow"><span class="slbl">MATERIAL SRC</span><span class="sval" id="rs-src">synthesis</span></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ DNA PANE ═══ -->
+  <div class="pane" id="pane-dna">
+
+    <div class="pack-header">
+      <div class="pack-lbl">ACTIVE PACK</div>
+      <div class="pack-nm">Rust Ritual</div>
+    </div>
+
+    <div class="sec">
+      <div class="st">DNA PROFILE</div>
+      <div class="dna-grid">
+        <div class="dgi"><div class="dgi-k">SAT DNA</div><div class="dgi-v" id="dna-sat">rust</div></div>
+        <div class="dgi"><div class="dgi-k">GENERATION</div><div class="dgi-v" id="dna-gen">0</div></div>
+        <div class="dgi"><div class="dgi-k">PHYSICALITY</div><div class="dgi-v" id="dna-phys">--</div></div>
+        <div class="dgi"><div class="dgi-k">DAMAGE</div><div class="dgi-v" id="dna-dmg">0%</div></div>
+        <div class="dgi"><div class="dgi-k">IMPACT</div><div class="dgi-v" id="dna-impact">0.72</div></div>
+        <div class="dgi"><div class="dgi-k">BODY WEIGHT</div><div class="dgi-v" id="dna-body">0.60</div></div>
+      </div>
+    </div>
+
+    <button class="forge-dna-btn" id="forge-dna-btn">FORGE DNA</button>
+
+    <div class="sec" style="margin-top:8px;">
+      <div class="st">WAV EXPORT</div>
+      <div class="wav-btns">
+        <button class="wav-btn" id="wav-dry">DRY MATERIAL</button>
+        <button class="wav-btn" id="wav-processed">PROCESSED</button>
+        <button class="wav-btn" id="wav-resampled">RESAMPLED</button>
+        <button class="wav-btn" id="wav-current">CURRENT OUTPUT</button>
+        <button class="wav-btn" id="wav-stems" style="grid-column:1/-1;">PRINT STEMS</button>
+      </div>
+      <div class="wav-status" id="wav-status"></div>
+    </div>
+
+  </div>
+
+</div><!-- .cpanel -->
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <button id="tbtn">TRIGGER</button>
+  <div class="fstats">
+    <div class="frow"><span class="flbx">TRIGGERS</span><span class="fval-x" id="fi-tot">0</span></div>
+    <div class="frow"><span id="fdot"></span><span id="flbl">FRESH</span></div>
+  </div>
+</footer>
+
+</div>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SOUND FORGE — Phase 3: Sonic Sculpting Engine
+   SpukLab 2025
+
+   New systems:
+   ① Material Import — iOS canonical, MaterialDef analysis,
+     waveform display, per-slot storage
+   ② Transient Forge — 8 perceptual controls mapping to
+     audio parameters (IMPACT HARDNESS, BODY WEIGHT, etc.)
+   ③ Material Processor — 6 real-time processes (tape
+     fatigue, oxide collapse, transient smear, harmonic
+     collapse, spectral hollow, pressure sat)
+   ④ Saturation DNA — 8 profiles with distinct WaveShaper
+     curves (rust, magnetic, burned, collapsing, toxic,
+     overloaded, exhausted, cracked)
+   ⑤ Resampling Chamber — OfflineAudioContext multi-pass
+     render → reload → destroy cycle with generation counter
+   ⑥ Spectral Carving — 6 perceptual EQ controls
+   Carried: Voice Pool, Safety Layer, Global State, EMF,
+   Ghost trails, Trigger scars
+═══════════════════════════════════════════════════════════ */
+
+// ─── UTILS ──────────────────────────────────────────────
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function safe(v,fb=0){return(typeof v==='number'&&isFinite(v))?v:fb;}
+function clampAudio(v,mn,mx,fb=0){return Math.max(mn,Math.min(mx,safe(v,fb)));}
+function setW(id,pct){const el=document.getElementById(id);if(el)el.style.width=clamp(pct*100,0,100).toFixed(1)+'%';}
+function setT(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+
+// ─── DEBUG ──────────────────────────────────────────────
+const DEBUG={audio:false,material:false,resample:false,territory:false};
+function dbg(s,...a){if(DEBUG[s])console.log(`[SF3:${s}]`,...a);}
+
+// ─── AUDIO PARAM SAFETY ─────────────────────────────────
+const AP={FREQ_MIN:24,FREQ_MAX:18000,GAIN_MIN:0,GAIN_MAX:1.2,Q_MIN:.0001,Q_MAX:24,PAN_MIN:-1,PAN_MAX:1};
+function safeParam(p,v,mn,mx,fb=0){try{if(p&&typeof p.value!=='undefined')p.value=clampAudio(v,mn,mx,fb);}catch(e){dbg('audio','safeParam FAIL',e.message);}}
+function safeFreq(p,v,fb=440){safeParam(p,v,AP.FREQ_MIN,AP.FREQ_MAX,fb);}
+function safeQ(p,v,fb=1){safeParam(p,v,AP.Q_MIN,AP.Q_MAX,fb);}
+function safeSetValue(p,v,t,mn,mx,fb=0){try{p.setValueAtTime(clampAudio(v,mn,mx,fb),clampAudio(t,0,3600));}catch(e){dbg('audio','SSV FAIL',e.message);}}
+function safeLinearRamp(p,v,t,mn,mx,fb=0){try{p.linearRampToValueAtTime(clampAudio(v,mn,mx,fb),clampAudio(t,0,3600));}catch(e){dbg('audio','SLR FAIL',e.message);}}
+function safeExpRamp(p,v,t,mn,mx,fb=.001){try{p.exponentialRampToValueAtTime(Math.max(.00001,clampAudio(v,mn,mx,fb)),clampAudio(t,0,3600));}catch(e){dbg('audio','SER FAIL',e.message);}}
+
+// ─── AUDIO CONTEXT ──────────────────────────────────────
+let AC=null,masterGain,compressor,masterSat,masterAnalyser;
+let noiseBuffer=null,FFT_SIZE=2048;
+
+function initAC(){
+  if(AC)return;
+  AC=new(window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
+  masterGain=AC.createGain();masterGain.gain.value=0.80; // normal level — nothing playing yet
+  compressor=AC.createDynamicsCompressor();
+  compressor.threshold.value=-14;compressor.knee.value=8;
+  compressor.ratio.value=4;compressor.attack.value=.003;compressor.release.value=.18;
+  masterSat=AC.createWaveShaper();
+  masterSat.curve=buildSatCurveRaw('rust',28);masterSat.oversample='4x';
+  masterAnalyser=AC.createAnalyser();
+  masterAnalyser.fftSize=FFT_SIZE;masterAnalyser.smoothingTimeConstant=.88;
+  masterGain.connect(compressor);compressor.connect(masterSat);
+  masterSat.connect(masterAnalyser);masterAnalyser.connect(AC.destination);
+  noiseBuffer=genNoise(2);
+  initPool();
+  // keepDACAlive called after first resume (trigger or material load)
+  startWatchdog();
+}
+
+// Keep iOS DAC powered on: subsonic oscillator, gain 0.00003, direct to destination.
+// Must be called synchronously inside a user gesture (or inside AC.resume().then).
+let _dacAlive=null;
+function keepDACAlive(){
+  if(!AC||_dacAlive)return;
+  try{
+    const osc=AC.createOscillator();
+    const g=AC.createGain();
+    osc.frequency.value=1;    // 1Hz — subsonic, never audible
+    g.gain.value=0.00003;     // inaudible amplitude, just enough to keep DAC active
+    osc.connect(g);g.connect(AC.destination);
+    osc.start();
+    _dacAlive=osc;
+  }catch(e){dbg('audio','keepDACAlive fail:',e.message);}
+}
+
+// resumeSafe: mutes master, resumes AC, then fades in.
+// Uses AC.currentTime AFTER resume resolves — avoids frozen-time bug.
+function resumeSafe(){
+  if(!AC)return;
+  // Cancel any pending ramps and go to 0 immediately
+  masterGain.gain.cancelScheduledValues(0);
+  masterGain.gain.value=0;
+  AC.resume().then(()=>{
+    keepDACAlive();
+    // currentTime is now live — schedule fade-in from this point
+    const now=AC.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setValueAtTime(0,now);
+    masterGain.gain.linearRampToValueAtTime(0.80,now+0.20);
+  });
+}
+function genNoise(dur){
+  const sr=AC.sampleRate,len=Math.floor(sr*dur),buf=AC.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
+  return buf;
+}
+
+// ─── WATCHDOG ───────────────────────────────────────────
+let _wdi=null;
+function startWatchdog(){
+  if(_wdi)return;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'&&AC&&AC.state!=='running'){
+      resumeSafe(); // mute→resume→fade handles the return-from-picker pop
+    }
+  });
+  _wdi=setInterval(()=>{
+    if(!AC||document.visibilityState!=='visible')return;
+    if(masterAnalyser){
+      const b=new Uint8Array(masterAnalyser.fftSize);
+      masterAnalyser.getByteTimeDomainData(b);
+      const rms=Math.sqrt(b.reduce((s,v)=>s+(v/128-1)**2,0)/b.length);
+      const act=pool.filter(v=>!v.free&&AC&&AC.currentTime<v.freeAt).length;
+      if(act>0&&rms<.002)console.warn('[SF3:watchdog] STALL v:',act,'rms:',rms.toFixed(4));
+    }
+  },3000);
+}
+
+// ─── VOICE POOL ─────────────────────────────────────────
+const POOL_SIZE=16;const pool=[];
+class Voice{
+  constructor(){
+    this.free=true;this.freeAt=0;
+    this.bus=AC.createGain();this.panner=AC.createStereoPanner();this.sat=AC.createWaveShaper();
+    this.bus.gain.value=0;
+    this.bus.connect(this.panner);this.panner.connect(this.sat);this.sat.connect(masterGain);
+  }
+  available(){return this.free||(AC&&AC.currentTime>=this.freeAt);}
+  claim(dur){this.free=false;this.freeAt=AC.currentTime+dur+0.12;setTimeout(()=>{this.free=true;},(dur+0.16)*1000);}
+}
+function initPool(){
+  for(let i=0;i<POOL_SIZE;i++)pool.push(new Voice());
+  const g=document.getElementById('vgrid');
+  if(g)g.innerHTML=Array.from({length:16},()=>'<div class="vdot"></div>').join('');
+}
+function getVoice(){
+  for(const v of pool)if(v.available())return v;
+  Perf.evictions++;return pool.reduce((a,b)=>a.freeAt<b.freeAt?a:b);
+}
+
+// ═══════════════════════════════════════════════════════
+// ① MATERIAL IMPORT SYSTEM
+// ═══════════════════════════════════════════════════════
+// Per-slot material storage (3 slots for A/B/C)
+const SLOTS=[null,null,null]; // MaterialDef | null
+let currentSlot=0;
+let precomputedWaveforms=[null,null,null]; // per slot
+let resampledBuffer=null; // latest render result
+
+const matInput=document.getElementById('mat-file-input');
+
+// Input sits inside drop zone — user taps it directly.
+// No programmatic .click() needed. AC is initialized on the change event
+// which is itself a user gesture on iOS.
+matInput.addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  // Init AC here — 'change' fires inside a user gesture on iOS Safari
+  if(!AC)initAC();
+  AC.resume();
+  keepDACAlive();
+  setT('mat-status','loading...');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const buf=ev.target.result.slice(0);
+    AC.decodeAudioData(buf,
+      buffer=>onMaterialLoaded(buffer,file.name),
+      err=>{setT('mat-status','decode error');console.warn('[SF3:material]',err);}
+    );
+  };
+  reader.readAsArrayBuffer(file);
+  matInput.value='';
+});
+
+function onMaterialLoaded(buffer,name){
+  const mat=analyzeMaterial(buffer,name);
+  SLOTS[currentSlot]=mat;
+  precomputedWaveforms[currentSlot]=null; // reset
+  updateMaterialUI();
+  setT('mat-status','loaded: '+mat.name.slice(0,22));
+  dbg('material','Loaded',mat.name,'dur',mat.duration.toFixed(2),'s');
+}
+
+function analyzeMaterial(buffer,name){
+  const data=buffer.getChannelData(0);
+  const len=data.length;
+  // RMS
+  let sum=0;for(let i=0;i<len;i++)sum+=data[i]*data[i];
+  const rms=Math.sqrt(sum/len);
+  // Peak
+  let peak=0;for(let i=0;i<len;i++)if(Math.abs(data[i])>peak)peak=Math.abs(data[i]);
+  // Crest factor → transient profile
+  const crest=peak/Math.max(rms,.0001);
+  const transientProfile=crest>8?'sharp':crest>4?'medium':'smooth';
+  // Spectral centroid (approximate from first 4096 samples via zero-crossing rate)
+  let zc=0;for(let i=1;i<Math.min(4096,len);i++)if(data[i-1]*data[i]<0)zc++;
+  const zcRate=zc/Math.min(4096,len);
+  const spectralCentroid=zcRate*buffer.sampleRate*.5; // rough Hz estimate
+  const spectralProfile=spectralCentroid<300?'low_heavy':spectralCentroid<1500?'balanced':'bright';
+  // Noise floor: 10th percentile of abs values
+  const sample=Array.from(data.slice(0,Math.min(4096,len))).map(Math.abs).sort((a,b)=>a-b);
+  const noiseFloor=sample[Math.floor(sample.length*.10)];
+  // Air content: high ZC in last 20% of signal
+  const tailStart=Math.floor(len*.8);let tailZC=0;
+  for(let i=tailStart+1;i<len;i++)if(data[i-1]*data[i]<0)tailZC++;
+  const airContent=clamp(tailZC/(len-tailStart),.0,.8);
+  const physicality=clamp(peak*crest*.12,0,1);
+  return{
+    id:Date.now(),name:name.replace(/\.[^.]+$/,''),buffer,
+    duration:buffer.duration,sampleRate:buffer.sampleRate,channels:buffer.numberOfChannels,
+    rms,peak,crestFactor:crest,spectralCentroid,spectralProfile,noiseFloor,
+    transientProfile,physicality,airContent,damageLevel:0,generation:0
+  };
+}
+
+// Precompute waveform for fast drawing
+function getWaveformData(slotIdx,width){
+  if(precomputedWaveforms[slotIdx]&&precomputedWaveforms[slotIdx].length===Math.floor(width))
+    return precomputedWaveforms[slotIdx];
+  const mat=SLOTS[slotIdx];if(!mat||!mat.buffer)return null;
+  const data=mat.buffer.getChannelData(0);
+  const w=Math.floor(width);
+  const step=Math.ceil(data.length/w);
+  const wf=[];
+  for(let i=0;i<w;i++){
+    let mx=0,mn=0;
+    for(let j=0;j<step;j++){const idx=i*step+j;if(idx>=data.length)break;const v=data[idx];if(v>mx)mx=v;if(v<mn)mn=v;}
+    wf.push({max:mx,min:mn});
+  }
+  precomputedWaveforms[slotIdx]=wf;
+  return wf;
+}
+
+function updateMaterialUI(){
+  const mat=SLOTS[currentSlot];
+  const pvBtn=document.getElementById('preview-btn');
+  if(pvBtn)pvBtn.classList.toggle('no-mat',!mat);
+  if(!mat){
+    ['mat-dur','mat-trans','mat-spec','mat-phys','mat-noise','mat-gen','mat-dmg','mat-air']
+      .forEach(id=>setT(id,'--'));
+    setT('mat-gen','0');setT('mat-dmg','0%');
+    setT('sub-mat-status','synthesis');
+    drawMiniWaveform(null);
+    return;
+  }
+  setT('mat-dur',mat.duration.toFixed(2)+'s');
+  setT('mat-trans',mat.transientProfile);
+  setT('mat-spec',mat.spectralProfile);
+  setT('mat-phys',(mat.physicality).toFixed(2));
+  setT('mat-noise',(mat.noiseFloor*100).toFixed(1)+'%');
+  setT('mat-gen',mat.generation);
+  setT('mat-dmg',(mat.damageLevel*100).toFixed(0)+'%');
+  setT('mat-air',(mat.airContent).toFixed(2));
+  setT('sub-mat-status',mat.name.slice(0,14));
+  drawMiniWaveform(currentSlot);
+  updateDNAPane();
+}
+
+function drawMiniWaveform(slotIdx){
+  const canvas=document.getElementById('mat-wave-mini');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth;const h=canvas.offsetHeight||40;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#040210';ctx.fillRect(0,0,w,h);
+  if(slotIdx===null||!SLOTS[slotIdx]){
+    ctx.strokeStyle='rgba(153,68,255,.15)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+    return;
+  }
+  const wf=getWaveformData(slotIdx,w);if(!wf)return;
+  ctx.strokeStyle='rgba(0,255,255,.6)';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0;i<wf.length;i++){
+    const x=i;const yMax=h/2-wf[i].max*(h*.42);const yMin=h/2-wf[i].min*(h*.42);
+    ctx.moveTo(x,yMax);ctx.lineTo(x,yMin);
+  }
+  ctx.stroke();
+}
+
+// Clean preview: plays material through masterAnalyser bypassing all voice processing
+function previewMaterial(){
+  const mat=SLOTS[currentSlot];
+  if(!mat||!mat.buffer)return;
+  if(!AC)initAC();
+  AC.resume();keepDACAlive();
+  try{
+    const src=AC.createBufferSource();
+    src.buffer=mat.buffer;
+    const pvGain=AC.createGain();pvGain.gain.value=0.78;
+    // Direct to masterAnalyser: hear it in scope, bypass all voice saturation & processing
+    src.connect(pvGain);pvGain.connect(masterAnalyser);
+    src.start();src.stop(AC.currentTime+Math.min(mat.buffer.duration,3.0)+.08);
+  }catch(e){console.warn('[SF3:preview]',e.message);}
+}
+
+// ═══════════════════════════════════════════════════════
+// ② FORGE STATE — Perceptual controls
+// ═══════════════════════════════════════════════════════
+const ForgeState={
+  impactHardness:0.72,
+  bodyWeight:0.60,
+  coneStress:0.35,
+  transientErosion:0.20,
+  pressure:0.50,
+  speakerDamage:0.15,
+  airPush:0.40,
+  punchLength:0.55,
+  satDrive:1.5
+};
+
+// ─── LAYER STATE — opt-in synthesis layers ───────────────
+// Layers stack on top of material as subtle reinforcement.
+// Default: all off → trigger = silence when no material loaded.
+const LayerState={
+  sub:     {enabled:false,intensity:.55},  // sub reinforcement — sine only, very low
+  impact:  {enabled:false,intensity:.50},  // transient emphasis — shaped noise, not synth
+  air:     {enabled:false,intensity:.40},  // highpass noise breath
+  texture: {enabled:false,intensity:.30}   // material tail fragment or noise
+};
+let impactShape='physical'; // soft | tight | cracked | physical | fatigued
+
+// ─── QUICK FILTER STATE ──────────────────────────────────
+const QF={lowCut:0,air:0,presence:0,darken:0,softenT:0};
+
+// ─── TONE SHAPE STATE ────────────────────────────────────
+const ToneState={soften:0,warmth:0,smooth:0,dust:0,focus:0};
+
+// ─── GLUE / PHYSICALITY STATE ────────────────────────────
+const GlueState={glue:0,airAbsorption:0,surface:'wood',distance:0,mass:0,decaySoftness:0};
+
+// Surface tonal curves (no IRs — small filter adjustments)
+const SURFACE_PROFILES={
+  wood:    {lowMidBoost:1.8,highCut:10000,Q:.8,transRound:.18},
+  metal:   {lowMidBoost:-0.5,highCut:18000,Q:1.4,transRound:0},
+  concrete:{lowMidBoost:3.0,highCut:14000,Q:.6,transRound:.08},
+  fabric:  {lowMidBoost:0.8,highCut:5500,Q:.5,transRound:.32}
+};
+
+let chainBypassed=false;
+
+// Map perceptual controls to audio parameters
+function forgeToAudio(){
+  return{
+    subFreq:30+ForgeState.bodyWeight*50,                          // 30–80 Hz
+    subGain:clamp(ForgeState.bodyWeight*.9,.0,1.2),
+    subDecay:.04+ForgeState.punchLength*.55,                      // 40–590ms
+    transAtk:clamp(.00008+(.001-ForgeState.impactHardness*.001),AP.GAIN_MIN,.01), // fast if hard
+    satAmount:ForgeState.coneStress*2+ForgeState.pressure,       // saturation
+    compRatio:1+ForgeState.pressure*10,                          // 1:1 to 11:1
+    compThresh:-10-ForgeState.pressure*20,                       // -10 to -30dB
+    airGain:ForgeState.airPush*.3,
+    airFreq:3000+ForgeState.airPush*8000,                        // 3–11kHz
+    smearFreq:clamp(18000-ForgeState.transientErosion*14000,800,18000),  // erosion lowpass
+    speakerHPFreq:clamp(ForgeState.speakerDamage*180,AP.FREQ_MIN,800),
+    speakerSat:ForgeState.speakerDamage*1.5
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// ③ PROCESSOR STATE
+// ═══════════════════════════════════════════════════════
+const ProcState={
+  tapeFatigue:{enabled:true,intensity:.30},
+  oxideCollapse:{enabled:false,intensity:.00},
+  transientSmear:{enabled:false,intensity:.00},
+  harmonicCollapse:{enabled:false,intensity:.00},
+  spectralHollow:{enabled:false,intensity:.00},
+  pressureSat:{enabled:false,intensity:.00}
+};
+
+// ═══════════════════════════════════════════════════════
+// ④ SATURATION DNA PROFILES
+// ═══════════════════════════════════════════════════════
+let currentSatProfile='rust';
+
+const SAT_FNS={
+  rust:      (x,k)=>{const d=x*k;return d>0?Math.tanh(d)*.82:Math.tanh(d*1.3)*.72;},
+  magnetic:  (x,k)=>{const d=x*k;return d/(1+Math.abs(d));},
+  burned:    (x,k)=>{const clip=.68;return Math.max(-clip,Math.min(clip,x*k))*(1/clip);},
+  collapsing:(x,k)=>{return x>0?Math.tanh(x*k*1.9)*.70:Math.tanh(x*k*.85);},
+  toxic:     (x,k)=>{return((Math.PI+k*7)*x)/(Math.PI+k*7*Math.abs(x));},
+  overloaded:(x,k)=>{const d=x*k*2.8;return d/Math.sqrt(1+d*d);},
+  exhausted: (x,k)=>{return Math.tanh(x*k*.45)*1.3;},
+  cracked:   (x,k)=>{if(Math.abs(x)<.08)return x*k*.5;return Math.sign(x)*(.88-.28*Math.exp(-Math.abs(x)*k*2.5));}
+};
+
+function buildSatCurveRaw(profile,driveScaled){
+  const fn=SAT_FNS[profile]||SAT_FNS.rust;
+  const n=512,curve=new Float32Array(n);
+  for(let i=0;i<n;i++){const x=(i*2)/n-1;curve[i]=clamp(fn(x,driveScaled),-1,1);}
+  return curve;
+}
+function buildSatCurve(profile,drive){
+  return buildSatCurveRaw(profile,clamp(drive,.1,8));
+}
+
+function drawSatCurvePreview(){
+  const canvas=document.getElementById('sat-curve-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth;const h=canvas.offsetHeight||40;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#040210';ctx.fillRect(0,0,w,h);
+  // Grid
+  ctx.strokeStyle='rgba(153,68,255,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+  // Curve
+  const fn=SAT_FNS[currentSatProfile]||SAT_FNS.rust;
+  const k=clamp(ForgeState.satDrive,.1,8);
+  ctx.beginPath();ctx.strokeStyle='rgba(0,255,255,.8)';ctx.lineWidth=1.5;
+  for(let i=0;i<w;i++){
+    const x=(i/w)*2-1;const y=clamp(fn(x,k),-1,1);
+    const px=i,py=h/2-y*(h*.44);
+    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════
+// ⑥ SPECTRAL CARVING STATE
+// ═══════════════════════════════════════════════════════
+const CarveState={hollow:.0,pressure:.0,air:.0,mud:.0,metal:.0,ghost:.0};
+
+// ═══════════════════════════════════════════════════════
+// SYNTHESIS ORGANISMS (fallback when no material)
+// ═══════════════════════════════════════════════════════
+const SYNTH_ORGS=[
+  {name:'RUST KICK',    baseFreq:52, freqDecay:.28,freqFloor:.42,ampDecay:.52,gain:.72, isEvent:false},
+  {name:'DEBRIS HIT',  baseFreq:145,freqDecay:.11,freqFloor:.48,ampDecay:.21,gain:.42, isEvent:false},
+  {name:'SPECTRAL GHOST',baseFreq:36,freqDecay:1.1,freqFloor:.78,ampDecay:1.6,gain:.28,isEvent:false},
+  // EVENT ENTITIES — triggered rarely by RareEventManager, not by user tap
+  {name:'EVENT A',     baseFreq:22, freqDecay:2.2,freqFloor:.88,ampDecay:3.4,gain:.18, isEvent:true},
+  {name:'EVENT B',     baseFreq:68, freqDecay:.8, freqFloor:.65,ampDecay:2.1,gain:.14, isEvent:true}
+];
+const SYNTH_MEM=[
+  {playCount:0,fatigue:0},
+  {playCount:0,fatigue:0},
+  {playCount:0,fatigue:0},
+  {playCount:0,fatigue:0},
+  {playCount:0,fatigue:0}
+];
+let _recInterval=null;
+function startRecovery(){
+  if(_recInterval)return;
+  _recInterval=setInterval(()=>{
+    SYNTH_MEM.forEach(m=>{if(m.fatigue>0)m.fatigue=Math.max(0,m.fatigue*(1-.03));});
+  },2000);
+}
+
+// ─── RARE EVENT MANAGER ─────────────────────────────────
+// Event entities trigger contextually, never periodically.
+// Inputs: GlobalState phase, silenceDuration, anticipationLevel, ruptureCount
+const RareEventManager={
+  _lastEvent:0,    // timestamp of last rare event
+  _cooldown:0,     // current cooldown ms (18–45s)
+  _armed:false,
+
+  // Call after each normal trigger
+  tick(){
+    if(!AC||!noiseBuffer)return;
+    const now=Date.now();
+    if(now-this._lastEvent<this._cooldown)return;
+    const gs=GlobalState;
+    const phase=gs.phase;
+    // Base probability by phase (never > 8% per trigger, some phases near 0%)
+    const probMap={
+      intro:0,build:.005,peak:.012,tension:.025,
+      rupture:.04,recovery:.055,void:.075,aftershock:.08
+    };
+    let p=probMap[phase]||0;
+    // Boost if anticipated
+    p+=gs.EMF?gs.EMF.anticipationLevel*.025:0;
+    // Modulate by silence duration (more silence → more likely)
+    const sil=gs.EMF?gs.EMF.silenceDuration:0;
+    p+=Math.min(sil/120,.03);
+    if(Math.random()<p){
+      this._fire();
+      this._lastEvent=now;
+      this._cooldown=18000+Math.random()*27000; // 18–45s
+    }
+  },
+
+  _fire(){
+    try{
+      const orgIdx=Math.random()<.55?3:4; // EVENT A or EVENT B
+      const org=SYNTH_ORGS[orgIdx];
+      const v=getVoice();
+      if(!v)return;
+      const t=AC.currentTime+.02;
+      const dur=org.ampDecay;
+      // Wide, diffuse, degraded sound using noise + allpass
+      const src=AC.createBufferSource();src.buffer=noiseBuffer;
+      const bp=AC.createBiquadFilter();bp.type='bandpass';
+      safeFreq(bp.frequency,org.baseFreq*2.2);safeQ(bp.Q,.35);
+      const ap1=AC.createBiquadFilter();ap1.type='allpass';safeFreq(ap1.frequency,org.baseFreq*1.7);
+      const ap2=AC.createBiquadFilter();ap2.type='allpass';safeFreq(ap2.frequency,org.baseFreq*3.1);
+      const env=AC.createGain();
+      safeSetValue(env.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+      safeLinearRamp(env.gain,org.gain*.18,t+0.04,AP.GAIN_MIN,AP.GAIN_MAX);  // slow fade in
+      safeExpRamp(env.gain,.00001,t+dur,.000001,AP.GAIN_MAX);
+      src.connect(bp);bp.connect(ap1);ap1.connect(ap2);ap2.connect(env);env.connect(v.bus);
+      // Event entities: wide stereo, nearly panned center±wide
+      v.panner.pan.cancelScheduledValues(t);
+      v.panner.pan.setValueAtTime(v.panner.pan.value,t);
+      const eventPan=(Math.random()-.5)*1.6; // full width
+      v.panner.pan.linearRampToValueAtTime(clampAudio(eventPan,-1,1),t+.02);
+      v.bus.gain.cancelScheduledValues(t);
+      v.bus.gain.setValueAtTime(.0001,t);
+      v.bus.gain.linearRampToValueAtTime(1,t+.01);
+      v.bus.gain.setValueAtTime(1,t+dur-.06);
+      v.bus.gain.linearRampToValueAtTime(.0001,t+dur);
+      src.start(t);src.stop(t+dur+.08);
+      v.claim(dur);
+      addScar(2,(Math.random()-.5)*2); // ghost color scar
+      dbg('audio',`RareEvent fired: ${org.name}`);
+    }catch(e){console.warn('[SF3:RareEvent]',e.message);}
+  }
+};
+
+// ─── NARRATIVE SPATIALITY ────────────────────────────────
+// Returns pan width scalar [0–1] based on narrative phase + organism type
+function narrativePan(orgIdx){
+  const phase=GlobalState.phase;
+  const org=SYNTH_ORGS[orgIdx]||SYNTH_ORGS[0];
+  // Low anchor organisms: almost mono regardless
+  if(org.baseFreq<45)return (Math.random()-.5)*.25;
+  // Event entities: always wide
+  if(org.isEvent)return (Math.random()-.5)*1.7;
+  // Phase-based width
+  const widths={intro:.6,build:.85,peak:.7,tension:.55,rupture:.3,recovery:.65,void:.95,aftershock:.45};
+  const w=widths[phase]||.6;
+  return (Math.random()-.5)*2*w;
+}
+
+// ─── TRIGGER SCARS ──────────────────────────────────────
+const scars=[];
+let currentOrg=0;
+const ORG_COLORS=['#ff4422','#ffaa00','#8866ff'];
+
+function addScar(orgIdx,val){
+  scars.push({org:orgIdx,ph:clamp((val+1)*.5,0,1),age:0,maxAge:80,alpha:1});
+  if(scars.length>10)scars.shift();
+}
+
+// ═══════════════════════════════════════════════════════
+// TRIGGER — Material + Synthesis blend through Forge chain
+// ═══════════════════════════════════════════════════════
+let totalTriggers=0;
+let flashAmt=0;
+
+function trigger(){
+  try{
+    if(!AC)initAC();
+    // Synchronous resume inside gesture — iOS honors this.
+    // keepDACAlive starts here on first gesture, preventing future DAC power-cycle pops.
+    AC.resume();
+    keepDACAlive();
+    _triggerInner();
+  }catch(e){console.warn('[SF3:trigger] FAIL SOFT:',e.message);}
+}
+
+function _triggerInner(){
+  if(!AC||!noiseBuffer)return;
+
+  const fa=forgeToAudio();
+  const now=AC.currentTime;
+  // Temporal drift
+  const mem=SYNTH_MEM[currentOrg];
+  const drift=clamp(-.008+Math.random()*.022+mem.fatigue*.015,-.01,.035);
+  const t=clampAudio(now+Math.max(0,drift),now,now+.04);
+
+  const v=getVoice();
+  let maxDur=.05;
+
+  // === MATERIAL PATH ===
+  const mat=SLOTS[currentSlot];
+  if(mat&&mat.buffer){
+    const src=AC.createBufferSource();
+    src.buffer=mat.buffer;
+
+    // ── QUICK FILTER (pre-chain) ────────────────────────
+    // LOW CUT: highpass 20→320Hz
+    const qfLC=AC.createBiquadFilter();qfLC.type='highpass';
+    safeFreq(qfLC.frequency,20+QF.lowCut*300);safeQ(qfLC.Q,.55);
+    // AIR: highshelf boost at 8kHz
+    const qfAir=AC.createBiquadFilter();qfAir.type='highshelf';
+    safeFreq(qfAir.frequency,8000);
+    safeParam(qfAir.gain,QF.air*9,-12,12);
+    // PRESENCE: peak at 3.5kHz
+    const qfPres=AC.createBiquadFilter();qfPres.type='peaking';
+    safeFreq(qfPres.frequency,3500);safeQ(qfPres.Q,1.2);
+    safeParam(qfPres.gain,QF.presence*8,-12,12);
+    // DARKEN: lowpass 18kHz→1200Hz
+    const qfDark=AC.createBiquadFilter();qfDark.type='lowpass';
+    safeFreq(qfDark.frequency,clamp(18000-QF.darken*12000,1200,18000));safeQ(qfDark.Q,.55);
+
+    // ── PROCESSOR CHAIN ────────────────────────────────
+    const erosionLP=AC.createBiquadFilter();erosionLP.type='lowpass';
+    safeFreq(erosionLP.frequency,fa.smearFreq);safeQ(erosionLP.Q,.7);
+
+    // Hollow notch — Q clamped to 2.4, with RMS makeup gain comp (max +1.5dB)
+    const hollowNotch=AC.createBiquadFilter();hollowNotch.type='notch';
+    safeFreq(hollowNotch.frequency,400);
+    safeParam(hollowNotch.Q,1+CarveState.hollow*1.4,AP.Q_MIN,2.4); // Q max 2.4
+    const hollowComp=AC.createGain(); // makeup gain after notch, max +1.5dB
+    hollowComp.gain.value=1+CarveState.hollow*0.19; // ~0dB→+1.45dB
+
+    const mudHP=AC.createBiquadFilter();mudHP.type='highpass';
+    safeFreq(mudHP.frequency,80+CarveState.mud*180);safeQ(mudHP.Q,.7);
+    const metalPeak=AC.createBiquadFilter();metalPeak.type='peaking';safeFreq(metalPeak.frequency,3500);
+    safeParam(metalPeak.gain,CarveState.metal*8,-20,20);safeQ(metalPeak.Q,1);
+    const airLP=AC.createBiquadFilter();airLP.type='lowpass';
+    safeFreq(airLP.frequency,clamp(18000-CarveState.air*10000,1000,18000));safeQ(airLP.Q,.7);
+
+    const pressureComp=AC.createDynamicsCompressor();
+    pressureComp.threshold.value=clamp(fa.compThresh,-60,-1,-20);
+    pressureComp.ratio.value=clamp(fa.compRatio,1,20,1);
+    pressureComp.attack.value=.002;pressureComp.release.value=.1;pressureComp.knee.value=4;
+
+    const procSat=AC.createWaveShaper();
+    let procDrive=ForgeState.satDrive;
+    if(ProcState.tapeFatigue.enabled)procDrive*=(1+ProcState.tapeFatigue.intensity);
+    if(ProcState.oxideCollapse.enabled)procDrive*=(1+ProcState.oxideCollapse.intensity*.5);
+    procSat.curve=buildSatCurve(currentSatProfile,procDrive);procSat.oversample='4x';
+
+    const harmonicLP=AC.createBiquadFilter();harmonicLP.type='lowpass';
+    safeFreq(harmonicLP.frequency,
+      ProcState.harmonicCollapse.enabled?clamp(8000-ProcState.harmonicCollapse.intensity*6000,800,8000):18000);
+
+    const hollowProc=AC.createBiquadFilter();hollowProc.type='notch';safeFreq(hollowProc.frequency,600);
+    safeParam(hollowProc.Q,ProcState.spectralHollow.enabled?clamp(1+ProcState.spectralHollow.intensity*3,.5,2.4):.0001,AP.Q_MIN,2.4);
+
+    // ── TONE SHAPE (post-chain) ─────────────────────────
+    // SOFTEN: gentle dynamic lowpass
+    const toneSoften=AC.createBiquadFilter();toneSoften.type='lowpass';
+    safeFreq(toneSoften.frequency,ToneState.soften>.01?clamp(18000-ToneState.soften*13000,1200,18000):18000);
+    safeQ(toneSoften.Q,.48);
+    // WARMTH: low shelf tilt
+    const toneWarmth=AC.createBiquadFilter();toneWarmth.type='lowshelf';
+    safeFreq(toneWarmth.frequency,220);safeParam(toneWarmth.gain,ToneState.warmth*5,-12,8);
+    // SMOOTH: compress upper mids (soft high shelf cut)
+    const toneSmooth=AC.createBiquadFilter();toneSmooth.type='highshelf';
+    safeFreq(toneSmooth.frequency,4500);safeParam(toneSmooth.gain,-ToneState.smooth*7,-14,0);
+    // FOCUS: high-pass to clear low-mid mud
+    const toneFocus=AC.createBiquadFilter();toneFocus.type='highpass';
+    safeFreq(toneFocus.frequency,ToneState.focus>.01?20+ToneState.focus*220:20);safeQ(toneFocus.Q,.5);
+    // DUST: add grainy texture via subtle noise floor (gain only if dust>0)
+    // Implemented as a very low gain noise src merged in at matGain level (see below)
+
+    // ── GLUE / PHYSICALITY (post tone-shape) ───────────────
+    // GLUE: soft compressor blend + mid reinforcement
+    const glueComp=AC.createDynamicsCompressor();
+    const gv=GlueState.glue;
+    glueComp.threshold.value=clamp(-8-gv*16,-40,-4);
+    glueComp.ratio.value=clamp(1+gv*2.5,1,4);          // max 4:1, non-pumping
+    glueComp.attack.value=.008+gv*.012;                 // slower attack preserves transients
+    glueComp.release.value=.12+gv*.18;                  // release grows with glue
+    glueComp.knee.value=6+gv*8;                         // soft knee always
+    // AIR ABSORPTION: progressive HP roll-off on highs
+    const airAbsLP=AC.createBiquadFilter();airAbsLP.type='lowpass';
+    const aaFreq=clamp(18000-GlueState.airAbsorption*10000,1400,18000);
+    safeFreq(airAbsLP.frequency,aaFreq);safeQ(airAbsLP.Q,.45);
+    // SURFACE tonal curves
+    const surf=SURFACE_PROFILES[GlueState.surface]||SURFACE_PROFILES.wood;
+    const surfLM=AC.createBiquadFilter();surfLM.type='peaking';
+    safeFreq(surfLM.frequency,180);safeQ(surfLM.Q,.65);
+    safeParam(surfLM.gain,surf.lowMidBoost,-12,9);
+    const surfHC=AC.createBiquadFilter();surfHC.type='lowpass';
+    safeFreq(surfHC.frequency,surf.highCut);safeQ(surfHC.Q,surf.Q);
+    // DISTANCE: transient softener + extra LP + tiny early-reflection smear
+    const distLP=AC.createBiquadFilter();distLP.type='lowpass';
+    safeFreq(distLP.frequency,clamp(18000-GlueState.distance*10000,1200,18000));safeQ(distLP.Q,.5);
+    const distAP=AC.createBiquadFilter();distAP.type='allpass'; // micro room smear
+    safeFreq(distAP.frequency,clamp(300+GlueState.distance*800,300,1100));safeQ(distAP.Q,.35);
+    // MASS: low-mid reinforcement 90–240Hz
+    const massShelf=AC.createBiquadFilter();massShelf.type='lowshelf';
+    safeFreq(massShelf.frequency,200);
+    safeParam(massShelf.gain,GlueState.mass*5.5,-8,8);
+    // SURFACE transient rounding: mild highshelf cut proportional to surf.transRound
+    const surfTR=AC.createBiquadFilter();surfTR.type='highshelf';
+    safeFreq(surfTR.frequency,5000);
+    safeParam(surfTR.gain,-surf.transRound*6-QF.softenT*9,-18,0);
+
+    const matGain=AC.createGain();matGain.gain.value=.86;
+
+    // Chain assembly:
+    if(!chainBypassed){
+      src.connect(qfLC);qfLC.connect(qfAir);qfAir.connect(qfPres);qfPres.connect(qfDark);
+      qfDark.connect(erosionLP);erosionLP.connect(mudHP);mudHP.connect(metalPeak);
+      metalPeak.connect(airLP);airLP.connect(hollowNotch);hollowNotch.connect(hollowComp);
+      hollowComp.connect(hollowProc);hollowProc.connect(harmonicLP);
+      harmonicLP.connect(pressureComp);pressureComp.connect(procSat);
+      procSat.connect(toneSoften);
+    }else{
+      src.connect(qfLC);qfLC.connect(qfAir);qfAir.connect(qfPres);qfPres.connect(qfDark);
+      qfDark.connect(toneSoften);
+    }
+    // ToneShape → Glue → matGain
+    toneSoften.connect(toneWarmth);toneWarmth.connect(toneSmooth);
+    toneSmooth.connect(toneFocus);toneFocus.connect(glueComp);
+    glueComp.connect(airAbsLP);airAbsLP.connect(surfLM);surfLM.connect(surfHC);
+    surfHC.connect(distLP);distLP.connect(distAP);distAP.connect(massShelf);
+    massShelf.connect(surfTR);surfTR.connect(matGain);matGain.connect(v.bus);
+
+    // DUST: if dust > 0.04, inject low-level filtered noise
+    if(ToneState.dust>0.04&&noiseBuffer){
+      const dustSrc=AC.createBufferSource();dustSrc.buffer=noiseBuffer;dustSrc.loop=true;
+      const dustLP=AC.createBiquadFilter();dustLP.type='lowpass';safeFreq(dustLP.frequency,3000);
+      const dustG=AC.createGain();
+      safeSetValue(dustG.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+      safeLinearRamp(dustG.gain,ToneState.dust*0.04,t+0.012,AP.GAIN_MIN,AP.GAIN_MAX); // max ~4% noise
+      const dustStop=t+dur+.01;
+      safeSetValue(dustG.gain,ToneState.dust*0.04,dustStop-.030,AP.GAIN_MIN,AP.GAIN_MAX);
+      dustG.gain.linearRampToValueAtTime(.00001,dustStop);
+      dustSrc.connect(dustLP);dustLP.connect(dustG);dustG.connect(v.bus);
+      dustSrc.start(t);dustSrc.stop(dustStop+.003);
+    }
+
+    const dur=Math.min(mat.buffer.duration,3.0);
+    const matStop=t+dur+.01;
+    const fadeStart=Math.max(t+.010,matStop-.045);
+    matGain.gain.setValueAtTime(.88,fadeStart);
+    matGain.gain.linearRampToValueAtTime(.00001,matStop);
+    src.start(t);src.stop(matStop+.005);
+    maxDur=Math.max(maxDur,dur);
+  }
+
+  // === SYNTHESIS LAYERS (opt-in) ===
+  // Material always dominates. Layers are invisible reinforcement at safe mix levels.
+  // Max mix caps: SUB 25%, IMPACT 20%, AIR 20%, TEXTURE 22%
+
+  // SUB REINFORCEMENT — sine only, strong LP, very low gain, subtle pitch envelope
+  if(LayerState.sub.enabled){
+    const subFreq=clampAudio(40+ForgeState.bodyWeight*20,AP.FREQ_MIN,AP.FREQ_MAX,50); // 40–60Hz stable
+    const subDecay=0.10+ForgeState.punchLength*0.22; // 100–320ms
+    const subG=clamp(LayerState.sub.intensity*0.25,0,0.25); // MAX 0.25 — reinforcement only
+    const subOsc=AC.createOscillator();subOsc.type='sine';
+    const subLP=AC.createBiquadFilter();subLP.type='lowpass';
+    safeFreq(subLP.frequency,subFreq*2.5);safeQ(subLP.Q,.45); // strong LP, no resonance
+    const subEnv=AC.createGain();
+    // Subtle pitch: only 15% up, returns quickly — not audible as note
+    safeSetValue(subOsc.frequency,subFreq*1.15,t,AP.FREQ_MIN,AP.FREQ_MAX);
+    safeExpRamp(subOsc.frequency,subFreq,t+subDecay*0.25,AP.FREQ_MIN,AP.FREQ_MAX);
+    safeSetValue(subEnv.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(subEnv.gain,subG,t+0.006,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(subEnv.gain,.00001,t+subDecay,.000001,AP.GAIN_MAX);
+    const subSat=AC.createWaveShaper();
+    subSat.curve=buildSatCurveRaw('exhausted',clamp(0.7+ForgeState.coneStress*1.2,.4,2.0));
+    subOsc.connect(subLP);subLP.connect(subEnv);subEnv.connect(subSat);subSat.connect(v.bus);
+    subOsc.start(t);subOsc.stop(t+subDecay+0.04);
+    maxDur=Math.max(maxDur,subDecay);
+  }
+
+  // IMPACT TRANSIENT — shaped noise burst, NOT synth. Feels like attack of the material.
+  if(LayerState.impact.enabled&&noiseBuffer){
+    const SHAPES={
+      physical:{hp:60, lp:3500,dur:.040,sat:2.8,Q:.6,atk:.003},
+      tight:   {hp:220,lp:7000,dur:.018,sat:3.5,Q:.7,atk:.001},
+      soft:    {hp:80, lp:1800,dur:.055,sat:0.7,Q:.5,atk:.006},
+      cracked: {hp:900,lp:14000,dur:.012,sat:4.5,Q:1.0,atk:.0008},
+      fatigued:{hp:40, lp:1100,dur:.085,sat:0.4,Q:.4,atk:.009}
+    };
+    const sp=SHAPES[impactShape]||SHAPES.physical;
+    const impG=clamp(LayerState.impact.intensity*0.20,0,0.20); // MAX 0.20
+    const impSrc=AC.createBufferSource();impSrc.buffer=noiseBuffer;
+    const impHP=AC.createBiquadFilter();impHP.type='highpass';safeFreq(impHP.frequency,sp.hp);safeQ(impHP.Q,sp.Q);
+    const impLP=AC.createBiquadFilter();impLP.type='lowpass';safeFreq(impLP.frequency,sp.lp);safeQ(impLP.Q,.65);
+    const impSat=AC.createWaveShaper();impSat.curve=buildSatCurveRaw('rust',sp.sat);
+    const impEnv=AC.createGain();
+    safeSetValue(impEnv.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(impEnv.gain,impG,t+sp.atk,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(impEnv.gain,.00001,t+sp.dur,.000001,AP.GAIN_MAX);
+    impSrc.connect(impHP);impHP.connect(impLP);impLP.connect(impSat);impSat.connect(impEnv);impEnv.connect(v.bus);
+    impSrc.start(t);impSrc.stop(t+sp.dur+0.010);
+    maxDur=Math.max(maxDur,sp.dur);
+  }
+
+  // AIR LAYER — highpass noise breath
+  if(LayerState.air.enabled&&noiseBuffer){
+    const airSrc=AC.createBufferSource();airSrc.buffer=noiseBuffer;
+    const airFilt=AC.createBiquadFilter();airFilt.type='highpass';
+    safeFreq(airFilt.frequency,fa.airFreq);safeQ(airFilt.Q,.65);
+    const airEnv=AC.createGain();
+    const airG=clamp(fa.airGain*(LayerState.air.intensity/.40)*0.20,0,0.20); // MAX 0.20
+    safeSetValue(airEnv.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeLinearRamp(airEnv.gain,airG,t+.012,AP.GAIN_MIN,AP.GAIN_MAX);
+    safeExpRamp(airEnv.gain,.00001,t+.10,.000001,AP.GAIN_MAX);
+    airSrc.connect(airFilt);airFilt.connect(airEnv);airEnv.connect(v.bus);
+    airSrc.start(t);airSrc.stop(t+.13);
+    maxDur=Math.max(maxDur,.10);
+  }
+
+  // TEXTURE LAYER — extract tail fragment from material; fallback to noise
+  if(LayerState.texture.enabled){
+    const texMat=SLOTS[currentSlot];
+    const texG=clamp(LayerState.texture.intensity*0.22,0,0.22); // MAX 0.22
+    let texBuf=null;
+    if(texMat&&texMat.buffer){
+      // Extract random fragment from last 20–35% of material buffer
+      const bd=texMat.buffer;const data=bd.getChannelData(0);
+      const tailPos=0.65+Math.random()*0.15; // 65–80% into buffer
+      const tailStart=Math.floor(data.length*tailPos);
+      const fragLen=Math.min(Math.floor(bd.sampleRate*0.16),data.length-tailStart);
+      if(fragLen>200){
+        texBuf=AC.createBuffer(1,fragLen,bd.sampleRate);
+        texBuf.getChannelData(0).set(data.slice(tailStart,tailStart+fragLen));
+      }
+    }
+    if(!texBuf&&noiseBuffer)texBuf=noiseBuffer;
+    if(texBuf){
+      const texSrc=AC.createBufferSource();texSrc.buffer=texBuf;
+      const texBP=AC.createBiquadFilter();texBP.type='bandpass';
+      safeFreq(texBP.frequency,400+ForgeState.bodyWeight*900); // 400–1300Hz
+      safeQ(texBP.Q,clamp(1.2+ForgeState.coneStress*3.5,.5,6));
+      const texEnv=AC.createGain();
+      const texDur=Math.min(texBuf.duration,0.14);
+      safeSetValue(texEnv.gain,0,t,AP.GAIN_MIN,AP.GAIN_MAX);
+      safeLinearRamp(texEnv.gain,texG,t+.007,AP.GAIN_MIN,AP.GAIN_MAX);
+      safeExpRamp(texEnv.gain,.00001,t+texDur,.000001,AP.GAIN_MAX);
+      texSrc.connect(texBP);texBP.connect(texEnv);texEnv.connect(v.bus);
+      texSrc.start(t);texSrc.stop(t+texDur+.010);
+      maxDur=Math.max(maxDur,texDur);
+    }
+  }
+
+  // Apply saturation DNA to voice permanent chain
+  v.sat.curve=buildSatCurve(currentSatProfile,ForgeState.satDrive);
+  // Pan: state-based narrative width (cancels old schedules)
+  v.panner.pan.cancelScheduledValues(t);
+  v.panner.pan.setValueAtTime(v.panner.pan.value,t);
+  v.panner.pan.linearRampToValueAtTime(clampAudio(narrativePan(currentOrg),AP.PAN_MIN,AP.PAN_MAX),t+.005);
+  // Bus gain: cancel old schedules, ramp to 1 over 7ms
+  v.bus.gain.cancelScheduledValues(t);
+  v.bus.gain.setValueAtTime(v.bus.gain.value,t);
+  v.bus.gain.linearRampToValueAtTime(1.0,t+.007);
+  // Schedule bus fade-out at voice end
+  v.bus.gain.setValueAtTime(1.0,t+maxDur);
+  const releaseTime=0.025+GlueState.decaySoftness*.04; // longer release if decay softness up
+  v.bus.gain.linearRampToValueAtTime(.0001,t+maxDur+releaseTime);
+  v.claim(maxDur);
+
+  // Memory + fatigue
+  const mem2=SYNTH_MEM[currentOrg];
+  mem2.playCount++;mem2.fatigue=clamp(mem2.fatigue+.012,0,1);
+  totalTriggers++;GlobalState.record();
+
+  addScar(currentOrg,ForgeState.bodyWeight-.5);
+  flashTrigger();
+  updateForgeStats();
+  updateResampleUI();
+  RareEventManager.tick();
+
+  if(Math.abs(drift)>.006){
+    const b=document.getElementById('driftbadge');
+    if(b){b.textContent=(drift*1000).toFixed(0)+'ms';b.classList.add('show');setTimeout(()=>b.classList.remove('show'),300);}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ⑤ RESAMPLING CHAMBER — Multi-pass OfflineAudioContext
+// ═══════════════════════════════════════════════════════
+let totalGenerations=0;
+let renderInProgress=false;
+
+function startRenderingCompat(offlineCtx){
+  return new Promise((resolve,reject)=>{
+    try{
+      const p=offlineCtx.startRendering();
+      if(p&&typeof p.then==='function'){p.then(resolve).catch(reject);}
+      else{offlineCtx.oncomplete=e=>resolve(e.renderedBuffer);offlineCtx.onerror=reject;}
+    }catch(e){reject(e);}
+  });
+}
+
+async function runResamplePass(){
+  if(renderInProgress)return;
+  const mat=SLOTS[currentSlot];
+  const srcBuffer=mat?mat.buffer:null;
+  if(!srcBuffer&&!noiseBuffer){setT('render-log','no material loaded');return;}
+
+  renderInProgress=true;
+  document.getElementById('rsb-render').disabled=true;
+  document.getElementById('rsb-reload').disabled=true;
+  const log=document.getElementById('render-log');
+  log.innerHTML='';
+  const bar=document.getElementById('render-bar');bar.style.width='0%';
+
+  // Source: material or synthetic noise burst
+  const source=srcBuffer||noiseBuffer;
+  const fa=forgeToAudio();
+
+  const PASSES=[
+    {name:'SPECTRAL EROSION',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const lp=offline.createBiquadFilter();lp.type='lowpass';
+      lp.frequency.value=clamp(18000-ProcState.spectralHollow.intensity*6000,800,18000);lp.Q.value=.8;
+      const notch=offline.createBiquadFilter();notch.type='notch';
+      notch.frequency.value=600;notch.Q.value=1+ProcState.spectralHollow.intensity*3;
+      src.connect(lp);lp.connect(notch);notch.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }},
+    {name:'TRANSIENT SHAPING',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const comp=offline.createDynamicsCompressor();
+      comp.threshold.value=clamp(fa.compThresh,-60,-1,-20);
+      comp.ratio.value=clamp(fa.compRatio,1,20);comp.attack.value=fa.transAtk*2;comp.release.value=.12;comp.knee.value=4;
+      const erosLP=offline.createBiquadFilter();erosLP.type='lowpass';erosLP.frequency.value=fa.smearFreq;
+      src.connect(erosLP);erosLP.connect(comp);comp.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }},
+    {name:'TAPE SATURATION',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const sat=offline.createWaveShaper();
+      let drive=ForgeState.satDrive;
+      if(ProcState.tapeFatigue.enabled)drive*=(1+ProcState.tapeFatigue.intensity*.8);
+      if(ProcState.oxideCollapse.enabled)drive*=(1+ProcState.oxideCollapse.intensity*.4);
+      sat.curve=buildSatCurve(currentSatProfile,drive);sat.oversample='4x';
+      src.connect(sat);sat.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }},
+    {name:'ROOM STRESS',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const ap=offline.createBiquadFilter();ap.type='allpass';
+      ap.frequency.value=800;ap.Q.value=1+ForgeState.coneStress*3;
+      const ap2=offline.createBiquadFilter();ap2.type='allpass';ap2.frequency.value=2400;ap2.Q.value=.8;
+      src.connect(ap);ap.connect(ap2);ap2.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }},
+    {name:'GLUE COMPRESSION',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const comp=offline.createDynamicsCompressor();
+      comp.threshold.value=-18;comp.ratio.value=3+ForgeState.pressure*2;
+      comp.attack.value=.015;comp.release.value=.25;comp.knee.value=6;
+      src.connect(comp);comp.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }},
+    {name:'FINAL PRINT',fn:async(buf)=>{
+      const sr=buf.sampleRate,dur=buf.duration;
+      const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+      const src=offline.createBufferSource();src.buffer=buf;
+      const gain=offline.createGain();gain.gain.value=.85;
+      // Final saturation pass
+      const finalSat=offline.createWaveShaper();
+      finalSat.curve=buildSatCurveRaw('magnetic',18);finalSat.oversample='4x';
+      src.connect(finalSat);finalSat.connect(gain);gain.connect(offline.destination);
+      src.start(0);return await startRenderingCompat(offline);
+    }}
+  ];
+
+  let current=source;
+  for(let i=0;i<PASSES.length;i++){
+    const pass=PASSES[i];
+    const div=document.createElement('div');div.className='rl';
+    div.textContent=`▸ ${pass.name}...`;log.appendChild(div);log.scrollTop=999;
+    bar.style.width=((i)/PASSES.length*100).toFixed(0)+'%';
+    try{current=await pass.fn(current);}
+    catch(e){
+      const err=document.createElement('div');err.className='rl';
+      err.textContent=`  ✕ ${pass.name} failed: ${e.message}`;log.appendChild(err);
+      dbg('resample','Pass failed:',pass.name,e);
+    }
+    await new Promise(r=>setTimeout(r,60)); // brief yield for UI
+  }
+  bar.style.width='100%';
+
+  resampledBuffer=current;
+  totalGenerations++;
+  if(resampledBuffer)drawResampledWaveform(resampledBuffer);
+
+  const done=document.createElement('div');done.className='rl';
+  done.textContent=`▸ RENDER COMPLETE — gen ${totalGenerations}`;log.appendChild(done);log.scrollTop=999;
+
+  renderInProgress=false;
+  document.getElementById('rsb-render').disabled=false;
+  if(resampledBuffer)document.getElementById('rsb-reload').disabled=false;
+  updateResampleUI();
+  setT('gen-badge',totalGenerations>0?`GEN ${totalGenerations}`:'');
+  dbg('resample','Done, gen',totalGenerations);
+}
+
+function drawResampledWaveform(buffer){
+  const canvas=document.getElementById('resample-wave');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth;const h=canvas.offsetHeight||44;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#040210';ctx.fillRect(0,0,w,h);
+  const data=buffer.getChannelData(0);
+  const step=Math.ceil(data.length/w);
+  ctx.strokeStyle='rgba(255,150,0,.65)';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0;i<w;i++){
+    let mx=0,mn=0;
+    for(let j=0;j<step;j++){const idx=i*step+j;if(idx>=data.length)break;const v=data[idx];if(v>mx)mx=v;if(v<mn)mn=v;}
+    ctx.moveTo(i,h/2-mx*(h*.44));ctx.lineTo(i,h/2-mn*(h*.44));
+  }
+  ctx.stroke();
+}
+
+function reloadAsNewMaterial(){
+  if(!resampledBuffer)return;
+  const mat=SLOTS[currentSlot];
+  const baseName=mat?mat.name:`resampled_${currentSlot}`;
+  const newMat=analyzeMaterial(resampledBuffer,`${baseName}_g${totalGenerations}`);
+  newMat.generation=totalGenerations;
+  newMat.damageLevel=Math.min(1,totalGenerations*.10);
+  SLOTS[currentSlot]=newMat;
+  precomputedWaveforms[currentSlot]=null;
+  updateMaterialUI();
+  setT('mat-status',`gen ${totalGenerations} loaded`);
+}
+
+// ─── WAV ENCODE (24-bit, stereo) ────────────────────────
+function encodeWAV(buffer){
+  const numCh=buffer.numberOfChannels;
+  const sr=buffer.sampleRate;
+  const numSamples=buffer.length;
+  const bytesPerSample=3; // 24-bit
+  const blockAlign=numCh*bytesPerSample;
+  const dataSize=numSamples*blockAlign;
+  const ab=new ArrayBuffer(44+dataSize);
+  const v=new DataView(ab);
+  function str(off,s){for(let i=0;i<s.length;i++)v.setUint8(off+i,s.charCodeAt(i));}
+  function i32(off,n){v.setInt32(off,n,true);}
+  function i16(off,n){v.setInt16(off,n,true);}
+  str(0,'RIFF');i32(4,36+dataSize);str(8,'WAVE');
+  str(12,'fmt ');i32(16,16);i16(20,1);i16(22,numCh);
+  i32(24,sr);i32(28,sr*blockAlign);i16(32,blockAlign);i16(34,24);
+  str(36,'data');i32(40,dataSize);
+  let off=44;
+  for(let i=0;i<numSamples;i++){
+    for(let ch=0;ch<numCh;ch++){
+      const s=Math.max(-1,Math.min(1,buffer.getChannelData(ch)[i]));
+      const n=Math.round(s*8388607); // 24-bit int
+      v.setUint8(off,n&0xff);v.setUint8(off+1,(n>>8)&0xff);v.setUint8(off+2,(n>>16)&0xff);
+      off+=3;
+    }
+  }
+  return ab;
+}
+
+async function exportWAV(mode){
+  const mat=SLOTS[currentSlot];
+  const wavStatus=document.getElementById('wav-status');
+  let exportBuf=null;
+
+  if(mode==='dry'){
+    if(!mat||!mat.buffer){setT('wav-status','no material loaded');return;}
+    exportBuf=mat.buffer;
+  } else if(mode==='resampled'){
+    if(!resampledBuffer){setT('wav-status','no resampled buffer — run RENDER PASS first');return;}
+    exportBuf=resampledBuffer;
+  } else {
+    // processed or current: render offline with full chain + safety limiter
+    const srcBuf=(mode==='current'&&resampledBuffer)?resampledBuffer:(mat?mat.buffer:null);
+    if(!srcBuf){setT('wav-status','no material loaded');return;}
+    setT('wav-status','rendering...');
+    const fa=forgeToAudio();
+    const sr=srcBuf.sampleRate;const dur=srcBuf.duration;
+    const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+    const src=offline.createBufferSource();src.buffer=srcBuf;
+    // Full chain: QF → erosion → compressor → saturation → ToneShape → limiter
+    const erosLP=offline.createBiquadFilter();erosLP.type='lowpass';erosLP.frequency.value=fa.smearFreq;safeQ(erosLP.Q,.7);
+    const comp=offline.createDynamicsCompressor();
+    comp.threshold.value=clamp(fa.compThresh,-60,-1,-20);comp.ratio.value=clamp(fa.compRatio,1,20);
+    comp.attack.value=fa.transAtk;comp.release.value=.12;comp.knee.value=6;
+    const sat=offline.createWaveShaper();
+    let drive=ForgeState.satDrive;
+    if(ProcState.tapeFatigue.enabled)drive*=(1+ProcState.tapeFatigue.intensity);
+    sat.curve=buildSatCurve(currentSatProfile,drive);sat.oversample='4x';
+    // ToneShape
+    const tsLP=offline.createBiquadFilter();tsLP.type='lowpass';
+    tsLP.frequency.value=ToneState.soften>.01?clamp(18000-ToneState.soften*13000,1200,18000):18000;
+    const tsWarm=offline.createBiquadFilter();tsWarm.type='lowshelf';
+    tsWarm.frequency.value=220;tsWarm.gain.value=ToneState.warmth*5;
+    // Safety limiter at output
+    const limiter=offline.createDynamicsCompressor();
+    limiter.threshold.value=-1.5;limiter.ratio.value=20;
+    limiter.attack.value=.0005;limiter.release.value=.08;limiter.knee.value=0;
+    const finalGain=offline.createGain();finalGain.gain.value=0.88;
+    src.connect(erosLP);erosLP.connect(comp);comp.connect(sat);sat.connect(tsLP);
+    tsLP.connect(tsWarm);tsWarm.connect(limiter);limiter.connect(finalGain);
+    finalGain.connect(offline.destination);
+    src.start(0);
+    try{exportBuf=await startRenderingCompat(offline);}
+    catch(e){setT('wav-status','render error: '+e.message);return;}
+  }
+
+  const ab=encodeWAV(exportBuf);
+  const blob=new Blob([ab],{type:'audio/wav'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`sf_${mode}_g${totalGenerations}_${Date.now()}.wav`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setT('wav-status',`exported: ${mode} — ${(ab.byteLength/1024).toFixed(0)}kb`);
+}
+
+async function exportStemsWAV(){
+  setT('wav-status','rendering stems...');
+  const mat=SLOTS[currentSlot];
+  const results=[];
+  const sr=48000;
+
+  // STEM 1: DRY MATERIAL
+  if(mat&&mat.buffer){results.push({name:'stem_dry',buf:mat.buffer});}
+
+  // STEM 2: PROCESSED (full chain)
+  if(mat&&mat.buffer){
+    const fa=forgeToAudio();
+    const dur=mat.buffer.duration;
+    const offline=new OfflineAudioContext(2,Math.ceil(sr*dur),sr);
+    const src=offline.createBufferSource();src.buffer=mat.buffer;
+    const erosLP=offline.createBiquadFilter();erosLP.type='lowpass';erosLP.frequency.value=fa.smearFreq;
+    const comp=offline.createDynamicsCompressor();
+    comp.threshold.value=clamp(fa.compThresh,-60,-1,-20);comp.ratio.value=clamp(fa.compRatio,1,20);
+    comp.attack.value=fa.transAtk;comp.release.value=.12;comp.knee.value=6;
+    const sat=offline.createWaveShaper();
+    sat.curve=buildSatCurve(currentSatProfile,ForgeState.satDrive);sat.oversample='4x';
+    const limiter=offline.createDynamicsCompressor();
+    limiter.threshold.value=-1.5;limiter.ratio.value=20;limiter.attack.value=.0005;limiter.release.value=.08;
+    const g=offline.createGain();g.gain.value=.88;
+    src.connect(erosLP);erosLP.connect(comp);comp.connect(sat);sat.connect(limiter);limiter.connect(g);g.connect(offline.destination);
+    src.start(0);
+    try{const b=await startRenderingCompat(offline);results.push({name:'stem_processed',buf:b});}catch(e){console.warn(e);}
+  }
+
+  // STEM 3: RESAMPLED (if exists)
+  if(resampledBuffer){results.push({name:'stem_resampled',buf:resampledBuffer});}
+
+  // Download each stem
+  const ts=Date.now();
+  for(const stem of results){
+    const ab=encodeWAV(stem.buf);
+    const blob=new Blob([ab],{type:'audio/wav'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`${stem.name}_g${totalGenerations}_${ts}.wav`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    await new Promise(r=>setTimeout(r,200)); // brief pause between downloads
+  }
+  setT('wav-status',`stems exported: ${results.length} file${results.length!==1?'s':''}`);
+}
+
+function updateResampleUI(){
+  const mat=SLOTS[currentSlot];
+  setT('gen-num',totalGenerations);
+  setT('rs-passes',totalGenerations*6);
+  setT('rs-damage',(Math.min(1,totalGenerations*.10)*100).toFixed(0)+'%');
+  setT('rs-src',mat?mat.name.slice(0,14):'synthesis');
+}
+
+// ═══════════════════════════════════════════════════════
+// GLOBAL STATE (simplified carry from p2a)
+// ═══════════════════════════════════════════════════════
+const GlobalState={
+  tension:0,energy:0,density:0,phase:'intro',
+  _stamps:[],_recTimer:null,_voidTimer:null,
+  // EMF — Event Memory Field for RareEventManager context
+  EMF:{recentIntensity:0,silenceDuration:0,ruptureCount:0,anticipationLevel:0},
+  record(){
+    const now=Date.now();this._stamps.push(now);
+    this._stamps=this._stamps.filter(t=>t>now-20000);
+    this.EMF.silenceDuration=0;
+    this.EMF.recentIntensity+=(this.energy-.8*this.EMF.recentIntensity)*.18;
+  },
+  selfEvolve(){
+    const now=Date.now();const recent=this._stamps.filter(t=>t>now-5000).length;const idle=recent===0;
+    this.density+=(Math.min(1,recent/12)-this.density)*.14;
+    if(this.phase==='recovery'||this.phase==='void'){this.tension*=.93;this.energy*=.91;this.density*=.89;}
+    else{this.tension+=((this.density*.82+this.energy*.18)-this.tension)*.07;this.energy+=(this.density*.88-this.energy)*.05;}
+    if(idle){
+      this.tension*=.982;this.energy*=.975;this.density*=.968;
+      this.EMF.silenceDuration+=0.38; // seconds (selfEvolve runs every 380ms)
+      // anticipation rises with silence after tension phase
+      if(['tension','rupture','recovery'].includes(this.phase))
+        this.EMF.anticipationLevel=clamp(this.EMF.anticipationLevel+.015,0,1);
+    }else{
+      this.EMF.anticipationLevel*=.82;
+    }
+    this.tension=clamp(this.tension,0,1);this.energy=clamp(this.energy,0,1);this.density=clamp(this.density,0,1);
+    const prevPhase=this.phase;
+    if(!['recovery','void','aftershock'].includes(this.phase)){
+      const te=this.tension;
+      if(te<.14)this.phase='intro';else if(te<.38)this.phase='build';else if(te<.62)this.phase='peak';else if(te<.82)this.phase='tension';else this.phase='rupture';
+    }
+    if(prevPhase==='rupture'&&this.phase!=='rupture')this.EMF.ruptureCount++;
+    this.updateUI();
+  },
+  updateUI(){
+    setW('gf-t',this.tension);setW('gf-e',this.energy);setW('gf-d',this.density);
+    setT('gs-ph',this.phase.toUpperCase());setT('h-t',this.tension.toFixed(2));
+    setT('h-e',this.energy.toFixed(2));setT('h-ph',this.phase);
+    const cls='ph-'+this.phase;
+    const phEl=document.getElementById('h-ph');if(phEl)phEl.className='hv ph '+cls;
+    const gsEl=document.getElementById('gs-ph');if(gsEl)gsEl.className=cls;
+  },
+  start(){setInterval(()=>this.selfEvolve(),380);}
+};
+
+// ─── PERFORMANCE MONITOR ────────────────────────────────
+const Perf={
+  fps:60,frameTime:0,quality:'full',evictions:0,
+  _fh:[],_lf:0,
+  tick(now){
+    const dt=now-this._lf;this._lf=now;
+    if(dt>0&&dt<500){this._fh.push(dt);if(this._fh.length>20)this._fh.shift();
+      const avg=this._fh.reduce((a,b)=>a+b,0)/this._fh.length;this.frameTime=avg;this.fps=Math.round(1000/avg);}
+    this.quality=this.frameTime>28?'minimal':this.frameTime>18?'reduced':'full';
+    if(masterAnalyser){const tgt=this.quality==='minimal'?512:this.quality==='reduced'?1024:2048;
+      if(masterAnalyser.fftSize!==tgt){masterAnalyser.fftSize=tgt;FFT_SIZE=tgt;}}
+  },
+  updateUI(){
+    const active=AC?pool.filter(v=>!v.free&&AC.currentTime<v.freeAt).length:0;
+    setT('h-fps',this.fps);setT('h-vc',active);
+    const fEl=document.getElementById('h-fps');if(fEl)fEl.className='hv'+(this.fps<40?' danger':this.fps<55?' warn':'');
+    const dots=document.querySelectorAll('.vdot');
+    dots.forEach((d,i)=>{if(i<pool.length){const vv=pool[i];const ia=!vv.free&&AC&&AC.currentTime<vv.freeAt;const ih=ia&&(vv.freeAt-AC.currentTime)>.5;d.className='vdot'+(ih?' hot':ia?' active':'');}});
+  }
+};
+
+// ─── UI UPDATES ─────────────────────────────────────────
+function updateForgeStats(){
+  const fa=forgeToAudio();
+  const mem=SYNTH_MEM[currentOrg];
+  setT('sub-freq',fa.subFreq.toFixed(0)+'hz');
+  setT('sub-gain',fa.subGain.toFixed(2));
+  setW('pf-fat',mem.fatigue);setT('pv-fat',mem.fatigue.toFixed(2));
+  setT('st-cnt',mem.playCount);
+  setT('fi-tot',totalTriggers);
+  const dot=document.getElementById('fdot'),lbl=document.getElementById('flbl');
+  if(dot&&lbl){
+    const f=mem.fatigue;
+    if(f<.25){dot.style.background='#44ff99';lbl.textContent='FRESH';}
+    else if(f<.50){dot.style.background='#ffcc00';lbl.textContent='WORN';}
+    else if(f<.75){dot.style.background='#ff6600';lbl.textContent='FATIGUED';}
+    else{dot.style.background='#ff0033';lbl.textContent='ERODED';}
+  }
+}
+
+function updateDNAPane(){
+  const mat=SLOTS[currentSlot];
+  setT('dna-sat',currentSatProfile);
+  setT('dna-gen',totalGenerations);
+  setT('dna-phys',mat?mat.physicality.toFixed(2):'--');
+  setT('dna-dmg',mat?(mat.damageLevel*100).toFixed(0)+'%':'0%');
+  setT('dna-impact',ForgeState.impactHardness.toFixed(2));
+  setT('dna-body',ForgeState.bodyWeight.toFixed(2));
+}
+
+function flashTrigger(){
+  const btn=document.getElementById('tbtn');btn.classList.add('fire');
+  setTimeout(()=>btn.classList.remove('fire'),68);flashAmt=1;
+}
+
+// ─── MODE SYSTEM ────────────────────────────────────────
+let currentMode='mat';
+function setMode(mode){
+  currentMode=mode;
+  const modes=['mat','forge','sculpt','resample','dna'];
+  modes.forEach(m=>{
+    document.getElementById(`pane-${m}`).classList.toggle('visible',m===mode);
+    document.getElementById(`mb-${m}`).classList.toggle('active',m===mode);
+  });
+  if(mode==='sculpt')drawSatCurvePreview();
+  if(mode==='dna')updateDNAPane();
+}
+['mat','forge','sculpt','resample','dna'].forEach(m=>{
+  document.getElementById(`mb-${m}`).addEventListener('click',()=>setMode(m));
+  document.getElementById(`mb-${m}`).addEventListener('touchstart',e=>{e.preventDefault();setMode(m);},{passive:false});
+});
+
+// ─── ORGANISM SELECTOR ──────────────────────────────────
+const ORG_CSS=[
+  {accent:'var(--o0)',dim:'var(--o0d)',bg:'var(--o0b)'},
+  {accent:'var(--o1)',dim:'var(--o1d)',bg:'var(--o1b)'},
+  {accent:'var(--o2)',dim:'var(--o2d)',bg:'var(--o2b)'}
+];
+function selectOrg(idx){
+  currentOrg=idx;currentSlot=idx;
+  const cv=ORG_CSS[idx];
+  document.documentElement.style.setProperty('--org-accent',cv.accent);
+  document.documentElement.style.setProperty('--org-dim',cv.dim);
+  document.documentElement.style.setProperty('--org-bg',cv.bg);
+  setT('sf-org',SYNTH_ORGS[idx].name);
+  setT('cl-pk',['rust_ritual','rust_ritual','rust_ritual'][idx]);
+  document.querySelectorAll('.obtn').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  updateMaterialUI();updateForgeStats();updateResampleUI();
+  // Update all .ffill colors with org-accent
+  document.querySelectorAll('.ffill').forEach(el=>{el.style.background=cv.accent;});
+}
+
+// ─── INTERACTIVE FORGE CONTROLS ─────────────────────────
+// Touch/mouse drag on ftrack elements
+function initForgeControls(){
+  document.querySelectorAll('.ftrack').forEach(track=>{
+    const param=track.dataset.p;
+    if(!param)return;
+    const fill=track.querySelector('.ffill');
+    const row=track.closest('.fctrl');
+    const valSpan=row?row.querySelector('.fval'):null;
+
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const clientX=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((clientX-rect.left)/rect.width,0,1);
+      if(param==='satDrive'){
+        ForgeState.satDrive=v*7.9+.1; // .1 to 8.0
+        if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+        if(valSpan)valSpan.textContent=ForgeState.satDrive.toFixed(2);
+        drawSatCurvePreview();
+      } else if(ForgeState.hasOwnProperty(param)){
+        ForgeState[param]=v;
+        if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+        if(valSpan)valSpan.textContent=v.toFixed(2);
+        updateForgeStats();
+      }
+    }
+    let dragging=false;
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+
+  // Carve controls
+  document.querySelectorAll('.ctrack').forEach(track=>{
+    const c=track.dataset.c;if(!c)return;
+    const fill=track.querySelector('.cfill');
+    const valId='cv-'+c;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const clientX=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((clientX-rect.left)/rect.width,0,1);
+      CarveState[c]=v;
+      if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+      setT(valId,v.toFixed(2));
+    }
+    let dragging=false;
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+}
+
+// Saturation chips
+document.querySelectorAll('.sat-chip').forEach(chip=>{
+  function select(){
+    currentSatProfile=chip.dataset.sat;
+    document.querySelectorAll('.sat-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    drawSatCurvePreview();updateDNAPane();
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+
+// Processor nodes — drag intensity track to adjust, tap rest of node to toggle
+document.querySelectorAll('.proc-node').forEach(node=>{
+  const proc=node.dataset.proc;if(!proc||!ProcState[proc])return;
+  const intTrack=node.querySelector('.proc-int-track');
+  const intFill=node.querySelector('.proc-int-fill');
+  const intVal=node.querySelector('.proc-int-val');
+
+  // Initialize fill width from state
+  if(intFill)intFill.style.width=(ProcState[proc].intensity*100).toFixed(0)+'%';
+  if(intVal)intVal.textContent=ProcState[proc].intensity.toFixed(2);
+
+  // Intensity drag handler
+  let dragging=false;
+  function updateInt(e){
+    if(!intTrack)return;
+    const rect=intTrack.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const v=clamp((cx-rect.left)/rect.width,0,1);
+    ProcState[proc].intensity=v;
+    // Auto-enable when user drags intensity > 0
+    if(v>0.02&&!ProcState[proc].enabled){
+      ProcState[proc].enabled=true;
+      node.classList.add('active');
+    }
+    if(intFill)intFill.style.width=(v*100).toFixed(0)+'%';
+    if(intVal)intVal.textContent=v.toFixed(2);
+  }
+  if(intTrack){
+    intTrack.addEventListener('touchstart',e=>{
+      e.stopPropagation();e.preventDefault();dragging=true;updateInt(e);
+    },{passive:false});
+    intTrack.addEventListener('touchmove',e=>{
+      if(dragging){e.stopPropagation();e.preventDefault();updateInt(e);}
+    },{passive:false});
+    intTrack.addEventListener('touchend',e=>{e.stopPropagation();dragging=false;});
+    intTrack.addEventListener('mousedown',e=>{e.stopPropagation();dragging=true;updateInt(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)updateInt(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  }
+
+  // Toggle handler — only fires when click is NOT on the intensity track
+  function toggle(e){
+    if(intTrack&&intTrack.contains(e.target))return; // ignore clicks on the track
+    ProcState[proc].enabled=!ProcState[proc].enabled;
+    node.classList.toggle('active',ProcState[proc].enabled);
+  }
+  node.addEventListener('click',toggle);
+  node.addEventListener('touchstart',e=>{
+    if(intTrack&&intTrack.contains(e.target))return;
+    e.preventDefault();toggle(e);
+  },{passive:false});
+});
+
+// DNA Export
+document.getElementById('forge-dna-btn').addEventListener('click',()=>{
+  const mat=SLOTS[currentSlot];
+  const pack={
+    format:'sound_dna_v1',version:'3.0',packId:'rust_ritual',
+    exported:new Date().toISOString(),
+    saturationDNA:currentSatProfile,
+    generation:totalGenerations,
+    forgeState:{...ForgeState},
+    processor:{
+      active:Object.fromEntries(Object.entries(ProcState).map(([k,v])=>[k,{enabled:v.enabled,intensity:v.intensity}]))
+    },
+    carving:{...CarveState},
+    material:mat?{name:mat.name,duration:mat.duration,transientProfile:mat.transientProfile,
+      spectralProfile:mat.spectralProfile,physicality:mat.physicality,
+      damageLevel:mat.damageLevel,generation:mat.generation}:null,
+    globalState:{tension:GlobalState.tension,energy:GlobalState.energy,phase:GlobalState.phase}
+  };
+  const blob=new Blob([JSON.stringify(pack,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`rust_ritual_g${totalGenerations}.sound_dna_v1.json`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+});
+
+// Resample buttons
+document.getElementById('rsb-render').addEventListener('click',()=>{
+  if(!renderInProgress)runResamplePass();
+});
+document.getElementById('rsb-reload').addEventListener('click',()=>{
+  if(resampledBuffer)reloadAsNewMaterial();
+});
+
+// ─── PREVIEW CLEAN ──────────────────────────────────────
+document.getElementById('preview-btn').addEventListener('touchstart',e=>{
+  e.preventDefault();previewMaterial();
+},{passive:false});
+document.getElementById('preview-btn').addEventListener('click',()=>previewMaterial());
+
+// ─── CHAIN BYPASS ───────────────────────────────────────
+(function(){
+  const row=document.getElementById('chain-bypass-row');
+  const status=document.getElementById('chain-bypass-status');
+  function toggleBypass(){
+    chainBypassed=!chainBypassed;
+    row.classList.toggle('bypassed',chainBypassed);
+    if(status)status.textContent=chainBypassed?'BYPASS':'ACTIVE';
+  }
+  row.addEventListener('click',toggleBypass);
+  row.addEventListener('touchstart',e=>{e.preventDefault();toggleBypass();},{passive:false});
+})();
+
+// ─── LAYER BUILDER ──────────────────────────────────────
+(function(){
+  document.querySelectorAll('.layer-row').forEach(row=>{
+    const key=row.dataset.layer;if(!key||!LayerState[key])return;
+    const intTrack=row.querySelector('.layer-int-track');
+    const intFill=row.querySelector('.layer-int-fill');
+    const intVal=row.querySelector('.layer-int-val');
+
+    let dragging=false;
+    function updateInt(e){
+      if(!intTrack)return;
+      const rect=intTrack.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      LayerState[key].intensity=v;
+      if(v>0.02&&!LayerState[key].enabled){
+        LayerState[key].enabled=true;
+        row.classList.add('active');
+      }
+      if(intFill)intFill.style.width=(v*100).toFixed(0)+'%';
+      if(intVal)intVal.textContent=v.toFixed(2);
+    }
+    if(intTrack){
+      intTrack.addEventListener('touchstart',e=>{
+        e.stopPropagation();e.preventDefault();dragging=true;updateInt(e);
+      },{passive:false});
+      intTrack.addEventListener('touchmove',e=>{
+        if(dragging){e.stopPropagation();e.preventDefault();updateInt(e);}
+      },{passive:false});
+      intTrack.addEventListener('touchend',e=>{e.stopPropagation();dragging=false;});
+      intTrack.addEventListener('mousedown',e=>{e.stopPropagation();dragging=true;updateInt(e);});
+      window.addEventListener('mousemove',e=>{if(dragging)updateInt(e);});
+      window.addEventListener('mouseup',()=>{dragging=false;});
+    }
+    function toggleLayer(e){
+      if(intTrack&&intTrack.contains(e.target))return;
+      LayerState[key].enabled=!LayerState[key].enabled;
+      row.classList.toggle('active',LayerState[key].enabled);
+    }
+    row.addEventListener('click',toggleLayer);
+    row.addEventListener('touchstart',e=>{
+      if(intTrack&&intTrack.contains(e.target))return;
+      e.preventDefault();toggleLayer(e);
+    },{passive:false});
+  });
+})();
+
+// ─── QUICK FILTER STRIP ─────────────────────────────────
+(function(){
+  document.querySelectorAll('.qf-track[data-qf]').forEach(track=>{
+    const key=track.dataset.qf;if(!QF.hasOwnProperty(key))return;
+    const fill=track.querySelector('.qf-fill');
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      QF[key]=v;if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+})();
+
+// ─── TONE SHAPE ─────────────────────────────────────────
+(function(){
+  document.querySelectorAll('.ttrack[data-t]').forEach(track=>{
+    const key=track.dataset.t;if(!ToneState.hasOwnProperty(key))return;
+    const fill=track.querySelector('.tfill');
+    const valEl=document.getElementById('tv-'+key);
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      ToneState[key]=v;
+      if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+      if(valEl)valEl.textContent=v.toFixed(2);
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+})();
+
+// ─── IMPACT SHAPE CHIPS ─────────────────────────────────
+document.querySelectorAll('.imp-chip[data-shape]').forEach(chip=>{
+  function select(){
+    impactShape=chip.dataset.shape;
+    document.querySelectorAll('.imp-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+  }
+  chip.addEventListener('click',select);
+  chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+});
+
+// ─── WAV EXPORT ─────────────────────────────────────────
+['dry','processed','resampled','current'].forEach(mode=>{
+  const btn=document.getElementById('wav-'+mode);
+  if(btn){
+    btn.addEventListener('click',()=>exportWAV(mode));
+    btn.addEventListener('touchstart',e=>{e.preventDefault();exportWAV(mode);},{passive:false});
+  }
+});
+(function(){
+  const btn=document.getElementById('wav-stems');
+  if(btn){
+    btn.addEventListener('click',()=>exportStemsWAV());
+    btn.addEventListener('touchstart',e=>{e.preventDefault();exportStemsWAV();},{passive:false});
+  }
+})();
+
+// ─── GLUE / PHYSICALITY ─────────────────────────────────
+(function(){
+  document.querySelectorAll('.ttrack[data-g]').forEach(track=>{
+    const key=track.dataset.g;if(!GlueState.hasOwnProperty(key))return;
+    const fill=track.querySelector('.tfill');
+    const valEl=document.getElementById('gv-'+key);
+    let dragging=false;
+    function update(e){
+      const rect=track.getBoundingClientRect();
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const v=clamp((cx-rect.left)/rect.width,0,1);
+      GlueState[key]=v;
+      if(fill)fill.style.width=(v*100).toFixed(1)+'%';
+      if(valEl)valEl.textContent=v.toFixed(2);
+    }
+    track.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;update(e);},{passive:false});
+    track.addEventListener('touchmove',e=>{if(dragging){e.preventDefault();update(e);}},{passive:false});
+    track.addEventListener('touchend',()=>{dragging=false;});
+    track.addEventListener('mousedown',e=>{dragging=true;update(e);});
+    window.addEventListener('mousemove',e=>{if(dragging)update(e);});
+    window.addEventListener('mouseup',()=>{dragging=false;});
+  });
+  // Surface chips
+  document.querySelectorAll('.surf-chip[data-surf]').forEach(chip=>{
+    function select(){
+      GlueState.surface=chip.dataset.surf;
+      document.querySelectorAll('.surf-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+    }
+    chip.addEventListener('click',select);
+    chip.addEventListener('touchstart',e=>{e.preventDefault();select();},{passive:false});
+  });
+})();
+
+// ─── CANVAS VISUALIZATION ───────────────────────────────
+function initCanvas(){
+  const canvas=document.getElementById('scope');
+  const panel=canvas.parentElement;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  let W,H;
+  function resize(){
+    W=panel.clientWidth;H=panel.clientHeight;
+    canvas.width=W*dpr;canvas.height=H*dpr;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  requestAnimationFrame(()=>{resize();window.addEventListener('resize',()=>{ctx.setTransform(1,0,0,1,0,0);resize();});});
+
+  function draw(now){
+    requestAnimationFrame(draw);Perf.tick(now);
+    if(!W||!H)return;
+    const q=Perf.quality;
+
+    // Ghost persistence
+    ctx.fillStyle='rgba(5,3,16,0.82)';ctx.fillRect(0,0,W,H);
+
+    // Flash
+    if(flashAmt>.01){ctx.fillStyle=`rgba(153,68,255,${flashAmt*.20})`;ctx.fillRect(0,0,W,H);flashAmt*=.78;}
+
+    // Grid
+    ctx.strokeStyle='rgba(153,68,255,0.04)';ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){ctx.beginPath();ctx.moveTo(0,H*i/4);ctx.lineTo(W,H*i/4);ctx.stroke();}
+
+    // ZONE 1: Material waveform — top 18%
+    const matH=H*.18;
+    const mat=SLOTS[currentSlot];
+    if(mat){
+      const wf=getWaveformData(currentSlot,W);
+      if(wf){
+        ctx.strokeStyle='rgba(0,255,255,.22)';ctx.lineWidth=1;
+        ctx.beginPath();
+        for(let i=0;i<wf.length;i++){
+          ctx.moveTo(i,matH*.5-wf[i].max*(matH*.44));
+          ctx.lineTo(i,matH*.5-wf[i].min*(matH*.44));
+        }
+        ctx.stroke();
+      }
+    } else {
+      // No material: dashed line
+      ctx.strokeStyle='rgba(153,68,255,.1)';ctx.lineWidth=1;ctx.setLineDash([4,8]);
+      ctx.beginPath();ctx.moveTo(0,matH*.5);ctx.lineTo(W,matH*.5);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // Material zone divider
+    ctx.strokeStyle='rgba(153,68,255,.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,matH);ctx.lineTo(W,matH);ctx.stroke();
+
+    // TRIGGER SCARS
+    const oscTop=matH;const oscH=H*.48;
+    scars.forEach(s=>{
+      s.age++;s.alpha=Math.max(0,1-s.age/s.maxAge);if(s.alpha<=0)return;
+      const x=s.ph*W;const col=ORG_COLORS[s.org];
+      ctx.strokeStyle=col.replace(')'`,${s.alpha*.45})`).replace('rgb','rgba');
+      ctx.lineWidth=1;ctx.beginPath();
+      ctx.moveTo(x,oscTop+oscH*.1);ctx.lineTo(x,oscTop+oscH*.9);ctx.stroke();
+    });
+    for(let i=scars.length-1;i>=0;i--)if(scars[i].alpha<=0)scars.splice(i,1);
+
+    if(!masterAnalyser){Perf.updateUI();return;}
+    const fft=masterAnalyser.fftSize;
+    const tBuf=new Uint8Array(fft),fBuf=new Uint8Array(fft/2);
+    masterAnalyser.getByteTimeDomainData(tBuf);
+
+    // ZONE 2: Oscilloscope — 20%–68%
+    ctx.strokeStyle='rgba(153,68,255,.08)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,oscTop+oscH*.5);ctx.lineTo(W,oscTop+oscH*.5);ctx.stroke();
+
+    if(q!=='minimal'){
+      ctx.beginPath();ctx.strokeStyle='rgba(0,255,255,.12)';ctx.lineWidth=5;
+      for(let i=0;i<fft;i++){const x=(i/fft)*W,y=oscTop+(tBuf[i]/255)*oscH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+      ctx.stroke();
+    }
+    ctx.beginPath();ctx.strokeStyle='rgba(0,255,255,.82)';ctx.lineWidth=1.5;
+    for(let i=0;i<fft;i++){const x=(i/fft)*W,y=oscTop+(tBuf[i]/255)*oscH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();
+
+    // Divider
+    ctx.strokeStyle='rgba(153,68,255,.10)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,H*.70);ctx.lineTo(W,H*.70);ctx.stroke();
+
+    // ZONE 3: FFT — 70%–94% (reduced vs p2a)
+    const sTop=H*.71,sH=H*.22;
+    masterAnalyser.getByteFrequencyData(fBuf);
+    const bars=q==='minimal'?28:q==='reduced'?42:60;
+    const bw=W/bars;
+    for(let i=0;i<bars;i++){
+      const idx=Math.floor(Math.pow(i/bars,1.7)*fBuf.length);
+      const v=fBuf[Math.min(idx,fBuf.length-1)]/255,bh=v*sH,tt=i/bars;
+      let r,g,b;
+      if(tt<.5){r=Math.round(tt*2*153);g=Math.round((1-tt*2)*255);b=255;}
+      else{r=Math.round(153+(tt-.5)*2*102);g=0;b=Math.round(255-(tt-.5)*2*255);}
+      ctx.fillStyle=`rgba(${r},${g},${b},${.38+v*.30})`;
+      ctx.fillRect(i*bw+.5,sTop+sH-bh,bw-1.2,bh);
+    }
+    Perf.updateUI();
+  }
+  draw(performance.now());
+}
+
+// ─── INIT FORGE CONTROL DISPLAY ─────────────────────────
+function initForgeDisplay(){
+  // Set initial fill widths based on ForgeState
+  const map={
+    impactHardness:ForgeState.impactHardness,bodyWeight:ForgeState.bodyWeight,
+    coneStress:ForgeState.coneStress,transientErosion:ForgeState.transientErosion,
+    pressure:ForgeState.pressure,speakerDamage:ForgeState.speakerDamage,
+    airPush:ForgeState.airPush,punchLength:ForgeState.punchLength
+  };
+  document.querySelectorAll('.ftrack[data-p]').forEach(track=>{
+    const p=track.dataset.p;
+    const fill=track.querySelector('.ffill');
+    const row=track.closest('.fctrl');
+    const valSpan=row?row.querySelector('.fval'):null;
+    if(p==='satDrive'){
+      if(fill)fill.style.width=((ForgeState.satDrive-.1)/7.9*100).toFixed(1)+'%';
+      if(valSpan)valSpan.textContent=ForgeState.satDrive.toFixed(2);
+    } else if(map.hasOwnProperty(p)){
+      if(fill)fill.style.width=(map[p]*100).toFixed(1)+'%';
+      if(valSpan)valSpan.textContent=map[p].toFixed(2);
+    }
+  });
+}
+
+// ─── EVENTS ─────────────────────────────────────────────
+document.getElementById('tbtn').addEventListener('touchstart',e=>{e.preventDefault();trigger();},{passive:false});
+document.getElementById('tbtn').addEventListener('mousedown',e=>{e.preventDefault();trigger();});
+document.querySelectorAll('.obtn').forEach((btn,i)=>{
+  btn.addEventListener('touchstart',e=>{e.preventDefault();selectOrg(i);},{passive:false});
+  btn.addEventListener('click',()=>selectOrg(i));
+});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();trigger();}
+  if(e.code==='Digit1')selectOrg(0);if(e.code==='Digit2')selectOrg(1);if(e.code==='Digit3')selectOrg(2);
+  if(e.code==='KeyM')setMode('mat');if(e.code==='KeyF')setMode('forge');
+  if(e.code==='KeyS')setMode('sculpt');if(e.code==='KeyR')setMode('resample');
+});
+
+// ─── INIT ────────────────────────────────────────────────
+initCanvas();
+initForgeControls();
+initForgeDisplay();
+GlobalState.start();
+startRecovery();
+selectOrg(0);
+drawSatCurvePreview();
+</script>
+</body>
+</html>

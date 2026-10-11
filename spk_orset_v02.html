@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Spk_OrSet — Prototype v0.2</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: linear-gradient(155deg,#13111f,#1b1726);
+    color: #fff; font-family: Inter,-apple-system,sans-serif; font-size: 13px;
+    overscroll-behavior: none;
+  }
+  .mono { font-family: 'JetBrains Mono',monospace; font-style: italic; }
+
+  #app { min-height: 100%; display: flex; flex-direction: column; }
+
+  #topbar {
+    padding: 14px 18px 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  }
+  .logoSpk  { font-weight: 800; font-size: 22px; color: #fff; letter-spacing: .5px; }
+  .logoOrset{ font-weight: 300; font-size: 22px; color: #00ffff; letter-spacing: .5px; }
+  .subtitle { font-size: 11px; color: rgba(255,255,255,.5); }
+
+  #status { padding: 0 18px 10px; font-size: 12px; color: rgba(255,255,255,.6); min-height: 16px; }
+
+  #startOverlay { flex:1; display:flex; align-items:center; justify-content:center; padding:20px; }
+
+  button {
+    font-family: Inter,sans-serif; font-size: 13px; color: #fff;
+    background: rgba(153,68,255,.07); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 6px; padding: 10px 16px; cursor: pointer;
+  }
+  button:disabled { opacity: .35; }
+  #btnInit { font-size: 15px; padding: 16px 28px; background: rgba(153,68,255,.12); border-color: rgba(153,68,255,.4); }
+
+  #mainPanel { display:flex; flex-direction:column; gap:12px; padding: 0 18px 28px; }
+
+  #transport { display:flex; gap:10px; }
+
+  #workArea { display:flex; flex-direction:row; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+
+  #entities { flex:1 1 420px; display:flex; flex-direction:column; gap:9px; min-width:260px; }
+
+  .sectionLabel {
+    font-size: 11px; color: rgba(255,255,255,.3); letter-spacing: 1.5px;
+    padding: 6px 0 4px; border-bottom: 1px solid rgba(153,68,255,.1);
+  }
+
+  .entityCard {
+    background: rgba(153,68,255,.06); border: 1px solid rgba(153,68,255,.18);
+    border-radius: 8px; padding: 12px; transition: border-color .08s, box-shadow .08s;
+  }
+  .entityCard.trigger { border-color: #00ffff; box-shadow: 0 0 14px rgba(153,68,255,.35); }
+
+  @keyframes breatheAnim {
+    0%,100% { border-color: rgba(153,68,255,.18); box-shadow: none; }
+    50% { border-color: rgba(0,255,255,.38); box-shadow: 0 0 12px rgba(0,255,255,.12); }
+  }
+  .entityCard.breathing { animation: breatheAnim var(--breathe-dur,5s) ease-in-out infinite; }
+
+  .entityHeader { display:flex; align-items:baseline; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .entityName { font-weight:700; font-size:14px; letter-spacing:.5px; }
+  .entityFamily { font-size:11px; color:#b580ff; font-weight:700; }
+  .entityBehavior { font-size:11px; color:rgba(255,255,255,.45); }
+
+  .entityControls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .btnMute,.btnSolo { width:30px; height:30px; padding:0; font-size:12px; font-weight:700; }
+  .btnMute.active { background:rgba(255,80,80,.25); border-color:#ff5050; color:#ffb0b0; }
+  .btnSolo.active { background:rgba(153,68,255,.3); border-color:#b580ff; }
+
+  .weightLabel { font-size:11px; color:rgba(255,255,255,.45); display:flex; align-items:center; gap:6px; }
+  .weightSlider { width:80px; }
+
+  .btnLoad { font-size:11px; padding:7px 10px; }
+  input[type=file] { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+
+  .materialRow {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:8px 10px; border:1px dashed rgba(153,68,255,.22); border-radius:6px;
+    background: rgba(153,68,255,.03);
+  }
+  .materialLabel { font-size:11px; color:rgba(255,255,255,.4); flex:1; }
+
+  #dnaCenter {
+    flex:0 0 230px; min-width:210px;
+    background:rgba(153,68,255,.04); border:1px solid rgba(153,68,255,.18);
+    border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:14px;
+  }
+  #dnaCenter h3 { margin:0; font-size:13px; letter-spacing:1px; }
+  #dnaCenter label { display:flex; flex-direction:column; gap:5px; font-size:11px; color:rgba(255,255,255,.55); }
+  #dnaCenter select, #dnaCenter input[type=number] {
+    background:rgba(255,255,255,.05); border:1px solid rgba(153,68,255,.18);
+    color:#fff; border-radius:4px; padding:6px; font-size:13px; width:100%;
+  }
+
+  .noteSmall { font-size:11px; color:rgba(255,255,255,.28); line-height:1.55; }
+</style>
+</head>
+<body>
+
+<!--
+SPK_ORSET — Prototype v0.2
+Validacion de tres familias: EVENT / CONTINUOUS / FRAGMENT
+Mismo material vocal, tres comportamientos distintos.
+
+KICK     EVENT      Grid + ghost-notes (probability)
+VOICE A  EVENT      Density + Granular      <- referencia: "suena a secuenciador?"
+VOICE B  CONTINUOUS Breathe                 <- sin disparos, presencia viva
+VOICE C  FRAGMENT   Scatter                 <- segmentos en orden aleatorio
+NOISE    CONTINUOUS Gate                    <- modulacion de senial continua
+
+DNA CENTER: Focus (target + amount) / Complexity (afecta cada familia distinto)
+-->
+
+<div id="app">
+
+  <div id="topbar">
+    <span class="logoSpk">SPK</span><span class="logoOrset">_ORSET</span>
+    <span class="subtitle mono">prototype v0.2 — EVENT / CONTINUOUS / FRAGMENT</span>
+  </div>
+
+  <div id="status">presiona INICIAR AUDIO para comenzar</div>
+
+  <div id="startOverlay">
+    <button id="btnInit">INICIAR AUDIO</button>
+  </div>
+
+  <div id="mainPanel" style="display:none;">
+
+    <div id="transport">
+      <button id="btnPlay" disabled>PLAY</button>
+      <button id="btnStop" disabled>STOP</button>
+    </div>
+
+    <div id="workArea">
+
+      <div id="entities">
+
+        <div class="sectionLabel mono">EVENT</div>
+
+        <div class="entityCard" id="card_kick">
+          <div class="entityHeader">
+            <span class="entityName">KICK</span>
+            <span class="entityFamily">EVENT</span>
+            <span class="entityBehavior mono">Grid + ghost probability</span>
+          </div>
+          <div class="entityControls">
+            <button class="btnMute" data-entity="kick">M</button>
+            <button class="btnSolo" data-entity="kick">S</button>
+            <label class="weightLabel">weight
+              <input type="range" min="0" max="100" value="85" class="weightSlider" data-entity="kick">
+            </label>
+            <button class="btnLoad" id="btnLoadKick">cargar</button>
+            <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_kick">
+          </div>
+        </div>
+
+        <div class="sectionLabel mono">EVENT / CONTINUOUS / FRAGMENT — material compartido</div>
+
+        <div class="materialRow">
+          <span class="materialLabel mono">VOICE — mismo buffer para A, B y C</span>
+          <button class="btnLoad" id="btnLoadVoice">cargar material vocal</button>
+          <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_voice">
+        </div>
+
+        <div class="entityCard" id="card_voiceA">
+          <div class="entityHeader">
+            <span class="entityName">VOICE A</span>
+            <span class="entityFamily">EVENT</span>
+            <span class="entityBehavior mono">Density + Granular — referencia</span>
+          </div>
+          <div class="entityControls">
+            <button class="btnMute" data-entity="voiceA">M</button>
+            <button class="btnSolo" data-entity="voiceA">S</button>
+            <label class="weightLabel">weight
+              <input type="range" min="0" max="100" value="100" class="weightSlider" data-entity="voiceA">
+            </label>
+          </div>
+        </div>
+
+        <div class="entityCard" id="card_voiceB">
+          <div class="entityHeader">
+            <span class="entityName">VOICE B</span>
+            <span class="entityFamily" style="color:#00ffff;">CONTINUOUS</span>
+            <span class="entityBehavior mono">Breathe — presencia sin disparos</span>
+          </div>
+          <div class="entityControls">
+            <button class="btnMute" data-entity="voiceB">M</button>
+            <button class="btnSolo" data-entity="voiceB">S</button>
+            <label class="weightLabel">weight
+              <input type="range" min="0" max="100" value="90" class="weightSlider" data-entity="voiceB">
+            </label>
+          </div>
+        </div>
+
+        <div class="entityCard" id="card_voiceC">
+          <div class="entityHeader">
+            <span class="entityName">VOICE C</span>
+            <span class="entityFamily" style="color:#ff00ff;">FRAGMENT</span>
+            <span class="entityBehavior mono">Scatter — fragmentos, orden aleatorio</span>
+          </div>
+          <div class="entityControls">
+            <button class="btnMute" data-entity="voiceC">M</button>
+            <button class="btnSolo" data-entity="voiceC">S</button>
+            <label class="weightLabel">weight
+              <input type="range" min="0" max="100" value="90" class="weightSlider" data-entity="voiceC">
+            </label>
+          </div>
+        </div>
+
+        <div class="sectionLabel mono">CONTINUOUS</div>
+
+        <div class="entityCard" id="card_noise">
+          <div class="entityHeader">
+            <span class="entityName">NOISE</span>
+            <span class="entityFamily" style="color:#00ffff;">CONTINUOUS</span>
+            <span class="entityBehavior mono">Gate — modulacion de senial continua</span>
+          </div>
+          <div class="entityControls">
+            <button class="btnMute" data-entity="noise">M</button>
+            <button class="btnSolo" data-entity="noise">S</button>
+            <label class="weightLabel">weight
+              <input type="range" min="0" max="100" value="65" class="weightSlider" data-entity="noise">
+            </label>
+            <button class="btnLoad" id="btnLoadNoise">cargar</button>
+            <input type="file" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*" id="file_noise">
+          </div>
+        </div>
+
+        <div class="noteSmall">Voice B pulsa visualmente con su respiracion. Voice C flashea al disparar cada fragmento. Voice A flashea al disparar cada grano. Mismo material, tres comportamientos — EVENT es lo conocido, CONTINUOUS y FRAGMENT son lo que se esta validando.</div>
+
+      </div>
+
+      <div id="dnaCenter">
+        <h3 class="mono">DNA CENTER</h3>
+
+        <label>focus target
+          <select id="focusTarget">
+            <option value="none">ninguno</option>
+            <option value="kick">kick</option>
+            <option value="voiceA">voice A</option>
+            <option value="voiceB">voice B</option>
+            <option value="voiceC">voice C</option>
+            <option value="noise">noise</option>
+          </select>
+        </label>
+
+        <label>focus amount
+          <input type="range" id="focusAmount" min="0" max="100" value="0">
+        </label>
+
+        <label>complexity
+          <input type="range" id="complexity" min="0" max="100" value="40">
+        </label>
+
+        <label>bpm
+          <input type="number" id="bpmInput" min="40" max="220" value="120">
+        </label>
+
+        <div class="noteSmall">complexity afecta cada familia de forma distinta: Voice A gana densidad y granos mas pequenos, Voice B respira mas rapido, Voice C dispersa fragmentos mas seguido, Noise sube la frecuencia del Gate, Kick agrega ghost-notes. Un control, cinco efectos distintos segun familia.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+
+// ============================================================
+// SPK_ORSET — Prototype v0.2
+// Tres familias: EVENT / CONTINUOUS / FRAGMENT
+// ============================================================
+
+// ---------- helpers ----------
+
+function clamp(v, lo, hi) {
+  if (v < lo) { return lo; }
+  if (v > hi) { return hi; }
+  return v;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function randExp(rate) {
+  var r = Math.random();
+  if (r < 0.000001) { r = 0.000001; }
+  return -Math.log(1 - r) / rate;
+}
+
+// ---------- global state ----------
+
+var state = {
+  complexity:   40,
+  focusTarget:  null,
+  focusAmount:  0,
+  bpm:          120
+};
+
+// ---------- entities ----------
+
+var kick = {
+  id: 'kick', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 85,
+  stepIndex: 0, nextTime: 0,
+  pattern: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]
+};
+
+var voiceA = {
+  id: 'voiceA', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 100,
+  nextTime: 0
+};
+
+var voiceB = {
+  id: 'voiceB', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  srcNode: null, breatheOsc: null, breatheDepth: null, baseGain: null,
+  started: false
+};
+
+var voiceC = {
+  id: 'voiceC', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 90,
+  nextTime: 0, segments: []
+};
+
+var noise = {
+  id: 'noise', buffer: null, gainNode: null,
+  mute: false, solo: false, weight: 65,
+  sourceNode: null, gateOsc: null, gateDepthGain: null, gateNode: null,
+  started: false
+};
+
+function getEntity(id) {
+  if (id === 'kick')   { return kick;   }
+  if (id === 'voiceA') { return voiceA; }
+  if (id === 'voiceB') { return voiceB; }
+  if (id === 'voiceC') { return voiceC; }
+  return noise;
+}
+
+// ---------- audio context ----------
+
+var audioCtx = null;
+var masterGain = null;
+var limiter = null;
+var running = false;
+var lookahead = 0.12;
+var schedulerInterval = null;
+
+function initAudio() {
+  if (audioCtx) { return; }
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume();
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.78;
+
+  limiter = audioCtx.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.15;
+
+  masterGain.connect(limiter);
+  limiter.connect(audioCtx.destination);
+
+  kick.gainNode = audioCtx.createGain();   kick.gainNode.gain.value = 1.0; kick.gainNode.connect(masterGain);
+  voiceA.gainNode = audioCtx.createGain(); voiceA.gainNode.gain.value = 1.0; voiceA.gainNode.connect(masterGain);
+  voiceB.gainNode = audioCtx.createGain(); voiceB.gainNode.gain.value = 1.0; voiceB.gainNode.connect(masterGain);
+  voiceC.gainNode = audioCtx.createGain(); voiceC.gainNode.gain.value = 1.0; voiceC.gainNode.connect(masterGain);
+  noise.gainNode  = audioCtx.createGain(); noise.gainNode.gain.value = 0.0;  noise.gainNode.connect(masterGain);
+
+  buildBuffers();
+}
+
+// ---------- synthetic material ----------
+
+function buildKickBuffer(ctx) {
+  var dur = 0.38;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var i = 0;
+  while (i < len) {
+    var t   = i / sr;
+    var fr  = 140 * Math.exp(-t * 18);
+    var env = Math.exp(-t * 12);
+    d[i] = Math.sin(2 * Math.PI * fr * t) * env;
+    i = i + 1;
+  }
+  return buf;
+}
+
+function buildNoiseBuffer(ctx) {
+  var dur = 2.0;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var i = 0;
+  while (i < len) {
+    d[i] = (Math.random() * 2 - 1) * 0.55;
+    i = i + 1;
+  }
+  return buf;
+}
+
+function buildVoiceBuffer(ctx, callback) {
+  // Dual formant-filtered noise — sounds vaguely vocal without being speech.
+  // Duration 5s to give Voice C meaningful fragments (~0.625s each for 8 slices).
+  var dur = 5.0;
+  var sr  = ctx.sampleRate;
+  var frames = Math.floor(sr * dur);
+
+  try {
+    var offline = new OfflineAudioContext(1, frames, sr);
+
+    var noiseBuf  = offline.createBuffer(1, frames, sr);
+    var noiseData = noiseBuf.getChannelData(0);
+    var i = 0;
+    while (i < noiseData.length) {
+      noiseData[i] = (Math.random() * 2 - 1);
+      i = i + 1;
+    }
+
+    var src = offline.createBufferSource();
+    src.buffer = noiseBuf;
+
+    // F1 — low formant, sweeps slowly
+    var f1 = offline.createBiquadFilter();
+    f1.type = 'bandpass';
+    f1.Q.value = 8;
+    f1.frequency.setValueAtTime(350, 0);
+    f1.frequency.linearRampToValueAtTime(650, dur * 0.35);
+    f1.frequency.linearRampToValueAtTime(280, dur * 0.7);
+    f1.frequency.linearRampToValueAtTime(500, dur);
+
+    // F2 — high formant, moves with opposite direction
+    var f2 = offline.createBiquadFilter();
+    f2.type = 'bandpass';
+    f2.Q.value = 6;
+    f2.frequency.setValueAtTime(1100, 0);
+    f2.frequency.linearRampToValueAtTime(2200, dur * 0.35);
+    f2.frequency.linearRampToValueAtTime(900, dur * 0.7);
+    f2.frequency.linearRampToValueAtTime(1600, dur);
+
+    // Merge the two formant paths
+    var mix = offline.createGain();
+    mix.gain.value = 0.5;
+
+    var mix2 = offline.createGain();
+    mix2.gain.value = 0.5;
+
+    // Slow amplitude envelope
+    var env = offline.createGain();
+    env.gain.setValueAtTime(0.0001, 0);
+    env.gain.linearRampToValueAtTime(0.85, 0.5);
+    env.gain.setValueAtTime(0.85, dur * 0.5);
+    env.gain.linearRampToValueAtTime(0.0001, dur);
+
+    src.connect(f1); f1.connect(mix);
+    src.connect(f2); f2.connect(mix2);
+    mix.connect(env);
+    mix2.connect(env);
+    env.connect(offline.destination);
+    src.start(0);
+
+    offline.startRendering().then(function(rendered) {
+      callback(rendered);
+    }).catch(function() {
+      callback(buildVoiceFallback(ctx));
+    });
+
+  } catch (e) {
+    callback(buildVoiceFallback(ctx));
+  }
+}
+
+function buildVoiceFallback(ctx) {
+  // Simple sine sweep if OfflineAudioContext fails
+  var dur = 5.0;
+  var sr  = ctx.sampleRate;
+  var len = Math.floor(sr * dur);
+  var buf = ctx.createBuffer(1, len, sr);
+  var d   = buf.getChannelData(0);
+  var phase = 0;
+  var i = 0;
+  while (i < len) {
+    var t  = i / sr;
+    var fr = 300 + Math.sin(t * 0.4) * 200 + Math.sin(t * 1.3) * 80;
+    var en = Math.min(1, t * 1.5) * Math.min(1, (dur - t) * 1.5) * 0.6;
+    phase  = phase + 2 * Math.PI * fr / sr;
+    d[i]  = Math.sin(phase) * en;
+    i = i + 1;
+  }
+  return buf;
+}
+
+function buildBuffers() {
+  kick.buffer  = buildKickBuffer(audioCtx);
+  noise.buffer = buildNoiseBuffer(audioCtx);
+  setStatus('preparando material de voz...');
+  buildVoiceBuffer(audioCtx, function(rendered) {
+    voiceA.buffer = rendered;
+    voiceB.buffer = rendered;
+    voiceC.buffer = rendered;
+    buildSegments(rendered);
+    setStatus('listo — presiona PLAY');
+    document.getElementById('btnPlay').disabled = false;
+    document.getElementById('btnStop').disabled = false;
+  });
+}
+
+// ---------- Fragment segments ----------
+
+function buildSegments(buffer) {
+  var N   = 8;
+  var seg = buffer.duration / N;
+  voiceC.segments = [];
+  var i = 0;
+  while (i < N) {
+    voiceC.segments.push({ start: i * seg, duration: seg });
+    i = i + 1;
+  }
+}
+
+// ---------- activity: mute / solo / focus ----------
+
+function activityMultiplier(entityId) {
+  var ent = getEntity(entityId);
+  if (ent.mute) { return 0; }
+
+  var anySolo = kick.solo || voiceA.solo || voiceB.solo || voiceC.solo || noise.solo;
+  if (anySolo && !ent.solo) { return 0; }
+
+  var base = 1.0;
+  if (state.focusTarget && state.focusTarget !== 'none') {
+    if (state.focusTarget === entityId) {
+      base = 1.0 + (state.focusAmount / 100) * 0.3;
+    } else {
+      base = 1.0 - (state.focusAmount / 100) * 0.75;
+    }
+  }
+  return clamp(base, 0, 1.3);
+}
+
+// ---------- complexity-derived values ----------
+
+function ghostProb()       { return (state.complexity / 100) * 0.35; }
+function voiceARate()      { return lerp(0.5, 7.0, state.complexity / 100); }
+function grainSizeSec()    { return lerp(0.24, 0.025, state.complexity / 100); }
+function gateFrequency()   { return lerp(1.0, 18.0, state.complexity / 100); }
+function getBreatheFreq()  { return 0.04 + (state.complexity / 100) * 0.46; }
+function fragmentRate()    { return lerp(0.18, 2.2, state.complexity / 100); }
+function stepDuration()    { return (60 / state.bpm) / 4; }
+
+function getBreatheAnimDur() {
+  // CSS animation duration for Voice B card — slow to fast
+  return lerp(10, 1.5, state.complexity / 100);
+}
+
+// ---------- EVENT / Grid: KICK ----------
+
+function scheduleKick(untilTime) {
+  while (kick.nextTime < untilTime) {
+    var stepIdx = kick.stepIndex % 16;
+    var hit     = kick.pattern[stepIdx] === 1;
+    var ghost   = false;
+
+    if (!hit && Math.random() < ghostProb()) {
+      hit   = true;
+      ghost = true;
+    }
+
+    if (hit) {
+      var activity = activityMultiplier('kick');
+      if (activity > 0.02) {
+        var vel = ghost ? 0.28 : 1.0;
+        playKick(kick.nextTime, vel * activity);
+        scheduleFlash('kick', kick.nextTime);
+      }
+    }
+
+    kick.stepIndex = kick.stepIndex + 1;
+    kick.nextTime  = kick.nextTime + stepDuration();
+  }
+}
+
+function playKick(time, vel) {
+  if (!kick.buffer) { return; }
+  var src = audioCtx.createBufferSource();
+  src.buffer = kick.buffer;
+  var g = audioCtx.createGain();
+  g.gain.value = vel;
+  src.connect(g);
+  g.connect(kick.gainNode);
+  src.start(time);
+}
+
+// ---------- EVENT / Density + Granular: VOICE A ----------
+
+function scheduleVoiceA(untilTime) {
+  while (voiceA.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceA');
+    if (activity > 0.02 && voiceA.buffer) {
+      playGrain(voiceA.nextTime, activity);
+      scheduleFlash('voiceA', voiceA.nextTime);
+    }
+    var rate = Math.max(0.15, voiceARate() * Math.max(activity, 0.15));
+    voiceA.nextTime = voiceA.nextTime + randExp(rate);
+  }
+}
+
+function playGrain(time, activity) {
+  var buf  = voiceA.buffer;
+  var gs   = grainSizeSec();
+  var maxO = Math.max(0.01, buf.duration - gs - 0.01);
+  var offs = Math.random() * maxO;
+
+  var src  = audioCtx.createBufferSource();
+  src.buffer = buf;
+  var env = audioCtx.createGain();
+  var fade = Math.min(gs * 0.35, 0.04);
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.linearRampToValueAtTime(activity, time + fade);
+  env.gain.linearRampToValueAtTime(0.0001, time + gs);
+
+  src.connect(env);
+  env.connect(voiceA.gainNode);
+  src.start(time, offs, gs);
+  src.stop(time + gs + 0.06);
+}
+
+// ---------- CONTINUOUS / Breathe: VOICE B ----------
+
+function startVoiceB() {
+  if (voiceB.started || !voiceB.buffer) { return; }
+
+  voiceB.srcNode = audioCtx.createBufferSource();
+  voiceB.srcNode.buffer = voiceB.buffer;
+  voiceB.srcNode.loop = true;
+
+  // base gain at 0.55 — breathe oscillates it ±0.38
+  voiceB.baseGain = audioCtx.createGain();
+  voiceB.baseGain.gain.value = 0.55;
+
+  voiceB.breatheOsc = audioCtx.createOscillator();
+  voiceB.breatheOsc.type = 'sine';
+  voiceB.breatheOsc.frequency.value = getBreatheFreq();
+
+  voiceB.breatheDepth = audioCtx.createGain();
+  voiceB.breatheDepth.gain.value = 0.38;
+
+  voiceB.breatheOsc.connect(voiceB.breatheDepth);
+  voiceB.breatheDepth.connect(voiceB.baseGain.gain);
+
+  voiceB.srcNode.connect(voiceB.baseGain);
+  voiceB.baseGain.connect(voiceB.gainNode);
+
+  voiceB.srcNode.start();
+  voiceB.breatheOsc.start();
+  voiceB.started = true;
+
+  document.getElementById('card_voiceB').classList.add('breathing');
+}
+
+function stopVoiceB() {
+  if (voiceB.srcNode) { try { voiceB.srcNode.stop(); } catch(e) {} }
+  if (voiceB.breatheOsc) { try { voiceB.breatheOsc.stop(); } catch(e) {} }
+  voiceB.srcNode      = null;
+  voiceB.breatheOsc   = null;
+  voiceB.breatheDepth = null;
+  voiceB.baseGain     = null;
+  voiceB.started      = false;
+  document.getElementById('card_voiceB').classList.remove('breathing');
+}
+
+function updateBreatheFreq() {
+  if (voiceB.breatheOsc) {
+    voiceB.breatheOsc.frequency.setTargetAtTime(getBreatheFreq(), audioCtx.currentTime, 0.3);
+  }
+  // Sync CSS animation duration
+  document.documentElement.style.setProperty('--breathe-dur', getBreatheAnimDur() + 's');
+}
+
+function refreshVoiceBGain() {
+  if (!voiceB.gainNode || !audioCtx) { return; }
+  var activity = activityMultiplier('voiceB');
+  voiceB.gainNode.gain.setTargetAtTime(activity, audioCtx.currentTime, 0.15);
+}
+
+// ---------- FRAGMENT / Scatter: VOICE C ----------
+
+function scheduleVoiceC(untilTime) {
+  while (voiceC.nextTime < untilTime) {
+    var activity = activityMultiplier('voiceC');
+    if (activity > 0.02 && voiceC.buffer && voiceC.segments.length > 0) {
+      var idx = Math.floor(Math.random() * voiceC.segments.length);
+      var seg = voiceC.segments[idx];
+      playFragment(voiceC.nextTime, seg, activity);
+      scheduleFlash('voiceC', voiceC.nextTime);
+    }
+    var rate = Math.max(0.1, fragmentRate() * Math.max(activity, 0.12));
+    voiceC.nextTime = voiceC.nextTime + randExp(rate);
+  }
+}
+
+function playFragment(time, seg, activity) {
+  var src = audioCtx.createBufferSource();
+  src.buffer = voiceC.buffer;
+
+  var env  = audioCtx.createGain();
+  var fade = Math.min(seg.duration * 0.18, 0.07);
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.linearRampToValueAtTime(activity * 0.88, time + fade);
+  env.gain.linearRampToValueAtTime(0.0001, time + seg.duration);
+
+  src.connect(env);
+  env.connect(voiceC.gainNode);
+  src.start(time, seg.start, seg.duration);
+}
+
+// ---------- CONTINUOUS / Gate: NOISE ----------
+
+function startNoise() {
+  if (noise.started || !noise.buffer) { return; }
+
+  noise.sourceNode = audioCtx.createBufferSource();
+  noise.sourceNode.buffer = noise.buffer;
+  noise.sourceNode.loop = true;
+
+  noise.gateOsc = audioCtx.createOscillator();
+  noise.gateOsc.type = 'square';
+  noise.gateOsc.frequency.value = gateFrequency();
+
+  noise.gateDepthGain = audioCtx.createGain();
+  noise.gateDepthGain.gain.value = 0.5;
+
+  noise.gateNode = audioCtx.createGain();
+  noise.gateNode.gain.value = 0.5;
+
+  noise.gateOsc.connect(noise.gateDepthGain);
+  noise.gateDepthGain.connect(noise.gateNode.gain);
+  noise.sourceNode.connect(noise.gateNode);
+  noise.gateNode.connect(noise.gainNode);
+
+  noise.sourceNode.start();
+  noise.gateOsc.start();
+  noise.started = true;
+}
+
+function stopNoiseNodes() {
+  if (noise.sourceNode) { try { noise.sourceNode.stop(); } catch(e) {} }
+  if (noise.gateOsc)    { try { noise.gateOsc.stop(); } catch(e) {}    }
+  noise.sourceNode = null; noise.gateOsc = null;
+  noise.gateDepthGain = null; noise.gateNode = null;
+  noise.started = false;
+}
+
+function updateGateFrequency() {
+  if (noise.gateOsc) {
+    noise.gateOsc.frequency.setTargetAtTime(gateFrequency(), audioCtx.currentTime, 0.08);
+  }
+}
+
+function refreshNoiseGain() {
+  if (!noise.gainNode || !audioCtx) { return; }
+  var activity = activityMultiplier('noise');
+  noise.gainNode.gain.setTargetAtTime(0.65 * activity, audioCtx.currentTime, 0.1);
+}
+
+// ---------- scheduler ----------
+
+function schedulerTick() {
+  if (!audioCtx) { return; }
+  var until = audioCtx.currentTime + lookahead;
+  scheduleKick(until);
+  scheduleVoiceA(until);
+  scheduleVoiceC(until);
+  // Voice B and Noise are CONTINUOUS — no scheduler needed
+}
+
+function startTransport() {
+  if (!audioCtx) { return; }
+  var now = audioCtx.currentTime + 0.05;
+  kick.nextTime   = now;
+  kick.stepIndex  = 0;
+  voiceA.nextTime = now + 0.03;
+  voiceC.nextTime = now + 0.08;
+
+  startVoiceB();
+  startNoise();
+  refreshNoiseGain();
+  refreshVoiceBGain();
+  document.documentElement.style.setProperty('--breathe-dur', getBreatheAnimDur() + 's');
+
+  if (schedulerInterval) { clearInterval(schedulerInterval); }
+  schedulerInterval = setInterval(schedulerTick, 25);
+  running = true;
+  updateTransportUI();
+}
+
+function stopTransport() {
+  if (schedulerInterval) { clearInterval(schedulerInterval); }
+  schedulerInterval = null;
+  running = false;
+  stopVoiceB();
+  stopNoiseNodes();
+  updateTransportUI();
+}
+
+// ---------- flash / visual feedback ----------
+
+function scheduleFlash(entityId, time) {
+  var delay = (time - audioCtx.currentTime) * 1000;
+  if (delay < 0) { delay = 0; }
+  setTimeout(function() { flashCard(entityId); }, delay);
+}
+
+function flashCard(entityId) {
+  var el = document.getElementById('card_' + entityId);
+  if (!el) { return; }
+  el.classList.add('trigger');
+  setTimeout(function() { el.classList.remove('trigger'); }, 90);
+}
+
+// ---------- UI ----------
+
+function setStatus(msg) {
+  var el = document.getElementById('status');
+  if (el) { el.textContent = msg; }
+}
+
+function updateTransportUI() {
+  document.getElementById('btnPlay').disabled = running;
+  document.getElementById('btnStop').disabled = !running;
+}
+
+// ---------- mute / solo / weight ----------
+
+function onMuteClick(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  var ent = getEntity(id);
+  ent.mute = !ent.mute;
+  ev.target.classList.toggle('active', ent.mute);
+  refreshNoiseGain();
+  refreshVoiceBGain();
+}
+
+function onSoloClick(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  var ent = getEntity(id);
+  ent.solo = !ent.solo;
+  ev.target.classList.toggle('active', ent.solo);
+  refreshNoiseGain();
+  refreshVoiceBGain();
+}
+
+function onWeightInput(ev) {
+  var id  = ev.target.getAttribute('data-entity');
+  var ent = getEntity(id);
+  ent.weight = parseInt(ev.target.value, 10);
+}
+
+// ---------- file loading ----------
+
+function decodeFile(file, onSuccess, onError) {
+  var reader = new FileReader();
+  reader.onload = function(loadEv) {
+    var ab = loadEv.target.result.slice(0);
+    audioCtx.decodeAudioData(ab, onSuccess, onError);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function bindLoadKick() {
+  document.getElementById('btnLoadKick').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_kick').click();
+  });
+  document.getElementById('file_kick').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    decodeFile(file, function(decoded) {
+      kick.buffer = decoded;
+      setStatus('kick actualizado');
+    }, function() { setStatus('error decodificando kick'); });
+  });
+}
+
+function bindLoadVoice() {
+  document.getElementById('btnLoadVoice').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_voice').click();
+  });
+  document.getElementById('file_voice').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    decodeFile(file, function(decoded) {
+      voiceA.buffer = decoded;
+      voiceB.buffer = decoded;
+      voiceC.buffer = decoded;
+      buildSegments(decoded);
+      if (voiceB.started) { stopVoiceB(); startVoiceB(); refreshVoiceBGain(); }
+      setStatus('material vocal actualizado — A, B y C');
+    }, function() { setStatus('error decodificando material vocal'); });
+  });
+}
+
+function bindLoadNoise() {
+  document.getElementById('btnLoadNoise').addEventListener('click', function() {
+    if (audioCtx) { audioCtx.resume(); }
+    document.getElementById('file_noise').click();
+  });
+  document.getElementById('file_noise').addEventListener('change', function(ev) {
+    var file = ev.target.files[0];
+    if (!file) { return; }
+    decodeFile(file, function(decoded) {
+      var wasRunning = noise.started;
+      if (wasRunning) { stopNoiseNodes(); }
+      noise.buffer = decoded;
+      if (wasRunning) { startNoise(); refreshNoiseGain(); }
+      setStatus('noise actualizado');
+    }, function() { setStatus('error decodificando noise'); });
+  });
+}
+
+// ---------- DNA Center ----------
+
+function bindDnaCenter() {
+  document.getElementById('focusTarget').addEventListener('change', function(ev) {
+    var v = ev.target.value;
+    state.focusTarget = (v === 'none') ? null : v;
+    refreshNoiseGain();
+    refreshVoiceBGain();
+  });
+
+  document.getElementById('focusAmount').addEventListener('input', function(ev) {
+    state.focusAmount = parseInt(ev.target.value, 10);
+    refreshNoiseGain();
+    refreshVoiceBGain();
+  });
+
+  document.getElementById('complexity').addEventListener('input', function(ev) {
+    state.complexity = parseInt(ev.target.value, 10);
+    updateGateFrequency();
+    updateBreatheFreq();
+  });
+
+  document.getElementById('bpmInput').addEventListener('change', function(ev) {
+    var v = parseInt(ev.target.value, 10);
+    if (!isNaN(v) && v >= 40 && v <= 220) { state.bpm = v; }
+  });
+}
+
+// ---------- init ----------
+
+function bindEntityButtons() {
+  var muteButtons = document.getElementsByClassName('btnMute');
+  var i = 0;
+  while (i < muteButtons.length) {
+    muteButtons[i].addEventListener('click', onMuteClick);
+    i = i + 1;
+  }
+  var soloButtons = document.getElementsByClassName('btnSolo');
+  i = 0;
+  while (i < soloButtons.length) {
+    soloButtons[i].addEventListener('click', onSoloClick);
+    i = i + 1;
+  }
+  var weightSliders = document.getElementsByClassName('weightSlider');
+  i = 0;
+  while (i < weightSliders.length) {
+    weightSliders[i].addEventListener('input', onWeightInput);
+    i = i + 1;
+  }
+}
+
+function onVisibilityChange() {
+  if (audioCtx && document.visibilityState === 'visible' && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+window.onload = function() {
+  bindEntityButtons();
+  bindDnaCenter();
+  bindLoadKick();
+  bindLoadVoice();
+  bindLoadNoise();
+
+  document.getElementById('btnInit').addEventListener('click', function() {
+    initAudio();
+    document.getElementById('startOverlay').style.display = 'none';
+    document.getElementById('mainPanel').style.display = 'flex';
+    setStatus('preparando material...');
+  });
+
+  document.getElementById('btnPlay').addEventListener('click', function() {
+    if (audioCtx) { startTransport(); }
+  });
+
+  document.getElementById('btnStop').addEventListener('click', function() {
+    stopTransport();
+  });
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+};
+
+</script>
+</body>
+</html>

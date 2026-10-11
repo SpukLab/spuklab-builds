@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ChronoMed">
+<meta name="theme-color" content="#1A56DB">
+<link rel="manifest" id="mfLink">
+<title>ChronoMed</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#F5F7FA;--sf:#fff;--sf2:#F0F4F8;
+  --blue:#1A56DB;--bd:#1344B8;--bl:#EBF2FF;--bm:#C7D9FF;
+  --green:#0B7A56;--gl:#E6F5EF;--gm:#A7DFC9;
+  --red:#C0392B;--rl:#FDECEA;
+  --amb:#B45309;--al:#FEF3C7;
+  --teal:#0D6E8A;
+  --tx:#0D1B2A;--t2:#3D5166;--t3:#7A8FA6;--t4:#B0BEC5;
+  --br:#DDE3EC;--br2:#C8D1DC;
+  --r:16px;--rs:10px;--rx:6px;
+  --sh:0 1px 4px rgba(13,27,42,.07),0 4px 16px rgba(13,27,42,.05);
+  --ss:0 1px 3px rgba(13,27,42,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;padding-bottom:86px;font-size:16px}
+
+/* HEADER */
+.hdr{background:var(--sf);border-bottom:1px solid var(--br);padding:14px 18px 12px;padding-top:calc(14px + env(safe-area-inset-top));position:sticky;top:0;z-index:60}
+.hdr-row{display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:9px}
+.lmark{width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ltype{line-height:1}
+.lsub{font-size:8px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--t3)}
+.lname{font-size:17px;font-weight:700;letter-spacing:-.4px;color:var(--tx)}
+.lname b{color:var(--blue)}
+.htime{text-align:right}
+.hclk{font-size:17px;font-weight:600;color:var(--tx);letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.hdat{font-size:11px;color:var(--t3);margin-top:1px}
+
+/* NAV */
+.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--br);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 2px 7px;gap:3px;background:none;border:none;color:var(--t4);font-size:9px;font-weight:600;cursor:pointer;letter-spacing:.4px;text-transform:uppercase;transition:.15s;font-family:inherit}
+.nb.active{color:var(--blue)}
+.nb svg{width:21px;height:21px;stroke-width:1.8}
+
+/* PAGES */
+.page{display:none;padding:16px}
+.page.active{display:block}
+.stitle{font-size:20px;font-weight:700;letter-spacing:-.5px;color:var(--tx);margin-bottom:16px}
+
+/* CARD */
+.card{background:var(--sf);border-radius:var(--r);border:1px solid var(--br);box-shadow:var(--sh);padding:16px;margin-bottom:12px}
+.clbl{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);margin-bottom:12px}
+
+/* HERO */
+.hero{background:var(--blue);border-radius:var(--r);padding:20px 18px;margin-bottom:14px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.06)}
+.hbadge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border-radius:20px;padding:4px 11px 4px 8px;font-size:11px;font-weight:600;color:rgba(255,255,255,.9);letter-spacing:.3px;margin-bottom:10px}
+.dot{width:6px;height:6px;border-radius:50%;background:#6EE7B7;animation:pu 1.5s ease-in-out infinite}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.3}}
+.hname{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.5px;line-height:1.2;margin-bottom:3px}
+.hsub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:2px}
+.hpat{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px}
+.htime{font-size:42px;font-weight:700;color:#fff;letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1;margin-bottom:14px}
+.hacts{display:flex;gap:8px}
+.btn-ht{flex:1;background:#fff;color:var(--blue);border:none;border-radius:var(--rs);padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-hd{flex:1;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:var(--rs);padding:13px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit}
+.hero.ok{background:var(--green)}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.sc{background:var(--sf);border:1px solid var(--br);border-radius:var(--rs);padding:13px 8px;text-align:center;box-shadow:var(--ss)}
+.sn{font-size:26px;font-weight:700;letter-spacing:-1px;line-height:1}
+.sl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);margin-top:3px}
+.cbl{color:var(--blue)}.cgr{color:var(--green)}.cam{color:var(--amb)}
+
+/* NOTIF BANNER */
+.nbar{display:none;align-items:center;gap:10px;background:var(--al);border:1px solid #FDE68A;border-radius:var(--rs);padding:11px 13px;margin-bottom:12px}
+.nbar.show{display:flex}
+.nbar.ok{background:var(--gl);border-color:var(--gm)}
+.nbar.no{background:var(--rl);border-color:#FECACA}
+
+/* SCHEDULE */
+.drow{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--br)}
+.drow:last-child{border-bottom:none}
+.tpill{min-width:50px;text-align:center;background:var(--bl);color:var(--bd);border-radius:var(--rx);padding:5px 7px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid var(--bm)}
+.tpill.dn{background:var(--gl);color:var(--green);border-color:var(--gm)}
+.tpill.sk{background:var(--sf2);color:var(--t4);border-color:var(--br);text-decoration:line-through}
+.mico{width:36px;height:36px;border-radius:8px;background:var(--bl);border:1px solid var(--bm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mico img{width:36px;height:36px;border-radius:8px;object-fit:cover}
+.dname{font-size:14px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsub{font-size:12px;color:var(--t3);margin-top:1px}
+.dtag{display:inline-block;font-size:10px;font-weight:600;color:var(--blue);background:var(--bl);border-radius:10px;padding:2px 7px;margin-top:3px;border:1px solid var(--bm)}
+
+/* TAGS */
+.tag{font-size:11px;border-radius:10px;padding:3px 8px;font-weight:600}
+.tb{background:var(--bl);color:var(--bd);border:1px solid var(--bm)}
+.tg{background:var(--gl);color:var(--green);border:1px solid var(--gm)}
+.ta{background:var(--al);color:var(--amb)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:var(--rs);padding:13px 18px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;transition:.12s;letter-spacing:-.1px}
+.btn:active{opacity:.82}
+.bpr{background:var(--blue);color:#fff}
+.bsc{background:var(--green);color:#fff}
+.bol{background:transparent;color:var(--blue);border:1.5px solid var(--bm)}
+.bgh{background:var(--sf2);color:var(--t2);border:1px solid var(--br)}
+.bdg{background:var(--rl);color:var(--red);border:1px solid #F5C6C2}
+.bsm{padding:8px 12px;font-size:13px;width:auto;border-radius:var(--rx)}
+
+/* FORMS */
+.fg{margin-bottom:15px}
+.fl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);margin-bottom:6px;display:block}
+.fi,.fs{width:100%;border:1.5px solid var(--br);border-radius:var(--rs);padding:12px 14px;font-size:16px;color:var(--tx);background:var(--sf);outline:none;-webkit-appearance:none;font-family:inherit;transition:.15s}
+.fi:focus,.fs:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(26,86,219,.1)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+
+/* DAYS */
+.days{display:flex;gap:6px}
+.db{width:37px;height:37px;border-radius:50%;border:1.5px solid var(--br);background:var(--sf2);color:var(--t3);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;transition:.12s}
+.db.on{background:var(--blue);border-color:var(--blue);color:#fff}
+
+/* TIMES */
+.tel{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tel input{flex:1;border:1.5px solid var(--br);border-radius:var(--rs);padding:11px 13px;font-size:16px;color:var(--tx);background:var(--sf);outline:none;font-family:inherit;transition:.15s}
+.tel input:focus{border-color:var(--blue)}
+.trm{background:var(--rl);color:var(--red);border:none;border-radius:var(--rx);width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:600}
+
+/* PATIENT CARD */
+.pc{display:flex;align-items:center;gap:13px;padding:15px;background:var(--sf);border-radius:var(--r);border:1px solid var(--br);margin-bottom:10px;cursor:pointer;box-shadow:var(--ss)}
+.av{width:46px;height:46px;border-radius:50%;background:var(--bl);border:1.5px solid var(--bm);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.5px}
+.pname{font-size:16px;font-weight:700;color:var(--tx);letter-spacing:-.3px}
+.psub{font-size:12px;color:var(--t3);margin-top:3px}
+
+/* MED CARD */
+.mc{background:var(--sf);border-radius:var(--r);border:1px solid var(--br);padding:15px;margin-bottom:10px;box-shadow:var(--ss)}
+.mctop{display:flex;align-items:flex-start;gap:12px}
+.mcimg{width:52px;height:52px;border-radius:10px;object-fit:cover;border:1px solid var(--br);flex-shrink:0}
+.mcph{width:52px;height:52px;border-radius:10px;background:var(--bl);border:1px solid var(--bm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mcn{font-size:15px;font-weight:700;color:var(--tx);letter-spacing:-.3px}
+.mcd{font-size:12px;color:var(--t3);margin-top:2px}
+.mctags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.mcdays{display:flex;gap:3px;margin-top:7px}
+.dd{width:21px;height:21px;border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.dd.on{background:var(--blue);color:#fff}
+.dd.off{background:var(--sf2);color:var(--t4)}
+.mcfoot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--br)}
+.sbw{flex:1;margin-right:12px}
+.sbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--t4);margin-bottom:4px}
+.sb{height:5px;background:var(--sf2);border-radius:3px;overflow:hidden}
+.sf{height:100%;border-radius:3px;transition:.4s;background:var(--green)}
+.sf.low{background:var(--amb)}
+.sf.crit{background:var(--red)}
+
+/* PHOTO */
+.prow{display:flex;gap:10px}
+.pslot{flex:1;border:1.5px dashed var(--br2);border-radius:var(--rs);padding:13px;text-align:center;cursor:pointer;background:var(--sf2);transition:.15s}
+.pslot:active{background:var(--bl);border-color:var(--blue)}
+.pslot img{width:100%;height:68px;object-fit:cover;border-radius:var(--rx)}
+.plbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);margin-top:5px}
+
+/* STOCK ALERTS */
+.sal{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--al);border-radius:var(--rs);border-left:3px solid var(--amb);margin-bottom:8px}
+.sal.crit{background:var(--rl);border-color:var(--red)}
+.sal:last-child{margin-bottom:0}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(13,27,42,.45);z-index:200;align-items:flex-end;backdrop-filter:blur(3px)}
+.mo.open{display:flex}
+.ms{background:var(--sf);border-radius:24px 24px 0 0;padding:0 18px 22px;padding-bottom:calc(22px + env(safe-area-inset-bottom));width:100%;max-height:92vh;overflow-y:auto}
+.mh{width:34px;height:4px;background:var(--br2);border-radius:2px;margin:13px auto 18px}
+.mt{font-size:19px;font-weight:700;letter-spacing:-.4px;color:var(--tx);margin-bottom:18px}
+
+/* ALERT BANNER */
+.ab{display:none;position:fixed;top:0;left:0;right:0;z-index:300;background:var(--blue);color:#fff;padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top));font-size:14px;font-weight:600;text-align:center;cursor:pointer;letter-spacing:-.1px}
+.ab.show{display:block}
+.ab.urg{background:var(--red)}
+
+/* CLINICAL TABS */
+.ctabs{display:flex;background:var(--sf2);border-radius:var(--rs);padding:3px;margin-bottom:14px;border:1px solid var(--br)}
+.ctab{flex:1;padding:9px;text-align:center;border-radius:var(--rx);font-size:13px;font-weight:600;color:var(--t3);cursor:pointer;border:none;background:none;font-family:inherit;transition:.15s}
+.ctab.on{background:var(--sf);color:var(--blue);box-shadow:var(--ss)}
+.csec{display:none}
+.csec.on{display:block}
+
+/* VALUE ROW */
+.vrow{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--br)}
+.vrow:last-child{border-bottom:none}
+.vdt{font-size:11px;color:var(--t3);font-weight:600;min-width:50px;font-variant-numeric:tabular-nums}
+.vv{font-size:19px;font-weight:700;letter-spacing:-.5px}
+.vv.hi{color:var(--red)}.vv.lo{color:var(--amb)}.vv.ok{color:var(--green)}
+.vsub{font-size:11px;color:var(--t3);margin-top:1px}
+.vbg{margin-left:auto;font-size:10px;font-weight:700;border-radius:5px;padding:3px 7px;text-transform:uppercase;letter-spacing:.4px;flex-shrink:0}
+.vok{background:var(--gl);color:var(--green)}
+.vhi{background:var(--rl);color:var(--red)}
+.vlo{background:var(--al);color:var(--amb)}
+
+/* CHART */
+.chwrap{width:100%;height:175px;margin:6px 0 4px}
+canvas.ch{width:100%!important;height:175px!important}
+.chleg{display:flex;gap:14px;margin-top:6px;flex-wrap:wrap}
+.cli{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--t3)}
+.cldot{width:8px;height:8px;border-radius:50%}
+
+/* APPT CARD */
+.ac{background:var(--sf);border-radius:var(--r);border:1px solid var(--br);padding:15px;margin-bottom:10px;box-shadow:var(--ss);cursor:pointer}
+.ac.past{opacity:.55}
+.ach{display:flex;align-items:flex-start;gap:11px}
+.aci{width:42px;height:42px;border-radius:9px;background:var(--bl);border:1px solid var(--bm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aci.past{background:var(--sf2);border-color:var(--br)}
+.aspec{font-size:15px;font-weight:700;letter-spacing:-.3px;color:var(--tx)}
+.apat{font-size:12px;color:var(--t3);margin-top:2px}
+.adb{text-align:right;flex-shrink:0}
+.adtime{font-size:13px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums}
+.adtime.past{color:var(--t4)}
+.addate{font-size:11px;color:var(--t3);margin-top:1px}
+.acd{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:5px;padding:3px 8px;margin-top:7px;text-transform:uppercase;letter-spacing:.4px}
+.cdn{background:var(--al);color:var(--amb)}
+.cdt{background:var(--rl);color:var(--red)}
+.cdo{background:var(--bl);color:var(--blue)}
+.cdp{background:var(--sf2);color:var(--t4)}
+.adet{margin-top:11px;padding-top:11px;border-top:1px solid var(--br);display:flex;flex-direction:column;gap:7px}
+.arow{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--t2)}
+.arow svg{flex-shrink:0;margin-top:1px}
+
+/* STOCK HERO */
+.shero{background:var(--tx);border-radius:var(--r);padding:17px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.shn{font-size:34px;font-weight:700;color:#fff;letter-spacing:-1px;line-height:1}
+.shl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.4);margin-top:3px}
+
+/* TOGGLE */
+.trow{display:flex;align-items:center;justify-content:space-between;padding:2px 0}
+.tog{position:relative;width:48px;height:27px}
+.tog input{opacity:0;width:0;height:0}
+.tsl{position:absolute;inset:0;background:var(--br2);border-radius:14px;transition:.25s;cursor:pointer}
+.tsl::before{content:'';position:absolute;width:21px;height:21px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tog input:checked+.tsl{background:var(--blue)}
+.tog input:checked+.tsl::before{transform:translateX(21px)}
+
+.empty{text-align:center;padding:40px 20px;color:var(--t4)}
+.ei{margin-bottom:10px;opacity:.35}
+.et{font-size:14px;font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="ab" id="ab" onclick="document.getElementById('ab').className='ab'"></div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="logo">
+      <div class="lmark">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="8" stroke="white" stroke-width="1.6" opacity=".85"/>
+          <polyline points="10,5 10,10 14,12" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="ltype">
+        <div class="lsub">Gestión clínica</div>
+        <div class="lname">Chrono<b>Med</b></div>
+      </div>
+    </div>
+    <div class="htime">
+      <div class="hclk" id="hClk"></div>
+      <div class="hdat" id="hDat"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PAGES ── -->
+
+<!-- 1. INICIO -->
+<div class="page active" id="page-dash">
+  <div class="nbar" id="nbar">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" id="nicon"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    <div style="flex:1;font-size:13px;font-weight:600;color:var(--t2)" id="nmsg">Activá las notificaciones para recibir alertas</div>
+    <button class="btn bsm" id="nbtn" onclick="reqNotif()" style="background:var(--amb);color:#fff;white-space:nowrap">Activar</button>
+  </div>
+  <div id="heroArea"></div>
+  <div class="stats" id="statsA"></div>
+  <div class="card"><div class="clbl">Programa del día</div><div id="schedL"></div></div>
+  <div class="card" id="saCard" style="display:none"><div class="clbl">Alertas de stock</div><div id="saList"></div></div>
+</div>
+
+<!-- 2. PACIENTES -->
+<div class="page" id="page-patients">
+  <div class="stitle">Pacientes</div>
+  <div id="pList"></div>
+  <button class="btn bpr" onclick="openPM()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Agregar paciente
+  </button>
+</div>
+
+<!-- 3. CLÍNICO -->
+<div class="page" id="page-clin">
+  <div class="stitle">Registros clínicos</div>
+  <div class="ctabs">
+    <button class="ctab on" onclick="clinTab('bp',this)">Presión arterial</button>
+    <button class="ctab" onclick="clinTab('gluc',this)">Glucemia</button>
+  </div>
+  <div class="csec on" id="cs-bp">
+    <div class="card">
+      <div class="clbl">Nuevo registro</div>
+      <div class="fg"><label class="fl">Paciente</label><select class="fs" id="bpPat"></select></div>
+      <div class="frow">
+        <div class="fg"><label class="fl">Sistólica (mmHg)</label><input class="fi" id="bpS" type="number" placeholder="120" min="60" max="250"></div>
+        <div class="fg"><label class="fl">Diastólica (mmHg)</label><input class="fi" id="bpD" type="number" placeholder="80" min="30" max="150"></div>
+      </div>
+      <div class="fg"><label class="fl">Pulso (lpm)</label><input class="fi" id="bpP" type="number" placeholder="72" min="30" max="200"></div>
+      <button class="btn bpr" onclick="saveBP()">Registrar</button>
+    </div>
+    <div class="card">
+      <div class="clbl">Evolución — 14 días</div>
+      <div class="chwrap"><canvas id="bpCh" class="ch"></canvas></div>
+      <div class="chleg">
+        <div class="cli"><div class="cldot" style="background:var(--blue)"></div>Sistólica</div>
+        <div class="cli"><div class="cldot" style="background:var(--teal)"></div>Diastólica</div>
+      </div>
+    </div>
+    <div class="card"><div class="clbl">Historial</div><div id="bpList"></div></div>
+  </div>
+  <div class="csec" id="cs-gluc">
+    <div class="card">
+      <div class="clbl">Nuevo registro</div>
+      <div class="fg"><label class="fl">Paciente</label><select class="fs" id="gPat"></select></div>
+      <div class="frow">
+        <div class="fg"><label class="fl">Glucemia (mg/dL)</label><input class="fi" id="gV" type="number" placeholder="100" min="30" max="600"></div>
+        <div class="fg"><label class="fl">Contexto</label><select class="fs" id="gCtx"><option>Ayunas</option><option>Post-comida</option><option>Nocturno</option><option>Aleatorio</option></select></div>
+      </div>
+      <button class="btn bpr" onclick="saveGluc()">Registrar</button>
+    </div>
+    <div class="card">
+      <div class="clbl">Evolución — 14 días</div>
+      <div class="chwrap"><canvas id="gCh" class="ch"></canvas></div>
+      <div class="chleg">
+        <div class="cli"><div class="cldot" style="background:var(--blue)"></div>Glucemia</div>
+        <div class="cli"><div class="cldot" style="background:rgba(11,122,86,.2);border:1px solid var(--gm)"></div>Rango normal 70–140</div>
+      </div>
+    </div>
+    <div class="card"><div class="clbl">Historial</div><div id="gList"></div></div>
+  </div>
+</div>
+
+<!-- 4. MEDS -->
+<div class="page" id="page-meds">
+  <div class="stitle">Medicamentos</div>
+  <div id="mList"></div>
+  <button class="btn bpr" onclick="openMM()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Agregar medicamento
+  </button>
+</div>
+
+<!-- 5. TURNOS -->
+<div class="page" id="page-appts">
+  <div class="stitle">Turnos</div>
+  <div id="apUp"></div>
+  <div id="apPast"></div>
+  <button class="btn bpr" onclick="openAM()" style="margin-top:4px">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Agregar turno
+  </button>
+</div>
+
+<!-- NAV: Inicio · Pacientes · Clínico · Meds · Turnos -->
+<nav class="nav">
+  <button class="nb active" onclick="SP('dash',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    Inicio
+  </button>
+  <button class="nb" onclick="SP('patients',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+    Pacientes
+  </button>
+  <button class="nb" onclick="SP('clin',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Clínico
+  </button>
+  <button class="nb" onclick="SP('meds',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg>
+    Meds
+  </button>
+  <button class="nb" onclick="SP('appts',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="19" r="1" fill="currentColor"/></svg>
+    Turnos
+  </button>
+</nav>
+
+<!-- MODALS -->
+<!-- Patient -->
+<div class="mo" id="pMo"><div class="ms">
+  <div class="mh"></div><div class="mt" id="pMT">Nuevo paciente</div>
+  <div class="fg"><label class="fl">Nombre completo</label><input class="fi" id="pNm" placeholder="Ej: María García" type="text"></div>
+  <div class="fg"><label class="fl">Iniciales</label><input class="fi" id="pIn" placeholder="Ej: MG" type="text" maxlength="3"></div>
+  <div class="fg"><label class="fl">Notas clínicas</label><input class="fi" id="pNo" placeholder="Ej: Diabetes tipo 2, hipertensión" type="text"></div>
+  <div style="display:flex;gap:10px">
+    <button class="btn bgh" onclick="CM('pMo')" style="flex:1">Cancelar</button>
+    <button class="btn bpr" onclick="saveP()" style="flex:1">Guardar</button>
+  </div>
+</div></div>
+
+<!-- Med -->
+<div class="mo" id="mMo"><div class="ms">
+  <div class="mh"></div><div class="mt" id="mMT">Nuevo medicamento</div>
+  <div class="fg"><label class="fl">Paciente</label><select class="fs" id="mPat"></select></div>
+  <div class="fg"><label class="fl">Nombre</label><input class="fi" id="mNm" placeholder="Ej: Metformina 500mg" type="text"></div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Dosis</label><input class="fi" id="mDs" placeholder="1" type="text"></div>
+    <div class="fg"><label class="fl">Unidad</label>
+      <select class="fs" id="mUn"><option>comprimido</option><option>media pastilla</option><option>cápsula</option><option>gotas</option><option>ml</option><option>UI</option></select>
+    </div>
+  </div>
+  <div class="fg"><label class="fl">Días</label>
+    <div class="days" id="dPk">
+      <button class="db on" data-d="1" onclick="toggleD(this)">L</button>
+      <button class="db on" data-d="2" onclick="toggleD(this)">M</button>
+      <button class="db on" data-d="3" onclick="toggleD(this)">X</button>
+      <button class="db on" data-d="4" onclick="toggleD(this)">J</button>
+      <button class="db on" data-d="5" onclick="toggleD(this)">V</button>
+      <button class="db on" data-d="6" onclick="toggleD(this)">S</button>
+      <button class="db on" data-d="0" onclick="toggleD(this)">D</button>
+    </div>
+  </div>
+  <div class="fg"><label class="fl">Horarios</label>
+    <div id="tList"></div>
+    <button class="btn bol bsm" onclick="addT()" style="margin-top:2px">+ Horario</button>
+  </div>
+  <div class="fg"><label class="fl">Stock</label>
+    <div class="frow">
+      <input class="fi" id="mSt" placeholder="Unidades actuales" type="number" min="0">
+      <input class="fi" id="mSm" placeholder="Mínimo alerta" type="number" min="0">
+    </div>
+  </div>
+  <div class="fg"><label class="fl">Fotos</label>
+    <div class="prow">
+      <div class="pslot" onclick="tP('pill')">
+        <div id="ppv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <div class="plbl">Pastilla</div>
+        <input type="file" id="pInp" accept="image/*" style="display:none" onchange="lP(this,'pill')">
+      </div>
+      <div class="pslot" onclick="tP('box')">
+        <div id="bpv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <div class="plbl">Caja / envase</div>
+        <input type="file" id="bInp" accept="image/*" style="display:none" onchange="lP(this,'box')">
+      </div>
+    </div>
+  </div>
+  <div class="fg"><label class="fl">Instrucciones</label><input class="fi" id="mNo" placeholder="Ej: Tomar con comida" type="text"></div>
+  <div class="fg">
+    <div class="trow"><span style="font-size:13px;font-weight:600;color:var(--t2)">Tratamiento con fecha de fin</span>
+      <label class="tog"><input type="checkbox" id="mTp" onchange="togTp()"><span class="tsl"></span></label>
+    </div>
+    <div id="tpD" style="display:none;margin-top:10px"><input class="fi" id="mEd" type="date"></div>
+  </div>
+  <input type="hidden" id="mEI">
+  <div style="display:flex;gap:10px;margin-top:6px">
+    <button class="btn bgh" onclick="CM('mMo')" style="flex:1">Cancelar</button>
+    <button class="btn bpr" onclick="saveM()" style="flex:1">Guardar</button>
+  </div>
+</div></div>
+
+<!-- Dose -->
+<div class="mo" id="dMo"><div class="ms">
+  <div class="mh"></div><div class="mt" id="dMT"></div>
+  <div id="dMC"></div>
+  <div style="display:flex;gap:10px;margin-top:10px">
+    <button class="btn bgh" onclick="recD('skip')" style="flex:1">Omitir</button>
+    <button class="btn bsc" onclick="recD('taken')" style="flex:1">Tomado</button>
+  </div>
+</div></div>
+
+<!-- Appt -->
+<div class="mo" id="aMo"><div class="ms">
+  <div class="mh"></div><div class="mt" id="aMT">Nuevo turno</div>
+  <div class="fg"><label class="fl">Paciente</label><select class="fs" id="aPat"></select></div>
+  <div class="fg"><label class="fl">Especialidad / Médico</label><input class="fi" id="aSp" placeholder="Ej: Cardiología — Dra. López" type="text"></div>
+  <div class="fg"><label class="fl">Fecha y hora</label><input class="fi" id="aDT" type="datetime-local"></div>
+  <div class="fg"><label class="fl">Dirección</label><input class="fi" id="aAd" placeholder="Ej: Av. Corrientes 1234, piso 3" type="text"></div>
+  <div class="fg"><label class="fl">Teléfono</label><input class="fi" id="aPh" placeholder="+54 11 4444-5555" type="tel"></div>
+  <div class="fg"><label class="fl">Notas</label><input class="fi" id="aNo" placeholder="Ej: Llevar estudios, ayuno previo" type="text"></div>
+  <div class="fg"><label class="fl">Recordatorio</label>
+    <select class="fs" id="aRm">
+      <option value="60">1 hora antes</option>
+      <option value="120">2 horas antes</option>
+      <option value="1440" selected>1 día antes</option>
+      <option value="2880">2 días antes</option>
+      <option value="0">Sin recordatorio</option>
+    </select>
+  </div>
+  <input type="hidden" id="aEI">
+  <div style="display:flex;gap:10px;margin-top:6px">
+    <button class="btn bgh" onclick="CM('aMo')" style="flex:1">Cancelar</button>
+    <button class="btn bpr" onclick="saveA()" style="flex:1">Guardar</button>
+  </div>
+</div></div>
+
+<script>
+// ── AUDIO CONTEXT (pre-init en primer toque para iOS) ──
+let _AC = null;
+function getAC(){
+  if(!_AC) _AC = new (window.AudioContext || window.webkitAudioContext)();
+  if(_AC.state === 'suspended') _AC.resume();
+  return _AC;
+}
+document.addEventListener('touchend', () => { try{ getAC(); }catch(e){} }, { once: true });
+document.addEventListener('click',    () => { try{ getAC(); }catch(e){} }, { once: true });
+
+
+let DB={patients:[],meds:[],doses:{},gluc:[],bp:[],appts:[]};
+let cDose=null,pillD=null,boxD=null,ePId=null,eMId=null;
+
+function sv(){try{localStorage.setItem('cm4',JSON.stringify(DB))}catch(e){}}
+function ld(){try{const d=localStorage.getItem('cm4');if(d){DB=JSON.parse(d);['appts','gluc','bp'].forEach(k=>{if(!DB[k])DB[k]=[];});}}catch(e){}}
+
+// ── PWA ──
+(function(){
+  const mf={name:'ChronoMed',short_name:'ChronoMed',description:'Gestión clínica de medicamentos',start_url:'.',display:'standalone',background_color:'#F5F7FA',theme_color:'#1A56DB',orientation:'portrait',
+    icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%231A56DB'/%3E%3Ccircle cx='96' cy='96' r='60' stroke='white' stroke-width='10' fill='none' opacity='.8'/%3E%3Cpolyline points='96,50 96,96 130,115' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E",sizes:'192x192',type:'image/svg+xml'}]};
+  try{const b=new Blob([JSON.stringify(mf)],{type:'application/json'});document.getElementById('mfLink').href=URL.createObjectURL(b);}catch(e){}
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').then(r=>{
+      window._sw=r;
+      setTimeout(updNBar,800);
+    }).catch(()=>{setTimeout(updNBar,800);});
+  } else {
+    setTimeout(updNBar,800);
+  }
+})();
+
+function updNBar(){
+  const bar=document.getElementById('nbar');
+  if(!('Notification' in window)){bar.style.display='none';return;}
+  if(Notification.permission==='granted'){
+    bar.className='nbar show ok';
+    document.getElementById('nicon').setAttribute('stroke','var(--green)');
+    document.getElementById('nmsg').textContent='Notificaciones activas';
+    document.getElementById('nbtn').style.display='none';
+    setTimeout(()=>bar.classList.remove('show'),3000);
+  } else if(Notification.permission==='denied'){
+    bar.className='nbar show no';
+    document.getElementById('nicon').setAttribute('stroke','var(--red)');
+    document.getElementById('nmsg').style.color='var(--red)';
+    document.getElementById('nmsg').textContent='Notificaciones bloqueadas — habilitá el permiso en el navegador';
+    document.getElementById('nbtn').style.display='none';
+  } else {
+    bar.className='nbar show';
+  }
+}
+function reqNotif(){Notification.requestPermission().then(()=>updNBar());}
+
+function sndN(title,body){
+  if(window._sw&&window._sw.active&&Notification.permission==='granted')
+    window._sw.active.postMessage({type:'NOTIFY',title,body});
+}
+
+// ── INIT ──
+ld();
+tick(); setInterval(tick, 15000);
+setInterval(chkAlerts, 30000); // cada 30s para mayor precisión
+setInterval(rdDash, 60000);
+schedAllA();
+rdDash();
+
+function tick(){
+  const n=new Date();
+  document.getElementById('hClk').textContent=n.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('hDat').textContent=n.toLocaleDateString('es',{weekday:'long',day:'numeric',month:'short'});
+}
+
+// ── NAV ──
+function SP(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  ({dash:rdDash,patients:rdPats,clin:rdClin,meds:rdMeds,appts:rdAppts})[id]?.();
+}
+
+// ── DASHBOARD ──
+function rdDash(){const t=todaySc();rdHero(t);rdStats(t);rdSched(t);rdStAlerts();}
+
+function todaySc(){
+  const n=new Date(),day=n.getDay(),key=n.toISOString().split('T')[0],items=[];
+  DB.meds.forEach(m=>{
+    if(!m.days.includes(day))return;
+    if(m.endDate&&new Date(m.endDate)<n)return;
+    const pat=DB.patients.find(p=>p.id===m.patientId);
+    m.times.forEach(t=>{
+      const dk=`${key}_${m.id}_${t}`;
+      const[h,mi]=t.split(':').map(Number);
+      const dd=new Date(n);dd.setHours(h,mi,0,0);
+      items.push({m,pat,t,dk,status:DB.doses[dk]||'pending',dd,mfn:Math.round((dd-n)/60000)});
+    });
+  });
+  return items.sort((a,b)=>a.dd-b.dd);
+}
+
+function rdHero(items){
+  const el=document.getElementById('heroArea');
+  const up=items.filter(i=>i.status==='pending'&&i.mfn>=-5);
+  if(!up.length){
+    const done=items.filter(i=>i.status==='taken').length;
+    el.innerHTML=`<div class="hero ok"><div class="hbadge"><div class="dot"></div>Al día</div><div class="hname">${done>0?'Tomas completadas':'Sin tomas programadas'}</div><div class="htime">${done} / ${items.length}</div></div>`;return;
+  }
+  const nx=up[0],isNow=Math.abs(nx.mfn)<=5;
+  const tTxt=isNow?'Ahora':nx.mfn<60?`${nx.mfn} min`:`${nx.t}`;
+  el.innerHTML=`<div class="hero"><div class="hbadge">${isNow?`<div class="dot"></div>ES HORA`:'Próxima toma'}</div><div class="hname">${nx.m.name}</div><div class="hsub">${nx.m.dose} ${nx.m.unit}</div><div class="hpat">${nx.pat?nx.pat.name:'Sin asignar'}</div><div class="htime">${tTxt}</div>${nx.m.notes?`<div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px">${nx.m.notes}</div>`:''}<div class="hacts"><button class="btn-hd" onclick="openDM('${nx.dk}','${nx.m.id}','${nx.t}')">Detalle</button><button class="btn-ht" onclick="qTkn('${nx.dk}','${nx.m.id}')">✓ Tomado</button></div></div>`;
+}
+
+function rdStats(items){
+  const tk=items.filter(i=>i.status==='taken').length,pe=items.filter(i=>i.status==='pending').length,sk=items.filter(i=>i.status==='skip').length;
+  document.getElementById('statsA').innerHTML=`<div class="sc"><div class="sn cgr">${tk}</div><div class="sl">Tomados</div></div><div class="sc"><div class="sn cbl">${pe}</div><div class="sl">Pendientes</div></div><div class="sc"><div class="sn cam">${sk}</div><div class="sl">Omitidos</div></div>`;
+}
+
+function rdSched(items){
+  const el=document.getElementById('schedL');
+  if(!items.length){el.innerHTML=`<div class="empty"><div class="ei"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="et">Sin tomas para hoy</div></div>`;return;}
+  el.innerHTML=items.map(i=>{
+    const bc=i.status==='taken'?'dn':i.status==='skip'?'sk':'';
+    const si=i.status==='taken'?`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B7A56" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg>`:i.status==='skip'?`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8D1DC" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    const ic=i.m.pillPhoto?`<img src="${i.m.pillPhoto}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;border:1px solid var(--br);flex-shrink:0">`:`<div class="mico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A56DB" stroke-width="1.6"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg></div>`;
+    return`<div class="drow"><div class="tpill ${bc}">${i.t}</div>${ic}<div style="flex:1;min-width:0"><div class="dname">${i.m.name}</div><div class="dsub">${i.m.dose} ${i.m.unit}</div>${i.pat?`<div class="dtag">${i.pat.name}</div>`:''}</div><div onclick="openDM('${i.dk}','${i.m.id}','${i.t}')" style="cursor:pointer;padding:4px">${si}</div></div>`;
+  }).join('');
+}
+
+function rdStAlerts(){
+  const al=DB.meds.filter(m=>m.stock!==''&&m.stMin!==''&&Number(m.stock)<=Number(m.stMin));
+  const c=document.getElementById('saCard');
+  if(!al.length){c.style.display='none';return;}
+  c.style.display='block';
+  document.getElementById('saList').innerHTML=al.map(m=>{const cr=Number(m.stock)===0;
+    return`<div class="sal ${cr?'crit':''}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${cr?'#C0392B':'#B45309'}" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="1" fill="${cr?'#C0392B':'#B45309'}"/></svg><div><div style="font-size:13px;font-weight:700">${m.name}</div><div style="font-size:11px;color:var(--t3)">${cr?'Sin stock':'Quedan '+m.stock+' unidades'}</div></div></div>`;
+  }).join('');
+}
+
+// ── DOSE ──
+function qTkn(dk,mid){DB.doses[dk]='taken';const m=DB.meds.find(x=>x.id===mid);if(m&&m.stock!=='')m.stock=Math.max(0,Number(m.stock)-dQ(m));sv();rdDash();}
+function dQ(m){return m.unit==='media pastilla'?.5:parseFloat(m.dose)||1;}
+function openDM(dk,mid,t){
+  const m=DB.meds.find(x=>x.id===mid),pat=DB.patients.find(p=>p.id===m.patientId);
+  cDose={dk,mid};document.getElementById('dMT').textContent=m.name;
+  document.getElementById('dMC').innerHTML=`${m.pillPhoto?`<img src="${m.pillPhoto}" style="width:100%;height:150px;object-fit:contain;border-radius:12px;background:var(--sf2);margin-bottom:13px">`:''}<div style="background:var(--sf2);border-radius:11px;padding:14px"><div style="font-size:20px;font-weight:700;letter-spacing:-.4px">${m.dose} ${m.unit}</div><div style="font-size:13px;color:var(--t3);margin-top:4px">${t}${pat?' · '+pat.name:''}</div>${m.notes?`<div style="font-size:13px;color:var(--blue);margin-top:8px;font-weight:500">${m.notes}</div>`:''}</div>`;
+  OM('dMo');
+}
+function recD(st){if(!cDose)return;DB.doses[cDose.dk]=st;if(st==='taken'){const m=DB.meds.find(x=>x.id===cDose.mid);if(m&&m.stock!=='')m.stock=Math.max(0,Number(m.stock)-dQ(m));}sv();CM('dMo');rdDash();}
+
+// ── ALERTS ──
+const _alerted = new Set(); // evita alertar dos veces la misma toma
+function chkAlerts(){
+  todaySc().filter(i => i.status === 'pending' && i.mfn >= -1 && i.mfn <= 1).forEach(i => {
+    if(_alerted.has(i.dk)) return;
+    _alerted.add(i.dk);
+    const msg = `Hora de tomar: ${i.m.name} — ${i.m.dose} ${i.m.unit}`;
+    const b = document.getElementById('ab'); b.textContent = msg; b.className = 'ab show';
+    beep();
+    sndN('⏰ ChronoMed', msg);
+  });
+}
+function beep(){
+  try{
+    const ac = getAC();
+    [[528,0,.25],[660,.3,.25],[792,.6,.4]].forEach(([f,s,d])=>{
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0, ac.currentTime + s);
+      g.gain.linearRampToValueAtTime(0.25, ac.currentTime + s + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + s + d);
+      o.start(ac.currentTime + s);
+      o.stop(ac.currentTime + s + d + 0.1);
+    });
+  } catch(e){}
+}
+
+// ── PATIENTS ──
+function rdPats(){
+  const el=document.getElementById('pList');
+  if(!DB.patients.length){el.innerHTML=`<div class="empty"><div class="ei"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a6 6 0 0112 0v2"/></svg></div><div class="et">Sin pacientes registrados</div></div>`;return;}
+  el.innerHTML=DB.patients.map(p=>{const mc=DB.meds.filter(m=>m.patientId===p.id).length,ini=(p.ini||p.name.substring(0,2)).toUpperCase();
+    return`<div class="pc" onclick="editP('${p.id}')"><div class="av">${ini}</div><div style="flex:1"><div class="pname">${p.name}</div><div class="psub">${mc} medicamento${mc!==1?'s':''} · ${p.notes||'Sin notas'}</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C8D1DC" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></div>`;
+  }).join('');
+}
+function openPM(){ePId=null;document.getElementById('pMT').textContent='Nuevo paciente';['pNm','pIn','pNo'].forEach(i=>document.getElementById(i).value='');OM('pMo');}
+function editP(id){const p=DB.patients.find(x=>x.id===id);if(!p)return;ePId=id;document.getElementById('pMT').textContent='Editar paciente';document.getElementById('pNm').value=p.name;document.getElementById('pIn').value=p.ini||'';document.getElementById('pNo').value=p.notes||'';OM('pMo');}
+function saveP(){const n=document.getElementById('pNm').value.trim();if(!n)return alert('Ingresá el nombre');const ini=document.getElementById('pIn').value.trim()||n.substring(0,2).toUpperCase(),notes=document.getElementById('pNo').value.trim();if(ePId){const p=DB.patients.find(x=>x.id===ePId);p.name=n;p.ini=ini;p.notes=notes;}else DB.patients.push({id:'p'+Date.now(),name:n,ini,notes});sv();CM('pMo');rdPats();}
+
+// ── MEDS ──
+function rdMeds(){
+  const el=document.getElementById('mList');
+  if(!DB.meds.length){el.innerHTML=`<div class="empty"><div class="ei"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg></div><div class="et">Sin medicamentos registrados</div></div>`;return;}
+  const dn=['D','L','M','X','J','V','S'];
+  el.innerHTML=DB.meds.map(m=>{
+    const pat=DB.patients.find(p=>p.id===m.patientId);
+    const sp=m.stock!==''&&m.stMin!==''?Math.min(100,(Number(m.stock)/Math.max(1,Number(m.stMin)*3))*100):null;
+    const sc=sp!==null?(Number(m.stock)<=0?'crit':Number(m.stock)<=Number(m.stMin)?'low':''):'';
+    return`<div class="mc"><div class="mctop">${m.pillPhoto?`<img class="mcimg" src="${m.pillPhoto}">`:`<div class="mcph"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A56DB" stroke-width="1.5"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg></div>`}<div style="flex:1;min-width:0"><div class="mcn">${m.name}</div><div class="mcd">${m.dose} ${m.unit}</div><div class="mctags">${pat?`<span class="tag tb">${pat.name}</span>`:''} ${m.times.map(t=>`<span class="tag tg">${t}</span>`).join('')}${m.endDate?`<span class="tag ta">hasta ${m.endDate}</span>`:''}</div><div class="mcdays">${[1,2,3,4,5,6,0].map(d=>`<div class="dd ${m.days.includes(d)?'on':'off'}">${dn[d]}</div>`).join('')}</div></div>${m.boxPhoto?`<img src="${m.boxPhoto}" style="width:42px;height:42px;border-radius:9px;object-fit:cover;border:1px solid var(--br);flex-shrink:0">`:''}</div>${sp!==null?`<div class="mcfoot"><div class="sbw"><div class="sbl">Stock: ${m.stock} uds</div><div class="sb"><div class="sf ${sc}" style="width:${sp}%"></div></div></div><div style="display:flex;gap:6px"><button class="btn bgh bsm" onclick="aS('${m.id}',-1)">−</button><button class="btn bpr bsm" onclick="aS('${m.id}',1)">+</button></div></div>`:''}<div style="display:flex;gap:8px;margin-top:11px"><button class="btn bol bsm" onclick="editM('${m.id}')" style="flex:1">Editar</button><button class="btn bdg bsm" onclick="delM('${m.id}')" style="flex:1">Eliminar</button></div></div>`;
+  }).join('');
+}
+
+function ppPat(elId,sel){document.getElementById(elId).innerHTML='<option value="">Sin asignar</option>'+DB.patients.map(p=>`<option value="${p.id}"${p.id===sel?' selected':''}>${p.name}</option>`).join('');}
+function rTimes(ts){document.getElementById('tList').innerHTML='';ts.forEach(t=>addT(t));}
+function addT(v='08:00'){const d=document.createElement('div');d.className='tel';d.innerHTML=`<input type="time" value="${v}"><button class="trm" onclick="this.parentNode.remove()">×</button>`;document.getElementById('tList').appendChild(d);}
+function toggleD(b){b.classList.toggle('on');}
+function togTp(){document.getElementById('tpD').style.display=document.getElementById('mTp').checked?'block':'none';}
+
+function openMM(){eMId=null;pillD=null;boxD=null;document.getElementById('mMT').textContent='Nuevo medicamento';['mNm','mDs','mSt','mSm','mNo','mEd','mEI'].forEach(i=>document.getElementById(i).value='');document.getElementById('mTp').checked=false;document.getElementById('tpD').style.display='none';document.getElementById('ppv').innerHTML=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;document.getElementById('bpv').innerHTML=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;document.querySelectorAll('#dPk .db').forEach(b=>b.classList.add('on'));rTimes(['08:00']);ppPat('mPat');OM('mMo');}
+
+function editM(id){const m=DB.meds.find(x=>x.id===id);if(!m)return;eMId=id;pillD=m.pillPhoto||null;boxD=m.boxPhoto||null;document.getElementById('mMT').textContent='Editar medicamento';document.getElementById('mNm').value=m.name;document.getElementById('mDs').value=m.dose;document.getElementById('mUn').value=m.unit;document.getElementById('mSt').value=m.stock;document.getElementById('mSm').value=m.stMin||'';document.getElementById('mNo').value=m.notes||'';document.getElementById('mEI').value=id;document.getElementById('mTp').checked=!!m.endDate;document.getElementById('tpD').style.display=m.endDate?'block':'none';document.getElementById('mEd').value=m.endDate||'';if(m.pillPhoto)document.getElementById('ppv').innerHTML=`<img src="${m.pillPhoto}" style="width:100%;height:68px;object-fit:cover;border-radius:6px">`;if(m.boxPhoto)document.getElementById('bpv').innerHTML=`<img src="${m.boxPhoto}" style="width:100%;height:68px;object-fit:cover;border-radius:6px">`;document.querySelectorAll('#dPk .db').forEach(b=>b.classList.toggle('on',m.days.includes(parseInt(b.dataset.d))));rTimes(m.times);ppPat('mPat',m.patientId);OM('mMo');}
+
+function saveM(){const name=document.getElementById('mNm').value.trim();if(!name)return alert('Ingresá el nombre');const times=[...document.querySelectorAll('#tList input[type=time]')].map(i=>i.value).filter(Boolean);if(!times.length)return alert('Agregá al menos un horario');const days=[...document.querySelectorAll('#dPk .db.on')].map(b=>parseInt(b.dataset.d));if(!days.length)return alert('Seleccioná al menos un día');const m={id:eMId||'m'+Date.now(),patientId:document.getElementById('mPat').value,name,dose:document.getElementById('mDs').value||'1',unit:document.getElementById('mUn').value,times,days,stock:document.getElementById('mSt').value,stMin:document.getElementById('mSm').value,notes:document.getElementById('mNo').value.trim(),endDate:document.getElementById('mTp').checked?document.getElementById('mEd').value:'',pillPhoto:pillD,boxPhoto:boxD};if(eMId){const i=DB.meds.findIndex(x=>x.id===eMId);DB.meds[i]=m;}else DB.meds.push(m);sv();CM('mMo');rdMeds();}
+function delM(id){if(!confirm('¿Eliminar este medicamento?'))return;DB.meds=DB.meds.filter(m=>m.id!==id);sv();rdMeds();}
+function aS(id,d){const m=DB.meds.find(x=>x.id===id);if(!m)return;m.stock=Math.max(0,Number(m.stock)+d);sv();rdMeds();}
+
+// ── PHOTOS ──
+function tP(t){document.getElementById(t==='pill'?'pInp':'bInp').click();}
+function lP(inp,type){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas'),mx=400;let w=img.width,h=img.height;if(w>h){if(w>mx){h*=mx/w;w=mx;}}else{if(h>mx){w*=mx/h;h=mx;}}c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);const d=c.toDataURL('image/jpeg',.72);if(type==='pill'){pillD=d;document.getElementById('ppv').innerHTML=`<img src="${d}" style="width:100%;height:68px;object-fit:cover;border-radius:6px">`;}else{boxD=d;document.getElementById('bpv').innerHTML=`<img src="${d}" style="width:100%;height:68px;object-fit:cover;border-radius:6px">`;}};img.src=e.target.result;};r.readAsDataURL(f);}
+
+// ── CLINICAL ──
+function clinTab(id,btn){document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.csec').forEach(s=>s.classList.remove('on'));btn.classList.add('on');document.getElementById('cs-'+id).classList.add('on');}
+function rdClin(){ppPat('bpPat');ppPat('gPat');drawBP();drawG();rdBPList();rdGList();}
+
+function saveBP(){const s=parseFloat(document.getElementById('bpS').value),d=parseFloat(document.getElementById('bpD').value),p=parseFloat(document.getElementById('bpP').value)||null;if(!s||!d)return alert('Ingresá sistólica y diastólica');DB.bp.unshift({id:'bp'+Date.now(),patId:document.getElementById('bpPat').value,sys:s,dia:d,pulse:p,ts:Date.now()});if(DB.bp.length>200)DB.bp=DB.bp.slice(0,200);sv();['bpS','bpD','bpP'].forEach(i=>document.getElementById(i).value='');drawBP();rdBPList();}
+function saveGluc(){const v=parseFloat(document.getElementById('gV').value);if(!v||v<30||v>600)return alert('Valor inválido (30–600 mg/dL)');DB.gluc.unshift({id:'g'+Date.now(),patId:document.getElementById('gPat').value,val:v,ctx:document.getElementById('gCtx').value,ts:Date.now()});if(DB.gluc.length>200)DB.gluc=DB.gluc.slice(0,200);sv();document.getElementById('gV').value='';drawG();rdGList();}
+
+function bpSt(s,d){if(s<90||d<60)return{l:'Baja',c:'vlo'};if(s<=120&&d<=80)return{l:'Normal',c:'vok'};if(s<=139||d<=89)return{l:'Elevada',c:'vhi'};return{l:'Alta',c:'vhi'};}
+function gSt(v){return v<70?{c:'lo',l:'Bajo',bg:'vlo'}:v<=140?{c:'ok',l:'Normal',bg:'vok'}:v<=200?{c:'hi',l:'Elevado',bg:'vhi'}:{c:'hi',l:'Alto',bg:'vhi'};}
+
+function rdBPList(){const el=document.getElementById('bpList');if(!DB.bp.length){el.innerHTML=`<div class="empty"><div class="et" style="font-size:13px">Sin registros</div></div>`;return;}el.innerHTML=DB.bp.slice(0,10).map(r=>{const st=bpSt(r.sys,r.dia),pat=DB.patients.find(p=>p.id===r.patId),d=new Date(r.ts);return`<div class="vrow"><div><div class="vdt">${d.toLocaleDateString('es',{day:'numeric',month:'short'})}</div><div style="font-size:10px;color:var(--t4)">${d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</div></div><div style="flex:1;padding:0 10px"><div class="vv">${r.sys}<span style="font-size:13px;font-weight:400;color:var(--t3)">/${r.dia}</span> <span style="font-size:11px;color:var(--t3)">mmHg</span></div><div class="vsub">${r.pulse?r.pulse+' lpm':''}${pat?' · '+pat.name:''}</div></div><div class="vbg ${st.c}">${st.l}</div></div>`;}).join('');}
+function rdGList(){const el=document.getElementById('gList');if(!DB.gluc.length){el.innerHTML=`<div class="empty"><div class="et" style="font-size:13px">Sin registros</div></div>`;return;}el.innerHTML=DB.gluc.slice(0,10).map(r=>{const st=gSt(r.val),pat=DB.patients.find(p=>p.id===r.patId),d=new Date(r.ts);return`<div class="vrow"><div><div class="vdt">${d.toLocaleDateString('es',{day:'numeric',month:'short'})}</div><div style="font-size:10px;color:var(--t4)">${d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</div></div><div style="flex:1;padding:0 10px"><div class="vv ${st.c}">${r.val} <span style="font-size:12px;font-weight:400;color:var(--t3)">mg/dL</span></div><div class="vsub">${r.ctx}${pat?' · '+pat.name:''}</div></div><div class="vbg ${st.bg}">${st.l}</div></div>`;}).join('');}
+
+function drawBP(){
+  const cv=document.getElementById('bpCh'),ctx=cv.getContext('2d');
+  const W=cv.offsetWidth||300,H=175;cv.width=W*2;cv.height=H*2;ctx.scale(2,2);ctx.clearRect(0,0,W,H);
+  const now=Date.now(),day=86400000,days=[];
+  for(let i=13;i>=0;i--){const d=now-i*day,recs=DB.bp.filter(r=>r.ts>=d&&r.ts<d+day);days.push({sys:recs.length?Math.round(recs.reduce((s,r)=>s+r.sys,0)/recs.length):null,dia:recs.length?Math.round(recs.reduce((s,r)=>s+r.dia,0)/recs.length):null,lbl:new Date(d).toLocaleDateString('es',{day:'numeric',month:'short'})});}
+  const pL=18,pR=8,pT=8,pB=28,pw=W-pL-pR,ph=H-pT-pB,mn=40,mx=200,yS=v=>pT+ph-(v-mn)/(mx-mn)*ph;
+  ctx.strokeStyle='#EEF2F7';ctx.lineWidth=1;[60,80,100,120,140,160].forEach(v=>{const y=yS(v);ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(W-pR,y);ctx.stroke();ctx.fillStyle='#B0BEC5';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(v,0,y-2);});
+  const dl=(key,col)=>{ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineJoin='round';let s=false;days.forEach((d,i)=>{const v=d[key];if(v!=null){const x=pL+i*(pw/(days.length-1)),y=yS(v);s?ctx.lineTo(x,y):ctx.moveTo(x,y);s=true;}});ctx.stroke();days.forEach((d,i)=>{const v=d[key];if(v==null)return;const x=pL+i*(pw/(days.length-1)),y=yS(v);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();});};
+  dl('sys','#1A56DB');dl('dia','#0D6E8A');
+  ctx.fillStyle='#94A3B8';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='center';days.forEach((d,i)=>{if(i%3===0||i===days.length-1)ctx.fillText(d.lbl,pL+i*(pw/(days.length-1)),H-8);});
+}
+
+function drawG(){
+  const cv=document.getElementById('gCh'),ctx=cv.getContext('2d');
+  const W=cv.offsetWidth||300,H=175;cv.width=W*2;cv.height=H*2;ctx.scale(2,2);ctx.clearRect(0,0,W,H);
+  const now=Date.now(),day=86400000,days=[];
+  for(let i=13;i>=0;i--){const d=now-i*day,recs=DB.gluc.filter(r=>r.ts>=d&&r.ts<d+day);days.push({avg:recs.length?Math.round(recs.reduce((s,r)=>s+r.val,0)/recs.length):null,lbl:new Date(d).toLocaleDateString('es',{day:'numeric',month:'short'})});}
+  const pL=10,pR=8,pT=8,pB=28,pw=W-pL-pR,ph=H-pT-pB,mn=40,mx=300,yS=v=>pT+ph-(v-mn)/(mx-mn)*ph;
+  ctx.strokeStyle='#EEF2F7';ctx.lineWidth=1;[70,100,140,180,220].forEach(v=>{const y=yS(v);ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(W-pR,y);ctx.stroke();ctx.fillStyle='#B0BEC5';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(v,pL,y-2);});
+  ctx.fillStyle='rgba(11,122,86,.07)';ctx.fillRect(pL,yS(140),pw,yS(70)-yS(140));
+  ctx.beginPath();ctx.strokeStyle='#1A56DB';ctx.lineWidth=2;ctx.lineJoin='round';let s=false;
+  days.forEach((d,i)=>{if(d.avg!=null){const x=pL+i*(pw/(days.length-1)),y=yS(d.avg);s?ctx.lineTo(x,y):ctx.moveTo(x,y);s=true;}});ctx.stroke();
+  days.forEach((d,i)=>{if(d.avg==null)return;const x=pL+i*(pw/(days.length-1)),y=yS(d.avg),st=gSt(d.avg);ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fillStyle=st.c==='ok'?'#0B7A56':st.c==='lo'?'#B45309':'#C0392B';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();});
+  ctx.fillStyle='#94A3B8';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='center';days.forEach((d,i)=>{if(i%3===0||i===days.length-1)ctx.fillText(d.lbl,pL+i*(pw/(days.length-1)),H-8);});
+}
+
+// ── APPOINTMENTS ──
+function rdAppts(){
+  ppPat('aPat');
+  const now=Date.now(),up=DB.appts.filter(a=>a.dt>=now).sort((a,b)=>a.dt-b.dt),past=DB.appts.filter(a=>a.dt<now).sort((a,b)=>b.dt-a.dt).slice(0,5);
+  const e1=document.getElementById('apUp'),e2=document.getElementById('apPast');
+  if(!up.length&&!past.length){e1.innerHTML=`<div class="empty"><div class="ei"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="et">Sin turnos registrados</div></div>`;e2.innerHTML='';return;}
+  e1.innerHTML=(up.length?`<div class="clbl" style="margin-bottom:10px">Próximos</div>`+up.map(a=>aHTML(a,false)).join(''):'');
+  e2.innerHTML=(past.length?`<div class="clbl" style="margin-bottom:10px;margin-top:8px">Anteriores</div>`+past.map(a=>aHTML(a,true)).join(''):'');
+}
+
+function aHTML(a,isPast){
+  const pat=DB.patients.find(p=>p.id===a.patId),dt=new Date(a.dt),now=Date.now(),ms=dt.getTime()-now;
+  const days=Math.ceil(ms/86400000),hrs=Math.ceil(ms/3600000);
+  let cd='',cdC='cdp';
+  if(!isPast){if(hrs<=2){cd='Muy pronto';cdC='cdt';}else if(days<=1){cd='Hoy';cdC='cdt';}else if(days<=3){cd=`En ${days} días`;cdC='cdn';}else{cd=`En ${days} días`;cdC='cdo';}}else{cd='Realizado';}
+  const dStr=dt.toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short',year:'numeric'}),tStr=dt.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+  return`<div class="ac ${isPast?'past':''}" onclick="editA('${a.id}')">
+    <div class="ach">
+      <div class="aci ${isPast?'past':''}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="${isPast?'#B0BEC5':'#1A56DB'}" stroke-width="1.6"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+      <div style="flex:1;min-width:0"><div class="aspec">${a.spec}</div><div class="apat">${pat?pat.name:'Sin asignar'}</div><div class="acd ${cdC}">${cd}</div></div>
+      <div class="adb"><div class="adtime ${isPast?'past':''}">${tStr}</div><div class="addate">${dStr}</div></div>
+    </div>
+    <div class="adet">
+      ${a.addr?`<div class="arow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7A8FA6" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg><span>${a.addr}</span></div>`:''}
+      ${a.phone?`<div class="arow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7A8FA6" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.06 6.06l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><a href="tel:${a.phone}" onclick="event.stopPropagation()" style="color:var(--blue);text-decoration:none;font-weight:600">${a.phone}</a></div>`:''}
+      ${a.notes?`<div class="arow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7A8FA6" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span style="color:var(--t3)">${a.notes}</span></div>`:''}
+      ${a.addr?`<a href="https://maps.apple.com/?q=${encodeURIComponent(a.addr)}" onclick="event.stopPropagation()" target="_blank" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--blue);text-decoration:none;background:var(--bl);border:1px solid var(--bm);border-radius:6px;padding:5px 10px;margin-top:2px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Abrir en Mapas</a>`:''}
+    </div>
+  </div>`;
+}
+
+function openAM(){document.getElementById('aMT').textContent='Nuevo turno';['aSp','aAd','aPh','aNo','aEI'].forEach(i=>document.getElementById(i).value='');const d=new Date();d.setDate(d.getDate()+1);d.setHours(10,0,0,0);document.getElementById('aDT').value=d.toISOString().slice(0,16);document.getElementById('aRm').value='1440';ppPat('aPat');OM('aMo');}
+function editA(id){const a=DB.appts.find(x=>x.id===id);if(!a)return;document.getElementById('aMT').textContent='Editar turno';document.getElementById('aSp').value=a.spec;document.getElementById('aDT').value=new Date(a.dt).toISOString().slice(0,16);document.getElementById('aAd').value=a.addr||'';document.getElementById('aPh').value=a.phone||'';document.getElementById('aNo').value=a.notes||'';document.getElementById('aRm').value=a.remind??1440;document.getElementById('aEI').value=id;ppPat('aPat',a.patId);OM('aMo');}
+function saveA(){const spec=document.getElementById('aSp').value.trim();if(!spec)return alert('Ingresá la especialidad');const dt=document.getElementById('aDT').value;if(!dt)return alert('Ingresá fecha y hora');const eid=document.getElementById('aEI').value;const a={id:eid||'a'+Date.now(),patId:document.getElementById('aPat').value,spec,dt:new Date(dt).getTime(),addr:document.getElementById('aAd').value.trim(),phone:document.getElementById('aPh').value.trim(),notes:document.getElementById('aNo').value.trim(),remind:parseInt(document.getElementById('aRm').value)};if(eid){const i=DB.appts.findIndex(x=>x.id===eid);DB.appts[i]=a;}else DB.appts.push(a);schedA(a);sv();CM('aMo');rdAppts();}
+function schedA(a){if(!a.remind)return;const ms=a.dt-(a.remind*60000)-Date.now();if(ms<0||ms>7*24*3600000)return;setTimeout(()=>{const pat=DB.patients.find(p=>p.id===a.patId),msg=`Turno: ${a.spec}${pat?' — '+pat.name:''}${a.addr?' · '+a.addr:''}`;const b=document.getElementById('ab');b.textContent=msg;b.className='ab show';beep();sndN('📅 Turno médico',msg);},ms);}
+function schedAllA(){DB.appts.filter(a=>a.dt>Date.now()).forEach(schedA);}
+
+// ── MODALS ──
+function OM(id){document.getElementById(id).classList.add('open');}
+function CM(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+</script>
+</body>
+</html>

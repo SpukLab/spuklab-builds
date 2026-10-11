@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VoxDust</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg1:#13111f;--bg2:#1b1726;
+  --border:rgba(153,68,255,.18);--glow:rgba(153,68,255,.08);
+  --canvas-bg:rgba(153,68,255,.06);
+  --cyan:#00ffff;--magenta:#ff00ff;--violet:#9944ff;--violetlt:#b580ff;
+  --btn:rgba(153,68,255,.07);--active:rgba(153,68,255,.18);
+  --white:rgba(255,255,255,.92);--dim:rgba(255,255,255,.38);
+}
+body{
+  background:linear-gradient(155deg,var(--bg1),var(--bg2));
+  min-height:100vh;color:var(--white);
+  font-family:'Inter',sans-serif;font-size:13px;
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px 12px 32px;gap:12px;
+  overflow-x:hidden;
+}
+
+.logo{font-family:'JetBrains Mono',monospace;font-style:italic;letter-spacing:.04em;line-height:1;}
+.logo .spuk{font-weight:800;color:var(--white);font-size:22px;}
+.logo .lab{font-weight:300;color:var(--cyan);font-size:22px;}
+.logo .sub{font-size:10px;color:var(--dim);display:block;margin-top:2px;letter-spacing:.12em;}
+
+header{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:flex-start;}
+.version{font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;color:var(--dim);margin-top:4px;}
+
+.canvas-wrap{
+  width:100%;max-width:480px;
+  background:var(--canvas-bg);
+  border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;position:relative;
+}
+canvas#spectrogram{width:100%;height:160px;display:block;}
+.canvas-labels{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;flex-direction:column;pointer-events:none;
+}
+.clabel{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--dim);padding:4px 8px;
+}
+.clabel.bottom{position:absolute;bottom:0;left:0;}
+
+.slots{width:100%;max-width:480px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.slot{
+  background:var(--btn);border:1px solid var(--border);
+  border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;
+}
+.slot-header{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:11px;color:var(--violetlt);letter-spacing:.08em;
+}
+.slot-name{
+  font-size:10px;color:var(--dim);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-height:14px;
+}
+.waveform-mini{
+  width:100%;height:28px;border-radius:4px;
+  background:rgba(0,0,0,.3);border:1px solid var(--border);
+}
+.slot-btns{display:flex;gap:4px;flex-wrap:wrap;}
+.sbtn{
+  flex:1;min-width:45px;padding:5px 0;border:1px solid var(--border);
+  background:var(--btn);border-radius:6px;color:var(--white);
+  font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;
+  cursor:pointer;text-align:center;transition:background .15s;
+}
+.sbtn:active,.sbtn.recording{background:var(--active);color:var(--cyan);}
+.sbtn.has-audio{border-color:var(--violet);}
+
+.mic-gain-row{
+  width:100%;max-width:480px;
+  background:var(--btn);border:1px solid var(--border);
+  border-radius:8px;padding:8px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.gain-label{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--violetlt);letter-spacing:.06em;
+}
+.gain-val{
+  font-size:9px;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-style:italic;
+}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.06);border-radius:2px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer;}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--cyan);cursor:pointer;border:none;}
+
+.direction-row{
+  width:100%;max-width:480px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.dir-btn{
+  padding:7px 18px;border:1px solid var(--border);
+  background:var(--btn);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;font-size:10px;
+  color:var(--dim);cursor:pointer;transition:all .15s;
+}
+.dir-btn.active{background:var(--active);color:var(--cyan);border-color:var(--violet);}
+
+.mode-row{
+  width:100%;max-width:480px;
+  display:flex;justify-content:center;gap:4px;margin-bottom:4px;
+}
+.mode-btn{
+  padding:7px 16px;border:1px solid var(--border);
+  background:var(--btn);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;font-size:9px;
+  color:var(--dim);cursor:pointer;transition:all .15s;
+}
+.mode-btn.active{background:var(--active);color:var(--cyan);border-color:var(--violet);}
+
+.matter-section{
+  width:100%;max-width:480px;
+  background:var(--btn);border:1px solid var(--border);
+  border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;
+}
+.matter-label{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--violetlt);letter-spacing:.08em;
+}
+.matter-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+}
+.matter-btn{
+  padding:8px 0;border:1px solid var(--border);
+  background:var(--btn);border-radius:6px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;font-size:8px;
+  color:var(--dim);cursor:pointer;transition:all .15s;
+  letter-spacing:.04em;
+}
+.matter-btn.active{background:var(--active);color:var(--cyan);border-color:var(--violet);}
+.matter-btn:active{background:var(--active);}
+
+.macro-row{
+  width:100%;max-width:480px;
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 4px;
+}
+.macro-item{
+  background:var(--btn);border:1px solid var(--border);
+  border-radius:8px;padding:8px;
+}
+.macro-label{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--violetlt);letter-spacing:.06em;margin-bottom:4px;
+}
+.macro-val{
+  font-size:10px;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-style:italic;margin-bottom:4px;
+}
+
+.knobs-row{
+  width:100%;max-width:480px;
+  display:flex;justify-content:space-around;align-items:flex-end;
+  padding:4px 0;
+}
+.knob-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.knob-label{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--dim);letter-spacing:.08em;
+}
+.knob-val{font-size:9px;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-style:italic;}
+svg.knob{width:48px;height:48px;cursor:pointer;touch-action:none;}
+
+.transport{
+  width:100%;max-width:480px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+}
+.tbtn{
+  padding:10px 0;border:1px solid var(--border);
+  background:var(--btn);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:10px;color:var(--white);cursor:pointer;
+  text-align:center;transition:all .15s;letter-spacing:.04em;
+}
+.tbtn:active{background:var(--active);}
+.tbtn.playing{background:var(--active);color:var(--cyan);}
+.tbtn.recording{background:rgba(255,0,255,.15);color:var(--magenta);}
+.tbtn.disabled{opacity:.35;pointer-events:none;}
+
+.library-toggle{
+  width:100%;max-width:480px;
+  padding:10px;border:1px solid var(--border);
+  background:var(--btn);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:10px;color:var(--white);cursor:pointer;
+  text-align:center;transition:all .15s;
+}
+.library-toggle:active{background:var(--active);color:var(--cyan);}
+
+.library-panel{
+  position:fixed;bottom:0;left:0;right:0;
+  background:linear-gradient(to top, var(--bg1), var(--bg2));
+  border-top:1px solid var(--border);
+  max-height:0;overflow:hidden;transition:max-height .3s;
+  z-index:1000;
+}
+.library-panel.open{max-height:60vh;}
+.library-inner{
+  padding:16px;max-width:480px;margin:0 auto;
+  display:flex;flex-direction:column;gap:12px;
+}
+.library-header{
+  display:flex;justify-content:space-between;align-items:center;
+}
+.lib-title{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:11px;color:var(--violetlt);letter-spacing:.08em;
+}
+.lib-close{
+  background:var(--btn);border:1px solid var(--border);
+  border-radius:4px;padding:4px 8px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:9px;color:var(--dim);cursor:pointer;
+  transition:all .15s;
+}
+.lib-close:active{background:var(--active);color:var(--cyan);}
+
+.library-list{
+  display:flex;flex-direction:column;gap:8px;
+  max-height:40vh;overflow-y:auto;
+}
+.lib-item{
+  background:rgba(0,0,0,.3);border:1px solid var(--border);
+  border-radius:6px;padding:8px;display:flex;justify-content:space-between;
+  align-items:center;gap:6px;
+}
+.lib-name{
+  flex:1;font-size:10px;color:var(--white);
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.lib-time{
+  font-size:8px;color:var(--dim);font-family:'JetBrains Mono',monospace;font-style:italic;
+}
+.lib-btns{
+  display:flex;gap:4px;
+}
+.lib-btn{
+  padding:4px 6px;border:1px solid var(--border);
+  background:var(--btn);border-radius:4px;
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:7px;color:var(--dim);cursor:pointer;
+  transition:all .15s;
+}
+.lib-btn:active{background:var(--active);color:var(--cyan);}
+
+.status{
+  font-family:'JetBrains Mono',monospace;font-style:italic;
+  font-size:10px;color:var(--dim);text-align:center;min-height:14px;
+  max-width:480px;
+}
+.status.active{color:var(--cyan);}
+.status.error{color:var(--magenta);}
+
+input[type=file]{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span><span class="spuk">SPUK</span><span class="lab">LAB</span></span>
+    <span class="sub">VoxDust · fusión espectral</span>
+  </div>
+  <div class="version">v3.2</div>
+</header>
+
+<div class="canvas-wrap">
+  <canvas id="spectrogram"></canvas>
+  <div class="canvas-labels">
+    <span class="clabel">SLOT A · source</span>
+    <span class="clabel bottom">analysis + states</span>
+  </div>
+</div>
+
+<div class="slots">
+  <div class="slot" id="slotA">
+    <div class="slot-header">SLOT A · VOZ</div>
+    <div class="slot-name" id="nameA">— no source —</div>
+    <canvas class="waveform-mini" id="waveA"></canvas>
+    <div class="slot-btns">
+      <button class="sbtn" id="loadA">LOAD</button>
+      <button class="sbtn" id="recA">● MIC</button>
+    </div>
+  </div>
+  <div class="slot" id="slotB">
+    <div class="slot-header">SLOT B · TEXTURA</div>
+    <div class="slot-name" id="nameB">— no carrier —</div>
+    <canvas class="waveform-mini" id="waveB"></canvas>
+    <div class="slot-btns">
+      <button class="sbtn" id="loadB">LOAD</button>
+      <button class="sbtn" id="recB">● MIC</button>
+    </div>
+  </div>
+</div>
+
+<div class="mic-gain-row">
+  <div class="gain-label">MIC GAIN</div>
+  <div class="gain-val" id="valMicGain">100</div>
+  <input type="range" id="micGainSlider" min="0" max="200" value="100">
+</div>
+
+<div class="direction-row">
+  <button class="dir-btn active" id="dirAB">A → B</button>
+  <span style="color:var(--dim);font-size:10px;font-family:'JetBrains Mono',monospace;font-style:italic;">cross-synthesis</span>
+  <button class="dir-btn" id="dirBA">B → A</button>
+</div>
+
+<div class="mode-row">
+  <button class="mode-btn active" id="modeMAN">MANUAL</button>
+  <button class="mode-btn" id="modeAUT">AUTO</button>
+</div>
+
+<div class="matter-section">
+  <div class="matter-label">MATTER</div>
+  <div class="matter-grid" id="matterGrid"></div>
+</div>
+
+<div class="macro-row">
+  <div class="macro-item">
+    <div class="macro-label">DRY/WET</div>
+    <div class="macro-val" id="valDryWet">50</div>
+    <input type="range" id="dryWetSlider" min="0" max="100" value="50">
+  </div>
+  <div class="macro-item">
+    <div class="macro-label">INTENSITY</div>
+    <div class="macro-val" id="valIntensity">50</div>
+    <input type="range" id="intensitySlider" min="0" max="100" value="50">
+  </div>
+</div>
+
+<div class="knobs-row" id="knobsRow"></div>
+
+<div class="transport">
+  <button class="tbtn disabled" id="btnPreview">▶ PREVIEW</button>
+  <button class="tbtn disabled" id="btnRender">⬇ RENDER</button>
+  <button class="tbtn disabled" id="btnRec">⏺ REC</button>
+</div>
+
+<button class="library-toggle" id="btnLibrary">📚 LIBRARY</button>
+
+<div class="library-panel" id="libraryPanel">
+  <div class="library-inner">
+    <div class="library-header">
+      <div class="lib-title">SAVED RENDERS</div>
+      <button class="lib-close" id="libClose">✕</button>
+    </div>
+    <div class="library-list" id="libraryList"></div>
+  </div>
+</div>
+
+<div class="status" id="status">load voz (SLOT A) and textura (SLOT B) to begin</div>
+
+<input type="file" id="fileA" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*">
+<input type="file" id="fileB" accept=".mp3,.wav,.m4a,.aiff,.aif,.caf,audio/*">
+
+<script>
+let db;
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('VoxDustLibrary', 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      db = req.result;
+      resolve();
+    };
+    req.onupgradeneeded = e => {
+      const dbx = e.target.result;
+      if (!dbx.objectStoreNames.contains('renders')) {
+        dbx.createObjectStore('renders', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+};
+
+const state = {
+  bufA: null, bufB: null,
+  nameA: null, nameB: null,
+  direction: 'AB',
+  mode: 'MANUAL',
+  dryWet: 0.5,
+  intensity: 0.5,
+  matter: 'AUTO',
+  micGain: 1.0,
+  params: { FORM:0.5, SMEAR:0.5, CROSS:0.7, SPRAY:0.4 },
+  analysisData: null,
+  ac: null,
+  previewSource: null,
+  micStream: null,
+  micRecorder: null,
+  micTarget: null,
+  isRecording: false,
+  isPlaying: false,
+  lastRendered: null,
+};
+
+const STATES = {
+  Susurro: { FORM:0.2, SMEAR:0.1, CROSS:0.1, SPRAY:0.25 },
+  Eco: { FORM:0.3, SMEAR:0.9, CROSS:0.6, SPRAY:0.70 },
+  Ritual: { FORM:0.4, SMEAR:0.6, CROSS:0.7, SPRAY:0.65 },
+  Máquina: { FORM:0.7, SMEAR:0.2, CROSS:0.9, SPRAY:0.40 },
+  Híbrido: { FORM:0.5, SMEAR:0.5, CROSS:0.5, SPRAY:0.50 },
+  Colapso: { FORM:0.9, SMEAR:0.8, CROSS:1.0, SPRAY:0.50 },
+};
+
+const MATTER_LABELS = ['AUTO', 'Susurro', 'Eco', 'Ritual', 'Máquina', 'Híbrido', 'Colapso'];
+
+function getAC() {
+  if (!state.ac) state.ac = new (window.AudioContext || window.webkitAudioContext)();
+  return state.ac;
+}
+
+const KNOBS = [
+  {id:'FORM', label:'FORM'},
+  {id:'SMEAR', label:'SMEAR'},
+  {id:'CROSS', label:'CROSS'},
+];
+
+function buildMatterGrid() {
+  const grid = document.getElementById('matterGrid');
+  MATTER_LABELS.forEach(label => {
+    const btn = document.createElement('button');
+    btn.className = 'matter-btn' + (label === 'AUTO' ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      state.matter = label;
+      document.querySelectorAll('.matter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setStatus(`matter: ${label.toLowerCase()}`);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function buildKnobs() {
+  const row = document.getElementById('knobsRow');
+  KNOBS.forEach(k => {
+    const wrap = document.createElement('div');
+    wrap.className = 'knob-wrap';
+    wrap.innerHTML = `
+      <div class="knob-val" id="val_${k.id}">${Math.round(state.params[k.id]*100)}</div>
+      <svg class="knob" id="knob_${k.id}" viewBox="0 0 48 48">
+        <defs>
+          <linearGradient id="kg_${k.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00ffff"/>
+            <stop offset="50%" stop-color="#9944ff"/>
+            <stop offset="100%" stop-color="#ff00ff"/>
+          </linearGradient>
+        </defs>
+        <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="3.5"/>
+        <path id="arc_${k.id}" fill="none" stroke="url(#kg_${k.id})" stroke-width="3.5" stroke-linecap="round"/>
+        <circle id="dot_${k.id}" r="2" fill="white"/>
+      </svg>
+      <div class="knob-label">${k.label}</div>
+    `;
+    row.appendChild(wrap);
+    updateKnobArc(k.id);
+    addKnobEvents(k.id);
+  });
+}
+
+function updateKnobArc(id) {
+  const v = state.params[id];
+  const startAngle = -220 * Math.PI/180;
+  const endAngle = startAngle + v * 260 * Math.PI/180;
+  const cx=24,cy=24,r=18;
+  const x1=cx+r*Math.cos(startAngle), y1=cy+r*Math.sin(startAngle);
+  const x2=cx+r*Math.cos(endAngle), y2=cy+r*Math.sin(endAngle);
+  const large = (v*260)>180?1:0;
+  const path = document.getElementById('arc_'+id);
+  const dot = document.getElementById('dot_'+id);
+  const val = document.getElementById('val_'+id);
+  if(v>0.005) path.setAttribute('d',`M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}`);
+  else path.setAttribute('d','');
+  dot.setAttribute('cx', cx+r*Math.cos(endAngle));
+  dot.setAttribute('cy', cy+r*Math.sin(endAngle));
+  val.textContent = Math.round(v*100);
+}
+
+function addKnobEvents(id) {
+  if (state.mode === 'AUTO') return;
+  const svg = document.getElementById('knob_'+id);
+  let startY, startV;
+  const onStart = e => {
+    if (state.mode === 'AUTO') return;
+    e.preventDefault();
+    startY = (e.touches?e.touches[0].clientY:e.clientY);
+    startV = state.params[id];
+    const onMove = e2 => {
+      const y = e2.touches?e2.touches[0].clientY:e2.clientY;
+      const delta = (startY - y) / 140;
+      state.params[id] = Math.max(0, Math.min(1, startV + delta));
+      updateKnobArc(id);
+    };
+    const onEnd = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('mousemove', onMove, {passive:false});
+    window.addEventListener('touchmove', onMove, {passive:false});
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+  };
+  svg.addEventListener('mousedown', onStart);
+  svg.addEventListener('touchstart', onStart, {passive:false});
+}
+
+document.getElementById('micGainSlider').addEventListener('input', e => {
+  state.micGain = parseFloat(e.target.value) / 100;
+  document.getElementById('valMicGain').textContent = e.target.value;
+});
+
+document.getElementById('dryWetSlider').addEventListener('input', e => {
+  state.dryWet = parseFloat(e.target.value) / 100;
+  document.getElementById('valDryWet').textContent = e.target.value;
+});
+
+document.getElementById('intensitySlider').addEventListener('input', e => {
+  state.intensity = parseFloat(e.target.value) / 100;
+  document.getElementById('valIntensity').textContent = e.target.value;
+});
+
+document.getElementById('modeMAN').addEventListener('click', () => {
+  state.mode = 'MANUAL';
+  document.getElementById('modeMAN').classList.add('active');
+  document.getElementById('modeAUT').classList.remove('active');
+  KNOBS.forEach(k => addKnobEvents(k.id));
+  setStatus('manual mode — adjust knobs freely');
+});
+
+document.getElementById('modeAUT').addEventListener('click', () => {
+  if (!state.analysisData) {
+    setStatus('run render first (need analysis)', true);
+    return;
+  }
+  state.mode = 'AUTO';
+  document.getElementById('modeAUT').classList.add('active');
+  document.getElementById('modeMAN').classList.remove('active');
+  setStatus(`auto mode · matter: ${state.matter.toLowerCase()}`);
+});
+
+function drawWaveform(canvasId, buf) {
+  const cv = document.getElementById(canvasId);
+  const ctx = cv.getContext('2d');
+  cv.width = cv.offsetWidth * window.devicePixelRatio;
+  cv.height = cv.offsetHeight * window.devicePixelRatio;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!buf) return;
+  const data = buf.getChannelData(0);
+  const step = Math.ceil(data.length / cv.width);
+  const h = cv.height, w = cv.width, mid = h/2;
+  ctx.strokeStyle = '#9944ff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let i=0;i<w;i++){
+    let max=0;
+    for(let j=0;j<step;j++){const s=Math.abs(data[i*step+j]||0);if(s>max)max=s;}
+    ctx.moveTo(i, mid - max*mid*0.9);
+    ctx.lineTo(i, mid + max*mid*0.9);
+  }
+  ctx.stroke();
+}
+
+function normalizeAudio(buf, targetPeak=0.9) {
+  const data = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) if (Math.abs(data[i]) > peak) peak = Math.abs(data[i]);
+  if (peak > 0.001) {
+    const scale = targetPeak / peak;
+    for (let i = 0; i < data.length; i++) data[i] *= scale;
+  }
+  return buf;
+}
+
+async function loadFile(slot, file) {
+  setStatus(`loading ${file.name}…`);
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ab = e.target.result.slice(0);
+    const ac = getAC();
+    ac.decodeAudioData(ab, buf => {
+      if(slot==='A'){state.bufA=buf;state.nameA=file.name;document.getElementById('nameA').textContent=file.name;drawWaveform('waveA',buf);document.getElementById('loadA').classList.add('has-audio');}
+      else{state.bufB=buf;state.nameB=file.name;document.getElementById('nameB').textContent=file.name;drawWaveform('waveB',buf);document.getElementById('loadB').classList.add('has-audio');}
+      setStatus(`${file.name} loaded`);
+      checkReady();
+    }, err => setStatus('decode error: '+err, true));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+document.getElementById('fileA').addEventListener('change', e=>{if(e.target.files[0])loadFile('A',e.target.files[0]);});
+document.getElementById('fileB').addEventListener('change', e=>{if(e.target.files[0])loadFile('B',e.target.files[0]);});
+document.getElementById('loadA').addEventListener('click', ()=>{getAC().resume();document.getElementById('fileA').click();});
+document.getElementById('loadB').addEventListener('click', ()=>{getAC().resume();document.getElementById('fileB').click();});
+
+async function startMicRec(slot) {
+  if(state.isRecording) return stopMicRec();
+  try {
+    getAC().resume();
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    state.micStream = stream;
+    state.micTarget = slot;
+    state.isRecording = true;
+    const chunks = [];
+    const mr = new MediaRecorder(stream);
+    state.micRecorder = mr;
+    mr.ondataavailable = e => chunks.push(e.data);
+    mr.onstop = async () => {
+      const blob = new Blob(chunks, {type:'audio/webm'});
+      const ab = await blob.arrayBuffer();
+      const ac = getAC();
+      ac.decodeAudioData(ab.slice(0), buf => {
+        const data = buf.getChannelData(0);
+        // Apply mic gain
+        for (let i = 0; i < data.length; i++) {
+          data[i] *= state.micGain;
+        }
+        // Normalize by peak
+        let peak = 0;
+        for (let i = 0; i < data.length; i++) {
+          if (Math.abs(data[i]) > peak) peak = Math.abs(data[i]);
+        }
+        if (peak > 0.01) {
+          const norm = 0.9 / peak;
+          for (let i = 0; i < data.length; i++) {
+            data[i] *= norm;
+          }
+        }
+        const name = `mic_${slot}`;
+        if(slot==='A'){state.bufA=buf;state.nameA=name;document.getElementById('nameA').textContent=name;drawWaveform('waveA',buf);document.getElementById('recA').classList.add('has-audio');}
+        else{state.bufB=buf;state.nameB=name;document.getElementById('nameB').textContent=name;drawWaveform('waveB',buf);document.getElementById('recB').classList.add('has-audio');}
+        setStatus('mic captured · normalized');
+        checkReady();
+      });
+      stream.getTracks().forEach(t=>t.stop());
+      state.micStream=null;
+      state.isRecording=false;
+    };
+    mr.start();
+    const btn = slot==='A'?document.getElementById('recA'):document.getElementById('recB');
+    btn.textContent='■ STOP';
+    btn.classList.add('recording');
+    setStatus('recording…');
+  } catch(err) {
+    setStatus('mic error: '+err.message, true);
+  }
+}
+
+function stopMicRec() {
+  if(state.micRecorder && state.micRecorder.state==='recording') state.micRecorder.stop();
+  document.getElementById('recA').textContent='● MIC';
+  document.getElementById('recA').classList.remove('recording');
+  document.getElementById('recB').textContent='● MIC';
+  document.getElementById('recB').classList.remove('recording');
+}
+
+document.getElementById('recA').addEventListener('click', ()=>startMicRec('A'));
+document.getElementById('recB').addEventListener('click', ()=>startMicRec('B'));
+
+document.getElementById('dirAB').addEventListener('click', ()=>{
+  state.direction='AB';
+  document.getElementById('dirAB').classList.add('active');
+  document.getElementById('dirBA').classList.remove('active');
+});
+document.getElementById('dirBA').addEventListener('click', ()=>{
+  state.direction='BA';
+  document.getElementById('dirBA').classList.add('active');
+  document.getElementById('dirAB').classList.remove('active');
+});
+
+function checkReady() {
+  const ready = state.bufA && state.bufB;
+  ['btnPreview','btnRender'].forEach(id=>{
+    document.getElementById(id).classList.toggle('disabled',!ready);
+  });
+  if(ready) setStatus('ready · render to process');
+}
+
+function analyzeAudio(buf) {
+  const HOP_SIZE = 512;
+  const data = buf.getChannelData(0);
+  const frames = Math.floor(data.length / HOP_SIZE);
+  const analysis = new Array(frames);
+  for (let f = 0; f < frames; f++) {
+    const start = f * HOP_SIZE;
+    const frame = data.slice(start, start + HOP_SIZE);
+    let rms = 0;
+    for (let i = 0; i < frame.length; i++) rms += frame[i] * frame[i];
+    rms = Math.sqrt(rms / frame.length);
+    let low = 0, mid = 0, high = 0;
+    for (let i = 0; i < frame.length; i++) {
+      const e = Math.abs(frame[i]);
+      if (i < frame.length * 0.33) low += e;
+      else if (i < frame.length * 0.66) mid += e;
+      else high += e;
+    }
+    const total = low + mid + high;
+    const centroid = (low * 0.2 + mid * 0.5 + high * 0.9) / (total || 1);
+    let flux = 0;
+    if (f > 0) {
+      const prev = analysis[f - 1];
+      flux = Math.abs(centroid - prev.centroid) * 2;
+    }
+    analysis[f] = { rms: Math.min(rms, 1), centroid, flux };
+  }
+  for (let f = 1; f < frames - 1; f++) {
+    analysis[f].rms = (analysis[f - 1].rms + analysis[f].rms * 2 + analysis[f + 1].rms) / 4;
+  }
+  return analysis;
+}
+
+function moderateStates(analysis) {
+  const frames = analysis.length;
+  const weights = new Array(frames);
+  for (let f = 0; f < frames; f++) {
+    const { rms, centroid, flux } = analysis[f];
+    const susurroW = (1 - rms) * (1 - centroid);
+    const ecoW = (1 - rms * 0.7) * Math.abs(centroid - 0.6);
+    const ritualW = (0.5 - Math.abs(rms - 0.5)) * (0.5 - Math.abs(centroid - 0.5));
+    const maquinaW = rms * (1 - centroid);
+    const hibridoW = 0.5;
+    const colapsoW = Math.max(rms, flux * 0.5);
+    const sum = susurroW + ecoW + ritualW + maquinaW + hibridoW + colapsoW;
+    weights[f] = {
+      Susurro: susurroW / (sum || 1),
+      Eco: ecoW / (sum || 1),
+      Ritual: ritualW / (sum || 1),
+      Máquina: maquinaW / (sum || 1),
+      Híbrido: hibridoW / (sum || 1),
+      Colapso: colapsoW / (sum || 1),
+    };
+  }
+  return weights;
+}
+
+function processSpectral(srcBuf, carBuf, params, frameWeights) {
+  const FFT_SIZE = 2048;
+  const HOP = FFT_SIZE / 4;
+  const sampleRate = srcBuf.sampleRate;
+  const srcData = srcBuf.getChannelData(0);
+  const carData = carBuf.numberOfChannels > 0 ? carBuf.getChannelData(0) : srcData;
+
+  let car;
+  if(carData.length !== srcData.length) {
+    car = new Float32Array(srcData.length);
+    const ratio = carData.length / srcData.length;
+    for(let i=0;i<srcData.length;i++){
+      const p=i*ratio;const lo=Math.floor(p);const hi=Math.min(lo+1,carData.length-1);
+      car[i]=carData[lo]*(1-(p-lo))+carData[hi]*(p-lo);
+    }
+  } else { car = carData; }
+
+  const outLen = srcData.length;
+  const output = new Float32Array(outLen);
+  const window_ = new Float32Array(FFT_SIZE);
+  for(let i=0;i<FFT_SIZE;i++) window_[i]=0.5*(1-Math.cos(2*Math.PI*i/(FFT_SIZE-1)));
+
+  const N = FFT_SIZE;
+  const frames = Math.floor((outLen - N) / HOP);
+  const prevMag = new Float32Array(128);
+
+  for(let f=0;f<frames;f++){
+    const pos = f * HOP;
+    let frameParams = {...params};
+    if (frameWeights && f < frameWeights.length) {
+      const w = frameWeights[Math.floor(f * frameWeights.length / frames)];
+      const intensity = state.intensity;
+      
+      if (state.matter !== 'AUTO') {
+        const stateParams = STATES[state.matter];
+        Object.keys(stateParams).forEach(k => {
+          const stateVal = stateParams[k];
+          const neutral = state.params[k] || 0.5;
+          const modulated = neutral + (stateVal - neutral) * intensity;
+          frameParams[k] = Math.max(0, Math.min(1, modulated));
+        });
+      } else {
+        Object.keys(STATES).forEach(stateName => {
+          Object.keys(STATES[stateName]).forEach(k => {
+            const stateVal = STATES[stateName][k];
+            const neutral = state.params[k] || 0.5;
+            const boost = 0.5 + w[stateName] * 2.0;
+            const modulated = neutral + (stateVal - neutral) * boost * intensity;
+            if (!frameParams[k]) frameParams[k] = Math.max(0, Math.min(1, modulated));
+            else frameParams[k] += (stateVal - neutral) * boost * intensity;
+          });
+        });
+        Object.keys(frameParams).forEach(k => {
+          frameParams[k] = Math.max(0, Math.min(1, frameParams[k]));
+        });
+      }
+    }
+
+    const srcFrame = new Float32Array(N);
+    const carFrame = new Float32Array(N);
+    for(let i=0;i<N;i++){
+      srcFrame[i]=(srcData[pos+i]||0)*window_[i];
+      carFrame[i]=(car[pos+i]||0)*window_[i];
+    }
+
+    const BINS = 256;
+    const srcMag = new Float32Array(BINS);
+    const carMag = new Float32Array(BINS);
+    const srcPhase = new Float32Array(BINS);
+
+    for(let k=0;k<BINS;k++){
+      let sr=0,si=0,cr=0,ci=0;
+      const step = Math.floor(N/BINS);
+      for(let n=0;n<N;n+=step){
+        const ang = -2*Math.PI*k*n/N;
+        sr += srcFrame[n]*Math.cos(ang);
+        si += srcFrame[n]*Math.sin(ang);
+        cr += carFrame[n]*Math.cos(ang);
+        ci += carFrame[n]*Math.sin(ang);
+      }
+      srcMag[k]=Math.sqrt(sr*sr+si*si);
+      carMag[k]=Math.sqrt(cr*cr+ci*ci);
+      srcPhase[k]=Math.atan2(si,sr);
+    }
+
+    const cross = frameParams.CROSS || params.CROSS;
+    const fusedMag = new Float32Array(BINS);
+    for(let k=0;k<BINS;k++){
+      fusedMag[k] = srcMag[k] * (1 - cross) + carMag[k] * cross;
+    }
+
+    const smear = frameParams.SMEAR || params.SMEAR;
+    for(let k=0;k<BINS;k++){
+      prevMag[k] = prevMag[k] * 0.8 + fusedMag[k] * 0.2;
+      fusedMag[k] = fusedMag[k] * (1 - smear) + prevMag[k] * smear;
+    }
+
+    const form = frameParams.FORM || params.FORM;
+    const formShift = Math.pow(2, (form-0.5)*1.6);
+    const warpedMag = new Float32Array(BINS);
+    for(let k=0;k<BINS;k++){
+      const srcBin = Math.round(k * formShift);
+      if(srcBin>=0 && srcBin<BINS) warpedMag[k]=fusedMag[srcBin];
+    }
+
+    for(let n=0;n<N;n++){
+      let s=0;
+      const step = Math.floor(N/BINS);
+      for(let k=0;k<BINS;k++){
+        const ang = 2*Math.PI*k*n/N;
+        s += warpedMag[k]*Math.cos(ang+srcPhase[k]);
+      }
+      s *= (2/N) * window_[n];
+      if(pos+n < outLen) output[pos+n] += s * 0.15;
+    }
+  }
+
+  let peak=0;
+  for(let i=0;i<output.length;i++) if(Math.abs(output[i])>peak) peak=Math.abs(output[i]);
+  if(peak>0.001) for(let i=0;i<output.length;i++) output[i]/=peak;
+
+  return output;
+}
+
+async function doRender() {
+  const srcBuf = state.direction==='AB' ? state.bufA : state.bufB;
+  const carBuf = state.direction==='AB' ? state.bufB : state.bufA;
+  if(!srcBuf||!carBuf) return;
+
+  const btn = document.getElementById('btnRender');
+  btn.classList.add('recording');
+  btn.textContent='RENDERING…';
+  setStatus('processing…');
+
+  await new Promise(r=>setTimeout(r,80));
+
+  const analysis = analyzeAudio(srcBuf);
+  const frameWeights = state.mode === 'AUTO' ? moderateStates(analysis) : null;
+  state.analysisData = { analysis, frameWeights };
+
+  let processedData;
+  try {
+    processedData = processSpectral(srcBuf, carBuf, state.params, frameWeights);
+  } catch(e) {
+    setStatus('error: '+e.message, true);
+    btn.classList.remove('recording'); btn.textContent='⬇ RENDER';
+    return;
+  }
+
+  const sampleRate = srcBuf.sampleRate;
+  const offCtx = new OfflineAudioContext(1, processedData.length, sampleRate);
+  const outBuf = offCtx.createBuffer(1, processedData.length, sampleRate);
+  outBuf.copyToChannel(processedData, 0);
+
+  const src = offCtx.createBufferSource();
+  src.buffer = outBuf;
+
+  const wet = offCtx.createGain();
+  const dry = offCtx.createGain();
+  wet.gain.value = state.dryWet;
+  dry.gain.value = 1 - state.dryWet;
+
+  const drySrc = offCtx.createBufferSource();
+  drySrc.buffer = (() => {
+    const b = offCtx.createBuffer(1,Math.min(srcBuf.length,processedData.length),sampleRate);
+    const ch = new Float32Array(b.length);
+    srcBuf.copyFromChannel(ch,0,0);
+    b.copyToChannel(ch,0);
+    return b;
+  })();
+
+  const limiter = offCtx.createDynamicsCompressor();
+  limiter.threshold.value = -1;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.1;
+
+  drySrc.connect(dry); dry.connect(limiter);
+  src.connect(wet); wet.connect(limiter);
+  limiter.connect(offCtx.destination);
+
+  src.start(0); drySrc.start(0);
+  const rendered = await offCtx.startRendering();
+
+  state.lastRendered = rendered;
+  const ts = new Date();
+  const hhmm = `${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}`;
+  const renderName = `VoxDust_${hhmm}`;
+  
+  saveToLibrary(rendered, renderName, {
+    form: Math.round(state.params.FORM * 100),
+    smear: Math.round(state.params.SMEAR * 100),
+    cross: Math.round(state.params.CROSS * 100),
+    dryWet: Math.round(state.dryWet * 100),
+    intensity: Math.round(state.intensity * 100),
+    matter: state.matter,
+  });
+
+  btn.classList.remove('recording'); btn.textContent='⬇ RENDER';
+  setStatus(`✓ ${renderName} saved`);
+  document.getElementById('btnRec').classList.remove('disabled');
+
+  drawSpectrogram(rendered);
+  loadLibraryList();
+}
+
+function encodeWAV(buf) {
+  const numCh = buf.numberOfChannels;
+  const numSamples = buf.length;
+  const sampleRate = buf.sampleRate;
+  const bitsPerSample = 32;
+  const byteRate = sampleRate * numCh * bitsPerSample/8;
+  const blockAlign = numCh * bitsPerSample/8;
+  const dataSize = numSamples * numCh * bitsPerSample/8;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(ab);
+  const writeStr = (o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
+  writeStr(0,'RIFF'); view.setUint32(4,36+dataSize,true); writeStr(8,'WAVE');
+  writeStr(12,'fmt '); view.setUint32(16,18,true); view.setUint16(20,3,true);
+  view.setUint16(22,numCh,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28,byteRate,true); view.setUint16(32,blockAlign,true);
+  view.setUint16(34,bitsPerSample,true); view.setUint16(36,0,true);
+  writeStr(38,'data'); view.setUint32(42,dataSize,true);
+  let offset=44;
+  for(let i=0;i<numSamples;i++) for(let c=0;c<numCh;c++) { view.setFloat32(offset,buf.getChannelData(c)[i],true); offset+=4; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+
+function saveToLibrary(buf, name, metadata) {
+  const wav = encodeWAV(buf);
+  const reader = new FileReader();
+  reader.onload = () => {
+    const tx = db.transaction('renders', 'readwrite');
+    const store = tx.objectStore('renders');
+    store.add({
+      name,
+      blob: reader.result,
+      metadata,
+      timestamp: Date.now(),
+    });
+  };
+  reader.readAsArrayBuffer(wav);
+}
+
+function loadLibraryList() {
+  const tx = db.transaction('renders', 'readonly');
+  const store = tx.objectStore('renders');
+  const req = store.getAll();
+  req.onsuccess = () => {
+    const items = req.result.sort((a, b) => b.timestamp - a.timestamp);
+    const list = document.getElementById('libraryList');
+    list.innerHTML = '';
+    if (items.length === 0) {
+      list.innerHTML = '<div style="font-size:10px;color:var(--dim);text-align:center;">no renders yet</div>';
+      return;
+    }
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'lib-item';
+      const time = new Date(item.timestamp).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+      div.innerHTML = `
+        <div class="lib-name">${item.name}</div>
+        <div class="lib-time">${time}</div>
+        <div class="lib-btns">
+          <button class="lib-btn" onclick="previewLibItem(${item.id})">▶</button>
+          <button class="lib-btn" onclick="exportLibItem(${item.id})">⬇</button>
+          <button class="lib-btn" onclick="deleteLibItem(${item.id})">✕</button>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  };
+}
+
+window.previewLibItem = (id) => {
+  const tx = db.transaction('renders', 'readonly');
+  const store = tx.objectStore('renders');
+  const req = store.get(id);
+  req.onsuccess = () => {
+    const item = req.result;
+    const ac = getAC();
+    ac.resume();
+    if(state.previewSource){try{state.previewSource.stop();}catch(e){}}
+    ac.decodeAudioData(item.blob.slice(0), buf => {
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(ac.destination);
+      src.start(0);
+      state.previewSource = src;
+      setStatus(`▶ ${item.name}`);
+    });
+  };
+};
+
+window.exportLibItem = (id) => {
+  const tx = db.transaction('renders', 'readonly');
+  const store = tx.objectStore('renders');
+  const req = store.get(id);
+  req.onsuccess = () => {
+    const item = req.result;
+    const url = URL.createObjectURL(new Blob([item.blob], {type:'audio/wav'}));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${item.name}.wav`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+};
+
+window.deleteLibItem = (id) => {
+  const tx = db.transaction('renders', 'readwrite');
+  const store = tx.objectStore('renders');
+  store.delete(id);
+  loadLibraryList();
+};
+
+document.getElementById('btnLibrary').addEventListener('click', () => {
+  const panel = document.getElementById('libraryPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    loadLibraryList();
+  }
+});
+
+document.getElementById('libClose').addEventListener('click', () => {
+  document.getElementById('libraryPanel').classList.remove('open');
+});
+
+async function doLiveRec() {
+  if (!state.lastRendered) return;
+  const btn = document.getElementById('btnRec');
+  btn.classList.add('recording');
+  btn.textContent='⏹ REC';
+  
+  const ac = getAC();
+  const buf = state.lastRendered;
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  src.connect(ac.destination);
+  src.start(0);
+  
+  const duration = buf.duration;
+  await new Promise(r => setTimeout(r, duration * 1000 + 100));
+  
+  const wav = encodeWAV(buf);
+  const url = URL.createObjectURL(wav);
+  const a = document.createElement('a');
+  const ts = new Date();
+  const hhmm = `${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `VoxDust_REC_${hhmm}.wav`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  btn.classList.remove('recording');
+  btn.textContent = '⏺ REC';
+  setStatus('✓ rec exported');
+};
+
+document.getElementById('btnRender').addEventListener('click', doRender);
+document.getElementById('btnRec').addEventListener('click', doLiveRec);
+
+function drawSpectrogram(buf) {
+  const cv = document.getElementById('spectrogram');
+  const ctx = cv.getContext('2d');
+  cv.width = cv.offsetWidth * window.devicePixelRatio || 400;
+  cv.height = 160 * window.devicePixelRatio || 160;
+  const w = cv.width, h = cv.height;
+  ctx.fillStyle='rgba(19,17,31,1)';ctx.fillRect(0,0,w,h);
+
+  const data = buf.getChannelData(0);
+  const cols = w;
+  const fftSize = 256;
+  const step = Math.floor(data.length / cols);
+
+  for(let x=0;x<cols;x++){
+    const frame = data.slice(x*step, x*step+fftSize);
+    const bands = 32;
+    const bandH = h / bands;
+    for(let b=0;b<bands;b++){
+      let sum=0;
+      const bStart = Math.floor(b*fftSize/bands);
+      const bEnd = Math.floor((b+1)*fftSize/bands);
+      for(let i=bStart;i<bEnd;i++) sum+=Math.abs(frame[i]||0);
+      const mag = Math.min(1, sum/(bEnd-bStart)*4);
+      const r = Math.round(mag*255*0.6);
+      const g = Math.round(mag*255*0.2);
+      const bv = Math.round(mag*255);
+      ctx.fillStyle=`rgba(${r},${g},${bv},${mag*0.9})`;
+      ctx.fillRect(x, h - (b+1)*bandH, 1, bandH);
+    }
+  }
+}
+
+function doPreview() {
+  const srcBuf = state.direction==='AB' ? state.bufA : state.bufB;
+  if(!srcBuf) return;
+  const ac = getAC();
+  ac.resume();
+  if(state.previewSource){try{state.previewSource.stop();}catch(e){}}
+  const src = ac.createBufferSource();
+  src.buffer = srcBuf;
+  const gain = ac.createGain();
+  gain.gain.value = 0.7;
+  src.connect(gain); gain.connect(ac.destination);
+  src.start(0);
+  state.previewSource = src;
+  src.onended = ()=>{ setStatus('stopped'); };
+  setStatus('▶ source (dry)');
+}
+
+document.getElementById('btnPreview').addEventListener('click', doPreview);
+
+function setStatus(msg, isError=false) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (isError?' error':' active');
+}
+
+async function init() {
+  await initDB();
+  buildMatterGrid();
+  buildKnobs();
+  
+  const cv = document.getElementById('spectrogram');
+  cv.width = cv.offsetWidth * window.devicePixelRatio || 400;
+  cv.height = 160 * window.devicePixelRatio || 160;
+  const sctx = cv.getContext('2d');
+  sctx.fillStyle='rgba(19,17,31,1)';sctx.fillRect(0,0,cv.width,cv.height);
+  sctx.strokeStyle='rgba(153,68,255,.12)';sctx.setLineDash([4,6]);
+  for(let y=cv.height*0.33;y<cv.height;y+=cv.height*0.33){
+    sctx.beginPath();sctx.moveTo(0,y);sctx.lineTo(cv.width,y);sctx.stroke();
+  }
+}
+
+init();
+</script>
+</body>
+</html>

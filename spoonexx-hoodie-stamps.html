@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpoonexX — Estampas v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Chakra+Petch:wght@300;600;700&display=swap');
+  :root{--cyan:#00ffff;--magenta:#ff00ff;--purple:#9944ff;--acid:#b8ff2e;--bg:#060606;--border:rgba(153,68,255,0.15)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:#fff;font-family:'Space Mono',monospace;padding:20px 14px 60px}
+  .header{text-align:center;margin-bottom:36px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+  .header-label{font-size:10px;letter-spacing:4px;color:rgba(0,255,255,0.5);text-transform:uppercase;margin-bottom:8px}
+  .header h1{font-family:'Chakra Petch',sans-serif;font-size:clamp(24px,5.5vw,44px);font-weight:700;background:linear-gradient(90deg,#00d4ff 0%,#6633ff 45%,#ff00cc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .header-sub{font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:3px;margin-top:5px}
+  .section{margin-bottom:28px}
+  .section-label{font-size:10px;letter-spacing:4px;color:rgba(184,255,46,0.6);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(184,255,46,0.25),transparent)}
+  .stamp-panel{background:#080808;border:1px solid var(--border);border-radius:3px;overflow:hidden;position:relative}
+  .stamp-panel canvas{display:block;width:100%}
+  .panel-meta{position:absolute;top:10px;left:12px;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.18);text-transform:uppercase}
+  .panel-dim{position:absolute;top:10px;right:12px;font-size:9px;color:rgba(255,255,255,0.12)}
+  .sleeves-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .notes{margin-top:28px;padding:14px;border:1px solid rgba(153,68,255,0.12);border-radius:3px;background:rgba(153,68,255,0.025)}
+  .notes-title{font-size:9px;letter-spacing:3px;color:var(--purple);text-transform:uppercase;margin-bottom:10px}
+  .notes p{font-size:11px;color:rgba(255,255,255,0.38);line-height:1.9}
+  .notes span{color:rgba(0,255,255,0.7)}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-label">SpukLab — Diseño de Estampas v2</div>
+  <h1>SpoonexX Live Hoodie</h1>
+  <div class="header-sub">PERFORMANCE EDITION — BUZO NEGRO — SX-001</div>
+</div>
+<div class="section">
+  <div class="section-label">Frente — Pecho</div>
+  <div class="stamp-panel">
+    <div class="panel-meta">Frente</div><div class="panel-dim">~26 x 14 cm</div>
+    <canvas id="frontCanvas" height="260"></canvas>
+  </div>
+</div>
+<div class="section">
+  <div class="section-label">Espalda — Full Back</div>
+  <div class="stamp-panel">
+    <div class="panel-meta">Espalda</div><div class="panel-dim">~38 x 50 cm</div>
+    <canvas id="backCanvas" height="540"></canvas>
+  </div>
+</div>
+<div class="section">
+  <div class="section-label">Mangas</div>
+  <div class="sleeves-row">
+    <div class="stamp-panel"><div class="panel-meta">Manga Izq</div><canvas id="sleeveL" height="420"></canvas></div>
+    <div class="stamp-panel"><div class="panel-meta">Manga Der</div><canvas id="sleeveR" height="420"></canvas></div>
+  </div>
+</div>
+<div class="notes">
+  <div class="notes-title">Notas de Composicion</div>
+  <p><span>Tipografia degradada:</span> Palabras del universo SpoonexX — rotas, cortadas, desvanecidas</p>
+  <p><span>Destellos:</span> Puntos de luz en cyan/magenta/blanco — como particulas atrapadas</p>
+  <p><span>Lineas:</span> Finas, con gaps, sin grosor — mas aura que trazo</p>
+  <p><span>SpukLab:</span> Espalda inferior, muy sutil — mas firma que marca</p>
+</div>
+<script>
+function setW(c){c.width=c.parentElement.clientWidth||360}
+
+function destello(ctx,x,y,size,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  const g=ctx.createRadialGradient(x,y,0,x,y,size*3);
+  g.addColorStop(0,color);g.addColorStop(0.4,color.replace('1)','0.25)'));g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,size*3,0,Math.PI*2);ctx.fill();
+  const arms=[[0,size*4],[0,-size*4],[size*4,0],[-size*4,0]];
+  arms.forEach(([dx,dy])=>{
+    const gl=ctx.createLinearGradient(x,y,x+dx,y+dy);
+    gl.addColorStop(0,color);gl.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.strokeStyle=gl;ctx.lineWidth=0.6;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+  });
+  const d=size*2.2;
+  [[d,d],[d,-d],[-d,d],[-d,-d]].forEach(([dx,dy])=>{
+    const gd=ctx.createLinearGradient(x,y,x+dx,y+dy);
+    gd.addColorStop(0,color);gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.strokeStyle=gd;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function degradedWord(ctx,text,x,y,font,baseColor,alpha,mode,angle){
+  ctx.save();ctx.translate(x,y);if(angle)ctx.rotate(angle);
+  ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';
+  const m=ctx.measureText(text);const tw=m.width;const fsize=parseFloat(font);const th=fsize*1.4;
+  if(mode==='ghost'){
+    ctx.globalAlpha=alpha*0.3;ctx.fillStyle='#00ffff';ctx.fillText(text,-3,-1);
+    ctx.fillStyle='#ff00ff';ctx.fillText(text,3,1);
+    ctx.globalAlpha=alpha*0.55;ctx.fillStyle=baseColor;ctx.fillText(text,0,0);
+  } else if(mode==='hcut'){
+    const oc=document.createElement('canvas');oc.width=tw+20;oc.height=th+10;
+    const ox=oc.getContext('2d');ox.font=font;ox.textAlign='center';ox.textBaseline='middle';
+    ox.fillStyle=baseColor;ox.fillText(text,oc.width/2,oc.height/2);
+    const nc=3+Math.floor(Math.random()*3);
+    for(let i=0;i<nc;i++){const cy=Math.random()*oc.height;ox.clearRect(0,cy,oc.width,1.5+Math.random()*5);}
+    ctx.globalAlpha=alpha;ctx.drawImage(oc,-oc.width/2,-oc.height/2);
+  } else if(mode==='fade'){
+    const fg=ctx.createLinearGradient(-tw/2,0,tw/2,0);
+    const fl=Math.random()<0.5;
+    fg.addColorStop(0,fl?'rgba(0,0,0,0)':baseColor);fg.addColorStop(0.35,baseColor);
+    fg.addColorStop(1,fl?baseColor:'rgba(0,0,0,0)');
+    ctx.globalAlpha=alpha;ctx.fillStyle=fg;ctx.fillText(text,0,0);
+  } else if(mode==='dissolve'){
+    const vg=ctx.createLinearGradient(0,-th/2,0,th/2);
+    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(0.3,baseColor);
+    vg.addColorStop(0.7,baseColor);vg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.globalAlpha=alpha;ctx.fillStyle=vg;ctx.fillText(text,0,0);
+  } else {
+    ctx.globalAlpha=alpha;ctx.fillStyle=baseColor;ctx.fillText(text,0,0);
+  }
+  ctx.restore();
+}
+
+function thinLine(ctx,x1,y1,x2,y2,color,alpha,numGaps){
+  const dx=x2-x1,dy=y2-y1;
+  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=0.7;ctx.globalAlpha=alpha;
+  let segs=[[0,1]];
+  for(let i=0;i<numGaps;i++){
+    const t=0.1+Math.random()*0.8;const gw=0.01+Math.random()*0.07;
+    segs=segs.flatMap(([a,b])=>{if(t>a&&t<b&&gw<(b-a)*0.4)return[[a,t-gw/2],[t+gw/2,b]];return[[a,b]];});
+  }
+  segs.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(x1+dx*a,y1+dy*a);ctx.lineTo(x1+dx*b,y1+dy*b);ctx.stroke();});
+  ctx.restore();
+}
+
+function regMark(ctx,x,y,sx,sy){
+  ctx.save();ctx.strokeStyle='rgba(153,68,255,0.2)';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+sx*12,y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+sy*12);ctx.stroke();
+  ctx.restore();
+}
+
+function drawFront(){
+  const canvas=document.getElementById('frontCanvas');setW(canvas);
+  const W=canvas.width,H=canvas.height,ctx=canvas.getContext('2d');
+  ctx.fillStyle='#070707';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<400;i++){ctx.fillStyle=`rgba(${Math.random()<0.5?'0,255,255':'255,0,255'},${Math.random()*0.02})`;ctx.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  const cx=W/2;
+  const fs=Math.floor(W*0.13);
+  ctx.font=`600 ${fs}px 'Chakra Petch',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const g=ctx.createLinearGradient(cx-W*0.33,0,cx+W*0.33,0);
+  g.addColorStop(0,'#00d4ff');g.addColorStop(0.2,'#44aaff');g.addColorStop(0.45,'#8833ff');g.addColorStop(0.7,'#cc22ff');g.addColorStop(1,'#ff44cc');
+  ctx.fillStyle=g;ctx.fillText('SpoonexX',cx,H*0.44);
+  const glow=ctx.createRadialGradient(cx,H*0.44,0,cx,H*0.44,W*0.38);
+  glow.addColorStop(0,'rgba(100,30,255,0.08)');glow.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+  const tw=ctx.measureText('SpoonexX').width;
+  const lineY=H*0.44+fs*0.6;
+  const lg=ctx.createLinearGradient(cx-tw/2,0,cx+tw/2,0);
+  lg.addColorStop(0,'rgba(0,212,255,0)');lg.addColorStop(0.15,'rgba(0,212,255,0.7)');lg.addColorStop(0.85,'rgba(255,0,204,0.7)');lg.addColorStop(1,'rgba(255,0,204,0)');
+  ctx.strokeStyle=lg;ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(cx-tw/2,lineY);ctx.lineTo(cx+tw/2,lineY);ctx.stroke();
+  const subFs=Math.max(12,Math.floor(W*0.027));
+  ctx.font=`300 italic ${subFs}px 'Cormorant Garamond',serif`;
+  ctx.fillStyle='rgba(255,255,255,0.28)';ctx.fillText('by SpukLab',cx+tw*0.22,H*0.44+fs*0.8);
+  destello(ctx,cx-tw*0.43,H*0.44,1.6,'rgba(0,255,255,1)',0.55);
+  destello(ctx,cx+tw*0.45,H*0.44,1.3,'rgba(255,0,255,1)',0.5);
+  destello(ctx,cx+tw*0.1,H*0.2,1.0,'rgba(255,255,255,1)',0.32);
+  thinLine(ctx,cx-tw*0.6,H*0.76,cx+tw*0.6,H*0.76,'rgba(153,68,255,0.35)',0.5,2);
+  regMark(ctx,18,16,1,1);regMark(ctx,W-18,16,-1,1);regMark(ctx,18,H-16,1,-1);regMark(ctx,W-18,H-16,-1,-1);
+  ctx.font=`400 ${Math.max(11,Math.floor(W*0.02))}px 'Space Mono',monospace`;
+  ctx.textAlign='left';ctx.fillStyle='rgba(184,255,46,0.25)';ctx.fillText('SX-001',18,H-11);
+}
+
+const WORDS=[
+  ['BINAURAL',0.5,0.19,0.18,'ghost',0,0.17,'#ffffff'],
+  ['SPRAY',0.37,0.39,0.26,'hcut',0,0.13,'#00ffff'],
+  ['NEURAL',0.63,0.56,0.15,'dissolve',0,0.15,'#ff00ff'],
+  ['ANCLAJE',0.5,0.71,0.21,'fade',0,0.12,'#ffffff'],
+  ['LIBERACION',0.48,0.87,0.12,'ghost',0,0.10,'#9944ff'],
+  ['DISRUPCION',0.14,0.5,0.095,'fade',-Math.PI/2,0.11,'#00ffff'],
+  ['MUTATION',0.86,0.46,0.095,'dissolve',Math.PI/2,0.12,'#ff00ff'],
+  ['GENERATIVE',0.5,0.08,0.065,'fade',0,0.16,'#ffffff'],
+  ['RETORNO',0.5,0.96,0.075,'dissolve',0,0.13,'#ffffff'],
+  ['DISSOLVE',0.69,0.25,0.085,'hcut',0.035,0.09,'#00ffff'],
+  ['GRANULAR',0.31,0.67,0.085,'ghost',-0.025,0.09,'#ff00ff'],
+  ['EXPLORACION',0.5,0.32,0.062,'fade',0,0.08,'#9944ff'],
+];
+const DES=[
+  [0.14,0.13,2.2,'rgba(0,255,255,1)',0.42],[0.83,0.21,1.6,'rgba(255,255,255,1)',0.32],
+  [0.44,0.47,1.9,'rgba(255,0,255,1)',0.38],[0.71,0.73,1.4,'rgba(0,255,255,1)',0.28],
+  [0.27,0.89,1.1,'rgba(255,255,255,1)',0.26],[0.89,0.56,1.7,'rgba(255,0,255,1)',0.35],
+  [0.56,0.79,1.0,'rgba(255,255,255,1)',0.2],[0.11,0.34,1.2,'rgba(255,0,255,1)',0.28],
+  [0.5,0.5,0.8,'rgba(255,255,255,1)',0.15],
+];
+const LINS=[
+  [0.04,0.24,0.96,0.24,'rgba(0,255,255,0.5)',0.28,4],
+  [0.08,0.63,0.92,0.63,'rgba(255,0,255,0.5)',0.22,3],
+  [0.0,0.41,1.0,0.59,'rgba(255,255,255,0.3)',0.16,5],
+  [0.28,0.04,0.74,0.93,'rgba(153,68,255,0.4)',0.13,6],
+];
+
+function drawBack(){
+  const canvas=document.getElementById('backCanvas');setW(canvas);
+  const W=canvas.width,H=canvas.height,ctx=canvas.getContext('2d');
+  ctx.fillStyle='#070707';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<500;i++){ctx.fillStyle=`rgba(153,68,255,${Math.random()*0.022})`;ctx.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  WORDS.forEach(([text,xf,yf,sf,mode,angle,alpha,color])=>{
+    const fs=Math.max(12,Math.floor(W*sf));
+    const fontStr=sf>=0.12?`300 ${fs}px 'Cormorant Garamond',serif`:`400 italic ${fs}px 'Cormorant Garamond',serif`;
+    degradedWord(ctx,text,xf*W,yf*H,fontStr,color,alpha,mode,angle);
+  });
+  LINS.forEach(([x1f,y1f,x2f,y2f,color,alpha,gaps])=>thinLine(ctx,x1f*W,y1f*H,x2f*W,y2f*H,color,alpha,gaps));
+  DES.forEach(([xf,yf,sz,col,al])=>destello(ctx,xf*W,yf*H,sz,col,al));
+  const spFs=Math.max(11,Math.floor(W*0.028));
+  ctx.font=`300 ${spFs}px 'Cormorant Garamond',serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=0.28;ctx.fillStyle='#ffffff';
+  ctx.fillText('SpukLab',W/2,H*0.976);ctx.globalAlpha=1;
+  const slw=W*0.11;thinLine(ctx,W/2-slw,H*0.966,W/2+slw,H*0.966,'rgba(255,255,255,0.2)',0.4,0);
+  const hFs=Math.max(11,Math.floor(W*0.022));
+  ctx.font=`400 ${hFs}px 'Space Mono',monospace`;ctx.textAlign='center';
+  ctx.globalAlpha=0.38;ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.fillText('SOUND  /  VISUAL  /  SYSTEM',W/2,H*0.024);ctx.globalAlpha=1;
+  regMark(ctx,16,16,1,1);regMark(ctx,W-16,16,-1,1);regMark(ctx,16,H-16,1,-1);regMark(ctx,W-16,H-16,-1,-1);
+  ctx.font=`400 ${Math.max(11,Math.floor(W*0.018))}px 'Space Mono',monospace`;
+  ctx.textAlign='left';ctx.fillStyle='rgba(184,255,46,0.22)';ctx.fillText('SX-001',16,H-9);
+}
+
+function drawSleeve(id,side){
+  const canvas=document.getElementById(id);setW(canvas);
+  const W=canvas.width,H=canvas.height,ctx=canvas.getContext('2d');
+  ctx.fillStyle='#070707';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<160;i++){ctx.fillStyle=`rgba(153,68,255,${Math.random()*0.018})`;ctx.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  const cx=W/2;const isL=side==='left';
+  const sw=[
+    isL?['BINAURAL',0.5,0.18,0.082,'dissolve',-Math.PI/2,0.22,'#00ffff']:['MUTATION',0.5,0.15,0.075,'fade',-Math.PI/2,0.18,'#ff00ff'],
+    isL?['NEURAL',0.5,0.5,0.12,'ghost',-Math.PI/2,0.18,'#ffffff']:['DISSOLVE',0.5,0.5,0.115,'hcut',-Math.PI/2,0.2,'#ffffff'],
+    isL?['SPRAY',0.5,0.82,0.072,'hcut',-Math.PI/2,0.2,'#ff00ff']:['ANCLAJE',0.5,0.83,0.072,'dissolve',-Math.PI/2,0.18,'#00ffff'],
+  ];
+  sw.forEach(([text,xf,yf,sf,mode,angle,alpha,color])=>{
+    const fs=Math.max(12,Math.floor(W*sf*4));
+    const fontStr=`${sf>0.09?'300':'400 italic'} ${fs}px 'Cormorant Garamond',serif`;
+    degradedWord(ctx,text,xf*W,yf*H,fontStr,color,alpha,mode,angle);
+  });
+  thinLine(ctx,cx,H*0.04,cx,H*0.96,isL?'rgba(0,255,255,0.28)':'rgba(255,0,255,0.28)',0.4,3);
+  const sd=isL
+    ?[[0.5,0.06,1.3,'rgba(0,255,255,1)',0.42],[0.5,0.34,1.0,'rgba(255,255,255,1)',0.26],[0.5,0.66,0.9,'rgba(0,255,255,1)',0.3],[0.5,0.94,1.1,'rgba(255,0,255,1)',0.34]]
+    :[[0.5,0.06,1.1,'rgba(255,0,255,1)',0.38],[0.5,0.3,0.9,'rgba(255,255,255,1)',0.24],[0.5,0.67,1.2,'rgba(0,255,255,1)',0.28],[0.5,0.94,1.0,'rgba(255,0,255,1)',0.36]];
+  sd.forEach(([xf,yf,sz,col,al])=>destello(ctx,xf*W,yf*H,sz,col,al));
+  if(!isL){
+    ctx.save();ctx.translate(cx,H*0.5);ctx.rotate(-Math.PI/2);
+    const spFs=Math.max(11,Math.floor(W*0.3));
+    ctx.font=`300 ${spFs}px 'Cormorant Garamond',serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=0.15;ctx.fillStyle='#ffffff';
+    ctx.fillText('SpukLab',0,0);ctx.restore();ctx.globalAlpha=1;
+  }
+  regMark(ctx,10,10,1,1);regMark(ctx,W-10,10,-1,1);regMark(ctx,10,H-10,1,-1);regMark(ctx,W-10,H-10,-1,-1);
+}
+
+window.addEventListener('load',()=>{drawFront();drawBack();drawSleeve('sleeveL','left');drawSleeve('sleeveR','right');});
+window.addEventListener('resize',()=>{drawFront();drawBack();drawSleeve('sleeveL','left');drawSleeve('sleeveR','right');});
+</script>
+</body>
+</html>

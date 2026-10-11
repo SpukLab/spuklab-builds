@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VOXRITUAL DNA v3</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0812;color:#fff;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px}
+
+/* ─── BOOT ─────────────────────────────────────────────────────────── */
+#boot{position:fixed;inset:0;z-index:200;background:linear-gradient(155deg,#060410,#0a0812);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2rem}
+.b-logo{font-size:.9rem;font-weight:800;letter-spacing:.12em}
+.b-logo span{color:#00ffff}
+.b-title{font-size:1.7rem;font-weight:200;letter-spacing:.18em;text-align:center;
+  color:rgba(255,255,255,.55);line-height:1.45}
+.b-sub{font-size:.72rem;color:rgba(255,255,255,.3);letter-spacing:.08em;text-align:center}
+#enterBtn{padding:.9rem 2.6rem;background:rgba(153,68,255,.1);
+  border:1px solid rgba(153,68,255,.35);color:#fff;font-size:.95rem;
+  font-weight:700;letter-spacing:.12em;cursor:pointer;border-radius:2px}
+#enterBtn:active{background:rgba(153,68,255,.22)}
+#bootStatus{font-size:.72rem;color:rgba(255,255,255,.3);letter-spacing:.04em;min-height:1.2em}
+
+/* ─── MAIN ─────────────────────────────────────────────────────────── */
+#app{position:fixed;inset:0;display:none;flex-direction:column}
+#app.show{display:flex}
+
+/* ─── HEADER ────────────────────────────────────────────────────────── */
+#hdr{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.55rem 1rem;border-bottom:1px solid rgba(153,68,255,.1);
+  background:rgba(10,8,18,.8);backdrop-filter:blur(12px);flex-shrink:0}
+.logo{font-size:.8rem;font-weight:800;letter-spacing:.08em}
+.logo span{color:#00ffff}
+#semOrb{width:10px;height:10px;border-radius:50%;background:#ff00ff;
+  box-shadow:0 0 6px #ff00ff;transition:background .4s,box-shadow .4s}
+
+/* ─── CATEGORY TABS ─────────────────────────────────────────────────── */
+#catBar{
+  display:flex;gap:.35rem;padding:.45rem .9rem;overflow-x:auto;flex-shrink:0;
+  border-bottom:1px solid rgba(153,68,255,.08);background:rgba(10,8,18,.5);
+  scrollbar-width:none}
+#catBar::-webkit-scrollbar{display:none}
+.cat{
+  padding:.32rem .75rem;background:rgba(153,68,255,.07);
+  border:1px solid rgba(153,68,255,.15);color:rgba(255,255,255,.5);
+  font-size:.72rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px;white-space:nowrap;flex-shrink:0}
+.cat.on{background:rgba(153,68,255,.18);border-color:rgba(153,68,255,.4);
+  color:#fff}
+
+/* ─── SAMPLE LIST ───────────────────────────────────────────────────── */
+#library{flex:1;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:rgba(153,68,255,.2) transparent;min-height:0}
+#library::-webkit-scrollbar{width:3px}
+#library::-webkit-scrollbar-thumb{background:rgba(153,68,255,.2)}
+
+.sItem{
+  display:flex;align-items:center;gap:.6rem;
+  padding:.55rem .9rem;border-bottom:1px solid rgba(153,68,255,.06);
+  cursor:pointer;transition:background .12s;position:relative}
+.sItem:active,.sItem.on{background:rgba(153,68,255,.1)}
+.sItem.on{border-left:2px solid rgba(153,68,255,.6)}
+.sWave{width:52px;height:22px;flex-shrink:0;border-radius:2px;
+  background:rgba(153,68,255,.08);overflow:hidden}
+.sMeta{flex:1;min-width:0}
+.sName{font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sTags{display:flex;gap:.3rem;margin-top:.18rem;flex-wrap:wrap}
+.sTag{font-size:.64rem;padding:.1rem .35rem;border-radius:1px;
+  background:rgba(153,68,255,.12);color:rgba(255,255,255,.55);letter-spacing:.03em}
+.sTag.semTag{background:rgba(0,255,255,.08);color:rgba(0,255,255,.6)}
+.sDur{font-size:.68rem;color:rgba(255,255,255,.3);flex-shrink:0;
+  font-family:'Courier New',monospace}
+.sScores{display:flex;flex-direction:column;gap:.12rem;align-items:flex-end;flex-shrink:0}
+.sScore{font-size:.62rem;color:rgba(255,255,255,.3)}
+.sScore span{color:rgba(153,68,255,.8)}
+.sDesc{font-size:.64rem;color:rgba(0,255,255,.4);margin-left:.2rem}
+
+.sItemDel{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;background:rgba(255,50,50,.08);border:none;
+  color:rgba(255,50,50,.4);font-size:.8rem;cursor:pointer;display:none;
+  align-items:center;justify-content:center}
+.sItem:active .sItemDel{display:flex}
+
+.emptyLib{
+  padding:2rem 1rem;text-align:center;color:rgba(255,255,255,.2);
+  font-size:.78rem;line-height:1.7;letter-spacing:.04em}
+
+/* ─── WORKSPACE ─────────────────────────────────────────────────────── */
+#workspace{
+  border-top:1px solid rgba(153,68,255,.1);
+  background:rgba(10,8,18,.6);flex-shrink:0;
+  max-height:0;overflow:hidden;transition:max-height .25s ease}
+#workspace.open{max-height:320px;overflow-y:auto}
+
+#wsInner{padding:.7rem .9rem}
+#wsTitle{font-size:.72rem;color:rgba(255,255,255,.4);letter-spacing:.08em;margin-bottom:.5rem}
+
+/* Waveform + phrase map */
+#waveRow{margin-bottom:.5rem}
+#waveCanvas{width:100%;height:36px;display:block;border-radius:2px;
+  background:rgba(153,68,255,.05)}
+#phraseMap{
+  display:flex;gap:.25rem;margin-top:.3rem;flex-wrap:wrap;min-height:20px;
+  padding:.2rem .1rem}
+.pSeg{
+  padding:.18rem .45rem;border-radius:2px;font-size:.62rem;font-weight:700;
+  letter-spacing:.04em;cursor:pointer;border:1px solid transparent}
+.pSeg.breath{background:rgba(153,68,255,.12);border-color:rgba(153,68,255,.3);
+  color:rgba(153,68,255,.8)}
+.pSeg.consonant{background:rgba(0,255,255,.1);border-color:rgba(0,255,255,.3);
+  color:rgba(0,255,255,.8)}
+.pSeg.phrase{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);
+  color:rgba(255,255,255,.5)}
+.pSeg.silence{background:transparent;border-color:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.25)}
+
+/* Mutation macros */
+#mutLabel{font-size:.68rem;color:rgba(255,255,255,.3);letter-spacing:.06em;margin:.6rem 0 .35rem}
+#mutGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;margin-bottom:.6rem}
+.mBtn{
+  padding:.55rem 0;background:rgba(153,68,255,.07);
+  border:1px solid rgba(153,68,255,.18);color:rgba(255,255,255,.7);
+  font-size:.72rem;font-weight:700;letter-spacing:.04em;
+  cursor:pointer;border-radius:2px;text-align:center;text-transform:uppercase}
+.mBtn:active{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.4);color:#fff}
+.mBtn.generating{border-color:rgba(0,255,255,.4);color:rgba(0,255,255,.8)}
+
+/* Descendants */
+#descLabel{font-size:.68rem;color:rgba(255,255,255,.3);letter-spacing:.06em;margin-bottom:.35rem}
+#descRow{display:flex;gap:.4rem;flex-wrap:wrap}
+.dChip{
+  padding:.3rem .65rem;background:rgba(0,255,255,.06);
+  border:1px solid rgba(0,255,255,.2);color:rgba(0,255,255,.75);
+  font-size:.68rem;font-weight:700;cursor:pointer;border-radius:2px}
+.dChip:active{background:rgba(0,255,255,.15);border-color:rgba(0,255,255,.5)}
+.noDesc{font-size:.7rem;color:rgba(255,255,255,.2)}
+
+/* ─── CAPTURE STRIP ─────────────────────────────────────────────────── */
+#capStrip{
+  padding:.5rem .9rem;border-top:1px solid rgba(153,68,255,.1);
+  background:rgba(10,8,18,.7);backdrop-filter:blur(8px);
+  display:flex;align-items:center;gap:.5rem;flex-shrink:0;flex-wrap:wrap}
+.capBtn{
+  padding:.42rem .8rem;background:rgba(153,68,255,.08);
+  border:1px solid rgba(153,68,255,.2);color:rgba(255,255,255,.65);
+  font-size:.74rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:2px}
+.capBtn:active,.capBtn.on{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.45);color:#fff}
+.capBtn.live{border-color:rgba(255,68,68,.35);color:rgba(255,68,68,.75)}
+.capBtn.live.on{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.6);color:#ff4444}
+#capTimer{
+  font-size:.8rem;font-family:'Courier New',monospace;color:rgba(255,255,255,.35);
+  min-width:2.5rem;text-align:right;letter-spacing:.04em}
+#capStatus{font-size:.7rem;color:rgba(255,255,255,.28);letter-spacing:.04em;flex:1}
+
+/* Minimal semantic state */
+#semBar{
+  padding:.2rem .9rem;background:rgba(10,8,18,.5);
+  display:flex;align-items:center;gap:.6rem;border-top:1px solid rgba(153,68,255,.07);
+  flex-shrink:0}
+#semName{font-size:.7rem;color:rgba(255,255,255,.3);letter-spacing:.08em;min-width:6rem}
+#semDots{display:flex;gap:.2rem}
+.dot{width:5px;height:5px;border-radius:50%;background:rgba(153,68,255,.2)}
+.dot.on{background:rgba(153,68,255,.75);box-shadow:0 0 4px rgba(153,68,255,.6)}
+#semSpec{flex:1;height:16px;border-radius:1px;overflow:hidden;background:rgba(153,68,255,.04)}
+#specMini{width:100%;height:16px;display:block}
+
+/* ─── EXPORT BAR ─────────────────────────────────────────────────────── */
+#xBar{
+  padding:.45rem .9rem;border-top:1px solid rgba(153,68,255,.1);
+  background:rgba(10,8,18,.8);display:flex;gap:.45rem;flex-shrink:0}
+.xBtn{
+  padding:.38rem .8rem;background:rgba(0,255,255,.06);border:1px solid rgba(0,255,255,.18);
+  color:rgba(0,255,255,.7);font-size:.72rem;font-weight:700;letter-spacing:.05em;
+  cursor:pointer;border-radius:2px}
+.xBtn:active{background:rgba(0,255,255,.16);border-color:rgba(0,255,255,.45);color:#00ffff}
+.xBtn.warn{border-color:rgba(255,68,68,.2);color:rgba(255,68,68,.5)}
+.xBtn.warn:active{background:rgba(255,68,68,.12)}
+
+/* hidden */
+#fInput{display:none}
+</style>
+</head>
+<body>
+
+<!-- ── BOOT ─────────────────────────────────────────────────────────────── -->
+<div id="boot">
+  <div class="b-logo">SPUK<span>LAB</span></div>
+  <div class="b-title">VOXRITUAL<br>DNA ENGINE</div>
+  <div class="b-sub">vocal genetics laboratory — v3</div>
+  <button id="enterBtn">ENTER RITUAL</button>
+  <div id="bootStatus"></div>
+</div>
+
+<!-- ── APP ──────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <input type="file" id="fInput" accept=".wav,.mp3,.m4a,.aiff,.aif,.caf,audio/*">
+
+  <!-- HEADER -->
+  <div id="hdr">
+    <div class="logo">SPUK<span>LAB</span> / VOXRITUAL DNA</div>
+    <div id="semOrb"></div>
+  </div>
+
+  <!-- CATEGORY TABS -->
+  <div id="catBar">
+    <button class="cat on" data-cat="all">ALL</button>
+    <button class="cat" data-cat="spoken">SPOKEN</button>
+    <button class="cat" data-cat="whispers">WHISPERS</button>
+    <button class="cat" data-cat="breaths">BREATHS</button>
+    <button class="cat" data-cat="hooks">HOOKS</button>
+    <button class="cat" data-cat="textures">TEXTURES</button>
+    <button class="cat" data-cat="fragments">FRAGMENTS</button>
+    <button class="cat" data-cat="corrupted">CORRUPTED</button>
+    <button class="cat" data-cat="ritual">RITUAL</button>
+    <button class="cat" data-cat="captures">CAPTURES</button>
+  </div>
+
+  <!-- SAMPLE LIST -->
+  <div id="library">
+    <div class="emptyLib">NO SAMPLES<br><br>CAPTURE A PHRASE<br>OR LOAD A FILE<br><br>↓</div>
+  </div>
+
+  <!-- WORKSPACE (expands when sample selected) -->
+  <div id="workspace">
+    <div id="wsInner">
+      <div id="wsTitle">SOURCE: —</div>
+      <div id="waveRow">
+        <canvas id="waveCanvas"></canvas>
+        <div id="phraseMap"></div>
+      </div>
+      <div id="mutLabel">MUTATION MACROS</div>
+      <div id="mutGrid">
+        <button class="mBtn" data-m="dissolve">Dissolve</button>
+        <button class="mBtn" data-m="collapse">Collapse</button>
+        <button class="mBtn" data-m="ritual">Ritual</button>
+        <button class="mBtn" data-m="fever">Fever</button>
+      </div>
+      <div id="descLabel">DESCENDANTS</div>
+      <div id="descRow"><span class="noDesc">none generated</span></div>
+    </div>
+  </div>
+
+  <!-- SEMANTIC STATE BAR (minimal visual) -->
+  <div id="semBar">
+    <div id="semName">— fragile —</div>
+    <div id="semDots">
+      <div class="dot on"></div><div class="dot on"></div>
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div id="semSpec"><canvas id="specMini"></canvas></div>
+  </div>
+
+  <!-- CAPTURE STRIP -->
+  <div id="capStrip">
+    <button class="capBtn" id="cap5">5s</button>
+    <button class="capBtn" id="cap10">10s</button>
+    <button class="capBtn live" id="capLive">CAPTURE</button>
+    <button class="capBtn" id="capStop" style="display:none">STOP</button>
+    <button class="capBtn" id="loadBtn">LOAD</button>
+    <div id="capTimer">-:--</div>
+    <div id="capStatus">ready</div>
+  </div>
+
+  <!-- EXPORT BAR -->
+  <div id="xBar">
+    <button class="xBtn" id="xPack">ADN PACK</button>
+    <button class="xBtn" id="xSel">EXPORT WAV</button>
+    <button class="xBtn warn" id="xReset">CLEAR ALL</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// VOXRITUAL DNA ENGINE v3 — vocal genetics laboratory
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── APP STATE ────────────────────────────────────────────────────────────
+const A = {
+  AC: null,
+  db: null,
+  samples: [],          // in-memory sample list (loaded from DB)
+  selectedId: null,     // currently selected sample id
+  currentCat: 'all',
+  semState: 'fragile',  // current semantic state
+
+  // Capture state
+  cap: {
+    stream: null,
+    recorder: null,
+    chunks: [],
+    startTime: 0,
+    timer: null,
+    maxSec: null
+  },
+
+  // Minimal audio analysis (for spectrum only)
+  analyser: null,
+  freqData: null,
+
+  // Viz frame
+  vizRunning: false
+};
+
+const STATES    = ['fragile','collapse','ritual','ghost','fever'];
+const STATE_COL = ['#ff00ff','#ff0055','#00ffff','#9944ff','#ff4488'];
+const CATS      = ['spoken','whispers','breaths','hooks','textures',
+                   'fragments','corrupted','ritual','captures'];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDEXEDDB
+// ═══════════════════════════════════════════════════════════════════════════
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('voxritual_v3', 1);
+    req.onerror = () => rej(req.error);
+    req.onsuccess = () => res(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('samples')) {
+        const s = db.createObjectStore('samples', { keyPath: 'id' });
+        s.createIndex('cat', 'cat', { unique: false });
+        s.createIndex('parentId', 'parentId', { unique: false });
+      }
+    };
+  });
+}
+
+function dbPut(data) {
+  return new Promise((res, rej) => {
+    const tx = A.db.transaction('samples', 'readwrite');
+    const req = tx.objectStore('samples').put(data);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function dbGetAll() {
+  return new Promise((res, rej) => {
+    const tx = A.db.transaction('samples', 'readonly');
+    const req = tx.objectStore('samples').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function dbDelete(id) {
+  return new Promise((res, rej) => {
+    const tx = A.db.transaction('samples', 'readwrite');
+    const req = tx.objectStore('samples').delete(id);
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function dbClear() {
+  return new Promise((res, rej) => {
+    const tx = A.db.transaction('samples', 'readwrite');
+    const req = tx.objectStore('samples').clear();
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOT SEQUENCE — iOS Safari safe
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('enterBtn').addEventListener('click', async function() {
+  this.disabled = true;
+  setBootStatus('opening laboratory…');
+
+  // ① Create AC inside gesture
+  A.AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+  await A.AC.resume();
+
+  // ② Minimal audio graph (analyser only — no persistent processing)
+  A.analyser = A.AC.createAnalyser();
+  A.analyser.fftSize = 512;
+  A.analyser.smoothingTimeConstant = 0.88;
+  A.analyser.connect(A.AC.destination);
+  A.freqData = new Uint8Array(A.analyser.frequencyBinCount);
+
+  // ③ Open IndexedDB
+  setBootStatus('loading sample library…');
+  try {
+    A.db = await openDB();
+    const stored = await dbGetAll();
+    A.samples = stored;
+  } catch(e) {
+    console.warn('DB error:', e);
+    A.samples = [];
+  }
+
+  // ④ Show app
+  document.getElementById('boot').style.display = 'none';
+  document.getElementById('app').classList.add('show');
+  renderLibrary();
+  startViz();
+  setBootStatus('');
+});
+
+function setBootStatus(msg) {
+  document.getElementById('bootStatus').textContent = msg;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPTURE — HARVEST mode (capture → close)
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('cap5').addEventListener('click', () => startCapture(5));
+document.getElementById('cap10').addEventListener('click', () => startCapture(10));
+document.getElementById('capLive').addEventListener('click', () => startCapture(null));
+document.getElementById('capStop').addEventListener('click', stopCapture);
+
+async function startCapture(maxSec) {
+  if (A.cap.stream) return; // already capturing
+
+  setCapStatus('requesting mic…');
+
+  try {
+    // iOS: already have AC resumed from boot gesture
+    // Still need to resume if suspended (e.g. page was backgrounded)
+    if (A.AC.state === 'suspended') await A.AC.resume();
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+
+    A.cap.stream = stream;
+    A.cap.chunks = [];
+    A.cap.startTime = Date.now();
+    A.cap.maxSec = maxSec;
+
+    // Connect mic → analyser for spectrum display
+    const micSrc = A.AC.createMediaStreamSource(stream);
+    micSrc.connect(A.analyser);
+    A.cap.micSrc = micSrc;
+
+    // MediaRecorder for audio capture
+    const mr = new MediaRecorder(stream, { mimeType: getSupportedMime() });
+    mr.ondataavailable = e => { if (e.data.size > 0) A.cap.chunks.push(e.data); };
+    mr.onstop = finishCapture;
+    mr.start(100);
+    A.cap.recorder = mr;
+
+    // UI
+    document.getElementById('capStop').style.display = 'inline-block';
+    document.getElementById('cap5').classList.add('on');
+    document.getElementById('cap10').classList.add('on');
+    document.getElementById('capLive').classList.add('on');
+    setCapStatus(`capturing${maxSec ? ` ${maxSec}s` : ' (live)'}…`);
+
+    // Auto-stop timer
+    let elapsed = 0;
+    A.cap.timer = setInterval(() => {
+      elapsed = (Date.now() - A.cap.startTime) / 1000;
+      document.getElementById('capTimer').textContent = fmtTime(elapsed);
+      if (maxSec && elapsed >= maxSec) stopCapture();
+    }, 100);
+
+  } catch(e) {
+    setCapStatus('mic refused');
+    console.error('Capture failed:', e);
+  }
+}
+
+function stopCapture() {
+  if (!A.cap.stream) return;
+  clearInterval(A.cap.timer);
+  A.cap.recorder.stop();
+  // CRITICAL: immediately release mic tracks
+  A.cap.stream.getTracks().forEach(t => t.stop());
+  A.cap.stream = null;
+  if (A.cap.micSrc) { try { A.cap.micSrc.disconnect(); } catch(e){} }
+  A.cap.micSrc = null;
+  document.getElementById('capStop').style.display = 'none';
+  document.getElementById('cap5').classList.remove('on');
+  document.getElementById('cap10').classList.remove('on');
+  document.getElementById('capLive').classList.remove('on');
+  setCapStatus('processing…');
+}
+
+async function finishCapture() {
+  if (!A.cap.chunks.length) { setCapStatus('no audio captured'); return; }
+
+  const blob = new Blob(A.cap.chunks, { type: A.cap.chunks[0].type });
+  const ab = await blob.arrayBuffer();
+
+  let audioBuf;
+  try {
+    audioBuf = await A.AC.decodeAudioData(ab.slice(0));
+  } catch(e) {
+    console.error('Decode failed', e);
+    setCapStatus('decode error');
+    return;
+  }
+
+  const dur = audioBuf.duration;
+  const sample = await buildSampleRecord(audioBuf, {
+    name: `capture_${fmtStamp()}`,
+    cat: 'captures',
+    parentId: null
+  });
+
+  await dbPut(sample);
+  A.samples.push(sample);
+  renderLibrary();
+  selectSample(sample.id);
+  document.getElementById('capTimer').textContent = '-:--';
+  setCapStatus(`captured ${dur.toFixed(1)}s — mic released`);
+  setTimeout(() => setCapStatus('ready'), 3000);
+}
+
+function getSupportedMime() {
+  const types = ['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg'];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOAD FILE
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('loadBtn').addEventListener('click', () => {
+  document.getElementById('fInput').click();
+});
+
+document.getElementById('fInput').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  setCapStatus('loading…');
+
+  const ab = await file.arrayBuffer();
+  let audioBuf;
+  try {
+    audioBuf = await A.AC.decodeAudioData(ab.slice(0));
+  } catch(err) {
+    setCapStatus('decode error'); return;
+  }
+
+  const name = file.name.replace(/\.[^.]+$/, '');
+  const sample = await buildSampleRecord(audioBuf, { name, cat: 'spoken', parentId: null });
+  await dbPut(sample);
+  A.samples.push(sample);
+  renderLibrary();
+  selectSample(sample.id);
+  setCapStatus(`loaded: ${name.slice(0,24)}`);
+  setTimeout(() => setCapStatus('ready'), 2000);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SAMPLE RECORD BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildSampleRecord(audioBuf, meta) {
+  const analysis = analyzeBuffer(audioBuf);
+  const scores   = computeScores(audioBuf, analysis);
+
+  // Serialize audio data for IndexedDB
+  const channelData = [];
+  for (let ch = 0; ch < audioBuf.numberOfChannels; ch++) {
+    channelData.push(audioBuf.getChannelData(ch).slice());
+  }
+
+  return {
+    id:         uid(),
+    name:       meta.name || 'fragment',
+    cat:        meta.cat || 'fragments',
+    parentId:   meta.parentId || null,
+    mutationOf: meta.mutationOf || null,
+
+    sampleRate:       audioBuf.sampleRate,
+    numberOfChannels: audioBuf.numberOfChannels,
+    length:           audioBuf.length,
+    duration:         audioBuf.duration,
+    channelData,
+
+    analysis,
+    scores,
+    semState: A.semState,
+    tags: [],
+    createdAt: Date.now()
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHRASE ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+function analyzeBuffer(buf) {
+  const data = buf.getChannelData(0);
+  const rate = buf.sampleRate;
+  const win  = Math.floor(rate * 0.010);
+
+  const transients = [], breaths = [], silences = [], phrases = [];
+  let prevE = 0, silStart = -1, phraseStart = -1;
+
+  for (let i = 0; i < data.length; i += win) {
+    let e = 0;
+    const end = Math.min(i + win, data.length);
+    for (let j = i; j < end; j++) e += data[j] * data[j];
+    e = Math.sqrt(e / (end - i));
+    const t = i / rate;
+
+    // Transient / consonant onset
+    if (e > prevE * 1.7 && e > 0.016) {
+      transients.push({ t, e, type: e > 0.055 ? 'consonant' : 'onset' });
+    }
+
+    // Silence detection
+    if (e < 0.004) {
+      if (silStart < 0) silStart = t;
+      if (phraseStart >= 0 && (t - phraseStart) > 0.15) {
+        phrases.push({ t0: phraseStart, t1: t });
+        phraseStart = -1;
+      }
+    } else {
+      if (silStart >= 0 && (t - silStart) > 0.04) {
+        silences.push({ t0: silStart, t1: t });
+        if (e < 0.022) breaths.push({ t, dur: t - silStart });
+      }
+      silStart = -1;
+      if (phraseStart < 0) phraseStart = t;
+    }
+    prevE = e;
+  }
+  if (phraseStart >= 0) phrases.push({ t0: phraseStart, t1: buf.duration });
+
+  return { transients, breaths, silences, phrases };
+}
+
+function computeScores(buf, analysis) {
+  const { transients, breaths, silences } = analysis;
+  const dur = buf.duration;
+
+  // Fragility: ratio of silence/breath to total duration
+  const silDur = silences.reduce((a, s) => a + (s.t1 - s.t0), 0);
+  const fragility = Math.min(100, Math.round((silDur / dur) * 100 + breaths.length * 5));
+
+  // Ghost: transient density (lower density = more ghostly)
+  const tDens = transients.length / dur;
+  const ghost = Math.min(100, Math.round(Math.max(0, 100 - tDens * 8)));
+
+  return { fragility, ghost };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESERIALIZE AUDIO BUFFER
+// ═══════════════════════════════════════════════════════════════════════════
+function toAudioBuffer(sample) {
+  const buf = A.AC.createBuffer(
+    sample.numberOfChannels, sample.length, sample.sampleRate);
+  for (let ch = 0; ch < sample.numberOfChannels; ch++) {
+    buf.copyToChannel(new Float32Array(sample.channelData[ch]), ch);
+  }
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRARY UI
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.cat').forEach(btn =>
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.cat').forEach(b => b.classList.remove('on'));
+    this.classList.add('on');
+    A.currentCat = this.dataset.cat;
+    renderLibrary();
+  })
+);
+
+function renderLibrary() {
+  const lib = document.getElementById('library');
+  const cat = A.currentCat;
+
+  const visible = A.samples.filter(s =>
+    cat === 'all' || s.cat === cat
+  );
+
+  if (!visible.length) {
+    lib.innerHTML = '<div class="emptyLib">NO SAMPLES<br><br>CAPTURE A PHRASE<br>OR LOAD A FILE</div>';
+    return;
+  }
+
+  lib.innerHTML = visible.map(s => {
+    const isDesc = s.parentId !== null;
+    const descMark = isDesc ? `<span class="sDesc">↳ ${s.mutationOf || ''}</span>` : '';
+    const descCount = A.samples.filter(x => x.parentId === s.id).length;
+    const descBadge = descCount ? `<span class="sDesc">${descCount} desc.</span>` : '';
+
+    return `<div class="sItem${A.selectedId === s.id ? ' on' : ''}" data-id="${s.id}">
+      <canvas class="sWave" data-id="${s.id}" width="52" height="22"></canvas>
+      <div class="sMeta">
+        <div class="sName">${s.name}${descMark}${descBadge}</div>
+        <div class="sTags">
+          <span class="sTag">${s.cat}</span>
+          <span class="sTag semTag">${s.semState}</span>
+        </div>
+      </div>
+      <div class="sScores">
+        <div class="sDur">${fmtTime(s.duration)}</div>
+        <div class="sScore">frag <span>${s.scores.fragility}</span></div>
+        <div class="sScore">ghost <span>${s.scores.ghost}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Item click → select
+  lib.querySelectorAll('.sItem').forEach(el => {
+    el.addEventListener('click', () => selectSample(el.dataset.id));
+    el.addEventListener('contextmenu', e => { e.preventDefault(); deleteSample(el.dataset.id); });
+    el.addEventListener('touchstart', handleLongPress(el.dataset.id));
+  });
+
+  // Draw mini waveforms
+  lib.querySelectorAll('.sWave').forEach(c => {
+    const s = A.samples.find(x => x.id === c.dataset.id);
+    if (s) drawMiniWave(c, s);
+  });
+}
+
+function handleLongPress(id) {
+  let timer;
+  return {
+    handleEvent: (e) => {
+      if (e.type === 'touchstart') {
+        timer = setTimeout(() => deleteSample(id), 700);
+      } else {
+        clearTimeout(timer);
+      }
+    }
+  };
+}
+
+async function deleteSample(id) {
+  if (!confirm('Remove this sample?')) return;
+  // Also remove all descendants
+  const toDelete = [id, ...A.samples.filter(s => s.parentId === id).map(s => s.id)];
+  for (const did of toDelete) {
+    await dbDelete(did);
+    A.samples = A.samples.filter(s => s.id !== did);
+  }
+  if (A.selectedId === id) {
+    A.selectedId = null;
+    document.getElementById('workspace').classList.remove('open');
+  }
+  renderLibrary();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORKSPACE
+// ═══════════════════════════════════════════════════════════════════════════
+function selectSample(id) {
+  A.selectedId = id;
+  const s = A.samples.find(x => x.id === id);
+  if (!s) return;
+
+  // Update semantic state from sample
+  A.semState = s.semState || 'fragile';
+  updateSemUI();
+
+  // Open workspace
+  const ws = document.getElementById('workspace');
+  ws.classList.add('open');
+
+  // Title
+  document.getElementById('wsTitle').textContent = `SOURCE: ${s.name}`;
+
+  // Draw waveform
+  drawWorkspaceWave(s);
+
+  // Draw phrase map
+  drawPhraseMap(s);
+
+  // Draw descendants
+  drawDescendants(id);
+
+  // Re-render library to show selection highlight
+  renderLibrary();
+}
+
+function drawWorkspaceWave(s) {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 300;
+  canvas.height = 36;
+  const W = canvas.width, H = 36;
+
+  ctx.fillStyle = 'rgba(153,68,255,.05)';
+  ctx.fillRect(0, 0, W, H);
+
+  const data = s.channelData[0];
+  const step = Math.floor(data.length / W);
+  const mid = H / 2;
+
+  ctx.strokeStyle = 'rgba(153,68,255,.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base + step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const h = max * mid * 0.88;
+    if (x === 0) ctx.moveTo(x, mid - h);
+    else ctx.lineTo(x, mid - h);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(153,68,255,.3)';
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base + step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const h = max * mid * 0.88;
+    if (x === 0) ctx.moveTo(x, mid + h);
+    else ctx.lineTo(x, mid + h);
+  }
+  ctx.stroke();
+
+  // Transient tick marks
+  ctx.fillStyle = 'rgba(0,255,255,.55)';
+  for (const tr of (s.analysis.transients || []).slice(0, 80)) {
+    const x = (tr.t / s.duration) * W;
+    ctx.fillRect(x - 0.5, 0, 1, tr.type === 'consonant' ? H * 0.6 : H * 0.35);
+  }
+
+  // Breath marks
+  ctx.fillStyle = 'rgba(153,68,255,.6)';
+  for (const br of (s.analysis.breaths || []).slice(0, 40)) {
+    const x = (br.t / s.duration) * W;
+    ctx.fillRect(x - 0.5, H * 0.7, 1, H * 0.3);
+  }
+}
+
+function drawPhraseMap(s) {
+  const pm = document.getElementById('phraseMap');
+  const { transients, breaths, silences, phrases } = s.analysis;
+  const dur = s.duration;
+
+  let segments = [];
+
+  // Merge events into timeline
+  for (const b of breaths) segments.push({ t: b.t, type: 'breath', label: 'BR' });
+  for (const t of transients.filter(t => t.type === 'consonant').slice(0, 12))
+    segments.push({ t: t.t, type: 'consonant', label: 'CX' });
+  for (const s of silences.slice(0, 8))
+    segments.push({ t: s.t0, type: 'silence', label: '—' });
+  for (const p of phrases.slice(0, 10))
+    segments.push({ t: p.t0, type: 'phrase', label: `~${(p.t1-p.t0).toFixed(1)}s` });
+
+  segments.sort((a, b) => a.t - b.t);
+
+  pm.innerHTML = segments.slice(0, 24).map(seg =>
+    `<span class="pSeg ${seg.type}" title="${seg.type} @ ${seg.t.toFixed(2)}s">${seg.label}</span>`
+  ).join('');
+}
+
+function drawDescendants(parentId) {
+  const desc = A.samples.filter(s => s.parentId === parentId);
+  const row = document.getElementById('descRow');
+
+  if (!desc.length) {
+    row.innerHTML = '<span class="noDesc">none generated yet</span>';
+    return;
+  }
+
+  row.innerHTML = desc.map(d =>
+    `<button class="dChip" data-id="${d.id}">${d.mutationOf || d.semState} ${fmtTime(d.duration)}</button>`
+  ).join('');
+
+  row.querySelectorAll('.dChip').forEach(btn =>
+    btn.addEventListener('click', () => selectSample(btn.dataset.id))
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MUTATION MACROS — generates variants via OfflineAudioContext
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.mBtn').forEach(btn =>
+  btn.addEventListener('click', () => generateVariant(btn.dataset.m))
+);
+
+async function generateVariant(mutationType) {
+  const src = A.samples.find(s => s.id === A.selectedId);
+  if (!src) return;
+
+  const btn = document.querySelector(`.mBtn[data-m="${mutationType}"]`);
+  if (btn) btn.classList.add('generating');
+  setCapStatus(`generating ${mutationType} variant…`);
+
+  try {
+    const srcBuf = toAudioBuffer(src);
+    const mutBuf = await renderMutation(srcBuf, mutationType);
+
+    const newSample = await buildSampleRecord(mutBuf, {
+      name: `${src.name}_${mutationType}`,
+      cat: mutationType === 'fever' || mutationType === 'collapse' ? 'corrupted' : 
+           mutationType === 'ritual' ? 'ritual' : 
+           mutationType === 'dissolve' ? 'textures' : 'fragments',
+      parentId: src.id,
+      mutationOf: mutationType
+    });
+    newSample.semState = mutationType === 'dissolve' ? 'ghost' :
+                         mutationType === 'collapse' ? 'collapse' :
+                         mutationType === 'ritual'   ? 'ritual' :
+                         mutationType === 'fever'    ? 'fever'  : 'fragile';
+
+    await dbPut(newSample);
+    A.samples.push(newSample);
+
+    drawDescendants(src.id);
+    renderLibrary();
+    setCapStatus(`${mutationType} variant generated`);
+    setTimeout(() => setCapStatus('ready'), 2500);
+  } catch(e) {
+    console.error('Variant generation failed:', e);
+    setCapStatus('render error');
+  }
+
+  if (btn) btn.classList.remove('generating');
+}
+
+async function renderMutation(srcBuf, type) {
+  const len     = srcBuf.length;
+  const rate    = srcBuf.sampleRate;
+  const offAC   = new OfflineAudioContext(2, len, rate);
+  const stereo  = offAC.createBuffer(2, len, rate);
+
+  // Upmix if mono
+  for (let ch = 0; ch < 2; ch++) {
+    stereo.copyToChannel(srcBuf.getChannelData(Math.min(ch, srcBuf.numberOfChannels-1)), ch);
+  }
+
+  const src = offAC.createBufferSource();
+  src.buffer = stereo;
+
+  let last = src;
+
+  switch(type) {
+    case 'dissolve': {
+      // Ghost: long sparse reverb + slight pitch drift via convolver
+      const conv = offAC.createConvolver();
+      conv.buffer = buildIR(offAC, 0.7, 0.22);
+      const wet = offAC.createGain(); wet.gain.value = 0.45;
+      const dry = offAC.createGain(); dry.gain.value = 0.75;
+      const mix = offAC.createGain(); mix.gain.value = 1.0;
+      src.connect(dry); src.connect(conv);
+      conv.connect(wet); dry.connect(mix); wet.connect(mix);
+      last = mix;
+      break;
+    }
+    case 'collapse': {
+      // Collapse: heavy distortion + subtle pitch drop (playback rate 0.97)
+      src.playbackRate.value = 0.97;
+      const dist = offAC.createWaveShaper();
+      dist.curve = distCurve(120);
+      dist.oversample = '4x';
+      const g = offAC.createGain(); g.gain.value = 0.7;
+      src.connect(dist); dist.connect(g); last = g;
+      break;
+    }
+    case 'ritual': {
+      // Ritual: slow multi-tap delay (echoing phrase structure)
+      const delay = offAC.createDelay(1.5);
+      delay.delayTime.value = 0.22;
+      const fb = offAC.createGain(); fb.gain.value = 0.35;
+      const wet = offAC.createGain(); wet.gain.value = 0.38;
+      const dry = offAC.createGain(); dry.gain.value = 0.8;
+      const mix = offAC.createGain(); mix.gain.value = 1.0;
+      src.connect(dry); src.connect(delay);
+      delay.connect(fb); fb.connect(delay);
+      delay.connect(wet); dry.connect(mix); wet.connect(mix);
+      last = mix;
+      break;
+    }
+    case 'fever': {
+      // Fever: pitch up slightly + hard distortion + convolver crunch
+      src.playbackRate.value = 1.04;
+      const dist = offAC.createWaveShaper();
+      dist.curve = distCurve(220);
+      dist.oversample = '4x';
+      const g = offAC.createGain(); g.gain.value = 0.55;
+      src.connect(dist); dist.connect(g); last = g;
+      break;
+    }
+  }
+
+  // Brick-wall limiter
+  const lim = offAC.createDynamicsCompressor();
+  lim.threshold.value = -8; lim.knee.value = 2;
+  lim.ratio.value = 20;    lim.attack.value = 0.001;
+  lim.release.value = 0.05;
+  last.connect(lim);
+  lim.connect(offAC.destination);
+
+  src.start(0);
+  return offAC.startRendering();
+}
+
+// ─── DSP helpers ────────────────────────────────────────────────────────────
+function distCurve(amount) {
+  const n = 512;
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    c[i] = amount < 1 ? x : (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+  }
+  return c;
+}
+
+function buildIR(AC, dur, decay) {
+  const rate = AC.sampleRate;
+  const len  = Math.floor(rate * dur);
+  const buf  = AC.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      const t = i / len;
+      d[i] = Math.random() > 0.80 ?
+             (Math.random()*2-1) * Math.exp(-t / decay) * 0.3 : 0;
+    }
+  }
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLAYBACK (sample preview)
+// ═══════════════════════════════════════════════════════════════════════════
+// Double-tap to preview (simple, no full transport)
+let lastTap = 0, curPreviewSrc = null;
+document.getElementById('library').addEventListener('click', e => {
+  const now = Date.now();
+  const item = e.target.closest('.sItem');
+  if (!item) return;
+  const id = item.dataset.id;
+  if (now - lastTap < 400 && A.selectedId === id) {
+    previewSample(id);
+  }
+  lastTap = now;
+});
+
+function previewSample(id) {
+  const s = A.samples.find(x => x.id === id);
+  if (!s) return;
+  if (curPreviewSrc) { try { curPreviewSrc.stop(); } catch(e){} }
+  const src = A.AC.createBufferSource();
+  src.buffer = toAudioBuffer(s);
+  src.connect(A.analyser); // route through analyser for spectrum
+  src.connect(A.AC.destination);
+  src.start();
+  curPreviewSrc = src;
+  setCapStatus(`playing: ${s.name}`);
+  src.onended = () => setCapStatus('ready');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEMANTIC STATE UI
+// ═══════════════════════════════════════════════════════════════════════════
+function updateSemUI() {
+  const idx = STATES.indexOf(A.semState);
+  const col = STATE_COL[idx >= 0 ? idx : 0];
+
+  document.getElementById('semOrb').style.background = col;
+  document.getElementById('semOrb').style.boxShadow  = `0 0 8px ${col}`;
+  document.getElementById('semName').textContent = `— ${A.semState} —`;
+
+  const dots = document.querySelectorAll('#semDots .dot');
+  dots.forEach((d, i) => d.classList.toggle('on', i <= (idx >= 0 ? idx : 0)));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MINIMAL VISUALIZATION (spectrum only)
+// ═══════════════════════════════════════════════════════════════════════════
+function startViz() {
+  if (A.vizRunning) return;
+  A.vizRunning = true;
+  vizLoop();
+}
+
+function vizLoop() {
+  drawSpecMini();
+  requestAnimationFrame(vizLoop);
+}
+
+function drawSpecMini() {
+  const canvas = document.getElementById('specMini');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 100;
+  const H = 16;
+  canvas.width = W; canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+  if (!A.analyser) return;
+  A.analyser.getByteFrequencyData(A.freqData);
+
+  const col = STATE_COL[STATES.indexOf(A.semState)] || '#9944ff';
+  ctx.fillStyle = col.replace('#', 'rgba(') + '80)'; // simplified
+  // convert hex to rgba
+  const r = parseInt(col.slice(1,3),16), g = parseInt(col.slice(3,5),16), b = parseInt(col.slice(5,7),16);
+
+  const bins = A.freqData.length;
+  const step = bins / W;
+  for (let x = 0; x < W; x++) {
+    const v = A.freqData[Math.floor(x * step)] / 255;
+    const h = v * H;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.65)`;
+    ctx.fillRect(x, H - h, 1, h);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MINI WAVEFORM (library thumbnails)
+// ═══════════════════════════════════════════════════════════════════════════
+function drawMiniWave(canvas, s) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = 'rgba(153,68,255,.06)';
+  ctx.fillRect(0, 0, W, H);
+
+  const data = s.channelData[0];
+  const step = Math.max(1, Math.floor(data.length / W));
+  const mid = H / 2;
+
+  ctx.strokeStyle = 'rgba(153,68,255,.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base + step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const y = mid - max * mid * 0.85;
+    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(153,68,255,.3)';
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base + step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const y = mid + max * mid * 0.85;
+    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('xPack').addEventListener('click', exportADNPack);
+document.getElementById('xSel').addEventListener('click', exportSelectedWAV);
+document.getElementById('xReset').addEventListener('click', clearAll);
+
+function exportADNPack() {
+  const pack = {
+    version: 'voxritual_adn_v1',
+    timestamp: new Date().toISOString(),
+    totalSamples: A.samples.length,
+    semState: A.semState,
+    samples: A.samples.map(s => ({
+      id: s.id,
+      name: s.name,
+      cat: s.cat,
+      parentId: s.parentId,
+      mutationOf: s.mutationOf,
+      duration: s.duration,
+      sampleRate: s.sampleRate,
+      semState: s.semState,
+      scores: s.scores,
+      analysis: {
+        transientCount: s.analysis.transients.length,
+        breathCount: s.analysis.breaths.length,
+        silenceCount: s.analysis.silences.length,
+        phraseCount: s.analysis.phrases.length,
+        transients: s.analysis.transients.slice(0, 50),
+        breaths: s.analysis.breaths.slice(0, 30),
+        phrases: s.analysis.phrases.slice(0, 20)
+      },
+      tags: s.tags,
+      createdAt: s.createdAt
+    })),
+    descendantTree: buildDescendantTree()
+  };
+  dlJSON(pack, `voxritual_adn_${Date.now()}.json`);
+}
+
+function buildDescendantTree() {
+  const roots = A.samples.filter(s => !s.parentId);
+  return roots.map(r => ({
+    id: r.id, name: r.name, semState: r.semState,
+    descendants: A.samples.filter(s => s.parentId === r.id).map(d => ({
+      id: d.id, name: d.name, mutationOf: d.mutationOf, semState: d.semState
+    }))
+  }));
+}
+
+function exportSelectedWAV() {
+  const s = A.samples.find(x => x.id === A.selectedId);
+  if (!s) { alert('No sample selected'); return; }
+  const buf = toAudioBuffer(s);
+  const interleaved = new Float32Array(buf.length * buf.numberOfChannels);
+  const frames = buf.length;
+  for (let i = 0; i < frames; i++) {
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      interleaved[i * buf.numberOfChannels + ch] = buf.getChannelData(ch)[i];
+    }
+  }
+  dlBlob(buildWAV(interleaved, buf.sampleRate, buf.numberOfChannels),
+         'audio/wav', `${s.name}_${s.mutationOf||s.semState}_${Date.now()}.wav`);
+}
+
+async function clearAll() {
+  if (!confirm('Clear all samples? This cannot be undone.')) return;
+  await dbClear();
+  A.samples = [];
+  A.selectedId = null;
+  document.getElementById('workspace').classList.remove('open');
+  renderLibrary();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WAV BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+function buildWAV(samples, rate, ch) {
+  const bps = 16, ba = ch * 2, br = rate * ba;
+  const dl = samples.length * 2;
+  const buf = new ArrayBuffer(44 + dl);
+  const v = new DataView(buf);
+  const ws = (o, s) => s.split('').forEach((c, i) => v.setUint8(o+i, c.charCodeAt(0)));
+  ws(0,'RIFF'); v.setUint32(4, 36+dl,true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true); v.setUint32(28,br,true); v.setUint16(32,ba,true);
+  v.setUint16(34,bps,true); ws(36,'data'); v.setUint32(40,dl,true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++, off+=2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(off, s < 0 ? s*32768 : s*32767, true);
+  }
+  return buf;
+}
+
+function dlJSON(obj, name) { dlBlob(JSON.stringify(obj, null, 2), 'application/json', name); }
+function dlBlob(data, mime, name) {
+  const blob = new Blob([data], { type: mime });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+}
+
+function fmtStamp() {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}${d.getSeconds().toString().padStart(2,'0')}`;
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+}
+
+function setCapStatus(msg) {
+  document.getElementById('capStatus').textContent = msg;
+}
+</script>
+</body>
+</html>

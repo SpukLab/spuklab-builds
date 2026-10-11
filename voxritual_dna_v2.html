@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VOXRITUAL DNA ENGINE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d0b19;color:#fff;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px}
+
+/* ── BOOT OVERLAY ── */
+#bootOverlay{
+  position:fixed;inset:0;z-index:200;
+  background:linear-gradient(155deg,#080614,#0d0b19);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2rem;
+}
+.boot-logo{font-size:.95rem;font-weight:800;letter-spacing:.12em;color:#fff}
+.boot-logo span{color:#00ffff}
+.boot-title{font-size:2rem;font-weight:200;letter-spacing:.2em;text-align:center;
+  color:rgba(255,255,255,.6);line-height:1.4}
+#enterBtn{
+  padding:.95rem 2.8rem;background:rgba(153,68,255,.1);
+  border:1px solid rgba(153,68,255,.35);color:#fff;
+  font-size:1rem;font-weight:700;letter-spacing:.12em;cursor:pointer;border-radius:2px}
+#enterBtn:active{background:rgba(153,68,255,.25);border-color:rgba(153,68,255,.6)}
+
+/* ── DENIED OVERLAY ── */
+#deniedOverlay{
+  position:fixed;inset:0;z-index:250;background:rgba(8,6,20,.96);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;
+}
+#deniedOverlay.show{display:flex}
+.denied-head{font-size:1.3rem;font-weight:200;letter-spacing:.22em;color:rgba(255,68,68,.9)}
+.denied-body{font-size:.8rem;color:rgba(255,255,255,.35);text-align:center;max-width:260px;line-height:1.6}
+#retryBtn{padding:.6rem 1.7rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);
+  color:rgba(255,68,68,.85);font-size:.82rem;font-weight:700;letter-spacing:.08em;cursor:pointer;border-radius:2px}
+
+/* ── MAIN INTERFACE ── */
+#main{position:fixed;inset:0;display:none;flex-direction:column}
+#main.show{display:flex}
+
+/* canvas lives behind everything */
+#bgCanvas{position:fixed;inset:0;z-index:0}
+
+/* ui stack sits above canvas */
+#ui{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+#header{
+  padding:.7rem 1.1rem;background:rgba(13,11,25,.65);backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(153,68,255,.12);
+  display:flex;justify-content:space-between;align-items:center;flex-shrink:0
+}
+.logo{font-size:.82rem;font-weight:800;letter-spacing:.08em}
+.logo span{color:#00ffff}
+#micBadge{font-size:.72rem;color:rgba(255,255,255,.35);letter-spacing:.04em}
+#micBadge.on{color:rgba(0,255,255,.7)}
+#micBadge.err{color:rgba(255,68,68,.7)}
+
+/* ── TRANSPORT ── */
+#transport{
+  padding:.6rem 1.1rem .5rem;background:rgba(13,11,25,.55);backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(153,68,255,.12);flex-shrink:0
+}
+#tCtrl{display:flex;gap:.45rem;margin-bottom:.55rem;flex-wrap:wrap}
+.tb{
+  padding:.48rem .8rem;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);
+  color:rgba(255,255,255,.65);font-size:.76rem;font-weight:700;letter-spacing:.06em;
+  cursor:pointer;border-radius:2px;transition:background .12s,border-color .12s,color .12s
+}
+.tb:active,.tb.on{background:rgba(153,68,255,.2);border-color:rgba(153,68,255,.45);color:#fff}
+.tb.rec{border-color:rgba(255,68,68,.25);color:rgba(255,68,68,.7)}
+.tb.rec.on{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.55);color:#ff4444}
+
+/* ── TIMELINE ── */
+#tlWrap{position:relative;height:34px}
+#tlCanvas{width:100%;height:34px;cursor:pointer;display:block}
+#tlTime{
+  position:absolute;right:3px;top:50%;transform:translateY(-50%);
+  font-size:.68rem;color:rgba(255,255,255,.35);pointer-events:none;
+  font-family:'Courier New',monospace
+}
+
+/* ── CENTER ── */
+#center{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:.8rem;gap:.9rem;min-height:0;overflow:hidden}
+
+/* Semantic field label (ghostly, barely visible) */
+#semLabel{
+  font-size:.72rem;font-weight:200;letter-spacing:.28em;text-transform:uppercase;
+  color:rgba(255,255,255,.18);text-align:center
+}
+
+/* ── MACROS ── */
+#macros{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;width:100%;max-width:460px}
+.mac{
+  padding:.75rem 0;background:rgba(153,68,255,.07);border:1px solid rgba(153,68,255,.18);
+  color:rgba(255,255,255,.75);font-size:.75rem;font-weight:700;letter-spacing:.04em;
+  cursor:pointer;border-radius:2px;text-align:center;text-transform:uppercase;
+  transition:background .12s,border-color .12s,color .12s
+}
+.mac:active{background:rgba(153,68,255,.22);border-color:rgba(153,68,255,.5);color:#fff}
+
+/* ── SPECTRUM ── */
+#specWrap{padding:0 1.1rem .4rem;flex-shrink:0}
+#specCanvas{width:100%;height:34px;display:block}
+
+/* ── EXPORT BAR ── */
+#exports{
+  padding:.6rem 1.1rem;background:rgba(13,11,25,.65);backdrop-filter:blur(10px);
+  border-top:1px solid rgba(153,68,255,.12);display:flex;gap:.5rem;flex-shrink:0
+}
+.xb{padding:.45rem .85rem;background:rgba(0,255,255,.06);border:1px solid rgba(0,255,255,.2);
+  color:rgba(0,255,255,.75);font-size:.74rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:2px}
+.xb:active{background:rgba(0,255,255,.18);border-color:rgba(0,255,255,.5);color:#00ffff}
+
+/* ── DROP ZONE ── */
+#dropZone{
+  position:fixed;inset:0;z-index:100;background:rgba(153,68,255,.12);
+  border:2px dashed rgba(153,68,255,.45);display:none;align-items:center;justify-content:center;
+  font-size:1rem;font-weight:700;letter-spacing:.15em;color:rgba(153,68,255,.75)
+}
+#dropZone.show{display:flex}
+
+/* hidden file input */
+#fInput{display:none}
+</style>
+</head>
+<body>
+
+<!-- BOOT -->
+<div id="bootOverlay">
+  <div class="boot-logo">SPUK<span>LAB</span></div>
+  <div class="boot-title">VOXRITUAL<br>DNA ENGINE</div>
+  <button id="enterBtn">ENTER RITUAL</button>
+</div>
+
+<!-- DENIED -->
+<div id="deniedOverlay">
+  <div class="denied-head">TRANSMISSION REFUSED</div>
+  <div class="denied-body">microphone permission was denied — the ritual requires your voice</div>
+  <button id="retryBtn">RETRY</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <canvas id="bgCanvas"></canvas>
+  <div id="dropZone">DROP VOCAL HERE</div>
+  <input type="file" id="fInput" accept=".wav,.mp3,.m4a,.aiff,.aif,.caf,audio/*">
+
+  <div id="ui">
+    <div id="header">
+      <div class="logo">SPUK<span>LAB</span> / VOXRITUAL DNA</div>
+      <div id="micBadge">idle</div>
+    </div>
+
+    <!-- TRANSPORT — primary interface -->
+    <div id="transport">
+      <div id="tCtrl">
+        <button class="tb" id="tPlay">PLAY</button>
+        <button class="tb" id="tPause">PAUSE</button>
+        <button class="tb" id="tStop">STOP</button>
+        <button class="tb" id="tLoop">LOOP</button>
+        <button class="tb rec" id="tRec">REC</button>
+        <button class="tb" id="tMon">MON</button>
+        <button class="tb" id="tLoad">LOAD</button>
+      </div>
+      <div id="tlWrap">
+        <canvas id="tlCanvas"></canvas>
+        <div id="tlTime">0:00</div>
+      </div>
+    </div>
+
+    <!-- CENTER — semantic visual field + macros -->
+    <div id="center">
+      <div id="semLabel">— fragile —</div>
+      <div id="macros">
+        <button class="mac" data-m="dissolve">Dissolve</button>
+        <button class="mac" data-m="collapse">Collapse</button>
+        <button class="mac" data-m="ritual">Ritual</button>
+        <button class="mac" data-m="fever">Fever</button>
+      </div>
+    </div>
+
+    <div id="specWrap"><canvas id="specCanvas"></canvas></div>
+
+    <div id="exports">
+      <button class="xb" id="xDNA">DNA EXPORT</button>
+      <button class="xb" id="xWAV">WAV EXPORT</button>
+      <button class="xb" id="xReset">RESET</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// VOXRITUAL DNA ENGINE v2
+// A psychologically unstable vocal memory organism
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── STATE OBJECT ────────────────────────────────────────────────────────────
+const V = {
+  AC: null,
+  micStream: null, micSource: null,
+
+  // Audio graph node references
+  n: {},
+
+  // Semantic DNA
+  sem: {
+    cur: 0.0, target: 0, inertia: 0.93,
+    density: 0.0, drift: 0.0, driftPhase: 0.0,
+    // Inertia per state: fragile=0.95, collapse=0.91, ritual=0.98, ghost=0.97, fever=0.87
+    stateInertia: [0.95, 0.91, 0.98, 0.97, 0.87],
+    stateIntensity: [0.22, 0.65, 0.48, 0.38, 0.72]
+  },
+  STATES: ['fragile','collapse','ritual','ghost','fever'],
+  COLORS: ['#ff00ff','#ff0055','#00ffff','#9944ff','#ff4488'],
+
+  // Processing params (0–1)
+  p: { desync:0, stutter:0, granular:0, distort:0 },
+
+  // Transport
+  t: {
+    state: 'idle', // idle|playing|paused|stopped|recording
+    looping: false, monitoring: false,
+    startTime: 0, pauseAt: 0
+  },
+
+  // Audio data
+  loadedBuf: null, curSrc: null,
+  freqData: null,
+
+  // Recording (ScriptProcessor)
+  rec: { on: false, L: [], R: [] },
+
+  // Phrase Buffer Memory
+  mem: { transients:[], breaths:[], silences:[] },
+
+  // DNA log
+  dna: { events:[], macros:[] },
+
+  // Waveform cache for timeline
+  waveCache: null,
+
+  // Visuals
+  vis: { canvas:null, ctx:null, w:0, h:0, px:[], frame:0 }
+};
+
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const PARTICLE_COUNT = 90;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOT SEQUENCE — iOS Safari safe
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('enterBtn').addEventListener('click', async function() {
+  this.textContent = 'initializing…';
+  this.disabled = true;
+
+  // ① Create AudioContext INSIDE the gesture handler
+  V.AC = new (window.AudioContext || window.webkitAudioContext)({
+    latencyHint: 'interactive',
+    sampleRate: 44100
+  });
+
+  // ② Resume — this is the iOS audio unlock
+  await V.AC.resume();
+
+  // ③ Build the entire audio graph before requesting mic
+  buildGraph();
+
+  // ④ Request mic
+  setBadge('REQUESTING');
+  let gotMic = false;
+  try {
+    V.micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+    connectMic(V.micStream);
+    setBadge('ACTIVE');
+    gotMic = true;
+  } catch(e) {
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      setBadge('DENIED');
+      document.getElementById('deniedOverlay').classList.add('show');
+    } else {
+      // Non-permission error — continue without mic (WAV mode)
+      setBadge('WAV_ONLY');
+    }
+  }
+
+  // ⑤ Show interface
+  document.getElementById('bootOverlay').style.display = 'none';
+  document.getElementById('main').classList.add('show');
+  initVis();
+  runLoop();
+});
+
+document.getElementById('retryBtn').addEventListener('click', async function() {
+  document.getElementById('deniedOverlay').classList.remove('show');
+  setBadge('REQUESTING');
+  try {
+    V.micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+    connectMic(V.micStream);
+    setBadge('ACTIVE');
+  } catch(e) {
+    setBadge('DENIED');
+    document.getElementById('deniedOverlay').classList.add('show');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO GRAPH
+// ═══════════════════════════════════════════════════════════════════════════
+function buildGraph() {
+  const AC = V.AC;
+  const n = V.n;
+
+  // ── INPUT GAIN ──────────────────────────────────────────────────────────
+  n.input = mkGain(1.0);
+
+  // ── HUMAN DESYNC ENGINE ─────────────────────────────────────────────────
+  // Multi-tap delay simulating: reaction latency / syllable shadow /
+  // phrase echo / emotional hesitation tail
+  // Each tap controlled independently by semantic state
+  n.dsDry   = mkGain(1.0);
+  n.dsMix   = mkGain(1.0);
+
+  const tapCfg = [
+    { ms: 15,  maxG: 0.28, label: 'd1' },  // reaction latency
+    { ms: 45,  maxG: 0.18, label: 'd2' },  // syllable shadow
+    { ms: 120, maxG: 0.10, label: 'd3' },  // phrase echo
+    { ms: 350, maxG: 0.05, label: 'd4' },  // emotional hesitation tail
+    { ms: 800, maxG: 0.02, label: 'd5' }   // ghost memory
+  ];
+  n.taps = tapCfg.map(cfg => {
+    const delay = AC.createDelay(2.0);
+    delay.delayTime.value = cfg.ms / 1000;
+    const gain  = mkGain(0.0);
+    n.input.connect(delay);
+    delay.connect(gain);
+    gain.connect(n.dsMix);
+    return { delay, gain, maxG: cfg.maxG, baseDt: cfg.ms / 1000 };
+  });
+  n.input.connect(n.dsDry);
+  n.dsDry.connect(n.dsMix);
+
+  // ── RITUAL STUTTER ENGINE ───────────────────────────────────────────────
+  // Feedback delay — collapsing repeats with unstable timing
+  n.stDly  = AC.createDelay(1.0);
+  n.stDly.delayTime.value = 0.07;
+  n.stFB   = mkGain(0.0);   // feedback (capped at .62 for safety)
+  n.stWet  = mkGain(0.0);
+  n.stDry  = mkGain(1.0);
+  n.stMix  = mkGain(1.0);
+
+  n.dsMix.connect(n.stDry);
+  n.dsMix.connect(n.stDly);
+  n.stDly.connect(n.stFB);
+  n.stFB.connect(n.stDly);    // feedback loop
+  n.stDly.connect(n.stWet);
+  n.stDry.connect(n.stMix);
+  n.stWet.connect(n.stMix);
+
+  // ── GHOST GRANULAR ENGINE ────────────────────────────────────────────────
+  // Sparse-noise convolver → spectral fog / breath halos
+  n.grConv = AC.createConvolver();
+  n.grConv.buffer = buildGhostIR(AC, 0.45, 0.25);
+  n.grWet  = mkGain(0.0);
+  n.grDry  = mkGain(1.0);
+  n.grMix  = mkGain(1.0);
+
+  n.stMix.connect(n.grDry);
+  n.stMix.connect(n.grConv);
+  n.grConv.connect(n.grWet);
+  n.grDry.connect(n.grMix);
+  n.grWet.connect(n.grMix);
+
+  // ── RITUAL DISTORTION ENGINE ─────────────────────────────────────────────
+  n.distWS = AC.createWaveShaper();
+  n.distWS.oversample = '4x';
+  n.distWS.curve = distCurve(0);
+  n.distG  = mkGain(0.85);
+
+  n.grMix.connect(n.distWS);
+  n.distWS.connect(n.distG);
+
+  // ── MASTER + LIMITER ─────────────────────────────────────────────────────
+  n.master = mkGain(0.82);
+  n.limiter = AC.createDynamicsCompressor();
+  n.limiter.threshold.value = -8;
+  n.limiter.knee.value      = 3;
+  n.limiter.ratio.value     = 22;
+  n.limiter.attack.value    = 0.001;
+  n.limiter.release.value   = 0.08;
+
+  n.distG.connect(n.master);
+  n.master.connect(n.limiter);
+  n.limiter.connect(AC.destination);
+
+  // ── ANALYSER ─────────────────────────────────────────────────────────────
+  n.analyser = AC.createAnalyser();
+  n.analyser.fftSize = 2048;
+  n.analyser.smoothingTimeConstant = 0.86;
+  n.master.connect(n.analyser);
+  V.freqData = new Uint8Array(n.analyser.frequencyBinCount);
+
+  // ── MONITOR (mic → speaker, off by default) ──────────────────────────────
+  n.mon = mkGain(0.0);
+  // input → mon → master (wired after mic connects)
+
+  // ── RECORDER (ScriptProcessor) ───────────────────────────────────────────
+  // Permanent chain: master → recProc → destination (parallel)
+  try {
+    n.recProc = AC.createScriptProcessor(4096, 2, 2);
+    n.recProc.onaudioprocess = onAudioProcess;
+    n.master.connect(n.recProc);
+    n.recProc.connect(AC.destination);
+  } catch(e) {
+    console.warn('ScriptProcessor unavailable', e);
+  }
+}
+
+function connectMic(stream) {
+  if (V.micSource) { try { V.micSource.disconnect(); } catch(e){} }
+  V.micSource = V.AC.createMediaStreamSource(stream);
+  V.micSource.connect(V.n.input);
+  V.n.input.connect(V.n.mon);
+  V.n.mon.connect(V.n.master);
+}
+
+function onAudioProcess(e) {
+  if (!V.rec.on) return;
+  V.rec.L.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  V.rec.R.push(new Float32Array(e.inputBuffer.getChannelData(1)));
+}
+
+// ── DSP HELPERS ──────────────────────────────────────────────────────────────
+function mkGain(v) { const g = V.AC.createGain(); g.gain.value = v; return g; }
+
+function distCurve(amount) {
+  const n = 512;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    if (amount < 0.01) { curve[i] = x; continue; }
+    curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+function buildGhostIR(AC, dur, decay) {
+  const rate   = AC.sampleRate;
+  const length = Math.floor(rate * dur);
+  const buf    = AC.createBuffer(2, length, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      // Sparse impulse response — ghost fog, not full reverb
+      const hit = Math.random() > 0.82;
+      d[i] = hit ? (Math.random()*2-1) * Math.exp(-t / decay) * 0.35 : 0;
+    }
+  }
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEMANTIC DNA ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+function tickSemantic() {
+  const s = V.sem;
+  const n = V.n;
+  const AC = V.AC;
+  const now = AC.currentTime;
+  const sm = 0.06; // smoothing constant
+
+  // Smooth toward target with per-state inertia
+  s.inertia = s.stateInertia[Math.round(s.target) % 5];
+  s.cur += (s.target - s.cur) * (1 - s.inertia);
+
+  // Autonomous drift — sinusoidal multi-frequency (the organism breathes)
+  s.driftPhase += 0.0008;
+  s.drift = Math.sin(s.driftPhase) * 0.0015
+           + Math.sin(s.driftPhase * 2.3) * 0.0008
+           + Math.sin(s.driftPhase * 5.7) * 0.0003;
+
+  // Audio density from analyser
+  if (n.analyser) {
+    n.analyser.getByteFrequencyData(V.freqData);
+    let sum = 0;
+    for (let i = 0; i < V.freqData.length; i++) sum += V.freqData[i];
+    const rms = (sum / V.freqData.length) / 255;
+    s.density = s.density * 0.91 + rms * 0.09;
+  }
+
+  // Effective intensity based on current semantic state
+  const si = Math.floor(s.cur) % 5;
+  const base = s.stateIntensity[si];
+  const dens = Math.min(1, s.density * 2.5);
+
+  V.p.desync   = base * dens * 1.1;
+  V.p.stutter  = base * dens * 0.75;
+  V.p.granular = base * 0.55;
+  V.p.distort  = base * dens * 0.9;
+
+  // ── Apply to audio graph ──────────────────────────────────────────────
+
+  // Human Desync taps
+  for (let i = 0; i < V.n.taps.length; i++) {
+    const tap = V.n.taps[i];
+    const tapG = V.p.desync * tap.maxG;
+    tap.gain.gain.setTargetAtTime(tapG, now, sm);
+    // Emotional timing drift — each tap drifts at different rate
+    const dt = tap.baseDt + s.drift * (i + 1) * 0.8;
+    tap.delay.delayTime.setTargetAtTime(Math.max(0.001, dt), now, 0.4);
+  }
+  n.dsDry.gain.setTargetAtTime(Math.max(0.45, 1 - V.p.desync * 0.35), now, sm);
+
+  // Ritual Stutter
+  const fb = Math.min(0.62, V.p.stutter * 0.7);
+  n.stFB.gain.setTargetAtTime(fb, now, sm);
+  n.stWet.gain.setTargetAtTime(V.p.stutter * 0.45, now, sm);
+  // Stutter timing drifts with semantic state
+  const stDt = 0.055 + s.drift * 0.025 + V.p.stutter * 0.05;
+  n.stDly.delayTime.setTargetAtTime(Math.max(0.015, stDt), now, 0.2);
+
+  // Ghost Granular
+  n.grWet.gain.setTargetAtTime(V.p.granular * 0.38, now, sm);
+
+  // Ritual Distortion
+  n.distWS.curve = distCurve(V.p.distort * 180);
+  n.distG.gain.setTargetAtTime(1 / (1 + V.p.distort * 0.25), now, sm);
+
+  // Update semantic state label
+  const label = V.STATES[Math.round(s.cur) % 5];
+  document.getElementById('semLabel').textContent = `— ${label} —`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRANSPORT
+// ═══════════════════════════════════════════════════════════════════════════
+function playFrom(offset) {
+  if (V.curSrc) { try { V.curSrc.stop(); V.curSrc.disconnect(); } catch(e){} }
+  if (!V.loadedBuf) {
+    // Mic-only mode — just mark playing
+    V.t.state = 'playing'; updateTUI(); return;
+  }
+  const src = V.AC.createBufferSource();
+  src.buffer = V.loadedBuf;
+  src.loop = V.t.looping;
+  if (V.t.looping) {
+    src.loopStart = loopStartWithDrift();
+    src.loopEnd   = V.loadedBuf.duration;
+  }
+  src.connect(V.n.input);
+  V.t.startTime = V.AC.currentTime - offset;
+  src.start(V.AC.currentTime, offset);
+  V.curSrc = src;
+  V.t.state = 'playing';
+  src.onended = () => {
+    if (V.t.state === 'playing' && !V.t.looping) {
+      V.t.state = 'stopped'; V.t.pauseAt = 0; updateTUI();
+    }
+  };
+  updateTUI();
+}
+
+function loopStartWithDrift() {
+  // Organic loop: ±18ms randomized start + drift component
+  return Math.max(0, (Math.random() - 0.5) * 0.018 + V.sem.drift * 0.5);
+}
+
+function pauseTransport() {
+  if (V.t.state !== 'playing') return;
+  V.t.pauseAt = (V.AC.currentTime - V.t.startTime) %
+    (V.loadedBuf ? V.loadedBuf.duration : 1);
+  if (V.curSrc) { try { V.curSrc.stop(); } catch(e){} }
+  V.t.state = 'paused'; updateTUI();
+}
+
+function stopTransport() {
+  if (V.curSrc) { try { V.curSrc.stop(); } catch(e){} }
+  V.t.state = 'stopped'; V.t.pauseAt = 0; updateTUI();
+}
+
+function transportPos() {
+  if (!V.loadedBuf) return 0;
+  if (V.t.state === 'playing') {
+    return ((V.AC.currentTime - V.t.startTime) % V.loadedBuf.duration) / V.loadedBuf.duration;
+  }
+  if (V.t.state === 'paused') return V.t.pauseAt / V.loadedBuf.duration;
+  return 0;
+}
+
+function updateTUI() {
+  const t = V.t;
+  document.getElementById('tPlay').classList.toggle('on', t.state==='playing');
+  document.getElementById('tPause').classList.toggle('on', t.state==='paused');
+}
+
+// ── Transport button handlers ─────────────────────────────────────────────
+document.getElementById('tPlay').addEventListener('click', () => playFrom(V.t.pauseAt));
+document.getElementById('tPause').addEventListener('click', pauseTransport);
+document.getElementById('tStop').addEventListener('click', stopTransport);
+
+document.getElementById('tLoop').addEventListener('click', function() {
+  V.t.looping = !V.t.looping;
+  this.classList.toggle('on', V.t.looping);
+});
+
+document.getElementById('tRec').addEventListener('click', function() {
+  V.rec.on = !V.rec.on;
+  this.classList.toggle('on', V.rec.on);
+  V.t.state = V.rec.on ? 'recording' : (V.t.state === 'recording' ? 'playing' : V.t.state);
+  if (!V.rec.on && (V.rec.L.length || V.rec.R.length)) exportWAV();
+});
+
+document.getElementById('tMon').addEventListener('click', function() {
+  V.t.monitoring = !V.t.monitoring;
+  if (V.n.mon) V.n.mon.gain.setTargetAtTime(V.t.monitoring ? 0.75 : 0, V.AC.currentTime, 0.04);
+  this.classList.toggle('on', V.t.monitoring);
+});
+
+document.getElementById('tLoad').addEventListener('click', () => document.getElementById('fInput').click());
+
+// ── File loading ──────────────────────────────────────────────────────────
+document.getElementById('fInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) loadAudioFile(file);
+});
+
+function loadAudioFile(file) {
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const buf = await V.AC.decodeAudioData(ev.target.result.slice(0));
+      V.loadedBuf = buf;
+      analyzeBuffer(buf);
+      renderWaveformCache(buf);
+      setBadge('BUFFER');
+    } catch(e) { console.error('Decode failed', e); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Drag-and-drop ─────────────────────────────────────────────────────────
+document.getElementById('main').addEventListener('dragover', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('show');
+});
+document.getElementById('main').addEventListener('dragleave', () =>
+  document.getElementById('dropZone').classList.remove('show'));
+document.getElementById('main').addEventListener('drop', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('show');
+  const file = e.dataTransfer.files[0];
+  if (file) loadAudioFile(file);
+});
+
+// ── Timeline scrub ────────────────────────────────────────────────────────
+document.getElementById('tlCanvas').addEventListener('click', function(e) {
+  if (!V.loadedBuf) return;
+  const x = e.clientX - this.getBoundingClientRect().left;
+  const pos = Math.max(0, Math.min(1, x / this.offsetWidth));
+  V.t.pauseAt = pos * V.loadedBuf.duration;
+  if (V.t.state === 'playing') playFrom(V.t.pauseAt);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHRASE BUFFER MEMORY — Transient / Breath / Silence Analysis
+// ═══════════════════════════════════════════════════════════════════════════
+function analyzeBuffer(buf) {
+  const data  = buf.getChannelData(0);
+  const rate  = buf.sampleRate;
+  const win   = Math.floor(rate * 0.010); // 10ms windows
+  const mem   = V.mem;
+  mem.transients = []; mem.breaths = []; mem.silences = [];
+
+  let prevE = 0, silStart = -1;
+
+  for (let i = 0; i < data.length; i += win) {
+    let e = 0;
+    const end = Math.min(i + win, data.length);
+    for (let j = i; j < end; j++) e += data[j] * data[j];
+    e = Math.sqrt(e / (end - i));
+
+    const t = i / rate;
+
+    // Onset / transient (sharp energy rise — T, K, S protected here)
+    if (e > prevE * 1.75 && e > 0.018) {
+      const type = e > 0.06 ? 'consonant' : 'onset';
+      mem.transients.push({ t, e, type });
+    }
+
+    // Silence detection (≥50ms below threshold)
+    if (e < 0.004) {
+      if (silStart < 0) silStart = t;
+    } else {
+      if (silStart >= 0 && (t - silStart) > 0.05) {
+        mem.silences.push({ t0: silStart, t1: t, dur: t - silStart });
+        // Pre-onset breath (energy just above noise floor after silence)
+        if (e < 0.022) mem.breaths.push({ t, dur: t - silStart });
+      }
+      silStart = -1;
+    }
+    prevE = e;
+  }
+
+  console.log(
+    `[VOXRITUAL MEM] T:${mem.transients.length}  B:${mem.breaths.length}  S:${mem.silences.length}`
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MACRO SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.mac').forEach(btn =>
+  btn.addEventListener('click', () => triggerMacro(btn.dataset.m)));
+
+function triggerMacro(name) {
+  const now = V.AC ? V.AC.currentTime : 0;
+  V.dna.macros.push({ t: now, macro: name });
+  V.dna.events.push({ type:'macro', name, t: now });
+
+  // Each macro sets semantic target + adjusts inertia for personality
+  switch(name) {
+    case 'dissolve': V.sem.target = 3; break; // ghost — long trails, spectral fog
+    case 'collapse': V.sem.target = 1; break; // collapse — fast onset, jitter
+    case 'ritual':   V.sem.target = 2; break; // ritual — slow breathing pulses
+    case 'fever':    V.sem.target = 4; break; // fever — rapid mutation
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+function initVis() {
+  const canvas = document.getElementById('bgCanvas');
+  V.vis.canvas = canvas;
+  V.vis.ctx = canvas.getContext('2d');
+  resizeVis();
+  window.addEventListener('resize', resizeVis);
+
+  // Initialize particles
+  for (let i = 0; i < PARTICLE_COUNT; i++) V.vis.px.push(mkParticle());
+}
+
+function resizeVis() {
+  const { canvas } = V.vis;
+  V.vis.w = canvas.width  = window.innerWidth;
+  V.vis.h = canvas.height = window.innerHeight;
+}
+
+function mkParticle() {
+  return {
+    x: Math.random() * (V.vis.w || 400),
+    y: Math.random() * (V.vis.h || 800),
+    vx: (Math.random()-0.5)*0.5,
+    vy: (Math.random()-0.5)*0.5,
+    life: Math.random(),
+    phase: Math.random()*Math.PI*2,
+    sz: 1 + Math.random()*2.2
+  };
+}
+
+function runLoop() {
+  const ctx = V.vis.ctx;
+  const { w, h } = V.vis;
+
+  // ── Semantic tick ──
+  tickSemantic();
+
+  // ── Background fade (variable by state) ──
+  const si = Math.floor(V.sem.cur) % 5;
+  const fadeAlpha = [0.10, 0.15, 0.08, 0.07, 0.18][si];
+  ctx.fillStyle = `rgba(13,11,25,${fadeAlpha})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // ── State color ──
+  const col = V.COLORS[si];
+  const rgb = hexRGB(col);
+  const dens = Math.min(1, V.sem.density * 3);
+
+  // ── Transport visual modifier ──
+  let energyScale = 1.0;
+  let frozen = false;
+
+  switch(V.t.state) {
+    case 'paused':    energyScale = 0.25; frozen = true; break;
+    case 'recording': energyScale = 1.9; break;
+    case 'playing':   energyScale = 1.0 + dens * 0.6; break;
+  }
+
+  // ── Particles ──
+  for (const p of V.vis.px) {
+    if (!frozen) {
+      p.phase += 0.008 + dens * 0.04;
+      // Semantic state-specific movement behaviors
+      switch(si) {
+        case 0: // fragile — sparse, thin drifts
+          p.vx += (Math.random()-0.5) * 0.025 * energyScale;
+          p.vy += (Math.random()-0.5) * 0.025 * energyScale;
+          break;
+        case 1: // collapse — jittering
+          p.vx += (Math.random()-0.5) * 0.09 * energyScale;
+          p.vy += (Math.random()-0.5) * 0.09 * energyScale;
+          break;
+        case 2: // ritual — slow concentric breathing
+          const cx = w/2, cy = h/2;
+          const dx = p.x - cx, dy = p.y - cy;
+          const dist = Math.sqrt(dx*dx+dy*dy) + 0.001;
+          p.vx += (-dx/dist) * 0.006 * Math.sin(p.phase);
+          p.vy += (-dy/dist) * 0.006 * Math.sin(p.phase);
+          break;
+        case 3: // ghost — long fading trajectories
+          p.vx += (Math.random()-0.5) * 0.018 * energyScale;
+          p.vy += -0.012 * energyScale; // subtle upward drift
+          break;
+        case 4: // fever — rapid turbulence
+          p.vx += (Math.random()-0.5) * 0.12 * energyScale;
+          p.vy += (Math.random()-0.5) * 0.12 * energyScale;
+          break;
+      }
+      p.vx *= 0.974; p.vy *= 0.974;
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -20) p.x = w+20;
+      if (p.x > w+20) p.x = -20;
+      if (p.y < -20) p.y = h+20;
+      if (p.y > h+20) p.y = -20;
+    }
+
+    p.life += Math.sin(p.phase) * 0.005 * (frozen ? 0.1 : 1);
+    p.life = Math.max(0.05, Math.min(1, p.life));
+
+    const a = p.life * (0.18 + dens * 0.45) * (frozen ? 0.3 : 1);
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.sz + dens * 3.5, 0, 6.283);
+    ctx.fill();
+  }
+
+  // ── Recording aura (red turbulence overlay) ──
+  if (V.t.state === 'recording') {
+    ctx.fillStyle = `rgba(255,30,55,${0.025 + dens * 0.04})`;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // ── Collapse: visual tearing ──
+  if (si === 1 && dens > 0.3) {
+    const y = Math.random() * h;
+    const len = 20 + Math.random() * 120;
+    const shift = (Math.random()-0.5)*8*dens;
+    const imgData = ctx.getImageData(0, y, w, 3);
+    ctx.putImageData(imgData, shift, y + (Math.random()-0.5)*4);
+  }
+
+  // ── Draw spectrum ──
+  drawSpectrum();
+
+  // ── Draw / update timeline ──
+  updateTimeline();
+
+  V.vis.frame++;
+  requestAnimationFrame(runLoop);
+}
+
+// ── Waveform cache (rendered once on load) ─────────────────────────────────
+function renderWaveformCache(buf) {
+  const W = 600, H = 34;
+  const off = new OffscreenCanvas ? new OffscreenCanvas(W, H) : document.createElement('canvas');
+  off.width = W; off.height = H;
+  const c = off.getContext('2d');
+
+  c.fillStyle = 'rgba(153,68,255,0.06)';
+  c.fillRect(0, 0, W, H);
+
+  const data = buf.getChannelData(0);
+  const step = Math.floor(data.length / W);
+
+  c.strokeStyle = 'rgba(153,68,255,0.45)';
+  c.lineWidth = 1;
+  c.beginPath();
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base+step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const y = H/2 - max * H/2 * 0.85;
+    if (x===0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.stroke();
+  c.beginPath();
+  c.strokeStyle = 'rgba(153,68,255,0.25)';
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const base = x * step;
+    for (let j = base; j < base+step && j < data.length; j++)
+      if (Math.abs(data[j]) > max) max = Math.abs(data[j]);
+    const y = H/2 + max * H/2 * 0.85;
+    if (x===0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.stroke();
+
+  // Transient markers (cyan)
+  c.fillStyle = 'rgba(0,255,255,0.55)';
+  for (const tr of V.mem.transients.slice(0,300)) {
+    const x = (tr.t / buf.duration) * W;
+    c.fillRect(x-0.5, 0, 1, H * (tr.type==='consonant' ? 0.7 : 0.4));
+  }
+  // Breath markers (purple)
+  c.fillStyle = 'rgba(153,68,255,0.6)';
+  for (const br of V.mem.breaths) {
+    const x = (br.t / buf.duration) * W;
+    c.fillRect(x-0.5, H*0.6, 1, H*0.4);
+  }
+
+  V.waveCache = off;
+}
+
+function updateTimeline() {
+  const canvas = document.getElementById('tlCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W; canvas.height = H;
+  }
+  ctx.clearRect(0, 0, W, H);
+
+  if (V.waveCache) {
+    ctx.drawImage(V.waveCache, 0, 0, W, H);
+  } else {
+    ctx.fillStyle = 'rgba(153,68,255,0.05)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(153,68,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+    ctx.stroke();
+  }
+
+  // Playhead
+  const pos = transportPos();
+  if (pos > 0) {
+    const x = pos * W;
+    ctx.fillStyle = 'rgba(0,255,255,0.88)';
+    ctx.fillRect(x-1, 0, 2, H);
+  }
+
+  // Time label
+  if (V.loadedBuf) {
+    const secs = pos * V.loadedBuf.duration;
+    document.getElementById('tlTime').textContent = fmtTime(secs);
+  }
+}
+
+function drawSpectrum() {
+  const canvas = document.getElementById('specCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W; canvas.height = H;
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (!V.n.analyser) return;
+  V.n.analyser.getByteFrequencyData(V.freqData);
+
+  const grad = ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,   'rgba(0,255,255,0.75)');
+  grad.addColorStop(0.45,'rgba(153,68,255,0.75)');
+  grad.addColorStop(1,   'rgba(255,0,255,0.75)');
+
+  ctx.beginPath();
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 1.5;
+
+  const bins = V.freqData.length;
+  const step = bins / W;
+
+  for (let x = 0; x < W; x++) {
+    const idx = Math.floor(x * step);
+    const v = V.freqData[idx] / 255;
+    const y = H - v * H;
+    if (x===0) ctx.moveTo(0, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('xDNA').addEventListener('click', exportDNA);
+document.getElementById('xWAV').addEventListener('click', exportWAV);
+document.getElementById('xReset').addEventListener('click', resetSystem);
+
+function exportDNA() {
+  const pkg = {
+    version: 'voxritual_dna_v1',
+    timestamp: new Date().toISOString(),
+    semanticProfile: {
+      state: V.STATES[Math.round(V.sem.cur) % 5],
+      cur: V.sem.cur,
+      density: V.sem.density,
+      drift: V.sem.drift
+    },
+    eventMap:    V.dna.events,
+    macroHistory: V.dna.macros,
+    transientMap: V.mem.transients.slice(0, 200),
+    breathMap:    V.mem.breaths.slice(0, 100),
+    silenceMap:   V.mem.silences.slice(0, 100),
+    timingInstability: {
+      desync:  V.p.desync,
+      stutter: V.p.stutter
+    },
+    spectralIdentity: {
+      granular: V.p.granular,
+      distort:  V.p.distort
+    },
+    mutationStates: [{ t: Date.now(), state: V.sem.cur }],
+    visualState:    { color: V.COLORS[Math.round(V.sem.cur) % 5] }
+  };
+  dlBlob(JSON.stringify(pkg, null, 2), 'application/json', `voxritual_dna_${Date.now()}.json`);
+}
+
+function exportWAV() {
+  const L = V.rec.L, R = V.rec.R;
+  if (!L.length) { alert('No recording. Press REC while performing.'); return; }
+
+  const frames = L.reduce((a,c) => a + c.length, 0);
+  const interleaved = new Float32Array(frames * 2);
+  let off = 0;
+  for (let i = 0; i < L.length; i++) {
+    for (let j = 0; j < L[i].length; j++) {
+      interleaved[off++] = L[i][j];
+      interleaved[off++] = R[i] ? R[i][j] : L[i][j];
+    }
+  }
+  dlBlob(buildWAV(interleaved, V.AC.sampleRate, 2), 'audio/wav', `voxritual_${Date.now()}.wav`);
+  V.rec.L = []; V.rec.R = [];
+}
+
+function buildWAV(samples, rate, ch) {
+  const bps = 16, ba = ch * (bps/8), br = rate * ba;
+  const dlen = samples.length * (bps/8);
+  const buf = new ArrayBuffer(44 + dlen);
+  const v = new DataView(buf);
+  const ws = (off, s) => { for (let i=0;i<s.length;i++) v.setUint8(off+i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4, 36+dlen, true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true); v.setUint32(28,br,true); v.setUint16(32,ba,true);
+  v.setUint16(34,bps,true); ws(36,'data'); v.setUint32(40,dlen,true);
+  let off = 44;
+  for (let i=0; i<samples.length; i++, off+=2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(off, s < 0 ? s*32768 : s*32767, true);
+  }
+  return buf;
+}
+
+function dlBlob(data, mime, name) {
+  const blob = new Blob([data], { type: mime });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetSystem() {
+  stopTransport();
+  V.loadedBuf = null; V.waveCache = null;
+  V.sem.cur = 0; V.sem.target = 0;
+  V.rec.L = []; V.rec.R = [];
+  V.dna.events = []; V.dna.macros = [];
+  V.mem.transients = []; V.mem.breaths = []; V.mem.silences = [];
+  setBadge('IDLE');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+function setBadge(state) {
+  const el = document.getElementById('micBadge');
+  const MAP = {
+    IDLE:'idle', REQUESTING:'requesting…', ACTIVE:'mic:active',
+    DENIED:'refused', LOST:'lost', BUFFER:'buffer:loaded', WAV_ONLY:'no mic'
+  };
+  el.textContent = MAP[state] || state;
+  el.className = '';
+  if (state==='ACTIVE'||state==='BUFFER') el.classList.add('on');
+  if (state==='DENIED'||state==='LOST') el.classList.add('err');
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s/60);
+  return `${m}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+}
+
+function hexRGB(hex) {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? { r:parseInt(r[1],16), g:parseInt(r[2],16), b:parseInt(r[3],16) }
+           : { r:153, g:68, b:255 };
+}
+</script>
+</body>
+</html>
