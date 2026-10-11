@@ -1,0 +1,155 @@
+// CITHELA — explicit, audited WhatsApp send. Never invoked by webhooks or cron.
+// Requires signed-in owner/admin, a recent inbound message, identical server preview,
+// and a unique outbox record BEFORE any Meta request.
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+
+const ORIGIN = "https://spuklab.github.io";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CORS = {
+  "Access-Control-Allow-Origin": ORIGIN,
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
+};
+const reply = (payload: unknown, status = 200) =>
+  Response.json(payload, { status, headers: { ...CORS, "Cache-Control": "no-store" } });
+
+function adminKey() {
+  try {
+    const map = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
+    if (typeof map.default === "string" && map.default) return map.default;
+  } catch { /* use legacy key */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || null;
+}
+function freshInbound(providerTime: unknown) {
+  const time = Date.parse(String(providerTime || ""));
+  const age = Date.now() - time;
+  // Extra one-hour safety buffer before the WhatsApp 24-hour service window ends.
+  return Number.isFinite(time) && age >= -120000 && age < 23 * 60 * 60 * 1000;
+}
+function e164(value: unknown) {
+  const str = String(value ?? "");
+  return /^\+[1-9][0-9]{7,14}$/.test(str) ? str : null;
+}
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== "POST") return reply({ ok: false, code: "method_not_allowed" }, 405);
+  if (req.headers.get("origin") && req.headers.get("origin") !== ORIGIN)
+    return reply({ ok: false, code: "invalid_origin" }, 403);
+  const token = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") || "")?.[1];
+  if (!token) return reply({ ok: false, code: "unauthenticated" }, 401);
+
+  const url = Deno.env.get("SUPABASE_URL");
+  const secret = adminKey();
+  if (!url || !secret) return reply({ ok: false, code: "server_unavailable" }, 503);
+  const admin = createClient(url, secret, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data: identity, error: authError } = await admin.auth.getUser(token);
+  if (authError || !identity?.user?.id) return reply({ ok: false, code: "unauthenticated" }, 401);
+  let request: Record<string, unknown>;
+  try { request = await req.json(); } catch { return reply({ ok: false, code: "invalid_json" }, 400); }
+  if (!request || request.action !== "send" || !UUID.test(String(request.tenant_id)) ||
+    !UUID.test(String(request.event_id)) || typeof request.draft !== "string" ||
+    !request.draft.trim() || request.draft.length > 1000) {
+    return reply({ ok: false, code: "invalid_payload" }, 400);
+  }
+  const tenantId = String(request.tenant_id);
+  const eventId = String(request.event_id);
+  const { data: membership, error: memberError } = await admin.from("cithela_tenant_memberships")
+    .select("role").eq("tenant_id", tenantId).eq("user_id", identity.user.id).maybeSingle();
+  if (memberError || !["owner", "admin"].includes(membership?.role))
+    return reply({ ok: false, code: "forbidden" }, 403);
+  const { data: tenant, error: tenantError } = await admin.from("cithela_tenants")
+    .select("status").eq("id", tenantId).maybeSingle();
+  if (tenantError || tenant?.status !== "active") return reply({ ok: false, code: "inactive_tenant" }, 403);
+
+  const { data: event, error: eventError } = await admin.from("cithela_channel_inbox")
+    .select("id,connection_id,channel,message_type,sender_phone_e164,provider_timestamp,received_at")
+    .eq("tenant_id", tenantId).eq("id", eventId).eq("channel", "whatsapp").maybeSingle();
+  if (eventError || !event || event.message_type !== "text")
+    return reply({ ok: false, code: "event_not_found" }, 404);
+  const to = e164(event.sender_phone_e164);
+  if (!to || !freshInbound(event.provider_timestamp || event.received_at))
+    return reply({ ok: false, code: "conversation_window_expired" }, 409);
+
+  const { data: conn, error: connError } = await admin.from("cithela_channel_connections")
+    .select("external_account_id").eq("tenant_id", tenantId).eq("id", event.connection_id)
+    .eq("channel", "whatsapp").eq("status", "active").maybeSingle();
+  if (connError || !conn) return reply({ ok: false, code: "connection_not_found" }, 403);
+  const senderId = Deno.env.get("META_WHATSAPP_PHONE_NUMBER_ID");
+  const metaToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+  if (!senderId || !metaToken || senderId !== conn.external_account_id)
+    return reply({ ok: false, code: "sender_not_configured" }, 503);
+
+  // Get a fresh, signed-in, tenant-authorized draft from the read-only review function.
+  // The browser cannot send arbitrary text or reuse an outdated availability proposal.
+  let preview: Record<string, unknown>;
+  try {
+    const p = await fetch(url + "/functions/v1/cithela-whatsapp-review", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+        apikey: Deno.env.get("SUPABASE_ANON_KEY") || secret,
+      },
+      body: JSON.stringify({ action: "prepare", tenant_id: tenantId, event_id: eventId }),
+      signal: AbortSignal.timeout(12000),
+    });
+    preview = await p.json();
+    if (!p.ok || preview.ok !== true) throw new Error("review_unavailable");
+  } catch {
+    return reply({ ok: false, code: "preview_unavailable" }, 503);
+  }
+  if (!["needs_service", "slots_preview", "no_slots"].includes(String(preview.code)) ||
+      typeof preview.draft !== "string" || preview.draft !== request.draft) {
+    return reply({ ok: false, code: "stale_or_unsupported_draft" }, 409);
+  }
+
+  // A single inbound message authorizes at most ONE response. A new patient message
+  // supplies the next event. Never retry uncertain network deliveries automatically.
+  const { data: record, error: reserveError } = await admin.from("cithela_channel_outbox")
+    .insert({
+      tenant_id: tenantId, inbox_event_id: eventId, connection_id: event.connection_id,
+      actor_user_id: identity.user.id, reply_text: preview.draft, status: "sending",
+    }).select("id").single();
+  if (reserveError) return reply({
+    ok: false, code: reserveError.code === "23505" ? "already_attempted" : "outbox_unavailable",
+  }, reserveError.code === "23505" ? 409 : 503);
+  const outboxId = record.id;
+  const graphVersion = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
+  let resultStatus = "unknown";
+  let providerMessageId: string | null = null;
+  let errCode: string | null = null;
+  try {
+    const res = await fetch("https://graph.facebook.com/" + graphVersion + "/" + senderId + "/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + metaToken, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp", to: to.slice(1), type: "text",
+        text: { preview_url: false, body: preview.draft },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      providerMessageId = typeof result?.messages?.[0]?.id === "string"
+        ? result.messages[0].id : null;
+      resultStatus = providerMessageId ? "sent" : "unknown";
+      errCode = providerMessageId ? null : "missing_provider_receipt";
+    } else {
+      // A failed HTTP response does not prove delivery; keep non-retryable.
+      resultStatus = "unknown";
+      errCode = "meta_http_" + res.status;
+    }
+  } catch { errCode = "meta_delivery_uncertain"; }
+  const { error: updateError } = await admin.from("cithela_channel_outbox")
+    .update({
+      status: resultStatus, provider_message_id: providerMessageId,
+      error_code: errCode, sent_at: resultStatus === "sent" ? new Date().toISOString() : null,
+    }).eq("id", outboxId).eq("tenant_id", tenantId);
+  if (updateError) console.error("CITHELA outbox status persistence failed");
+  if (resultStatus !== "sent")
+    return reply({ ok: false, code: "delivery_unconfirmed", outbox_id: outboxId }, 502);
+  return reply({ ok: true, code: "submitted_to_meta", outbox_id: outboxId });
+});
