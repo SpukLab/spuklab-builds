@@ -150,6 +150,6 @@ Deno.serve(async (req: Request) => {
     }).eq("id", outboxId).eq("tenant_id", tenantId);
   if (updateError) console.error("CITHELA outbox status persistence failed");
   if (resultStatus !== "sent")
-    return reply({ ok: false, code: "delivery_unconfirmed", outbox_id: outboxId }, 502);
+    return reply({ ok: false, code: errCode === "meta_http_401" ? "meta_unauthorized" : "delivery_unconfirmed", outbox_id: outboxId }, 502);
   return reply({ ok: true, code: "submitted_to_meta", outbox_id: outboxId });
 });
