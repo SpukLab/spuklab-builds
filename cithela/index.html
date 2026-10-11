@@ -692,6 +692,12 @@ textarea.inp{resize:vertical;min-height:72px;}
       <div id="cloud-hours-form" style="display:none;margin-top:18px;">
         <p class="sh" style="margin-top:0;">Horarios cloud</p>
         <p class="contact-note">Horarios generales del workspace remoto. Admiten hasta dos tramos por día desde esta pantalla; los horarios específicos por profesional/recurso se conservan aparte.</p>
+        <div style="padding:12px;border:1px solid #d7e7e2;border-radius:12px;margin:12px 0;">
+          <strong style="font-size:.85rem;">Configuración rápida de la semana</strong>
+          <p class="contact-note">Lunes a viernes 09:00–13:00 / 14:00–18:00; sábado 09:00–13:00. Domingo cerrado. Podés editar cada día después.</p>
+          <button class="btn-main soft" type="button" onclick="cloudApplyWeeklyPreset()">Aplicar horario semanal</button>
+          <p class="contact-note">Solo cambia los horarios futuros de atención. Los turnos existentes no se cancelan ni se mueven.</p>
+        </div>
         <div id="cloud-hours-list"></div>
       </div>
       <div id="cloud-probe-form" style="display:none;margin-top:18px;">
@@ -4631,7 +4637,7 @@ function renderCloudWorkingHours(s){
     const p1=ps[0]||{},p2=ps[1]||{},advanced=ps.length>2;
     return `<div style="padding:12px 0;border-bottom:var(--line);">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;">
-        <strong style="font-size:.8rem;color:var(--ink);">${label}</strong>
+        <label style="font-size:.8rem;color:var(--ink);font-weight:600;"><input type="checkbox" id="cloud-wh-${day}-active" ${ps.length?"checked":""} onchange="cloudToggleWorkingDay(${day})"> ${label}</label>
         <span class="tag ${ps.length?'c':'p'}">${ps.length?ps.length+' tramo'+(ps.length===1?'':'s'):'CERRADO'}</span>
       </div>
       <div class="cloud-shift-stack">
@@ -4664,10 +4670,57 @@ function renderCloudWorkingHours(s){
   }).join('');
 }
 
+function cloudToggleWorkingDay(day){
+  const checked=$('cloud-wh-'+day+'-active')?.checked;
+  const shifts=$('cloud-wh-'+day+'-shifts');
+  if(shifts)shifts.style.display=checked?'':'none';
+  if(checked&&!$('cloud-wh-'+day+'-s1')?.value){
+    $('cloud-wh-'+day+'-s1').value='09:00';
+    $('cloud-wh-'+day+'-e1').value=day===6?'13:00':'13:00';
+    if(day!==6){$('cloud-wh-'+day+'-s2').value='14:00';$('cloud-wh-'+day+'-e2').value='18:00';}
+  }
+}
+
+async function cloudApplyWeeklyPreset(){
+  const s=CithelaCloud.state();
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||'')){
+    toast('Necesitás permisos de administración');return;
+  }
+  const existingHours=Array.isArray(s.workingHours)?s.workingHours:[];
+  const advancedDays=CLOUD_WEEKDAYS.filter(([day])=>
+    existingHours.filter(w=>Number(w.weekday)===day&&!w.resource_id).length>2
+  );
+  if(advancedDays.length){
+    toast('Hay días con más de dos tramos. Editalos individualmente antes de aplicar la plantilla.',5200);
+    return;
+  }
+  if(!confirm('¿Aplicar el horario semanal de prueba? Se cambiarán los horarios generales de atención, pero los turnos existentes se conservarán.'))return;
+  const preset=Object.fromEntries(CLOUD_WEEKDAYS.map(([day])=>[day,
+    day===7?[]:day===6?[{start:'09:00',end:'13:00'}]:
+    [{start:'09:00',end:'13:00'},{start:'14:00',end:'18:00'}]
+  ]));
+  let saved=0;
+  try{
+    for(const [day] of CLOUD_WEEKDAYS){
+      await CithelaCloud.setWorkingHours({
+        tenantId:s.tenant.id,
+        requestId:cloudRequestId('weekly-preset-'+day),
+        weekday:day,
+        periods:preset[day]
+      });
+      saved++;
+    }
+    toast('Semana configurada. Las reservas existentes siguen intactas ✓',4000);
+  }catch(err){
+    toast('Se guardaron '+saved+' de 7 días. Revisá los horarios antes de reintentar. '+(err?.message||''),5000);
+  }
+}
+
 async function cloudSaveWorkingHours(day){
   const s=CithelaCloud.state();
   if(!s.signedIn||!s.tenant){toast('Conectá primero la cuenta cloud');return;}
-  const pairs=[[1],[2]].map(([n])=>({
+  const active=$('cloud-wh-'+day+'-active')?.checked;
+  const pairs=(active?[[1],[2]]:[]).map(([n])=>({
     start:$('cloud-wh-'+day+'-s'+n)?.value||'',
     end:$('cloud-wh-'+day+'-e'+n)?.value||''
   }));
@@ -4675,6 +4728,9 @@ async function cloudSaveWorkingHours(day){
     toast('Completá inicio y fin de cada tramo');return;
   }
   const periods=pairs.filter(p=>p.start&&p.end).sort((a,b)=>a.start.localeCompare(b.start));
+  if(periods.some((p,i)=>p.start>=p.end||(i>0&&p.start<periods[i-1].end))){
+    toast('Revisá los tramos: deben tener inicio anterior al fin y no superponerse.');return;
+  }
   try{
     await CithelaCloud.setWorkingHours({
       tenantId:s.tenant.id,
