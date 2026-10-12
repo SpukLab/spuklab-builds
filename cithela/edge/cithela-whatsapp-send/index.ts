@@ -59,13 +59,14 @@ Deno.serve(async (req: Request) => {
   if (authError || !identity?.user?.id) return reply({ ok: false, code: "unauthenticated" }, 401);
   let request: Record<string, unknown>;
   try { request = await req.json(); } catch { return reply({ ok: false, code: "invalid_json" }, 400); }
-  if (!request || request.action !== "send" || !UUID.test(String(request.tenant_id)) ||
-    !UUID.test(String(request.event_id)) || typeof request.draft !== "string" ||
-    !request.draft.trim() || request.draft.length > 1000) {
+  if (!request || !["send", "check_credentials"].includes(String(request.action)) ||
+    !UUID.test(String(request.tenant_id)) ||
+    (request.action === "send" && (!UUID.test(String(request.event_id)) ||
+      typeof request.draft !== "string" || !request.draft.trim() || request.draft.length > 1000))) {
     return reply({ ok: false, code: "invalid_payload" }, 400);
   }
   const tenantId = String(request.tenant_id);
-  const eventId = String(request.event_id);
+  const eventId = String(request.event_id ?? "");
   const { data: membership, error: memberError } = await admin.from("cithela_tenant_memberships")
     .select("role").eq("tenant_id", tenantId).eq("user_id", identity.user.id).maybeSingle();
   if (memberError || !["owner", "admin"].includes(membership?.role))
@@ -73,6 +74,46 @@ Deno.serve(async (req: Request) => {
   const { data: tenant, error: tenantError } = await admin.from("cithela_tenants")
     .select("status").eq("id", tenantId).maybeSingle();
   if (tenantError || tenant?.status !== "active") return reply({ ok: false, code: "inactive_tenant" }, 403);
+
+  if (request.action === "check_credentials") {
+    // Read-only check using the actual Supabase Meta token; no message, outbox, or patient access.
+    const senderId = Deno.env.get("META_WHATSAPP_PHONE_NUMBER_ID");
+    const metaToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+    if (!senderId || !metaToken) return reply({ ok: false, code: "sender_not_configured" }, 503);
+    const { data: connection, error: connectionError } = await admin.from("cithela_channel_connections")
+      .select("id").eq("tenant_id", tenantId).eq("channel", "whatsapp")
+      .eq("external_account_id", senderId).eq("status", "active").maybeSingle();
+    if (connectionError || !connection) return reply({ ok: false, code: "connection_not_found" }, 403);
+    const graphVersion = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
+    try {
+      const response = await fetch(
+        "https://graph.facebook.com/" + graphVersion + "/" + senderId +
+        "?fields=id,display_phone_number,quality_rating",
+        {
+          method: "GET",
+          headers: { Authorization: "Bearer " + metaToken },
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const metaCode = body?.error?.code;
+        const diagnostic = Number.isInteger(metaCode) && metaCode > 0 && metaCode < 1000000
+          ? "meta_code_" + metaCode : "meta_http_" + response.status;
+        return reply({
+          ok: false, code: "meta_credential_check_failed", diagnostic_code: diagnostic
+        }, 502);
+      }
+      if (body?.id !== senderId) return reply({ ok: false, code: "meta_number_mismatch" }, 502);
+      return reply({
+        ok: true, code: "meta_number_accessible", diagnostic: "read_only",
+        quality_rating: ["GREEN", "YELLOW", "RED"].includes(body?.quality_rating)
+          ? body.quality_rating : null,
+      });
+    } catch {
+      return reply({ ok: false, code: "meta_check_unavailable" }, 503);
+    }
+  }
 
   const { data: event, error: eventError } = await admin.from("cithela_channel_inbox")
     .select("id,connection_id,channel,message_type,sender_phone_e164,provider_timestamp,received_at")
