@@ -1213,6 +1213,9 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
+// Pilot: Meta's test WABA cannot create an authentication template yet.
+// Keep phone OTP gated until the approved template, Auth SMS Hook and E2E test are ready.
+const CITHELA_PHONE_OTP_ENABLED=false;
 const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
 const CITHELA_PENDING_INVITE_TTL=30*60*1000;
 function patientInviteLink(code,email){
@@ -1601,6 +1604,7 @@ const CithelaCloud=(()=>{
     return {ok:true};
   }
   async function sendPatientWhatsAppOtp(phone){
+    if(!CITHELA_PHONE_OTP_ENABLED)throw Error('otp_whatsapp_no_disponible');
     const c=await getClient();
     const clean=String(phone||'').trim();
     if(!/^\+[1-9][0-9]{7,14}$/.test(clean))throw Error('WhatsApp inválido');
@@ -2175,20 +2179,29 @@ function renderPatientLoginSession(){
   if(targetEmail&&!$('l-patient-email').value)$('l-patient-email').value=targetEmail;
   if(emailWrap)emailWrap.hidden=Boolean(targetPhone)||hasInvite||Boolean(session.signedIn);
   if(otpWrap)otpWrap.style.display=targetPhone&&patientWhatsappOtpSent&&!session.signedIn?'block':'none';
-  if(copy)copy.textContent=targetPhone
-    ?'Acceso por WhatsApp detectado. CITHELA verificará este número con un código de 6 dígitos.'
-    :(hasInvite
-      ?'Invitación detectada. Tocá Continuar para acceder a tus turnos.'
-      :(session.signedIn
-        ?'Tu acceso ya está activo en este dispositivo.'
-        :'Ingresá tu correo solo para recuperar un acceso anterior.'));
-  if(hint)hint.textContent=targetPhone
-    ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
-    :(hasInvite
-      ?'No necesitás copiar ningún código. El código manual queda solo como respaldo.'
-      :'Si es tu primera vez, usá el enlace personal que te enviaron por WhatsApp.');
-  if(primary)primary.textContent=session.signedIn?'Ver mis turnos':
-    (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
+  const unsupportedPhoneInvite=Boolean(targetPhone&&!CITHELA_PHONE_OTP_ENABLED);
+  if(copy)copy.textContent=unsupportedPhoneInvite
+    ?'El acceso por código de WhatsApp aún no está habilitado para el piloto.'
+    :targetPhone
+      ?'Acceso por WhatsApp detectado. CITHELA verificará este número con un código de 6 dígitos.'
+      :(hasInvite
+        ?'Invitación detectada. Tocá Continuar para acceder a tus turnos.'
+        :(session.signedIn
+          ?'Tu acceso ya está activo en este dispositivo.'
+          :'Ingresá tu correo para recuperar tu acceso.'));
+  if(hint)hint.textContent=unsupportedPhoneInvite
+    ?'Solicitá al establecimiento una nueva invitación para tu correo. Puede enviarte el enlace por WhatsApp, pero la verificación se realiza por email. Esta invitación de teléfono no sirve para ingresar hasta que habilitemos OTP.'
+    :targetPhone
+      ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
+      :(hasInvite
+        ?'Verificá tu correo desde el enlace recibido. Si se abre en otra app, volvé a esta invitación desde el mismo navegador.'
+        :'Si es tu primera vez, pedí al establecimiento una invitación personal. Podés recibirla por WhatsApp y verificarte por correo.');
+  if(primary){
+    primary.textContent=unsupportedPhoneInvite?'Solicitá una invitación por correo':
+      session.signedIn?'Ver mis turnos':
+        (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
+    primary.disabled=Boolean(unsupportedPhoneInvite&&!session.signedIn);
+  }
   if(role!=='paciente'||!session.signedIn){
     note.style.display='none';button.style.display='none';return;
   }
@@ -2226,6 +2239,7 @@ async function patientSwitchAccount(){
 }
 function patientWhatsAppAuthMessage(err){
   const message=String(err?.message||'');
+  if(message==='otp_whatsapp_no_disponible')return 'El acceso con OTP por WhatsApp está pendiente. Pedí una invitación por correo al establecimiento.';
   if(/provider|phone provider|unsupported|whatsapp/i.test(message))
     return 'La verificación por WhatsApp todavía no está habilitada. Pedí acceso por correo.';
   if(/rate limit|too many/i.test(message))
@@ -2240,6 +2254,10 @@ async function patientPrimaryAccess(){
   }
   const targetPhone=pendingPatientInvitePhone();
   if(targetPhone){
+    if(!CITHELA_PHONE_OTP_ENABLED){
+      toast('La invitación por teléfono todavía no permite ingresar. Pedí al establecimiento un enlace vinculado a tu correo.',6200);
+      return;
+    }
     try{
       await CithelaCloud.sendPatientWhatsAppOtp(targetPhone);
       patientWhatsappOtpSent=true;
@@ -3772,6 +3790,9 @@ function renderPacs(){
 }
 
 async function cloudIssuePhoneInvite(personId){
+  if(!CITHELA_PHONE_OTP_ENABLED){
+    toast('Acceso OTP por WhatsApp pendiente. Prepará una invitación por correo para este paciente.',5100);return;
+  }
   if(!professionalCloudWritable())return;
   const p=cloudPersonById(personId);
   const phone=String(p?.tel||'').trim();
@@ -3841,13 +3862,13 @@ async function cloudIssueInvite(personId){
       <label class="lbl" for="cloud-invite-link">Enlace para el paciente</label>
       <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code,r.email))}">
       <button type="button" class="btn-main soft" onclick="copyPatientInviteLink()">Copiar enlace</button>
-      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Enviar enlace por WhatsApp</button>`:''}
+      ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Compartir invitación por WhatsApp</button>`:''}
       <details style="margin-top:12px;"><summary class="contact-note" style="cursor:pointer;">Código manual (solo si falla el enlace)</summary>
         <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="margin-top:8px;font-size:.75rem;">
         <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
       </details>
     </div>`;
-    toast('Acceso por correo generado.',3600);
+    toast('Invitación generada. Compartila por WhatsApp o copiá el enlace; el paciente verificará su correo.',4800);
   }catch(err){
     const messages={invalid_email:'Ingresá un correo válido',
       already_linked:'La ficha ya tiene una cuenta vinculada',
@@ -3994,19 +4015,23 @@ async function cloudVerFicha(id){
       ${editForm}
       <hr class="divider">
       ${professionalCloudWritable()?`<div style="margin:14px 0 18px;">
-        <p class="sh" style="margin:0 0 8px;">Acceso del paciente</p>
-        ${wa?`<p class="contact-note" style="margin-bottom:8px;">WhatsApp · ${phone}</p>
-          <button type="button" class="btn-main" onclick="cloudIssuePhoneInvite('${p.id}')">Enviar acceso por WhatsApp</button>
-          <div id="cloud-whatsapp-invite-result" style="margin-top:10px;"></div>`
-        :`<p class="contact-note">Agregá un WhatsApp válido a la ficha para usar el acceso principal.</p>`}
+        <p class="sh" style="margin:0 0 8px;">Acceso del paciente · piloto</p>
+        <p class="contact-note" style="margin-bottom:12px;">
+          Prepará un enlace personal para el correo del paciente y, si tiene WhatsApp,
+          enviáselo por ahí. El paciente verifica su correo y entra a CITHELA
+          para reservar y gestionar sus turnos.
+        </p>
+        <label class="lbl" for="cloud-invite-email">Correo del paciente</label>
+        <input class="inp" type="email" autocomplete="off" id="cloud-invite-email"
+          placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
+        <button type="button" class="btn-main" onclick="cloudIssueInvite('${p.id}')">Preparar invitación por correo</button>
+        <div id="cloud-invite-result" style="margin-top:10px;"></div>
         <details style="margin-top:14px;">
-          <summary class="mb ghost" style="cursor:pointer;width:100%;">Usar correo como alternativa</summary>
-          <div style="padding-top:14px;">
-            <label class="lbl">Correo del paciente</label>
-            <input class="inp" type="email" autocomplete="off" id="cloud-invite-email" placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
-            <button type="button" class="btn-main soft" onclick="cloudIssueInvite('${p.id}')">Generar acceso por correo</button>
-            <div id="cloud-invite-result" style="margin-top:10px;"></div>
-          </div>
+          <summary class="contact-note" style="cursor:pointer;">Verificación por WhatsApp (próximamente)</summary>
+          <p class="contact-note" style="padding-top:8px;">
+            La plantilla OTP de Meta no está habilitada para el número de prueba.
+            Las invitaciones por teléfono no están disponibles; evitamos enviar enlaces que aún no permiten ingresar.
+          </p>
         </details>
       </div><hr class="divider">`:''}
       <p class="sh">Últimos turnos (${appointments.length}${appointments.length===50?'+':''})</p>
