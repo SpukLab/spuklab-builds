@@ -82,3 +82,15 @@ test("test sender does not rewrite numbers outside Argentine mobile format",asyn
  assert.equal((await h.send()).data.code,"submitted_to_meta");
  assert.equal(h.calls.find(x=>x.kind==="meta").to,"12025550123");
 });
+
+test("Meta access denied 131005 is actionable and never retried",async()=>{
+ const h=await make({metaCode:131005});
+ const first=await h.send();
+ assert.equal(first.status,502);
+ assert.equal(first.data.code,"meta_access_denied");
+ assert.equal(first.data.diagnostic_code,"meta_code_131005");
+ assert.equal(h.calls.find(x=>x.kind==="update").row.error_code,"meta_code_131005");
+ const again=await h.send();
+ assert.equal(again.data.code,"already_attempted");
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
+});
