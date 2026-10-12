@@ -8,7 +8,7 @@ const EVENT = "2903949d-f170-48c4-9273-2abad48a715d";
 const CONN = "542ad49e-df0a-4833-bc95-773c1a5de364";
 
 async function harness({ role = "owner", text = "Quiero reservar un turno", resourceCount = 1,
-  outgoingStatus = null } = {}) {
+  outgoingStatus = null, selection = false, sameSender = true, selectedAvailable = true, lastOfferValid = true } = {}) {
   let handler;
   const calls = [];
   const deno = {
@@ -23,7 +23,7 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
       const eq = {};
       return {
         select() { return this; }, eq(k, v) { eq[k] = v; return this; },
-        order() { return this; },
+        order() { return this; }, lt() { return this; }, gte() { return this; },
         async maybeSingle() {
           calls.push({ table, eq: { ...eq } });
           if (table === "cithela_tenant_memberships")
@@ -32,7 +32,7 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
             return { data: eq.id === TENANT ? { status: "active", timezone: "America/Argentina/Buenos_Aires" } : null, error: null };
           if (table === "cithela_channel_inbox")
             return { data: eq.id === EVENT && eq.tenant_id === TENANT
-              ? { id: EVENT, connection_id: CONN, external_event_id: "wamid.test", message_type: "text", text_body: text } : null, error: null };
+              ? { id: EVENT, connection_id: CONN, external_event_id: "wamid.test", message_type: "text", text_body: text, received_at: "2026-10-12T22:01:51Z", sender_phone_e164: "+5491123456789" } : null, error: null };
           if (table === "cithela_channel_connections")
             return { data: eq.id === CONN && eq.tenant_id === TENANT && eq.status === "active"
               ? { external_account_id: "test_phone_id" } : null, error: null };
@@ -40,12 +40,21 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
         },
         async limit() {
           calls.push({ table, eq: { ...eq } });
+          if (table === "cithela_channel_outbox") return { data: selection ? [{
+            id: "outbox-test", inbox_event_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            reply_text: lastOfferValid ?
+              "Estos horarios están disponibles para Corte:\n1. mar, 13 oct a las 14:00\n2. mar, 13 oct a las 15:00\n3. mar, 13 oct a las 16:00\n¿Cuál preferís? El turno se confirmará luego de comprobar nuevamente la disponibilidad." :
+              "Mensaje genérico, sin opciones.",
+            sent_at: "2026-10-12T21:45:50Z" }] : [], error: null };
           if (table !== "cithela_channel_inbox") throw Error("unexpected list");
           return { data: [{ id: EVENT, external_event_id: "wamid.test", sender_name: "Test",
             message_type: "text", text_body: text, status: "new", received_at: "2026-10-11T16:11:52Z" }], error: null };
         },
         async in(field, ids) {
           calls.push({ table, eq: { ...eq }, field, ids });
+          if (table === "cithela_channel_inbox" && selection)
+            return { data: [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              sender_phone_e164: sameSender ? "+5491123456789" : "+5491199999999" }], error: null };
           if (table !== "cithela_channel_outbox") throw Error("unexpected outbox lookup");
           return { data: outgoingStatus
             ? [{ inbox_event_id: EVENT, status: outgoingStatus, reply_text: "Estos son los horarios...",
@@ -64,7 +73,7 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
       if (args.p_command === "catalog.resources")
         return { data: { ok: true, items: Array.from({ length: resourceCount }, (_, i) => ({ id: "res" + i })) }, error: null };
       if (args.p_command === "availability.query")
-        return { data: { ok: true, date: args.p_payload.date, slots: ["09:00", "09:15", "10:00", "11:00"] }, error: null };
+        return { data: { ok: true, date: args.p_payload.date, slots: selection ? (selectedAvailable ? ["14:00","15:00","16:00"] : ["14:00","16:00"]) : ["09:00", "09:15", "10:00", "11:00"] }, error: null };
       throw Error("mutation or unsupported command");
     },
   };
@@ -282,4 +291,51 @@ test("UI escapes patient messages and outgoing responses", async () => {
     malicious, {status:"sent", reply_text:malicious}));
   assert.match(html, /&lt;img/);
   assert.doesNotMatch(html, /<img/);
+});
+
+test("parses exactly the chosen option from a previously sent WhatsApp offer", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const pick = new Function("Deno", "createClient", js + "\nreturn {selectedOption,recoverOffer};")
+    ({env:{get:()=>null},serve(){}},()=>({}));
+  assert.equal(pick.selectedOption("Elijo la opción 2"), 2);
+  assert.equal(pick.selectedOption("la segunda"), 2);
+  assert.equal(pick.selectedOption("2"), 2);
+  assert.equal(pick.selectedOption("2:00"), null);
+  const offer = pick.recoverOffer(
+    "Estos horarios están disponibles para Corte:\n1. mar, 13 oct a las 14:00\n2. mar, 13 oct a las 15:00\n3. mar, 13 oct a las 16:00\n¿Cuál preferís? El turno se confirmará luego de comprobar nuevamente la disponibilidad.",
+    "2026-10-12T21:45:50Z");
+  assert.equal(offer.serviceName, "Corte");
+  assert.deepEqual(offer.slots[1],{ ordinal:2,date:"2026-10-13",hour:"15:00" });
+});
+test("choice 2 matches same-sender sent offer and rechecks 15:00, without booking", async () => {
+  const h = await harness({ selection:true, text:"Elijo la opción 2" });
+  const response = await h.request("prepare");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.code, "selection_preview");
+  assert.deepEqual(response.body.chosen.date, "2026-10-13");
+  assert.equal(response.body.chosen.hour, "15:00");
+  assert.equal(response.body.chosen.option, 2);
+  assert.match(response.body.draft, /todavía no está reservado/);
+  const queries = h.calls.filter(x => x.rpc).map(x => x.args.p_command);
+  assert.deepEqual(queries,["catalog.services","catalog.resources","availability.query"]);
+  assert.equal(h.calls.some(x=>x.args?.p_command==="appointment.create"),false);
+});
+test("choice cannot read or use another sender's latest offer", async () => {
+  const h = await harness({ selection:true, text:"Elijo la opción 2",sameSender:false });
+  const response = await h.request("prepare");
+  assert.equal(response.body.code,"manual_review");
+  assert.equal(h.calls.filter(x=>x.rpc).length,0);
+});
+test("choice cannot accept stale or unsupported proposals", async () => {
+  const h = await harness({ selection:true, text:"Elijo la opción 2",lastOfferValid:false });
+  const response = await h.request("prepare");
+  assert.equal(response.body.code,"manual_review");
+});
+test("if choice is no longer available, no booking or fabricated time", async () => {
+  const h = await harness({ selection:true, text:"Elijo la opción 2",selectedAvailable:false });
+  const response = await h.request("prepare");
+  assert.equal(response.body.code,"manual_review");
+  assert.match(response.body.draft,/ya no está disponible/);
+  assert.equal(h.calls.some(x=>x.args?.p_command==="appointment.create"),false);
 });
