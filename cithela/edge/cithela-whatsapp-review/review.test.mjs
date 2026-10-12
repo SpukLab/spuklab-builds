@@ -124,3 +124,14 @@ test("requires resource choice for multiple professionals", async () => {
   const result = await h.request("prepare");
   assert.equal(result.body.code, "needs_resource");
 });
+
+test("tintura maps uniquely to Coloración without guessing combined services", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const fn = new Function("Deno", "createClient", js + "\nreturn matchService;");
+  const match = fn({ env: { get: () => null }, serve: () => {} }, () => ({}));
+  const services = [{ id: "color", name: "Coloración" }, { id: "cut", name: "Corte" }];
+  assert.equal(match("Quiero un turno para tintura", services)?.id, "color");
+  assert.equal(match("Quiero un turno para corte", services)?.id, "cut");
+  assert.equal(match("Quiero corte y tintura", services), null);
+});
