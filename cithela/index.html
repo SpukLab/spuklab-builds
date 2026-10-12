@@ -321,6 +321,25 @@ textarea.inp{resize:vertical;min-height:72px;}
 .cithela-config-group{border:1px solid #d6e4e0;border-radius:13px;background:var(--white);margin-bottom:12px;overflow:hidden}.cithela-config-group>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:16px;font-weight:600;list-style:none}.cithela-config-group>summary::-webkit-details-marker,.cithela-day>summary::-webkit-details-marker{display:none}.cithela-config-group[open]>summary span{transform:rotate(180deg)}.cithela-config-group>.form-card{margin:0 12px 14px!important}.cithela-day{border-bottom:1px solid #dce8e6}.cithela-day>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 0;cursor:pointer;list-style:none}.cithela-day>.day-editor{padding:8px 0 12px}.cithela-day .tag{font-size:.67rem;max-width:70%;text-align:right;white-space:normal}
 
 .cithela-weekly-preset{margin:8px 0 14px;border:1px solid #dbe8e5;border-radius:10px;padding:0 12px}.cithela-weekly-preset>summary{cursor:pointer;padding:12px 2px;list-style:none;font-weight:600;font-size:.82rem;color:var(--teal2)}.cithela-weekly-preset>summary::-webkit-details-marker{display:none}
+
+/* CITHELA WhatsApp supervisory inbox: one collapsible thread per inbound event. */
+.cloud-wa-item{margin:9px 0;border:1px solid #d8e5e2;border-radius:12px;background:var(--white);overflow:hidden}
+.cloud-wa-item[open]{border-color:#95b7b1}
+.cloud-wa-item>summary{list-style:none;cursor:pointer;padding:13px 12px}
+.cloud-wa-item>summary::-webkit-details-marker{display:none}
+.cloud-wa-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cloud-wa-item-head strong{font-size:.82rem}
+.cloud-wa-item-time{font-size:.68rem;color:var(--ink3);margin-top:5px}
+.cloud-wa-item-snippet{font-size:.77rem;margin-top:7px;line-height:1.35;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cloud-wa-label{font-size:.65rem;border-radius:99px;padding:5px 9px;white-space:nowrap;background:#eff4f3;color:#516a66}
+.cloud-wa-label.sent{background:#e2f1ea;color:#246a58}
+.cloud-wa-label.unknown,.cloud-wa-label.sending{background:#fbf0df;color:#845827}
+.cloud-wa-item-content{border-top:1px solid #dbe7e3;padding:13px 12px}
+.cloud-wa-message-quote{padding:11px;border-left:3px solid #9cbeb5;background:#f5f7f5;font-size:.8rem;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45;margin:8px 0 12px}
+.cloud-wa-draft{margin-top:13px;padding:12px;border:1px solid #cfe3dd;border-radius:9px}
+.cloud-wa-draft[hidden]{display:none}
+.cloud-wa-reply-text{font-size:.8rem;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;margin:8px 0}
+.cloud-wa-status-line{font-size:.76rem;line-height:1.4;margin-top:9px}
 </style>
 
 </head>
@@ -727,15 +746,12 @@ textarea.inp{resize:vertical;min-height:72px;}
       <details class="cithela-weekly-preset" id="cloud-wa-pilot" style="display:none;margin-top:18px;">
         <summary>Asistente WhatsApp · prueba supervisada ▾</summary>
         <div style="padding:4px 2px 14px;">
-          <p class="contact-note">Solo el propietario o un administrador puede revisar estos mensajes. No se envían respuestas ni se crean turnos.</p>
+          <p class="contact-note">Mensajes ordenados del más reciente al más antiguo. Cada consulta muestra su propia respuesta y estado. Solo el propietario o administrador puede aprobar envíos; no se crean turnos automáticamente.</p>
           <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
           <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
           <button class="btn-main soft" type="button" onclick="cloudLoadWhatsappInbox()">Ver mensajes recibidos</button>
+          <p id="cloud-wa-counts" class="contact-note" role="status" style="margin:12px 0;"></p>
           <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
-          <p class="contact-note" style="margin-top:12px;">Borrador para revisión:</p>
-          <div id="cloud-wa-preview" role="status" aria-live="polite" style="white-space:pre-wrap;word-break:break-word;font-size:.8rem;line-height:1.5;"></div>
-          <button class="btn-main" id="cloud-wa-send" type="button" style="display:none;margin-top:12px;" onclick="cloudSendWhatsappDraft()">Aprobar y enviar por WhatsApp</button>
-          <p id="cloud-wa-send-status" role="status" class="contact-note" style="display:none;margin-top:8px;"></p>
         </div>
       </details>
       <div id="cloud-probe-form" style="display:none;margin-top:18px;">
@@ -4553,67 +4569,133 @@ async function cloudCheckMetaCredentials(){
 }
 let cloudWaBusy=false;
 let cloudWaPendingDraft=null;
-function cloudWaResetApproval(){
-  cloudWaPendingDraft=null;
-  const button=$('cloud-wa-send'),status=$('cloud-wa-send-status');
-  if(button){button.style.display='none';button.disabled=false;}
-  if(status){status.style.display='none';status.textContent='';}
-}
+let cloudWaMessages=new Map();
 
-async function cloudLoadWhatsappInbox(){
+function cloudWaStatusLabel(outbound){
+  if(!outbound)return 'Sin responder';
+  if(outbound.status==='sent')return 'Aceptado por Meta';
+  if(outbound.status==='sending')return 'Envío en curso';
+  return 'Intento no confirmado';
+}
+function cloudWaMessageMarkup(item){
+  const id=item.id, outbound=item.outbound;
+  const status=cloudWaStatusLabel(outbound);
+  const time=item.received_at?new Date(item.received_at).toLocaleString('es-AR'):'Fecha no disponible';
+  const text=String(item.text_body||'Mensaje no textual');
+  const safeName=escHtml(item.sender_name||'Contacto WhatsApp');
+  const pending=outbound
+    ? '<div class="cloud-wa-draft"><strong>Respuesta vinculada a este mensaje</strong>'+
+      '<div class="cloud-wa-reply-text">'+escHtml(outbound.reply_text||'Respuesta no disponible')+'</div>'+
+      '<p class="cloud-wa-status-line">'+
+      (outbound.status==='sent'
+        ? 'Meta aceptó la solicitud de envío. La entrega final requiere confirmación aparte.'
+        : 'Hay un intento registrado; no se permite reenviar este mensaje para evitar duplicados.')+
+      '</p></div>'
+    : '<button class="btn-main soft" type="button" onclick="cloudPrepareWhatsappDraft(\''+id+'\')">Preparar respuesta a este mensaje</button>'+
+      '<div id="cloud-wa-draft-box-'+id+'" class="cloud-wa-draft" hidden>'+
+        '<strong>Respuesta propuesta para este mensaje</strong>'+
+        '<div id="cloud-wa-draft-'+id+'" class="cloud-wa-reply-text" role="status"></div>'+
+        '<button class="btn-main" type="button" id="cloud-wa-send-'+id+
+          '" style="display:none;margin-top:10px" onclick="cloudSendWhatsappDraft(\''+id+'\')">Aprobar y enviar esta respuesta</button>'+
+        '<p id="cloud-wa-status-'+id+'" class="cloud-wa-status-line" role="status"></p>'+
+      '</div>';
+  const statusClass=outbound?.status==='sent'?'sent':outbound?.status==='unknown'?'unknown':outbound?.status==='sending'?'sending':'';
+  return '<details class="cloud-wa-item" id="cloud-wa-event-'+id+'">'+
+    '<summary><div class="cloud-wa-item-head"><strong>'+safeName+'</strong>'+
+    '<span class="cloud-wa-label '+statusClass+'">'+escHtml(status)+'</span></div>'+
+    '<div class="cloud-wa-item-snippet">'+escHtml(text)+'</div>'+
+    '<div class="cloud-wa-item-time">Recibido: '+escHtml(time)+' · Tocar para ver detalle</div></summary>'+
+    '<div class="cloud-wa-item-content"><strong>Mensaje original</strong>'+
+    '<div class="cloud-wa-message-quote">'+escHtml(text)+'</div>'+pending+'</div></details>';
+}
+function cloudWaResetApproval(){
+  if(cloudWaPendingDraft){
+    const id=cloudWaPendingDraft.event_id;
+    const box=$('cloud-wa-draft-box-'+id);
+    const button=$('cloud-wa-send-'+id);
+    if(box)box.hidden=true;
+    if(button){button.disabled=false;button.style.display='none';}
+  }
+  cloudWaPendingDraft=null;
+}
+async function cloudLoadWhatsappInbox(reopenId=null){
   if(cloudWaBusy)return;
-  const s=CithelaCloud.state(),list=$('cloud-wa-list'),preview=$('cloud-wa-preview');
+  const s=CithelaCloud.state(),list=$('cloud-wa-list'),counts=$('cloud-wa-counts');
   if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  const previouslyOpen=reopenId||list?.querySelector('.cloud-wa-item[open]')?.id?.replace('cloud-wa-event-','');
   cloudWaResetApproval();
-  cloudWaBusy=true;if(list)list.textContent='Consultando mensajes...';if(preview)preview.textContent='';
+  cloudWaBusy=true;
+  if(list)list.textContent='Consultando mensajes y respuestas...';
+  if(counts)counts.textContent='';
   try{
     const data=await CithelaCloud.whatsappReview({action:'list',tenant_id:s.tenant.id});
     if(!list)return;
-    const items=(data.items||[]).filter(x=>/^[0-9a-f-]{36}$/i.test(x.id));
+    const items=(data.items||[])
+      .filter(x=>/^[0-9a-f-]{36}$/i.test(x.id))
+      .sort((a,b)=>Date.parse(b.received_at||0)-Date.parse(a.received_at||0));
+    cloudWaMessages=new Map(items.map(x=>[x.id,x]));
     if(!items.length){list.textContent='Todavía no hay mensajes recibidos.';return;}
-    list.innerHTML=items.map(x=>{
-      const time=x.received_at?new Date(x.received_at).toLocaleString('es-AR'):'';
-      return '<div class="block-row"><div class="block-main">'+
-        '<div class="block-title">'+escHtml(x.sender_name||'Contacto WhatsApp')+'</div>'+
-        '<div class="block-meta">'+escHtml(x.text_body||'Mensaje no textual')+'</div>'+
-        '<div class="contact-note">'+escHtml(time)+'</div>'+
-        '</div><button class="mb ghost" type="button" onclick="cloudPrepareWhatsappDraft(\''+x.id+'\')">Preparar</button></div>';
-    }).join('');
-  }catch(err){if(list)list.textContent=err?.message||'No fue posible recuperar los mensajes.';}
-  finally{cloudWaBusy=false;}
+    const replied=items.filter(x=>x.outbound?.status==='sent').length;
+    const uncertain=items.filter(x=>x.outbound&&x.outbound.status!=='sent').length;
+    const pending=items.length-replied-uncertain;
+    if(counts)counts.textContent='Sin responder: '+pending+' · Meta aceptó: '+replied+
+      ' · Intentos sin confirmación: '+uncertain;
+    list.innerHTML=items.map(cloudWaMessageMarkup).join('');
+    if(previouslyOpen&&cloudWaMessages.has(previouslyOpen)){
+      const row=$('cloud-wa-event-'+previouslyOpen);if(row)row.open=true;
+    }
+  }catch(err){
+    if(list)list.textContent=err?.message||'No fue posible recuperar los mensajes.';
+    cloudWaMessages=new Map();
+  }finally{cloudWaBusy=false;}
 }
 async function cloudPrepareWhatsappDraft(eventId){
   if(cloudWaBusy||!/^[0-9a-f-]{36}$/i.test(String(eventId||'')))return;
-  const s=CithelaCloud.state(),preview=$('cloud-wa-preview');
-  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  const s=CithelaCloud.state(),item=cloudWaMessages.get(eventId);
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||'')||!item||item.outbound)return;
   cloudWaResetApproval();
-  cloudWaBusy=true;if(preview)preview.textContent='Consultando servicios y disponibilidad...';
+  for(const row of document.querySelectorAll('.cloud-wa-item[open]')){
+    if(row.id!=='cloud-wa-event-'+eventId)row.open=false;
+  }
+  const row=$('cloud-wa-event-'+eventId),box=$('cloud-wa-draft-box-'+eventId);
+  const preview=$('cloud-wa-draft-'+eventId),send=$('cloud-wa-send-'+eventId);
+  if(row)row.open=true;
+  if(box)box.hidden=false;
+  cloudWaBusy=true;
+  if(preview)preview.textContent='Consultando servicios y disponibilidad...';
+  if(send)send.style.display='none';
   try{
     const data=await CithelaCloud.whatsappReview({action:'prepare',tenant_id:s.tenant.id,event_id:eventId});
     if(preview)preview.textContent=data.draft||'Revisión manual necesaria.';
     if(typeof data.draft==='string'&&['needs_service','slots_preview','no_slots'].includes(data.code)){
-      cloudWaPendingDraft={tenant_id:s.tenant.id,event_id:eventId,draft:data.draft};
-      const send=$('cloud-wa-send');if(send)send.style.display='block';
+      cloudWaPendingDraft={tenant_id:s.tenant.id,event_id:eventId,draft:data.draft,
+        sender_name:item.sender_name||'Contacto WhatsApp',source_text:item.text_body||'',received_at:item.received_at};
+      if(send)send.style.display='block';
     }
   }catch(err){if(preview)preview.textContent=err?.message||'No fue posible generar el borrador.';}
   finally{cloudWaBusy=false;}
 }
-
-async function cloudSendWhatsappDraft(){
-  const p=cloudWaPendingDraft;
-  const s=CithelaCloud.state();
-  if(cloudWaBusy||!p||!s?.signedIn||!s.tenant||
-    !['owner','admin'].includes(s.membership?.role||'')||p.tenant_id!==s.tenant.id)return;
-  if(!confirm('¿Enviar este texto por WhatsApp al contacto que lo solicitó? No se creará ningún turno.'))return;
+async function cloudSendWhatsappDraft(eventId){
+  const p=cloudWaPendingDraft,s=CithelaCloud.state(),item=cloudWaMessages.get(eventId);
+  if(cloudWaBusy||!p||p.event_id!==eventId||!item||item.outbound||
+    !s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||'')||
+    p.tenant_id!==s.tenant.id)return;
+  const receivedAt=p.received_at?new Date(p.received_at).toLocaleString('es-AR'):'fecha no disponible';
+  const ok=confirm('¿Aprobar y enviar esta respuesta por WhatsApp?\n\n'+
+    'DESTINATARIO: '+p.sender_name+'\nMENSAJE RECIBIDO ('+receivedAt+'):\n'+p.source_text.slice(0,200)+
+    '\n\nRESPUESTA A ENVIAR:\n'+p.draft.slice(0,700)+'\n\nNo se creará ningún turno.');
+  if(!ok)return;
   cloudWaBusy=true;
-  const send=$('cloud-wa-send'),status=$('cloud-wa-send-status');
+  const send=$('cloud-wa-send-'+eventId),status=$('cloud-wa-status-'+eventId);
   if(send)send.disabled=true;
-  if(status){status.style.display='block';status.textContent='Enviando respuesta aprobada a Meta...';}
+  if(status)status.textContent='Enviando respuesta aprobada a Meta...';
+  let refresh=false;
   try{
-    await CithelaCloud.whatsappSend({action:'send',...p});
+    await CithelaCloud.whatsappSend({action:'send',tenant_id:p.tenant_id,event_id:p.event_id,draft:p.draft});
     cloudWaPendingDraft=null;
     if(send)send.style.display='none';
-    if(status)status.textContent='Meta recibió la solicitud de envío. La entrega al destinatario aún debe confirmarse.';
+    if(status)status.textContent='Meta aceptó este envío. Se actualizará su estado en la bandeja.';
+    refresh=true;
   }catch(err){
     const descriptions={
       conversation_window_expired:'La ventana de WhatsApp venció. El paciente debe escribir nuevamente antes de responder.',
@@ -4621,15 +4703,20 @@ async function cloudSendWhatsappDraft(){
       stale_or_unsupported_draft:'El borrador cambió o perdió vigencia. Volvé a tocar Preparar.',
       sender_not_configured:'El número remitente o las credenciales Meta no están configurados.',
       delivery_unconfirmed:'Meta no confirmó el envío. No reintentes este mensaje sin revisar el estado.',
-      meta_unauthorized:'Meta rechazó la autenticación (HTTP 401). Revisá o renová el token de WhatsApp en Supabase. Este mensaje no se volverá a enviar.',
-      test_recipient_not_allowed:'Meta no autorizó este destinatario de prueba (código 131030). Revisá la lista de números autorizados en Meta y su formato. No reintentes este mensaje.',
-      meta_access_denied:'Meta denegó el acceso (131005). Revisá los permisos WhatsApp Business Messaging y el acceso de la aplicación al número de Meta. No reintentes este mensaje.',
+      meta_unauthorized:'Meta rechazó la autenticación. Revisá el token de WhatsApp en Supabase.',
+      test_recipient_not_allowed:'Meta no autorizó al destinatario de prueba. No reintentes este mensaje.',
+      meta_access_denied:'Meta denegó el acceso (131005). Revisá los permisos de WhatsApp.',
     };
     if(status)status.textContent=descriptions[err?.message]||'No se pudo completar el envío. Código: '+(err?.message||'desconocido');
-    if(['already_attempted','delivery_unconfirmed','meta_unauthorized','meta_access_denied','test_recipient_not_allowed','conversation_window_expired'].includes(err?.message)){
+    if(['already_attempted','delivery_unconfirmed','meta_unauthorized','meta_access_denied',
+      'test_recipient_not_allowed','conversation_window_expired'].includes(err?.message)){
       cloudWaPendingDraft=null;if(send)send.style.display='none';
+      refresh=true;
     }else if(send)send.disabled=false;
-  }finally{cloudWaBusy=false;}
+  }finally{
+    cloudWaBusy=false;
+    if(refresh)await cloudLoadWhatsappInbox(eventId);
+  }
 }
 
 function renderCloudStatus(){
