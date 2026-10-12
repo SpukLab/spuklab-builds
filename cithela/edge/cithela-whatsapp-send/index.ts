@@ -168,6 +168,7 @@ Deno.serve(async (req: Request) => {
       ok: false,
       code: errCode === "meta_http_401" || errCode === "meta_code_190" ? "meta_unauthorized"
         : errCode === "meta_code_131030" ? "test_recipient_not_allowed"
+        : errCode === "meta_code_131005" ? "meta_access_denied"
         : "delivery_unconfirmed",
       diagnostic_code: errCode,
       outbox_id: outboxId,
