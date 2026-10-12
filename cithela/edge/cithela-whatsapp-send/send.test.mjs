@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const TENANT="50b3e3eb-77a5-413d-af3b-9aa5b56e833e", EVENT="2903949d-f170-48c4-9273-2abad48a715d", DRAFT="¿Qué servicio necesitás?";
-async function make({age=60,authorized=true,stale=false}={}){
+async function make({age=60,authorized=true,stale=false,metaCode=null}={}){
  let handler, reserved=false;
  const calls=[];
  const env={SUPABASE_URL:"https://test.invalid",SUPABASE_SERVICE_ROLE_KEY:"secret-test",META_WHATSAPP_PHONE_NUMBER_ID:"phone-id",META_WHATSAPP_ACCESS_TOKEN:"test-only"};
@@ -30,7 +30,7 @@ async function make({age=60,authorized=true,stale=false}={}){
  const clean=src.replace(/^import .*?;\s*$/m,"").replace("Deno.serve(async (req: Request)","Deno.serve(async (req)").replace("payload: unknown","payload").replace("providerTime: unknown","providerTime").replace("value: unknown","value").replace("let request: Record<string, unknown>","let request").replace("let preview: Record<string, unknown>","let preview").replace("let providerMessageId: string | null","let providerMessageId").replace("let errCode: string | null","let errCode");
  const fetcher=async url=>{
   if(String(url).includes("cithela-whatsapp-review")){calls.push({kind:"review"});return Response.json({ok:true,code:"needs_service",draft:stale?"outdated":DRAFT});}
-  if(String(url).includes("graph.facebook.com")){calls.push({kind:"meta"});return Response.json({messages:[{id:"wamid.mock"}]});}
+  if(String(url).includes("graph.facebook.com")){calls.push({kind:"meta"});return metaCode?Response.json({error:{code:metaCode,message:"REDACTED"}},{status:400}):Response.json({messages:[{id:"wamid.mock"}]});}
   throw Error("unexpected URL");
  };
  new Function("Deno","createClient","fetch",clean)(Deno,()=>db,fetcher);
@@ -50,4 +50,16 @@ test("valid approval sends only once even if repeated",async()=>{
  assert.equal((await h.send()).data.code,"already_attempted");
  assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
  assert.equal(h.calls.find(x=>x.kind==="update").row.status,"sent");
+});
+
+test("test-recipient rejection retains Meta code without resending",async()=>{
+ const h=await make({metaCode:131030});
+ const result=await h.send();
+ assert.equal(result.status,502);
+ assert.equal(result.data.code,"test_recipient_not_allowed");
+ assert.equal(result.data.diagnostic_code,"meta_code_131030");
+ assert.equal(h.calls.find(x=>x.kind==="update").row.error_code,"meta_code_131030");
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
+ assert.equal((await h.send()).data.code,"already_attempted");
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
 });
