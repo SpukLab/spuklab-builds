@@ -29,8 +29,8 @@ function matchService(text, services) {
     const needle = clean(s.name);
     const direct = needle && haystack.includes(" " + needle + " ");
     // Single, conservative hair-service synonym; never resolve ambiguous matches.
-    const dyeIntent = /\\b(tintura|tinte|tenir|tenirme|tenido)\\b/.test(haystack);
-    const hairColor = /\\b(coloracion|color)\\b/.test(needle);
+    const dyeIntent = /\b(tintura|tinte|tenir|tenirme|tenido)\b/.test(haystack);
+    const hairColor = /\b(coloracion|color)\b/.test(needle);
     return direct || (dyeIntent && hairColor);
   });
   return found.length === 1 ? found[0] : null;
