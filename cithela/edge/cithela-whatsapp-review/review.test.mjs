@@ -7,7 +7,8 @@ const OTHER = "11111111-2222-4333-8444-555555555555";
 const EVENT = "2903949d-f170-48c4-9273-2abad48a715d";
 const CONN = "542ad49e-df0a-4833-bc95-773c1a5de364";
 
-async function harness({ role = "owner", text = "Quiero reservar un turno", resourceCount = 1 } = {}) {
+async function harness({ role = "owner", text = "Quiero reservar un turno", resourceCount = 1,
+  outgoingStatus = null } = {}) {
   let handler;
   const calls = [];
   const deno = {
@@ -42,6 +43,15 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
           if (table !== "cithela_channel_inbox") throw Error("unexpected list");
           return { data: [{ id: EVENT, external_event_id: "wamid.test", sender_name: "Test",
             message_type: "text", text_body: text, status: "new", received_at: "2026-10-11T16:11:52Z" }], error: null };
+        },
+        async in(field, ids) {
+          calls.push({ table, eq: { ...eq }, field, ids });
+          if (table !== "cithela_channel_outbox") throw Error("unexpected outbox lookup");
+          return { data: outgoingStatus
+            ? [{ inbox_event_id: EVENT, status: outgoingStatus, reply_text: "Estos son los horarios...",
+              attempted_at: "2026-10-11T16:14:52Z",
+              sent_at: outgoingStatus === "sent" ? "2026-10-11T16:15:10Z" : null }]
+            : [], error: null };
         },
       };
     },
@@ -103,6 +113,10 @@ test("lists only tenant-scoped messages", async () => {
   const read = h.calls.find(x => x.table === "cithela_channel_inbox");
   assert.equal(read.eq.tenant_id, TENANT);
   assert.equal(read.eq.channel, "whatsapp");
+  const outbox = h.calls.find(x => x.table === "cithela_channel_outbox");
+  assert.equal(outbox.eq.tenant_id, TENANT);
+  assert.deepEqual(outbox.ids, [EVENT]);
+  assert.equal(result.body.items[0].outbound, null);
 });
 test("asks for service if missing; never writes", async () => {
   const h = await harness();
@@ -178,4 +192,20 @@ test("clinical or commercial side questions demand human review", async () => {
   assert.equal(review("Tintura a las 16, tengo alergia a productos"),true);
   assert.equal(review("Cuanto cuesta la coloracion?"),true);
   assert.equal(review("Quiero turno para tintura mañana"),false);
+});
+
+test("pairs accepted reply with the exact inbound message and never calls Meta", async () => {
+  const h = await harness({ outgoingStatus: "sent" });
+  const result = await h.request("list");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.items[0].id, EVENT);
+  assert.equal(result.body.items[0].outbound.status, "sent");
+  assert.equal(result.body.items[0].outbound.reply_text, "Estos son los horarios...");
+  assert.equal(h.calls.some(x => x.rpc), false);
+});
+test("failed or uncertain response is never advertised as pending", async () => {
+  const h = await harness({ outgoingStatus: "unknown" });
+  const result = await h.request("list");
+  assert.equal(result.body.items[0].outbound.status, "unknown");
+  assert.equal(result.body.items[0].outbound.sent_at, null);
 });
