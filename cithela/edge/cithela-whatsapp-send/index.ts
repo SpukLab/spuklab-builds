@@ -31,6 +31,16 @@ function e164(value: unknown) {
   const str = String(value ?? "");
   return /^\+[1-9][0-9]{7,14}$/.test(str) ? str : null;
 }
+// Meta's Argentina test-recipient allowlist may use +54 without the mobile 9,
+// although inbound webhooks provide +549. Limit the workaround to THIS test sender.
+// Never mutate the stored patient phone or production sender behavior.
+function metaRecipient(to: string, senderId: string) {
+  const CITHELA_META_TEST_SENDER = "1300517359820775";
+  if (senderId === CITHELA_META_TEST_SENDER && /^\+549[0-9]{10}$/.test(to)) {
+    return "54" + to.slice(4);
+  }
+  return to.slice(1);
+}
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return reply({ ok: false, code: "method_not_allowed" }, 405);
@@ -126,7 +136,7 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: { Authorization: "Bearer " + metaToken, "Content-Type": "application/json" },
       body: JSON.stringify({
-        messaging_product: "whatsapp", to: to.slice(1), type: "text",
+        messaging_product: "whatsapp", to: metaRecipient(to, senderId), type: "text",
         text: { preview_url: false, body: preview.draft },
       }),
       signal: AbortSignal.timeout(15000),
