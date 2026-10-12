@@ -239,7 +239,7 @@ Deno.serve(async req => {
       const available = await command("availability.query", { date, service_id: service.id, resource_id: resource.id });
       if (!Array.isArray(available.slots) || available.date !== date) throw new Error("invalid_availability");
       const slots = [...new Set(available.slots.filter(hour =>
-        /^([01]\\d|2[0-3]):[0-5]\\d$/.test(hour) &&
+        /^([01]\d|2[0-3]):[0-5]\d$/.test(hour) &&
         (date !== days[0] || slotMinutes(hour) > earliestToday) &&
         slotMinutes(hour) >= preferences.lower && slotMinutes(hour) < preferences.upper &&
         (preferences.exact === null || slotMinutes(hour) === preferences.exact)
