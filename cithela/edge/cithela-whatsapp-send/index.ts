@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return reply({ ok: false, code: "preview_unavailable" }, 503);
   }
-  if (!["needs_service", "slots_preview", "no_slots"].includes(String(preview.code)) ||
+  if (!["needs_service", "slots_preview", "no_slots", "selection_preview"].includes(String(preview.code)) ||
       typeof preview.draft !== "string" || preview.draft !== request.draft) {
     return reply({ ok: false, code: "stale_or_unsupported_draft" }, 409);
   }
