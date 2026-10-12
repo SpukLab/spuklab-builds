@@ -138,9 +138,13 @@ Deno.serve(async (req: Request) => {
       resultStatus = providerMessageId ? "sent" : "unknown";
       errCode = providerMessageId ? null : "missing_provider_receipt";
     } else {
-      // A failed HTTP response does not prove delivery; keep non-retryable.
+      // Preserve only Meta's numeric code, never its raw response, token, or phone.
+      // No automatic retry: any uncertain delivery remains uniquely reserved.
+      const errorBody = await res.json().catch(() => null);
+      const numericCode = errorBody?.error?.code;
+      const validCode = Number.isInteger(numericCode) && numericCode > 0 && numericCode < 1000000;
       resultStatus = "unknown";
-      errCode = "meta_http_" + res.status;
+      errCode = validCode ? "meta_code_" + numericCode : "meta_http_" + res.status;
     }
   } catch { errCode = "meta_delivery_uncertain"; }
   const { error: updateError } = await admin.from("cithela_channel_outbox")
@@ -150,6 +154,13 @@ Deno.serve(async (req: Request) => {
     }).eq("id", outboxId).eq("tenant_id", tenantId);
   if (updateError) console.error("CITHELA outbox status persistence failed");
   if (resultStatus !== "sent")
-    return reply({ ok: false, code: errCode === "meta_http_401" ? "meta_unauthorized" : "delivery_unconfirmed", outbox_id: outboxId }, 502);
+    return reply({
+      ok: false,
+      code: errCode === "meta_http_401" || errCode === "meta_code_190" ? "meta_unauthorized"
+        : errCode === "meta_code_131030" ? "test_recipient_not_allowed"
+        : "delivery_unconfirmed",
+      diagnostic_code: errCode,
+      outbox_id: outboxId,
+    }, 502);
   return reply({ ok: true, code: "submitted_to_meta", outbox_id: outboxId });
 });
