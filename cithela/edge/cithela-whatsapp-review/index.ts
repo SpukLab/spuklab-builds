@@ -166,15 +166,37 @@ Deno.serve(async req => {
     const { data, error } = await admin.from("cithela_channel_inbox")
       .select("id,external_event_id,sender_name,message_type,text_body,status,received_at")
       .eq("tenant_id", tenantId).eq("channel", "whatsapp")
-      .order("received_at", { ascending: false }).limit(12);
+      .order("received_at", { ascending: false }).limit(20);
     if (error) return json({ ok: false, code: "inbox_unavailable" }, 503);
+    const items = data || [];
+    let outbox = [];
+    if (items.length) {
+      const { data: outgoing, error: outgoingError } = await admin.from("cithela_channel_outbox")
+        .select("inbox_event_id,reply_text,status,attempted_at,sent_at")
+        .eq("tenant_id", tenantId).in("inbox_event_id", items.map(x => x.id));
+      // A missing status must never be presented as "not yet answered".
+      if (outgoingError) return json({ ok: false, code: "outbox_unavailable" }, 503);
+      outbox = outgoing || [];
+    }
+    const byEvent = new Map(outbox.map(x => [x.inbox_event_id, x]));
     return json({
-      ok: true, items: (data || []).map(x => ({
-        id: x.id, external_event_id: x.external_event_id,
-        sender_name: boundedText(x.sender_name, 80),
-        message_type: x.message_type, text_body: boundedText(x.text_body, 300),
-        status: x.status, received_at: x.received_at,
-      })),
+      ok: true, items: items.map(x => {
+        const outgoing = byEvent.get(x.id);
+        return {
+          id: x.id,
+          sender_name: boundedText(x.sender_name, 80),
+          message_type: x.message_type,
+          text_body: boundedText(x.text_body, 1500),
+          received_at: x.received_at,
+          outbound: outgoing ? {
+            status: ["sent", "unknown", "sending"].includes(outgoing.status)
+              ? outgoing.status : "unknown",
+            reply_text: boundedText(outgoing.reply_text, 1000),
+            attempted_at: outgoing.attempted_at,
+            sent_at: outgoing.sent_at,
+          } : null,
+        };
+      }),
     });
   }
   if (body.action !== "prepare" || !UUID.test(body.event_id))
