@@ -7,7 +7,8 @@ const OTHER = "11111111-2222-4333-8444-555555555555";
 const EVENT = "2903949d-f170-48c4-9273-2abad48a715d";
 const CONN = "542ad49e-df0a-4833-bc95-773c1a5de364";
 
-async function harness({ role = "owner", text = "Quiero reservar un turno", resourceCount = 1 } = {}) {
+async function harness({ role = "owner", text = "Quiero reservar un turno", resourceCount = 1,
+  outgoingStatus = null } = {}) {
   let handler;
   const calls = [];
   const deno = {
@@ -42,6 +43,15 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
           if (table !== "cithela_channel_inbox") throw Error("unexpected list");
           return { data: [{ id: EVENT, external_event_id: "wamid.test", sender_name: "Test",
             message_type: "text", text_body: text, status: "new", received_at: "2026-10-11T16:11:52Z" }], error: null };
+        },
+        async in(field, ids) {
+          calls.push({ table, eq: { ...eq }, field, ids });
+          if (table !== "cithela_channel_outbox") throw Error("unexpected outbox lookup");
+          return { data: outgoingStatus
+            ? [{ inbox_event_id: EVENT, status: outgoingStatus, reply_text: "Estos son los horarios...",
+              attempted_at: "2026-10-11T16:14:52Z",
+              sent_at: outgoingStatus === "sent" ? "2026-10-11T16:15:10Z" : null }]
+            : [], error: null };
         },
       };
     },
@@ -103,6 +113,10 @@ test("lists only tenant-scoped messages", async () => {
   const read = h.calls.find(x => x.table === "cithela_channel_inbox");
   assert.equal(read.eq.tenant_id, TENANT);
   assert.equal(read.eq.channel, "whatsapp");
+  const outbox = h.calls.find(x => x.table === "cithela_channel_outbox");
+  assert.equal(outbox.eq.tenant_id, TENANT);
+  assert.deepEqual(outbox.ids, [EVENT]);
+  assert.equal(result.body.items[0].outbound, null);
 });
 test("asks for service if missing; never writes", async () => {
   const h = await harness();
@@ -178,4 +192,94 @@ test("clinical or commercial side questions demand human review", async () => {
   assert.equal(review("Tintura a las 16, tengo alergia a productos"),true);
   assert.equal(review("Cuanto cuesta la coloracion?"),true);
   assert.equal(review("Quiero turno para tintura mañana"),false);
+});
+
+test("pairs accepted reply with the exact inbound message and never calls Meta", async () => {
+  const h = await harness({ outgoingStatus: "sent" });
+  const result = await h.request("list");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.items[0].id, EVENT);
+  assert.equal(result.body.items[0].outbound.status, "sent");
+  assert.equal(result.body.items[0].outbound.reply_text, "Estos son los horarios...");
+  assert.equal(h.calls.some(x => x.rpc), false);
+});
+test("failed or uncertain response is never advertised as pending", async () => {
+  const h = await harness({ outgoingStatus: "unknown" });
+  const result = await h.request("list");
+  assert.equal(result.body.items[0].outbound.status, "unknown");
+  assert.equal(result.body.items[0].outbound.sent_at, null);
+});
+
+
+// Frontend regression tests: no detached draft, no reused confirmation across events.
+const TEST_ONE = "11111111-2222-4333-8444-555555555555";
+const TEST_TWO = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+async function inboxUI(inbox = []) {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, "Main script must exist");
+  const begin = script.indexOf("let cloudWaBusy=false;");
+  const end = script.indexOf("async function cloudPrepareWhatsappDraft(", begin);
+  assert.ok(begin >= 0 && end > begin);
+  const list = { textContent: "", innerHTML: "", querySelector: () => null };
+  const counts = { textContent: "" };
+  const nodes = { "cloud-wa-list": list, "cloud-wa-counts": counts };
+  const $ = id => nodes[id] || null;
+  const esc = value => String(value ?? "").replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const cloud = {
+    state: () => ({ signedIn: true, tenant: { id: TEST_ONE }, membership: { role: "owner" } }),
+    whatsappReview: async args => {
+      assert.equal(args.action, "list");
+      assert.equal(args.tenant_id, TEST_ONE);
+      return { ok: true, items: inbox };
+    },
+  };
+  const setup = new Function("escHtml", "$", "CithelaCloud", script.slice(begin, end) +
+    "\nreturn {cloudWaMessageMarkup,cloudLoadWhatsappInbox};");
+  return { ...setup(esc, $, cloud), list, counts };
+}
+const sample = (id, time, text, outbound = null) =>
+  ({ id, received_at: time, text_body: text, sender_name: "Paciente", outbound });
+
+test("UI sorts latest first and shows reply inside its original message", async () => {
+  const old = sample(TEST_ONE, "2026-10-11T10:00:00Z", "Consulta anterior");
+  const latest = sample(TEST_TWO, "2026-10-12T10:00:00Z", "Corte mañana", {
+    status: "sent", reply_text: "Mañana a las 14",
+  });
+  const view = await inboxUI([old, latest]);
+  await view.cloudLoadWhatsappInbox();
+  assert.ok(view.list.innerHTML.indexOf(TEST_TWO) < view.list.innerHTML.indexOf(TEST_ONE));
+  assert.match(view.counts.textContent, /Sin responder: 1/);
+  assert.match(view.counts.textContent, /Meta aceptó: 1/);
+  assert.match(view.list.innerHTML, new RegExp("cloud-wa-draft-box-" + TEST_ONE));
+  assert.doesNotMatch(view.list.innerHTML, new RegExp("cloud-wa-draft-box-" + TEST_TWO));
+  assert.match(view.list.innerHTML, /Mañana a las 14/);
+});
+test("UI blocks send actions on accepted and uncertain responses", async () => {
+  const view = await inboxUI();
+  for (const status of ["sent", "unknown", "sending"]) {
+    const html = view.cloudWaMessageMarkup(sample(TEST_ONE, "2026-10-12T10:00:00Z",
+      "Corte", {status, reply_text: "14:00"}));
+    assert.match(html, /Respuesta vinculada a este mensaje/);
+    assert.doesNotMatch(html, /Preparar respuesta a este mensaje/);
+    assert.doesNotMatch(html, /Aprobar y enviar esta respuesta/);
+  }
+});
+test("UI gives unique draft controls to each unanswered message", async () => {
+  const view = await inboxUI();
+  const first = view.cloudWaMessageMarkup(sample(TEST_ONE, "2026-10-11T10:00:00Z", "Corte"));
+  const second = view.cloudWaMessageMarkup(sample(TEST_TWO, "2026-10-12T10:00:00Z", "Coloración"));
+  assert.match(first, new RegExp("cloud-wa-draft-box-" + TEST_ONE));
+  assert.doesNotMatch(first, new RegExp("cloud-wa-draft-box-" + TEST_TWO));
+  assert.match(second, new RegExp("cloud-wa-draft-box-" + TEST_TWO));
+  assert.doesNotMatch(second, new RegExp("cloud-wa-draft-box-" + TEST_ONE));
+});
+test("UI escapes patient messages and outgoing responses", async () => {
+  const view = await inboxUI();
+  const malicious = "<img src=x onerror=alert(1)>";
+  const html = view.cloudWaMessageMarkup(sample(TEST_ONE, "2026-10-11T10:00:00Z",
+    malicious, {status:"sent", reply_text:malicious}));
+  assert.match(html, /&lt;img/);
+  assert.doesNotMatch(html, /<img/);
 });
