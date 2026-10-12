@@ -44,6 +44,93 @@ function datesFromToday(tz, length = 7) {
   if (!Number.isFinite(utc)) throw new Error("invalid_timezone");
   return Array.from({ length }, (_, i) => new Date(utc + i * 86400000).toISOString().slice(0, 10));
 }
+
+const slotMinutes = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+function parseRequestedPreferences(message, upcoming) {
+  const normalized = String(message ?? "").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const today = upcoming[0];
+  const daysOfWeek = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+  let date = null;
+  const weekdayRequests = daysOfWeek.filter(day => new RegExp("\\b" + day + "\\b").test(normalized));
+  if (weekdayRequests.length > 1) return { clarification: "¿Preferís un día concreto? Podés indicarme uno." };
+  if (weekdayRequests.length === 1) {
+    date = upcoming.find(day => daysOfWeek[new Date(day + "T12:00:00Z").getUTCDay()] === weekdayRequests[0]) || null;
+  }
+  const relative = /\bpasado manana\b/.test(normalized) ? 2 :
+    /\bhoy\b/.test(normalized) ? 0 :
+    /\bmanana\b/.test(normalized) && !/\b(?:por|a|de|en) la manana\b/.test(normalized) ? 1 : null;
+  if (relative !== null) {
+    if (date && date !== upcoming[relative]) return { clarification: "¿Para qué día necesitás el turno?" };
+    date = upcoming[relative];
+  }
+  const numericDate = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/.exec(normalized);
+  if (numericDate) {
+    const day = Number(numericDate[1]), month = Number(numericDate[2]);
+    const startYear = Number(today.slice(0, 4));
+    const years = numericDate[3] ? [Number(numericDate[3])] : [startYear, startYear + 1];
+    const candidates = years.map(year => {
+      const d = new Date(Date.UTC(year, month - 1, day));
+      return d.getUTCDate() === day && d.getUTCMonth() === month - 1 ? d.toISOString().slice(0, 10) : null;
+    }).filter(Boolean);
+    const explicit = candidates.find(x => x >= today) || candidates[0];
+    if (!explicit) return { clarification: "¿Podés indicarme una fecha válida?" };
+    if (date && date !== explicit) return { clarification: "Mencionaste dos fechas distintas. ¿Cuál preferís?" };
+    date = explicit;
+  }
+  if (/\b(?:semana que viene|proxima semana|mes que viene|el mes que viene)\b/.test(normalized) && !date) {
+    return { clarification: "¿Qué día de esa semana preferís? Por ahora puedo consultar los próximos siete días." };
+  }
+  const after = /\b(?:despues de|a partir de|desde)\s+(?:las?\s+)?(\d{1,2})(?::(\d{2}))?\b/.exec(normalized);
+  const before = /\b(?:antes de|hasta)\s+(?:las?\s+)?(\d{1,2})(?::(\d{2}))?\b/.exec(normalized);
+  const exact = /\b(?:a las?|para las?)\s+(\d{1,2})(?::(\d{2}))?\b/.exec(normalized);
+  const validMinutes = (match) => {
+    if (!match) return null;
+    const hour = Number(match[1]), minute = Number(match[2] || 0);
+    return hour <= 23 && minute <= 59 ? hour * 60 + minute : Number.NaN;
+  };
+  const min = validMinutes(after), max = validMinutes(before), at = validMinutes(exact);
+  if ([min, max, at].some(x => Number.isNaN(x))) return { clarification: "¿Podés indicar un horario válido, por ejemplo 16:30?" };
+  const morning = /\b(?:por|a|de|en) la manana\b|\btemprano\b/.test(normalized);
+  const afternoon = /\b(?:por|a|de|en) la tarde\b/.test(normalized);
+  const evening = /\b(?:por|a|de|en) la noche\b/.test(normalized);
+  if ([morning, afternoon, evening].filter(Boolean).length > 1) {
+    return { clarification: "¿Preferís mañana, tarde o noche?" };
+  }
+  const lower = Math.max(min ?? 0, afternoon ? 13 * 60 : evening ? 19 * 60 : 0);
+  const upper = Math.min(max ?? 24 * 60, morning ? 13 * 60 : afternoon ? 19 * 60 : 24 * 60);
+  if (lower >= upper || (at !== null && (at < lower || at >= upper))) {
+    return { clarification: "Las preferencias de horario se contradicen. ¿Qué franja horaria preferís?" };
+  }
+  return { date, lower, upper, exact: at, hasPreference: Boolean(date || min !== null || max !== null || at !== null || morning || afternoon || evening) };
+}
+function chooseSpreadSlots(byDay) {
+  const options = byDay.filter(x => x.slots.length);
+  const result = [], used = new Set();
+  const add = (date, hour) => {
+    if (!hour || used.has(date + hour) || result.length >= 3) return;
+    used.add(date + hour);
+    result.push({ date, hour });
+  };
+  if (!options.length) return result;
+  add(options[0].date, options[0].slots[0]);
+  add(options[0].date, options[0].slots.find(x => slotMinutes(x) >= 14 * 60));
+  for (const day of options.slice(1)) add(day.date, day.slots[0]);
+  for (const day of options) {
+    for (const hour of day.slots) {
+      const apart = result.filter(x => x.date === day.date)
+        .every(x => Math.abs(slotMinutes(x.hour) - slotMinutes(hour)) >= 60);
+      if (apart) add(day.date, hour);
+    }
+  }
+  for (const day of options) for (const hour of day.slots) add(day.date, hour);
+  return result;
+}
+function unsupportedConversationDetail(message) {
+  const n = clean(message);
+  return /\b(alergia|alergico|embarazada|medicacion|dolor|precio|cuanto sale|cuanto cuesta|descuento|factura|pagar|sena|dos turnos|con mi hermana|simultaneo|urgente)\b/.test(n);
+}
+
 function boundedText(str, max = 3600) { return String(str ?? "").slice(0, max); }
 
 Deno.serve(async req => {
@@ -105,6 +192,10 @@ Deno.serve(async req => {
   const text = boundedText(event.text_body, 5000);
   if (/\b(cancelar|anular|reprogramar|cambiar|mover)\b/i.test(clean(text)))
     return json({ ok: true, code: "manual_review", draft: "Recibimos tu solicitud. Un profesional revisará el cambio antes de confirmarlo." });
+  if (unsupportedConversationDetail(text)) {
+    return json({ ok: true, code: "manual_review",
+      draft: "Recibimos tu consulta y un profesional la revisará antes de confirmar cualquier turno." });
+  }
 
   const command = async (name, payload = {}) => {
     const { data, error } = await admin.rpc("cithela_channel_command", {
@@ -130,22 +221,45 @@ Deno.serve(async req => {
     if (!Array.isArray(resources.items) || resources.items.length !== 1)
       return json({ ok: true, code: "needs_resource", draft: "¿Con qué profesional querés reservar? Te ayudo a consultar los horarios disponibles." });
     const resource = resources.items[0];
-    const days = datesFromToday(tenant.timezone || services.timezone);
-    const slots = [];
-    for (const date of days) {
+    const timezone = tenant.timezone || services.timezone || "America/Argentina/Buenos_Aires";
+    const days = datesFromToday(timezone);
+    const preferences = parseRequestedPreferences(text, days);
+    if (preferences.clarification) {
+      return json({ ok: true, code: "manual_review", draft: preferences.clarification });
+    }
+    if (preferences.date && !days.includes(preferences.date)) {
+      return json({ ok: true, code: "no_slots", service: service.name, slots: [],
+        draft: "La fecha que pediste queda fuera de los próximos siete días. ¿Querés probar otra fecha?" });
+    }
+    const clock = new Intl.DateTimeFormat("en-GB", { timeZone: timezone,
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+    const earliestToday = slotMinutes(clock) + 15;
+    const candidates = [];
+    for (const date of days.filter(d => !preferences.date || d === preferences.date)) {
       const available = await command("availability.query", { date, service_id: service.id, resource_id: resource.id });
       if (!Array.isArray(available.slots) || available.date !== date) throw new Error("invalid_availability");
-      for (const hour of available.slots) {
-        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hour)) continue;
-        if (slots.length < 3) slots.push({ date, hour });
-      }
-      if (slots.length >= 3) break;
+      const slots = [...new Set(available.slots.filter(hour =>
+        /^([01]\d|2[0-3]):[0-5]\d$/.test(hour) &&
+        (date !== days[0] || slotMinutes(hour) > earliestToday) &&
+        slotMinutes(hour) >= preferences.lower && slotMinutes(hour) < preferences.upper &&
+        (preferences.exact === null || slotMinutes(hour) === preferences.exact)
+      ))].sort();
+      candidates.push({ date, slots });
     }
+    const slots = chooseSpreadSlots(candidates);
     if (!slots.length) return json({
       ok: true, code: "no_slots", service: service.name, slots: [],
-      draft: "No encontré horarios disponibles para " + service.name + " en los próximos siete días. ¿Querés consultar otra semana?",
+      draft: preferences.hasPreference
+        ? "No encontré horarios disponibles para " + service.name +
+          " con el día y horario que pediste. ¿Querés consultar otra fecha o franja?"
+        : "No encontré horarios disponibles para " + service.name +
+          " en los próximos siete días. ¿Querés consultar otra semana?",
     });
-    const lines = slots.map((slot, i) => (i + 1) + ". " + slot.date + " a las " + slot.hour).join("\n");
+    const formatDate = (date) => new Intl.DateTimeFormat("es-AR",
+      { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
+      .format(new Date(date + "T12:00:00Z"));
+    const lines = slots.map((slot, i) => (i + 1) + ". " +
+      formatDate(slot.date) + " a las " + slot.hour).join("\n");
     return json({
       ok: true, code: "slots_preview", service: service.name, slots,
       draft: "Estos horarios están disponibles para " + service.name + ":\n" +

@@ -135,3 +135,47 @@ test("tintura maps uniquely to Coloración without guessing combined services", 
   assert.equal(match("Quiero un turno para corte", services)?.id, "cut");
   assert.equal(match("Quiero corte y tintura", services), null);
 });
+
+
+test("understands weekday with an explicit afternoon minimum", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const f = new Function("Deno", "createClient", js + "\nreturn {parseRequestedPreferences,chooseSpreadSlots};");
+  const helpers = f({env:{get:()=>null},serve(){}},()=>({}));
+  const days = ["2026-10-12","2026-10-13","2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18"];
+  assert.deepEqual(helpers.parseRequestedPreferences("Tintura el jueves despues de las 16",days), {
+    date:"2026-10-15", lower:960, upper:1440, exact:null, hasPreference:true
+  });
+  assert.deepEqual(helpers.parseRequestedPreferences("Turno mañana por la tarde",days), {
+    date:"2026-10-13", lower:780, upper:1140, exact:null, hasPreference:true
+  });
+  assert.equal(helpers.parseRequestedPreferences("Turno por la mañana",days).date,null);
+  assert.equal(helpers.parseRequestedPreferences("El viernes a las 17:30",days).exact,1050);
+  assert.equal(helpers.parseRequestedPreferences("El lunes 15/10",days).clarification.includes("dos fechas"),true);
+  assert.equal(helpers.parseRequestedPreferences("jueves y viernes",days).clarification.includes("día concreto"),true);
+  assert.equal(helpers.parseRequestedPreferences("lunes despues de las 19 por la mañana",days).clarification.includes("contradicen"),true);
+});
+test("offers real, separated suggestions instead of three adjacent times", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const select = new Function("Deno", "createClient", js + "\nreturn chooseSpreadSlots;")
+    ({env:{get:()=>null},serve(){}},()=>({}));
+  assert.deepEqual(select([
+    {date:"2026-10-12",slots:["09:00","09:15","14:00","14:15"]},
+    {date:"2026-10-13",slots:["10:00","10:15"]}
+  ]),[
+    {date:"2026-10-12",hour:"09:00"},
+    {date:"2026-10-12",hour:"14:00"},
+    {date:"2026-10-13",hour:"10:00"}
+  ]);
+  assert.deepEqual(select([{date:"2026-10-12",slots:[]}]),[]);
+});
+test("clinical or commercial side questions demand human review", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const review = new Function("Deno", "createClient", js + "\nreturn unsupportedConversationDetail;")
+    ({env:{get:()=>null},serve(){}},()=>({}));
+  assert.equal(review("Tintura a las 16, tengo alergia a productos"),true);
+  assert.equal(review("Cuanto cuesta la coloracion?"),true);
+  assert.equal(review("Quiero turno para tintura mañana"),false);
+});
