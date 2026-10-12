@@ -131,6 +131,53 @@ function unsupportedConversationDetail(message) {
   return /\b(alergia|alergico|embarazada|medicacion|dolor|precio|cuanto sale|cuanto cuesta|descuento|factura|pagar|sena|dos turnos|con mi hermana|simultaneo|urgente)\b/.test(n);
 }
 
+
+function selectedOption(message) {
+  const value = clean(message);
+  const selected = /^(?:(?:elijo|prefiero|quiero|selecciono|tomo|me quedo con) )?(?:(?:la|el) )?(?:opcion )?([123])$/.exec(value);
+  if (selected) return Number(selected[1]);
+  const ordinal = /^(?:(?:elijo|prefiero|quiero) )?(?:la )?(primera|segunda|tercera)$/.exec(value);
+  return ordinal ? { primera: 1, segunda: 2, tercera: 3 }[ordinal[1]] : null;
+}
+const OFFER_MONTHS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+function recoverOffer(replyText, sentAt) {
+  // Accept ONLY the numbered format produced by CITHELA, not arbitrary free text.
+  const lines = String(replyText || "").split(/\r?\n/);
+  const title = /^Estos horarios están disponibles para ([^\n:]{1,100}):$/.exec(lines[0]?.trim() || "");
+  if (!title || !lines.some(x => x.includes("¿Cuál preferís?"))) return null;
+  const anchor = new Date(sentAt);
+  if (!Number.isFinite(anchor.getTime())) return null;
+  const origin = Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate());
+  const slots = [];
+  for (const line of lines.slice(1)) {
+    const found = /^([123])\.\s+(.+?)\s+a las\s+([01]?\d|2[0-3]):([0-5]\d)\s*$/.exec(line.trim());
+    if (!found) continue;
+    const ordinal = Number(found[1]);
+    if (slots.some(x => x.ordinal === ordinal)) return null;
+    const label = clean(found[2]).replace(/^(lun|mar|mie|jue|vie|sab|dom) /,"");
+    let date = null;
+    const iso = /^(\d{4}) (\d{2}) (\d{2})$/.exec(label);
+    if (iso) date = iso[1] + "-" + iso[2] + "-" + iso[3];
+    else {
+      const named = /^(\d{1,2}) (ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)$/.exec(label);
+      if (!named) return null;
+      const month = OFFER_MONTHS.indexOf(named[2]) + 1, day = Number(named[1]);
+      for (const year of [anchor.getUTCFullYear(), anchor.getUTCFullYear() + 1]) {
+        const dt = new Date(Date.UTC(year, month - 1, day));
+        if (dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) continue;
+        const distance = dt.getTime() - origin;
+        if (distance >= -86400000 && distance <= 31 * 86400000) {
+          date = dt.toISOString().slice(0, 10); break;
+        }
+      }
+    }
+    if (!date || Number.isNaN(Date.parse(date + "T00:00:00Z"))) return null;
+    slots.push({ ordinal, date, hour: found[3].padStart(2, "0") + ":" + found[4] });
+  }
+  if (!slots.length || slots.some((x,i) => x.ordinal !== i+1)) return null;
+  return { serviceName: title[1], slots };
+}
+
 function boundedText(str, max = 3600) { return String(str ?? "").slice(0, max); }
 
 Deno.serve(async req => {
@@ -202,7 +249,7 @@ Deno.serve(async req => {
   if (body.action !== "prepare" || !UUID.test(body.event_id))
     return json({ ok: false, code: "unsupported_action" }, 400);
   const { data: event, error: eventError } = await admin.from("cithela_channel_inbox")
-    .select("id,tenant_id,connection_id,channel,external_event_id,message_type,text_body")
+    .select("id,tenant_id,connection_id,channel,external_event_id,message_type,text_body,received_at,sender_phone_e164")
     .eq("id", body.event_id).eq("tenant_id", tenantId).eq("channel", "whatsapp").maybeSingle();
   if (eventError || !event) return json({ ok: false, code: "event_not_found" }, 404);
   if (event.message_type !== "text")
@@ -229,6 +276,75 @@ Deno.serve(async req => {
     return data;
   };
   try {
+
+    const optionNumber = selectedOption(text);
+    if (optionNumber !== null) {
+      const sourceTime = Date.parse(event.received_at);
+      if (!Number.isFinite(sourceTime)) throw new Error("invalid_message_time");
+      // Resolve latest accepted outbound to SAME verified sender and tenant.
+      const cutoff = new Date(sourceTime - 48 * 3600000).toISOString();
+      const { data: sent, error: sentError } = await admin.from("cithela_channel_outbox")
+        .select("id,inbox_event_id,reply_text,sent_at").eq("tenant_id", tenantId)
+        .eq("connection_id", event.connection_id).eq("status", "sent")
+        .gte("sent_at", cutoff).lt("sent_at", event.received_at)
+        .order("sent_at", { ascending: false }).limit(20);
+      if (sentError) throw new Error("offer_history_unavailable");
+      const options = sent || [];
+      if (!options.length) return json({
+        ok: true, code: "manual_review",
+        draft: "No encontré una propuesta anterior confirmada para elegir. ¿Podés contarme qué servicio necesitás?",
+      });
+      const { data: sources, error: sourceError } = await admin.from("cithela_channel_inbox")
+        .select("id,sender_phone_e164").eq("tenant_id", tenantId)
+        .eq("connection_id", event.connection_id)
+        .in("id", options.map(x => x.inbox_event_id));
+      if (sourceError) throw new Error("offer_sender_unavailable");
+      const sourceIds = new Set((sources || [])
+        .filter(x => x.sender_phone_e164 === event.sender_phone_e164).map(x => x.id));
+      const latest = options.find(x => sourceIds.has(x.inbox_event_id));
+      if (!latest) return json({
+        ok: true, code: "manual_review",
+        draft: "No encontré una propuesta anterior para este contacto. ¿Qué servicio necesitás?",
+      });
+      const offer = recoverOffer(latest.reply_text, latest.sent_at);
+      if (!offer) return json({
+        ok: true, code: "manual_review",
+        draft: "No pude identificar con seguridad las opciones del último mensaje. Un profesional revisará tu elección.",
+      });
+      const picked = offer.slots.find(x => x.ordinal === optionNumber);
+      if (!picked) return json({
+        ok: true, code: "manual_review",
+        draft: "Esa opción no figura en la propuesta anterior. ¿Podés elegir una de las opciones ofrecidas?",
+      });
+      const services = await command("catalog.services");
+      const matching = (services.items || []).filter(x => clean(x.name) === clean(offer.serviceName));
+      const resources = await command("catalog.resources");
+      if (matching.length !== 1 || !Array.isArray(resources.items) || resources.items.length !== 1) {
+        return json({ ok: true, code: "manual_review",
+          draft: "Un profesional revisará el servicio y la disponibilidad antes de confirmar el turno." });
+      }
+      const service = matching[0], resource = resources.items[0];
+      const available = await command("availability.query", {
+        date: picked.date, service_id: service.id, resource_id: resource.id
+      });
+      if (available.date !== picked.date || !Array.isArray(available.slots)) throw new Error("invalid_availability");
+      const stillAvailable = available.slots.includes(picked.hour);
+      const formatter = new Intl.DateTimeFormat("es-AR", {
+        weekday: "long", day: "numeric", month: "long", timeZone: "UTC"
+      });
+      const when = formatter.format(new Date(picked.date + "T12:00:00Z")) + " a las " + picked.hour;
+      return json({
+        ok: true,
+        code: stillAvailable ? "selection_preview" : "manual_review",
+        chosen: { service: service.name, date: picked.date, hour: picked.hour,
+          option: optionNumber, offer_inbox_id: latest.inbox_event_id },
+        draft: stillAvailable
+          ? "Elegiste la opción " + optionNumber + ": " + service.name + " el " + when +
+            ". El horario sigue disponible por ahora. Un profesional revisará la solicitud y confirmará el turno; todavía no está reservado."
+          : "La opción " + optionNumber + " para " + service.name + " el " + when +
+            " ya no está disponible. ¿Querés que te ofrezcamos otros horarios?",
+      });
+    }
     const services = await command("catalog.services");
     if (!Array.isArray(services.items)) throw new Error("services_unavailable");
     const service = matchService(text, services.items);
