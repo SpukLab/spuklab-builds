@@ -29,12 +29,17 @@ async function make({age=60,authorized=true,stale=false,metaCode=null,senderId="
  const src=await readFile(new URL("./index.ts",import.meta.url),"utf8");
  const clean=src.replace(/^import .*?;\s*$/m,"").replace("Deno.serve(async (req: Request)","Deno.serve(async (req)").replace("payload: unknown","payload").replace("providerTime: unknown","providerTime").replace("value: unknown","value").replace("let request: Record<string, unknown>","let request").replace("let preview: Record<string, unknown>","let preview").replace("let providerMessageId: string | null","let providerMessageId").replace("let errCode: string | null","let errCode").replace("function metaRecipient(to: string, senderId: string)","function metaRecipient(to, senderId)");
  const fetcher=async (url,opts)=>{
+  if(String(url).includes("fields=id,display_phone_number,quality_rating")){
+    calls.push({kind:"meta_read",method:opts.method});
+    return metaCode?Response.json({error:{code:metaCode}},{status:403}):
+      Response.json({id:senderId,display_phone_number:"+1 555-645-6422",quality_rating:"GREEN"});
+  }
   if(String(url).includes("cithela-whatsapp-review")){calls.push({kind:"review"});return Response.json({ok:true,code:"needs_service",draft:stale?"outdated":DRAFT});}
   if(String(url).includes("graph.facebook.com")){calls.push({kind:"meta",to:JSON.parse(opts.body).to});return metaCode?Response.json({error:{code:metaCode,message:"REDACTED"}},{status:400}):Response.json({messages:[{id:"wamid.mock"}]});}
   throw Error("unexpected URL");
  };
  new Function("Deno","createClient","fetch",clean)(Deno,()=>db,fetcher);
- return {calls,async send(token="valid"){const resp=await handler(new Request("https://test.invalid",{method:"POST",headers:{"origin":"https://spuklab.github.io",authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify({action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT})}));return {status:resp.status,data:await resp.json()};}};
+ return {calls,async send(token="valid",payload=null){const resp=await handler(new Request("https://test.invalid",{method:"POST",headers:{"origin":"https://spuklab.github.io",authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(payload||{action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT})}));return {status:resp.status,data:await resp.json()};}};
 }
 test("authentication and tenant authorization",async()=>{
  const bad=await make();assert.equal((await bad.send("bad")).status,401);assert.equal(bad.calls.length,0);
@@ -93,4 +98,31 @@ test("Meta access denied 131005 is actionable and never retried",async()=>{
  const again=await h.send();
  assert.equal(again.data.code,"already_attempted");
  assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
+});
+
+test("read-only Meta credentials check uses Supabase token and never sends",async()=>{
+ const h=await make();
+ const result=await h.send("valid",{action:"check_credentials",tenant_id:TENANT});
+ assert.equal(result.status,200);
+ assert.equal(result.data.code,"meta_number_accessible");
+ assert.equal(result.data.quality_rating,"GREEN");
+ assert.equal(h.calls.filter(x=>x.kind==="meta_read").length,1);
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,0);
+ assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="update"),false);
+ assert.equal(h.calls.some(x=>x.table==="cithela_channel_inbox"),false);
+});
+test("only admins can check token access to their active WhatsApp connection",async()=>{
+ const h=await make({authorized:false});
+ const result=await h.send("valid",{action:"check_credentials",tenant_id:TENANT});
+ assert.equal(result.status,403);
+ assert.equal(h.calls.some(x=>x.kind==="meta_read"),false);
+});
+test("Meta rejected token returns numeric code without exposing credentials",async()=>{
+ const h=await make({metaCode:190});
+ const result=await h.send("valid",{action:"check_credentials",tenant_id:TENANT});
+ assert.equal(result.status,502);
+ assert.equal(result.data.code,"meta_credential_check_failed");
+ assert.equal(result.data.diagnostic_code,"meta_code_190");
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,0);
+ assert.equal(h.calls.filter(x=>x.kind==="meta_read").length,1);
 });
