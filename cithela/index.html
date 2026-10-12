@@ -728,6 +728,8 @@ textarea.inp{resize:vertical;min-height:72px;}
         <summary>Asistente WhatsApp · prueba supervisada ▾</summary>
         <div style="padding:4px 2px 14px;">
           <p class="contact-note">Solo el propietario o un administrador puede revisar estos mensajes. No se envían respuestas ni se crean turnos.</p>
+          <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
+          <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
           <button class="btn-main soft" type="button" onclick="cloudLoadWhatsappInbox()">Ver mensajes recibidos</button>
           <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
           <p class="contact-note" style="margin-top:12px;">Borrador para revisión:</p>
@@ -4525,6 +4527,30 @@ async function saveCloudPaymentConfig(){
   }
 }
 
+let cloudWaCheckBusy=false;
+async function cloudCheckMetaCredentials(){
+  if(cloudWaCheckBusy)return;
+  const s=CithelaCloud.state(),status=$('cloud-wa-connection-status');
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  cloudWaCheckBusy=true;
+  if(status)status.textContent='Comprobando token de Supabase con Meta, sin enviar mensajes...';
+  try{
+    const data=await CithelaCloud.whatsappSend({action:'check_credentials',tenant_id:s.tenant.id});
+    if(status)status.textContent=data.code==='meta_number_accessible'
+      ? 'Meta confirma acceso al número de CITHELA con el token guardado en Supabase. Esto no garantiza el envío; podemos continuar con una prueba supervisada.'
+      : 'Meta respondió con un estado inesperado.';
+  }catch(err){
+    const descriptions={
+      meta_credential_check_failed:'Meta rechazó la consulta con el token de Supabase. Revisá sus permisos o vigencia.',
+      connection_not_found:'No existe una conexión activa entre el establecimiento y el número Meta configurado.',
+      sender_not_configured:'Falta configurar el número de origen o el token Meta en Supabase.',
+      meta_number_mismatch:'Meta devolvió un número diferente del configurado.',
+      unauthenticated:'La sesión expiró. Volvé a iniciar sesión.',
+      forbidden:'Esta comprobación solo está disponible para propietario o administrador.',
+    };
+    if(status)status.textContent=descriptions[err?.message]||'No se pudo comprobar la conexión. Código: '+(err?.message||'desconocido');
+  }finally{cloudWaCheckBusy=false;}
+}
 let cloudWaBusy=false;
 let cloudWaPendingDraft=null;
 function cloudWaResetApproval(){
