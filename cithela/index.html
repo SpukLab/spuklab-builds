@@ -2144,6 +2144,8 @@ function openPatientWhatsApp(patientId){
 
 let patientPortalData=null,patientPortalRequest=0;
 let patientWhatsappOtpSent=false;
+// Authentication is not proof that this account is linked to any patient record.
+let patientNoLinkedProfile=false;
 
 function togglePatientDemo(){
   const el=$('patient-demo-form');
@@ -2180,7 +2182,9 @@ function renderPatientLoginSession(){
   if(emailWrap)emailWrap.hidden=Boolean(targetPhone)||hasInvite||Boolean(session.signedIn);
   if(otpWrap)otpWrap.style.display=targetPhone&&patientWhatsappOtpSent&&!session.signedIn?'block':'none';
   const unsupportedPhoneInvite=Boolean(targetPhone&&!CITHELA_PHONE_OTP_ENABLED);
-  if(copy)copy.textContent=unsupportedPhoneInvite
+  if(copy)copy.textContent=session.signedIn&&patientNoLinkedProfile&&!hasInvite
+    ?'Esta cuenta está conectada, pero no tiene una ficha de paciente vinculada en CITHELA.'
+    :unsupportedPhoneInvite
     ?'El acceso por código de WhatsApp aún no está habilitado para el piloto.'
     :targetPhone
       ?'Acceso por WhatsApp detectado. CITHELA verificará este número con un código de 6 dígitos.'
@@ -2189,7 +2193,9 @@ function renderPatientLoginSession(){
         :(session.signedIn
           ?'Tu acceso ya está activo en este dispositivo.'
           :'Ingresá tu correo para recuperar tu acceso.'));
-  if(hint)hint.textContent=unsupportedPhoneInvite
+  if(hint)hint.textContent=session.signedIn&&patientNoLinkedProfile&&!hasInvite
+    ?'Si ya tenés una ficha vinculada, tocá Cambiar de cuenta e ingresá con el correo que usaste como paciente. Si todavía no te vincularon, pedí al establecimiento una invitación personal a tu correo; pueden enviártela por WhatsApp. No se envió ningún mensaje nuevo.'
+    :unsupportedPhoneInvite
     ?'Solicitá al establecimiento una nueva invitación para tu correo. Puede enviarte el enlace por WhatsApp, pero la verificación se realiza por email. Esta invitación de teléfono no sirve para ingresar hasta que habilitemos OTP.'
     :targetPhone
       ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
@@ -2198,7 +2204,7 @@ function renderPatientLoginSession(){
         :'Si es tu primera vez, pedí al establecimiento una invitación personal. Podés recibirla por WhatsApp y verificarte por correo.');
   if(primary){
     primary.textContent=unsupportedPhoneInvite?'Solicitá una invitación por correo':
-      session.signedIn?'Ver mis turnos':
+      session.signedIn?(patientNoLinkedProfile?'Comprobar mis turnos nuevamente':'Ver mis turnos'):
         (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
     primary.disabled=Boolean(unsupportedPhoneInvite&&!session.signedIn);
   }
@@ -2209,7 +2215,8 @@ function renderPatientLoginSession(){
   note.style.display='block';
   note.textContent=email&&entered&&entered!==email.toLowerCase()
     ?'Hay otra cuenta activa en este dispositivo. Cambiá de cuenta para continuar.'
-    :'Acceso verificado.';
+    :('Sesión iniciada con '+(email||phone||'una cuenta verificada')+
+      (session.membership?' (cuenta con acceso profesional).':' .').replace(' .','.'));
   button.style.display='inline-flex';
 }
 async function patientSwitchAccount(){
@@ -2225,6 +2232,8 @@ async function patientSwitchAccount(){
     patientRescheduleState=null;
     patientPortalData=null;
     patientWhatsappOtpSent=false;
+    patientNoLinkedProfile=false;
+    if($('l-patient-email'))$('l-patient-email').value=pendingPatientInviteEmail()||'';
     if($('l-patient-otp'))$('l-patient-otp').value='';
     patientSharedDrafts.clear();patientSharedOpen.clear();
     me={};
@@ -2338,9 +2347,12 @@ async function patientEnter(){
     }
     const result=await CithelaCloud.patientPortal();
     if(!result.profiles?.length){
-      toast('Acceso verificado. Abrí el enlace personal que recibiste por WhatsApp.',4700);
+      patientNoLinkedProfile=true;
+      renderPatientLoginSession();
+      toast('Esta sesión no tiene una ficha de paciente vinculada. Comprobá la cuenta o pedí una invitación al establecimiento.',5900);
       return;
     }
+    patientNoLinkedProfile=false;
     patientPortalData=result;
     me={role:'paciente',cloud:true,email:s.email||null,phone:s.phone||null,
       identity:s.phone?'phone:'+s.phone:'email:'+String(s.email||'').toLowerCase(),
@@ -2898,13 +2910,15 @@ async function resumeCloudSession(){
   const result=await CithelaCloud.patientPortal();
   setRole('paciente');$('l-patient-email').value=s.email||'';
   if(result?.profiles?.length){
+    patientNoLinkedProfile=false;
     patientPortalData=result;
     me={role:'paciente',cloud:true,email:s.email||null,phone:s.phone||null,
       identity:s.phone?'phone:'+s.phone:'email:'+String(s.email||'').toLowerCase(),
       nombre:result.profiles[0].name};
     goPac();
   }else{
-    toast('Sesión verificada. Abrí el enlace personal de WhatsApp para vincular tus turnos.',4900);
+    patientNoLinkedProfile=true;
+    renderPatientLoginSession();
   }
 }
 function showProfessionalPasswordRecovery(){
