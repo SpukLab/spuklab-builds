@@ -13,7 +13,7 @@ const login=extract('function renderPatientLoginSession(){','async function pati
 const primary=extract('async function patientPrimaryAccess(){','async function patientVerifyWhatsAppOtp(){');
 const professional=extract('async function cloudIssuePhoneInvite(personId){','function sharePatientPhoneInviteWhatsApp(personId){');
 const ficha=extract('let cloudFichaRequest=0;','async function crearPersona(){');
-function simulateLogin({phone='',email='',invited=false}={}){
+function simulateLogin({phone='',email='',invited=false,signedIn=false,sessionEmail='',membership=null,unlinked=false}={}){
  const refs={
   'patient-session-state':{style:{},textContent:''},
   'patient-switch-account':{style:{}},
@@ -25,10 +25,10 @@ function simulateLogin({phone='',email='',invited=false}={}){
   'patient-whatsapp-otp':{style:{}}
  };
  const run=new Function('$','CithelaCloud','pendingPatientInviteEmail','pendingPatientInvitePhone',
-   'pendingPatientInvite','CITHELA_PHONE_OTP_ENABLED','role','patientWhatsappOtpSent',
+   'pendingPatientInvite','CITHELA_PHONE_OTP_ENABLED','role','patientWhatsappOtpSent','patientNoLinkedProfile',
     login+'\nreturn renderPatientLoginSession;')(
-      id=>refs[id],{state:()=>({signedIn:false,email:'',phone:''})},
-      ()=>email,()=>phone,()=>invited?'abc':'',false,'paciente',false);
+      id=>refs[id],{state:()=>({signedIn,email:sessionEmail,phone:'',membership})},
+      ()=>email,()=>phone,()=>invited?'abc':'',false,'paciente',false,unlinked);
  run();return refs;
 }
 test('pilot explicitly prevents broken phone OTP enrollment',()=>{
@@ -57,4 +57,23 @@ test('patient booking remains authenticated and server-authoritative',()=>{
  assert.match(script,/c\.rpc\('cithela_patient_booking_create'/);
  assert.match(script,/function patientBookingProfile\(/);
  assert.match(script,/patientBookingProfile\(s\.tenantId,s\.personId\)/);
+});
+
+test('verified session without patient link identifies account and does not imply WhatsApp delivery',()=>{
+ const r=simulateLogin({signedIn:true,sessionEmail:'other@example.org',unlinked:true});
+ assert.equal(r['patient-primary-access'].textContent,'Comprobar mis turnos nuevamente');
+ assert.match(r['patient-session-state'].textContent,/other@example.org/);
+ assert.match(r['patient-access-copy'].textContent,/no tiene una ficha de paciente vinculada/i);
+ assert.match(r['patient-invite-hint'].textContent,/No se envió ningún mensaje nuevo/);
+ assert.ok(!r['patient-session-state'].textContent.includes('Acceso verificado.'));
+});
+test('professional session is identified before trying a patient-only portal',()=>{
+ const r=simulateLogin({signedIn:true,sessionEmail:'operator@example.org',membership:{role:'owner'}});
+ assert.match(r['patient-session-state'].textContent,/acceso profesional/);
+ assert.equal(r['patient-primary-access'].textContent,'Ver mis turnos');
+});
+test('switching accounts clears the previous account email and stale unlinked warning',()=>{
+ assert.match(script,/patientNoLinkedProfile=false;\s+if\(\$\('l-patient-email'\)\)\$\('l-patient-email'\)\.value=pendingPatientInviteEmail\(\)\|\|''/);
+ assert.match(script,/if\(!result\.profiles\?\.length\)\{\s+patientNoLinkedProfile=true;/);
+ assert.match(script,/if\(result\?\.profiles\?\.length\)\{\s+patientNoLinkedProfile=false;/);
 });
