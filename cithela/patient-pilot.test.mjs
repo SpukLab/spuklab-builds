@@ -77,3 +77,58 @@ test('switching accounts clears the previous account email and stale unlinked wa
  assert.match(script,/if\(!result\.profiles\?\.length\)\{\s+patientNoLinkedProfile=true;/);
  assert.match(script,/if\(result\?\.profiles\?\.length\)\{\s+patientNoLinkedProfile=false;/);
 });
+
+const magicHelpers=extract('let patientMagicLinkSending=false;', 'function togglePatientDemo(){');
+const magicSend=extract('async function patientSendMagicLink(){', 'async function patientEnter(){');
+function createMagicLinkHarness({email='patient@example.com',send=async()=>({})}={}){
+  const els={'l-patient-email':{value:email},'patient-primary-access':{disabled:false}};
+  let attempts=0;
+  const messages=[];
+  const localStore=new Map();
+  const storage={getItem:key=>localStore.get(key)||null,setItem:(key,value)=>localStore.set(key,value)};
+  const auth={state:()=>({signedIn:false,email:''}),sendPatientMagicLink:async value=>{attempts++;return send(value);}};
+  const setup=new Function('$','CithelaCloud','renderPatientLoginSession','toast','localStorage',
+    magicHelpers+'\n'+magicSend+'\nreturn {send:patientSendMagicLink,until:patientMagicLinkNextAllowedAt};');
+  const session=setup(id=>els[id],auth,()=>{els['patient-primary-access'].disabled=false;},
+    (message)=>messages.push(message),storage);
+  return {...session,els,messages,get attempts(){return attempts;}};
+}
+test('email project rate limit is presented as a clear message and prevents immediate repeat',async()=>{
+ const h=createMagicLinkHarness({send:async()=>{throw Object.assign(new Error('email rate limit exceeded'),{code:'over_email_send_rate_limit'});}});
+ await h.send();
+ assert.equal(h.attempts,1);
+ assert.match(h.messages.at(-1),/límite de correos/i);
+ assert.match(h.messages.at(-1),/No se envió otro enlace/i);
+ assert.ok(h.until()>Date.now());
+ await h.send();
+ assert.equal(h.attempts,1);
+});
+test('patient email success rate guards duplicate requests without leaving submit disabled',async()=>{
+ const h=createMagicLinkHarness();
+ await h.send();
+ assert.equal(h.attempts,1);
+ assert.equal(h.els['patient-primary-access'].disabled,false);
+ await h.send();
+ assert.equal(h.attempts,1);
+ assert.match(h.messages.at(-1),/Ya se solicitó/);
+});
+test('patient email invalid address never triggers Supabase call',async()=>{
+ const h=createMagicLinkHarness({email:'not-an-email'});
+ await h.send();
+ assert.equal(h.attempts,0);
+ assert.match(h.messages.at(-1),/correo válido/i);
+});
+test('concurrent email clicks call the backend only once',async()=>{
+ let release;const wait=new Promise(r=>{release=r;});
+ const h=createMagicLinkHarness({send:async()=>wait});
+ const one=h.send(),two=h.send();
+ assert.equal(h.attempts,1);
+ release();
+ await Promise.all([one,two]);
+ assert.equal(h.attempts,1);
+});
+test('rate limit message never claims a new email was delivered',()=>{
+ const g=new Function(magicHelpers+'\nreturn patientMagicLinkErrorMessage;')();
+ assert.match(g({message:'429: email rate limit exceeded'}),/No se envió otro enlace/);
+ assert.match(g({message:'For security purposes, you can only request this after 31 seconds.'}),/Por seguridad/);
+});
