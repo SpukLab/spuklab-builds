@@ -32,3 +32,33 @@ Fecha de revisión: 2026-10-04. Estado: interfaz implementada en rama; pruebas r
 5. Cerrar y reabrir CITHELA en el iPhone para comprobar la restauración de la sesión, el mismo tenant y el tema/logo configurados; el login debe mantener la marca del producto y no mostrar datos del prototipo local.
 
 **Estado de validación a la fecha:** comprobaciones de código y flujo simulado superadas; no hay verificación de envío de emails a terceros, acceso real desde WhatsApp ni prueba del segundo tenant. No declarar producción lista antes de completarlas.
+
+
+## Actualización: autenticación por WhatsApp · 15/10/2026
+
+El piloto **ya validó** en dispositivos reales: acceso del paciente por correo, reserva cloud, reprogramación, cancelación y actualización visible en el iPad profesional. Safari conserva su sesión; abrir desde la vista de Mail o desde otro contexto de navegador puede usar una sesión distinta. El SMTP incorporado de Supabase bloqueó nuevos correos mediante `over_email_send_rate_limit`.
+
+### Objetivo final (separar chat de autenticación)
+
+1. El profesional da de alta/invita al paciente con teléfono E.164 propio del paciente, seleccionado y verificado antes de asociar la ficha.
+2. El paciente abre CITHELA y solicita un código por WhatsApp; no necesita conversar para reservar.
+3. Supabase Auth genera OTP, ejecuta **Send SMS Hook** autenticado con Standard Webhooks, y la Edge Function `cithela-whatsapp-otp` envía exclusivamente mediante la API oficial de Meta. El paciente copia el código y lo introduce en CITHELA; Supabase valida mediante `verifyOtp({type:'sms'})`.
+4. Solo después de verificar el teléfono y canjear una invitación personal válida (expiración y un único uso) puede acceder a la ficha, los turnos y datos del tenant.
+
+**Integración corregida:** Para usar Meta directamente como transporte mediante el Send SMS Hook, el cliente debe solicitar `signInWithOtp({phone, options:{channel:'sms', shouldCreateUser:true}})`. El `channel:'whatsapp'` nativo de Supabase está reservado a Twilio y Twilio Verify. El destinatario recibe el mensaje **por WhatsApp** igualmente, porque lo envía el hook. Referencias:
+- [Supabase: Send SMS Hook](https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook)
+- [Supabase: Phone Login](https://supabase.com/docs/guides/auth/phone-login)
+- [Meta: autenticación con botón copiar código](https://www.postman.com/meta/whatsapp-business-platform/request/6vkv46u/create-authentication-template-w-otp-copy-code-button)
+
+**Estado del bloqueo externo:** la cuenta `Test WhatsApp Business Account` (número +1 555, exclusivo de pruebas) devuelve un rechazo explícito al intentar crear la plantilla `cithela_codigo_acceso` de categoría AUTHENTICATION / botón copiar código. La plantilla **no fue creada ni aprobada**. La Edge Function está desplegada, pero la funcionalidad sigue desactivada mediante `CITHELA_PHONE_OTP_ENABLED=false`. No habilitarla ni iniciar envíos reales hasta disponer de WABA autorizada y plantilla APROBADA. No presentar plantillas de utilidad como si fueran códigos OTP.
+
+### Puertas de activación pendientes
+
+- Registrar una **cuenta WhatsApp Business real con número controlado por SpukLab**, distinto del número personal ya utilizado en WhatsApp, o resolver formalmente la restricción de la cuenta actual con Meta. No dar por elegible un número Meta gratuito para clientes externos.
+- Crear/aprobar `cithela_codigo_acceso`, idioma `es_AR`, categoría AUTHENTICATION, `COPY_CODE`, y verificar el payload efectivo del botón en Meta. La validez de entrega de 10 minutos se configura aparte de la caducidad efectiva del OTP en Auth.
+- En Supabase: Authentication → Providers → Phone (habilitar); Authentication → Hooks → Send SMS (apuntar a `/functions/v1/cithela-whatsapp-otp`, firma Standard Webhooks válida); definir `SEND_SMS_HOOK_SECRET` concordante **sin exponerlo en navegador**, `META_WHATSAPP_OTP_TEMPLATE` y, si corresponde, `META_WHATSAPP_OTP_BUTTON_SUBTYPE`. Comprobar que el token permanente y phone number ID son del emisor autorizado. No activar sin probar el envío.
+- E2E de laboratorio: un solo teléfono verificado, destinatario permitido, botón copiar, comprobación de OTP válido/inválido/vencido, límite de reintentos y ausencia de doble cuenta; cerrar y reabrir el navegador para comprobar persistencia.
+- **Migración de pacientes existentes:** el perfil ya enlazado por correo pertenece a su `auth.uid()`. Crear otra cuenta de Auth por teléfono no lo autoriza automáticamente a la misma ficha; `patient_invite_redeem` rechaza `already_linked`. Diseñar un enrolamiento verificado de teléfono sobre la identidad existente (o mecanismo administrativo de migración que preserve trazabilidad), sin reasignar la ficha solo por coincidencia de número.
+- Luego de superar las pruebas, activar el feature gate en la web; correo se conserva solo como recuperación, preferentemente con SMTP propio. No presentar autenticación por WhatsApp como funcional durante el bloqueo Meta.
+
+**No modificar** secretos o Auth Providers en producción antes de resolver los puntos de Meta y la estrategia de identidad; el acceso ya probado debe permanecer estable.
