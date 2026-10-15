@@ -2144,6 +2144,24 @@ function openPatientWhatsApp(patientId){
 
 let patientPortalData=null,patientPortalRequest=0;
 let patientWhatsappOtpSent=false;
+let patientMagicLinkSending=false;
+const CITHELA_PATIENT_MAGIC_LINK_COOLDOWN_KEY='cithela_patient_magic_link_next_send_at';
+function patientMagicLinkNextAllowedAt(){
+  try{return Number(localStorage.getItem(CITHELA_PATIENT_MAGIC_LINK_COOLDOWN_KEY))||0;}
+  catch{return 0;}
+}
+function patientMagicLinkSetCooldown(ms){
+  try{localStorage.setItem(CITHELA_PATIENT_MAGIC_LINK_COOLDOWN_KEY,String(Date.now()+ms));}catch{}
+}
+function patientMagicLinkErrorMessage(err){
+  const message=String(err?.message||'');
+  const code=String(err?.code||'');
+  if(/email rate limit exceeded|over_email_send_rate_limit/i.test(message+' '+code))
+    return 'CITHELA alcanzó el límite de correos del proveedor de prueba. No se envió otro enlace. Si tenés la sesión abierta en Mail u otro navegador, volvé a esa ventana. Si no, esperá antes de intentar nuevamente.';
+  if(/for security purposes|after [0-9]+ seconds|over_request_rate_limit/i.test(message+' '+code))
+    return 'Por seguridad hay que esperar antes de pedir otro enlace. Revisá primero el correo recibido.';
+  return message||'No se pudo solicitar el enlace de acceso.';
+}
 // Authentication is not proof that this account is linked to any patient record.
 let patientNoLinkedProfile=false;
 
@@ -2201,7 +2219,7 @@ function renderPatientLoginSession(){
       ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
       :(hasInvite
         ?'Verificá tu correo desde el enlace recibido. Si se abre en otra app, volvé a esta invitación desde el mismo navegador.'
-        :'Si es tu primera vez, pedí al establecimiento una invitación personal. Podés recibirla por WhatsApp y verificarte por correo.');
+        :'Si ya ingresaste desde Mail, volvé a esa misma ventana: otro navegador puede tener una sesión distinta. Si es tu primera vez, pedí al establecimiento una invitación personal y verificá tu correo.');
   if(primary){
     primary.textContent=unsupportedPhoneInvite?'Solicitá una invitación por correo':
       session.signedIn?(patientNoLinkedProfile?'Comprobar mis turnos nuevamente':'Ver mis turnos'):
@@ -2302,7 +2320,8 @@ async function patientVerifyWhatsAppOtp(){
   }
 }
 async function patientSendMagicLink(){
-  const email=$('l-patient-email').value.trim();
+  if(patientMagicLinkSending)return;
+  const email=String($('l-patient-email')?.value||'').trim();
   const s=CithelaCloud.state();
   if(s.signedIn&&s.email&&s.email.toLowerCase()!==email.toLowerCase()){
     renderPatientLoginSession();
@@ -2312,10 +2331,36 @@ async function patientSendMagicLink(){
   if(s.signedIn&&s.email&&s.email.toLowerCase()===email.toLowerCase()){
     await patientEnter();return;
   }
+  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){
+    toast('Ingresá un correo válido.',3500);
+    return;
+  }
+  const nextAllowedAt=patientMagicLinkNextAllowedAt();
+  if(nextAllowedAt>Date.now()){
+    toast('Ya se solicitó un enlace recientemente. Revisá tu correo o esperá antes de volver a intentar.',6000);
+    return;
+  }
+  const button=$('patient-primary-access');
+  patientMagicLinkSending=true;
+  if(button)button.disabled=true;
   try{
     await CithelaCloud.sendPatientMagicLink(email);
-    toast('Revisá tu correo y abrí el enlace de acceso',4800);
-  }catch(err){toast(err?.message||'No se pudo enviar el enlace',4200);}
+    patientMagicLinkSetCooldown(90*1000);
+    toast('Revisá tu correo y abrí el enlace en el mismo navegador. No hace falta pedir otro.',6500);
+  }catch(err){
+    const message=String(err?.message||'');
+    const code=String(err?.code||'');
+    if(/email rate limit exceeded|over_email_send_rate_limit/i.test(message+' '+code))
+      patientMagicLinkSetCooldown(10*60*1000);
+    else if(/for security purposes|after [0-9]+ seconds|over_request_rate_limit/i.test(message+' '+code)){
+      const seconds=Number(message.match(/after (\\d+) seconds/i)?.[1]||60);
+      patientMagicLinkSetCooldown(Math.max(60,Math.min(120,seconds+5))*1000);
+    }
+    toast(patientMagicLinkErrorMessage(err),11000);
+  }finally{
+    patientMagicLinkSending=false;
+    renderPatientLoginSession();
+  }
 }
 async function patientEnter(){
   try{
