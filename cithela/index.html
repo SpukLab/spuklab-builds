@@ -1215,6 +1215,10 @@ const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
 // Pilot: Meta's test WABA cannot create an authentication template yet.
 // Keep phone OTP gated until the approved template, Auth SMS Hook and E2E test are ready.
+// Meta Cloud API is the transport through our Supabase Send SMS Hook.
+// Never set this to true until Phone Auth, the signed hook, an approved
+// AUTHENTICATION/COPY_CODE template and end-to-end delivery are verified.
+// Explicit channel:'whatsapp' is a Twilio-only Supabase provider path.
 const CITHELA_PHONE_OTP_ENABLED=false;
 const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
 const CITHELA_PENDING_INVITE_TTL=30*60*1000;
@@ -1610,7 +1614,7 @@ const CithelaCloud=(()=>{
     if(!/^\+[1-9][0-9]{7,14}$/.test(clean))throw Error('WhatsApp inválido');
     const {error}=await c.auth.signInWithOtp({
       phone:clean,
-      options:{channel:'whatsapp',shouldCreateUser:true}
+      options:{channel:'sms',shouldCreateUser:true}
     });
     if(error)throw error;
     return {ok:true,phone:clean};

@@ -132,3 +132,31 @@ test('rate limit message never claims a new email was delivered',()=>{
  assert.match(g({message:'429: email rate limit exceeded'}),/No se envió otro enlace/);
  assert.match(g({message:'For security purposes, you can only request this after 31 seconds.'}),/Por seguridad/);
 });
+
+const whatsappOtpSignIn=extract('  async function sendPatientWhatsAppOtp(phone){','  async function verifyPatientPhoneOtp(phone,token){');
+function makeOtpFunction({enabled=true}={}){
+ const calls=[];
+ const fn=new Function('getClient','CITHELA_PHONE_OTP_ENABLED',whatsappOtpSignIn+'\nreturn sendPatientWhatsAppOtp;')(
+   async()=>({auth:{signInWithOtp:async x=>{calls.push(x);return {error:null};}}}),enabled);
+ return {fn,calls};
+}
+test('Meta Cloud API OTP uses Supabase SMS Hook (not Twilio WhatsApp channel)',async()=>{
+ const {fn,calls}=makeOtpFunction();
+ const result=await fn('+5492215723664');
+ assert.deepEqual(result,{ok:true,phone:'+5492215723664'});
+ assert.deepEqual(calls,[{phone:'+5492215723664',options:{channel:'sms',shouldCreateUser:true}}]);
+});
+test('phone OTP remains disabled until approved Meta AUTHENTICATION template',async()=>{
+ const {fn,calls}=makeOtpFunction({enabled:false});
+ await assert.rejects(fn('+5492215723664'),/otp_whatsapp_no_disponible/);
+ assert.equal(calls.length,0);
+});
+test('invalid phone never triggers Meta OTP transport',async()=>{
+ const {fn,calls}=makeOtpFunction();
+ await assert.rejects(fn('not-phone'),/WhatsApp inválido/);
+ assert.equal(calls.length,0);
+});
+test('OTP verification uses Supabase phone SMS type',()=>{
+ const source=extract('  async function verifyPatientPhoneOtp(phone,token){','  async function issuePatientPhoneInvite(');
+ assert.match(source,/verifyOtp\(\{phone:clean,token:code,type:'sms'\}\)/);
+});
