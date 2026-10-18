@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>CITHELA · Odontograma (prototipo)</title>
+  <style>
+    :root {
+      --bg:#f5f6f2; --paper:#fff; --ink:#243331; --muted:#536561;
+      --teal:#398e84; --line:#dce6e1; --soft:#e6f2ee;
+      --danger:#a33c50; --radius:15px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+    button,select,textarea{font:inherit}
+    button{cursor:pointer}
+    button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #246e84;outline-offset:3px}
+    header{background:var(--paper);border-bottom:1px solid var(--line);padding:16px 18px}
+    header>div{max-width:1120px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .brand{font-weight:750;letter-spacing:.15em;font-size:18px}
+    .eyebrow{color:var(--teal);font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.06em}
+    .chip{background:#f0f4f3;border-radius:99px;padding:6px 10px;font-size:12px;white-space:nowrap}
+    main{max-width:1120px;margin:0 auto;padding:24px 16px 70px}
+    h1{font-size:clamp(1.5rem,3.2vw,2rem);margin:3px 0 8px}
+    h2{font-size:1.12rem;margin:0 0 12px}
+    h3{font-size:.9rem;margin:0 0 8px}
+    p{margin:0 0 12px}
+    .muted{color:var(--muted);font-size:.85rem}
+    .warning{background:#fff8e9;border:1px solid #ecd7ad;border-radius:12px;padding:13px 15px;margin:18px 0;color:#664d20}
+    .layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.7fr);gap:16px;align-items:start}
+    .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:18px;min-width:0;box-shadow:0 2px 9px #24333108}
+    .card+.card{margin-top:16px}
+    .quadrants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .quadrant{min-width:0;border:1px solid var(--line);border-radius:11px;padding:9px;background:#fcfdfc}
+    .quadrant h3{font-size:.77rem;color:var(--muted);font-weight:600}
+    .teeth{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;min-width:0}
+    .tooth{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;min-width:0;width:100%;border:1px solid transparent;border-radius:8px;background:transparent;padding:4px 1px;color:var(--ink);min-height:72px}
+    .tooth svg{display:block;width:min(100%,38px);height:auto;pointer-events:none}
+    .tooth small{font-size:11px;font-weight:650;font-variant-numeric:tabular-nums;pointer-events:none}
+    .tooth:hover{background:var(--soft)}
+    .tooth.selected{border:2px solid var(--teal);background:var(--soft)}
+    .tooth.absent{opacity:.65}
+    .legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:14px;font-size:11px;color:var(--muted)}
+    .legend span{display:inline-flex;gap:5px;align-items:center}
+    .dot{width:10px;height:10px;display:inline-block;border-radius:3px;border:1px solid #0002}
+    .group{margin-top:14px}
+    label{display:block;font-size:.79rem;font-weight:700;color:var(--muted);margin-bottom:6px}
+    select,textarea{width:100%;background:#f8faf9;border:1px solid #bacbc5;border-radius:10px;color:var(--ink);padding:10px}
+    textarea{min-height:82px;resize:vertical}
+    .surfaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+    .surface{background:#fff;border:1px solid #aebeb9;border-radius:9px;padding:10px 5px;font-size:.75rem;min-height:48px}
+    .surface[aria-pressed=true]{background:var(--soft);border:2px solid var(--teal);font-weight:700}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}
+    .btn{border:1px solid #a6bbb4;border-radius:9px;background:#fff;padding:10px 12px;font-size:.83rem;font-weight:650;min-height:44px}
+    .btn.primary{background:var(--teal);border-color:var(--teal);color:white}
+    .btn.danger{color:var(--danger)}
+    .message{color:var(--muted);font-size:.81rem;min-height:1.3em;margin-top:10px}
+    .history{list-style:none;padding:0;margin:0;max-height:350px;overflow:auto}
+    .history li{border-bottom:1px solid var(--line);padding:10px 0}
+    .history li:last-child{border-bottom:0}
+    .history strong{font-size:.83rem}
+    .history small{display:block;color:var(--muted);font-size:.72rem}
+    .history .note{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.8rem}
+    .empty{font-size:.85rem;color:var(--muted);padding:8px 0}
+    footer{max-width:1120px;margin:0 auto;padding:0 16px 24px;color:var(--muted);font-size:.75rem}
+    @media(max-width:950px){.layout{grid-template-columns:1fr}}
+    @media(max-width:660px){
+      main{padding:18px 10px 60px}
+      .card{padding:13px}
+      .quadrants{grid-template-columns:1fr;gap:9px}
+      .quadrant{padding:7px}
+      .tooth{min-height:68px}
+      .tooth svg{width:min(100%,36px)}
+    }
+  </style>
+</head>
+<body>
+  <header><div><span class="brand">CITHELA</span><span class="chip">Prototipo odontológico · v0.1</span></div></header>
+  <main>
+    <div class="eyebrow">Módulo opcional para odontología</div>
+    <h1>Odontograma digital</h1>
+    <p class="muted">Seleccioná una pieza dental, una superficie y una observación. Vista permanente FDI para adultos (32 piezas).</p>
+    <div class="warning" role="note"><strong>Demostración sin pacientes reales.</strong> Los registros son ficticios, están solo en la memoria de esta pestaña y se pierden al recargar. No está conectada a Supabase ni a fichas clínicas. No usar para asistencia clínica.</div>
+    <div class="layout">
+      <section class="card" aria-labelledby="chart-heading">
+        <h2 id="chart-heading">Piezas dentales</h2>
+        <div class="quadrants" id="quadrants"></div>
+        <div class="legend" aria-label="Leyenda de colores">
+          <span><i class="dot" style="background:#eab5bc"></i>Caries</span>
+          <span><i class="dot" style="background:#a5d5de"></i>Restauración</span>
+          <span><i class="dot" style="background:#e7d3a8"></i>Pendiente</span>
+          <span><i class="dot" style="background:#add9c1"></i>Realizado</span>
+          <span><i class="dot" style="background:#cbd0d2"></i>Ausente</span>
+          <span><i class="dot" style="background:#fff"></i>Sin registro</span>
+        </div>
+      </section>
+      <div>
+        <section class="card" aria-labelledby="editor-heading">
+          <h2 id="editor-heading">Registrar observación</h2>
+          <p id="selection-heading" class="muted" aria-live="polite"></p>
+          <div class="group">
+            <label>Superficie / pieza completa</label>
+            <div class="surfaces" id="surfaces" role="group" aria-label="Seleccionar superficie"></div>
+          </div>
+          <div class="group">
+            <label for="finding">Observación o tratamiento</label>
+            <select id="finding">
+              <option value="caries">Caries</option>
+              <option value="restauracion">Restauración</option>
+              <option value="pendiente">Tratamiento pendiente</option>
+              <option value="realizado">Tratamiento realizado</option>
+              <option value="ausente">Pieza ausente (pieza completa)</option>
+              <option value="sin_registro">Quitar marca (corrección)</option>
+            </select>
+          </div>
+          <div class="group">
+            <label for="detail">Nota (opcional, máximo 300 caracteres)</label>
+            <textarea id="detail" maxlength="300" placeholder="Solo información ficticia durante la demostración"></textarea>
+          </div>
+          <div class="actions">
+            <button type="button" id="save" class="btn primary">Agregar al historial</button>
+            <button type="button" id="seed" class="btn">Cargar ejemplo</button>
+            <button type="button" id="reset" class="btn danger">Limpiar demo</button>
+          </div>
+          <p id="message" class="message" aria-live="polite"></p>
+        </section>
+        <section class="card" aria-labelledby="history-heading">
+          <h2 id="history-heading">Historial de esta sesión</h2>
+          <p class="muted">Cada modificación agrega un evento, sin borrar las anteriores.</p>
+          <ol id="history" class="history"></ol>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer>Prototipo de interacción · pendiente de validación clínica, privacidad, permisos por profesional, almacenamiento y auditoría antes de integrarlo a CITHELA.</footer>
+  <script>
+  (() => {
+    'use strict';
+    const quadrants = [
+      {title:'Superior derecha · 18–11', numbers:['18','17','16','15','14','13','12','11']},
+      {title:'Superior izquierda · 21–28', numbers:['21','22','23','24','25','26','27','28']},
+      {title:'Inferior derecha · 48–41', numbers:['48','47','46','45','44','43','42','41']},
+      {title:'Inferior izquierda · 31–38', numbers:['31','32','33','34','35','36','37','38']}
+    ];
+    const allowedTeeth = new Set(quadrants.flatMap(q => q.numbers));
+    const surfaceIds = ['pieza','oclusal','vestibular','lingual','mesial','distal'];
+    const statuses = {
+      caries:{label:'Caries',color:'#eab5bc'},
+      restauracion:{label:'Restauración',color:'#a5d5de'},
+      pendiente:{label:'Tratamiento pendiente',color:'#e7d3a8'},
+      realizado:{label:'Tratamiento realizado',color:'#add9c1'},
+      ausente:{label:'Pieza ausente',color:'#cbd0d2'},
+      sin_registro:{label:'Sin registro',color:'#ffffff'}
+    };
+    const state = { tooth:'11',surface:'oclusal',events:[],nextId:1 };
+    const $ = id => document.getElementById(id);
+    const isIncisorOrCanine = t => Number(t[1]) <= 3;
+    function surfaceLabel(surface,tooth){
+      if(surface === 'pieza') return 'Pieza completa';
+      if(surface === 'oclusal') return isIncisorOrCanine(tooth) ? 'Incisal' : 'Oclusal';
+      if(surface === 'lingual') return tooth[0]==='1'||tooth[0]==='2' ? 'Palatina' : 'Lingual';
+      const labels = {vestibular:'Vestibular',mesial:'Mesial',distal:'Distal'};
+      return labels[surface];
+    }
+    function lastStatus(tooth,surface){
+      for(let i=state.events.length-1;i>=0;i--){
+        const e=state.events[i];
+        if(e.tooth===tooth && e.surface===surface) return e.status;
+      }
+      return 'sin_registro';
+    }
+    function faceColor(tooth,face){
+      return statuses[lastStatus(tooth,face)].color;
+    }
+    function toothSvg(tooth){
+      const whole=lastStatus(tooth,'pieza');
+      if(whole==='ausente') {
+        return '<svg viewBox="0 0 52 56" aria-hidden="true"><path d="M8 8 Q26 3 44 8 L46 39 Q27 52 6 39 Z" fill="#e6e8e7" stroke="#aab4b0" stroke-width="2"/><path d="M13 15 L39 42 M39 15 L13 42" stroke="#8b9692" stroke-width="3" stroke-linecap="round"/></svg>';
+      }
+      // The medial direction faces the midline in each quadrant.
+      const right = tooth[0]==='1'||tooth[0]==='4';
+      const leftFace=right?'distal':'mesial';
+      const rightFace=right?'mesial':'distal';
+      return '<svg viewBox="0 0 52 56" aria-hidden="true">' +
+        '<path d="M8 8 Q26 3 44 8 L46 39 Q27 52 6 39 Z" fill="#fff" stroke="#849c94" stroke-width="2"/>' +
+        '<path d="M10 11 Q26 6 42 11 L34 21 L18 21 Z" fill="'+faceColor(tooth,'vestibular')+'" stroke="#9aada6"/>' +
+        '<path d="M10 12 L18 21 L18 34 L8 38 Z" fill="'+faceColor(tooth,leftFace)+'" stroke="#9aada6"/>' +
+        '<path d="M42 12 L34 21 L34 34 L44 38 Z" fill="'+faceColor(tooth,rightFace)+'" stroke="#9aada6"/>' +
+        '<path d="M18 34 L34 34 L44 39 Q26 48 8 39 Z" fill="'+faceColor(tooth,'lingual')+'" stroke="#9aada6"/>' +
+        '<rect x="18" y="21" width="16" height="13" rx="3" fill="'+faceColor(tooth,'oclusal')+'" stroke="#9aada6"/>' +
+        '</svg>';
+    }
+    function renderChart(){
+      const box=$('quadrants');
+      box.replaceChildren();
+      quadrants.forEach(q=>{
+        const section=document.createElement('section');
+        section.className='quadrant';
+        const heading=document.createElement('h3');
+        heading.textContent=q.title;
+        const grid=document.createElement('div');
+        grid.className='teeth';
+        q.numbers.forEach(tooth=>{
+          const btn=document.createElement('button');
+          btn.type='button';
+          btn.className='tooth'+(state.tooth===tooth?' selected':'')+(lastStatus(tooth,'pieza')==='ausente'?' absent':'');
+          btn.setAttribute('aria-label','Pieza '+tooth+(lastStatus(tooth,'pieza')==='ausente'?', ausente':''));
+          btn.setAttribute('aria-pressed',String(state.tooth===tooth));
+          btn.innerHTML=toothSvg(tooth)+'<small>'+tooth+'</small>';
+          btn.addEventListener('click',()=>{
+            state.tooth=tooth;
+            state.surface='oclusal';
+            render();
+          });
+          grid.appendChild(btn);
+        });
+        section.append(heading,grid);
+        box.appendChild(section);
+      });
+    }
+    function renderSurfaces(){
+      const holder=$('surfaces');
+      holder.replaceChildren();
+      surfaceIds.forEach(id=>{
+        const b=document.createElement('button');
+        b.type='button';
+        b.className='surface';
+        b.textContent=surfaceLabel(id,state.tooth);
+        b.setAttribute('aria-pressed',String(id===state.surface));
+        b.addEventListener('click',()=>{
+          state.surface=id;
+          renderSurfaces();
+          renderSelection();
+        });
+        holder.appendChild(b);
+      });
+    }
+    function renderSelection(){
+      $('selection-heading').textContent='Pieza '+state.tooth+' · '+surfaceLabel(state.surface,state.tooth);
+    }
+    function renderHistory(){
+      const holder=$('history');
+      holder.replaceChildren();
+      if(state.events.length===0){
+        const li=document.createElement('li');
+        li.className='empty';
+        li.textContent='Todavía no hay observaciones de demostración.';
+        holder.appendChild(li);
+        return;
+      }
+      state.events.slice().reverse().forEach(e=>{
+        const li=document.createElement('li');
+        const title=document.createElement('strong');
+        title.textContent='Pieza '+e.tooth+' · '+surfaceLabel(e.surface,e.tooth)+' · '+statuses[e.status].label;
+        const date=document.createElement('small');
+        date.textContent=new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short'}).format(new Date(e.at))+' · Evento #'+e.id;
+        li.append(title,date);
+        if(e.note){
+          const note=document.createElement('div');
+          note.className='note';
+          note.textContent=e.note;
+          li.appendChild(note);
+        }
+        holder.appendChild(li);
+      });
+    }
+    function render(){renderChart();renderSurfaces();renderSelection();renderHistory();}
+    function record(tooth,surface,status,note){
+      if(!allowedTeeth.has(tooth)||!surfaceIds.includes(surface)||!statuses[status]) return false;
+      if(status==='ausente' && surface!=='pieza') return false;
+      if(surface==='pieza' && status!=='ausente' && status!=='sin_registro') return false;
+      if(typeof note!=='string'||note.length>300) return false;
+      state.events.push({id:state.nextId++,tooth,surface,status,note,at:new Date().toISOString()});
+      return true;
+    }
+    $('save').addEventListener('click',()=>{
+      const status=$('finding').value;
+      if(!record(state.tooth,state.surface,status,$('detail').value.trim())){
+        $('message').textContent='Combinación no válida: ausencia y corrección general se registran en “Pieza completa”. Para superficies elegí otro estado.';
+        return;
+      }
+      $('detail').value='';
+      $('message').textContent='Evento agregado a la demostración (no guardado en el servidor).';
+      render();
+    });
+    $('seed').addEventListener('click',()=>{
+      state.events=[];
+      state.nextId=1;
+      record('16','oclusal','restauracion','Ejemplo ficticio');
+      record('25','mesial','caries','Ejemplo ficticio');
+      record('36','oclusal','pendiente','Ejemplo ficticio');
+      record('48','pieza','ausente','Ejemplo ficticio');
+      $('message').textContent='Se cargaron cuatro eventos ficticios.';
+      render();
+    });
+    $('reset').addEventListener('click',()=>{
+      state.events=[];
+      state.nextId=1;
+      $('detail').value='';
+      $('message').textContent='Demostración limpia.';
+      render();
+    });
+    // All state is deliberately ephemeral; no storage, network calls or patient identifiers.
+    render();
+  })();
+  </script>
+</body>
+</html>
