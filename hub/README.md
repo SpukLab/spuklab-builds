@@ -17,3 +17,12 @@ Se publica mediante GitHub Pages desde la rama `main` y la raíz del repositorio
 5. Incorporar onboarding seguro de WhatsApp/Mercado Libre, contratación, facturación y soporte según etapa comercial.
 
 **Seguridad:** el HTML no incluye llaves ni credenciales. No confundir esta landing con el panel operativo de los productos. Actualizar contenido al pasar de piloto a producción.
+
+## DAHZEA: sitio comercial externo
+
+La tarjeta DAHZEA enlaza a la landing creada anteriormente en ChatGPT Sites:
+https://dahzea.dentrix-8m.chatgpt.site/
+
+Esta landing comercial con demostración interactiva es independiente de la app operativa privada en Render y no expone su panel de operador ni credenciales. En el Hub se conserva un enlace alternativo por correo para consultas sobre el piloto.
+
+**Validación de publicación pendiente:** comprobar desde navegador de incógnito (sin cuenta del propietario) que la configuración de compartir del ChatGPT Site permita acceso público. El metadato de la biblioteca mostraba estado activo pero acceso personalizado; no asumir disponibilidad anónima hasta probarlo. Si está restringida, ajustar la audiencia desde el Site original en ChatGPT antes de difundir el enlace.
