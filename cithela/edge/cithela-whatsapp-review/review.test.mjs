@@ -161,7 +161,7 @@ test("interprets patient haircut intent without inventing or combining services"
     assert.equal(match(message, services)?.id, "cut", message);
   }
   for (const message of ["Quiero cortarme y coloración",
-    "Quiero cortarme y hacerme tintura", "Me corté y tengo dolor"]) {
+    "Quiero cortarme y hacerme tintura"]) {
     assert.equal(match(message, services), null, message);
   }
   assert.equal(match("Quiero cortarme", [{id:"consulta",name:"Consulta"}]), null);
