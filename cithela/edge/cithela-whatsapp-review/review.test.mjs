@@ -148,6 +148,25 @@ test("requires resource choice for multiple professionals", async () => {
   assert.equal(result.body.code, "needs_resource");
 });
 
+test("interprets patient haircut intent without inventing or combining services", async () => {
+  const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const js = src.replace(/^import\s+.*?;\s*$/m, "");
+  const match = new Function("Deno", "createClient", js + "\nreturn matchService;")
+    ({env:{get:()=>null},serve(){}},()=>({}));
+  const services = [
+    {id:"cut",name:"Corte"}, {id:"color",name:"Coloración"}, {id:"consult",name:"Consulta"},
+  ];
+  for (const message of ["Quiero cortarme", "Necesito cortarme el pelo",
+    "Turno para cortarme mañana", "Quiero cortar el cabello"]) {
+    assert.equal(match(message, services)?.id, "cut", message);
+  }
+  for (const message of ["Quiero cortarme y coloración",
+    "Quiero cortarme y hacerme tintura"]) {
+    assert.equal(match(message, services), null, message);
+  }
+  assert.equal(match("Quiero cortarme", [{id:"consulta",name:"Consulta"}]), null);
+});
+
 test("tintura maps uniquely to Coloración without guessing combined services", async () => {
   const src = await readFile(new URL("./index.ts", import.meta.url), "utf8");
   const js = src.replace(/^import\s+.*?;\s*$/m, "");
