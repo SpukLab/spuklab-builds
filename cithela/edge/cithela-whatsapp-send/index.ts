@@ -41,6 +41,37 @@ function metaRecipient(to: string, senderId: string) {
   }
   return to.slice(1);
 }
+// Keep Meta error details on the server only. Strip URLs, phone/IDs, mail and token-like values.
+function diagnosticMetaText(input) {
+  if (typeof input !== "string") return null;
+  const clean = input.slice(0, 450)
+    .replace(/https?:\/\/[^\s]+/gi, "[url]")
+    .replace(/\b(?:EAA|EAAG|EAAF)[A-Za-z0-9_-]{12,}\b/g, "[token]")
+    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[email]")
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]")
+    .replace(/\b\d{4,}\b/g, "[id]")
+    .replace(/[\r\n\t]/g, " ");
+  return clean || null;
+}
+function logMetaSendRejection(response, errorPayload) {
+  // No access token, phone number, patient text, URL, or full API response in logs.
+  const err = errorPayload && typeof errorPayload === "object" ? errorPayload.error : undefined;
+  const code = typeof err?.code === "number" && Number.isInteger(err.code) ? err.code : null;
+  const subcode = typeof err?.error_subcode === "number" && Number.isInteger(err.error_subcode)
+    ? err.error_subcode : null;
+  const type = typeof err?.type === "string" && /^(OAuthException|GraphMethodException|GraphAPIException|APIException)$/.test(err.type)
+    ? err.type : "other";
+  const trace = typeof err?.fbtrace_id === "string" && /^[A-Za-z0-9_-]{4,128}$/.test(err.fbtrace_id)
+    ? err.fbtrace_id : null;
+  const data = err?.error_data;
+  const details = data && typeof data === "object" ? data.details : null;
+  console.error("CITHELA_META_SEND_REJECTED " + JSON.stringify({
+    http_status: response.status, code, subcode, type,
+    message: diagnosticMetaText(err?.message),
+    details: diagnosticMetaText(details), fbtrace_id: trace,
+  }));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return reply({ ok: false, code: "method_not_allowed" }, 405);
@@ -189,9 +220,11 @@ Deno.serve(async (req: Request) => {
       resultStatus = providerMessageId ? "sent" : "unknown";
       errCode = providerMessageId ? null : "missing_provider_receipt";
     } else {
-      // Preserve only Meta's numeric code, never its raw response, token, or phone.
+      // Preserve only Meta's numeric code in the outbox. Record a redacted
+      // server-side diagnostic for resolving permission issues safely.
       // No automatic retry: any uncertain delivery remains uniquely reserved.
       const errorBody = await res.json().catch(() => null);
+      logMetaSendRejection(res, errorBody);
       const numericCode = errorBody?.error?.code;
       const validCode = Number.isInteger(numericCode) && numericCode > 0 && numericCode < 1000000;
       resultStatus = "unknown";

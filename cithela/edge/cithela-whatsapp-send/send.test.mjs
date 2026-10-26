@@ -126,3 +126,26 @@ test("Meta rejected token returns numeric code without exposing credentials",asy
  assert.equal(h.calls.filter(x=>x.kind==="meta").length,0);
  assert.equal(h.calls.filter(x=>x.kind==="meta_read").length,1);
 });
+
+test("Meta diagnostic redacts tokens, patient phone, email, and URL before logging", async () => {
+ const src=await readFile(new URL("./index.ts",import.meta.url),"utf8");
+ const clean=src.replace(/^import .*?;\s*$/m,"")
+  .replace("Deno.serve(async (req: Request)","Deno.serve(async (req)")
+  .replace("payload: unknown","payload")
+  .replace("providerTime: unknown","providerTime")
+  .replace("value: unknown","value")
+  .replace("let request: Record<string, unknown>","let request")
+  .replace("let preview: Record<string, unknown>","let preview")
+  .replace("let providerMessageId: string | null","let providerMessageId")
+  .replace("let errCode: string | null","let errCode")
+  .replace("function metaRecipient(to: string, senderId: string)","function metaRecipient(to, senderId)");
+ const sanitize=new Function("Deno","createClient","fetch",clean+"\nreturn diagnosticMetaText;")
+  ({env:{get:()=>null},serve:()=>{}},()=>({}),()=>{});
+ const unsafe="Denied for +5492212345678 and user@example.com at https://example.com?key=secret EAA12345678901234567890";
+ const result=sanitize(unsafe);
+ assert.ok(typeof result==="string");
+ for(const secret of ["+5492212345678","user@example.com","https://example.com","EAA12345678901234567890"])
+  assert.equal(result.includes(secret),false,secret);
+ assert.ok(result.includes("Denied"));
+});
+
