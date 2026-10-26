@@ -28,10 +28,13 @@ function matchService(text, services) {
   const found = services.filter(s => {
     const needle = clean(s.name);
     const direct = needle && haystack.includes(" " + needle + " ");
-    // Single, conservative hair-service synonym; never resolve ambiguous matches.
+    // Conservative Spanish hair-service synonyms, resolved only against the
+    // tenant's actual catalog. Multiple candidate services remain ambiguous.
     const dyeIntent = /\b(tintura|tinte|tenir|tenirme|tenido)\b/.test(haystack);
     const hairColor = /\b(coloracion|color)\b/.test(needle);
-    return direct || (dyeIntent && hairColor);
+    const cutIntent = /\b(cortarme|cortarte|cortarse|cortarnos|cortarme el pelo|cortar(?:me|te|se|nos)? (?:el )?(?:pelo|cabello))\b/.test(haystack);
+    const haircut = /\bcorte\b/.test(needle);
+    return direct || (dyeIntent && hairColor) || (cutIntent && haircut);
   });
   return found.length === 1 ? found[0] : null;
 }
