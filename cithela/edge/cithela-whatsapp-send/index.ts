@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
   if (authError || !identity?.user?.id) return reply({ ok: false, code: "unauthenticated" }, 401);
   let request: Record<string, unknown>;
   try { request = await req.json(); } catch { return reply({ ok: false, code: "invalid_json" }, 400); }
-  if (!request || !["send", "check_credentials"].includes(String(request.action)) ||
+  if (!request || !["send", "check_credentials", "check_otp_template"].includes(String(request.action)) ||
     !UUID.test(String(request.tenant_id)) ||
     (request.action === "send" && (!UUID.test(String(request.event_id)) ||
       typeof request.draft !== "string" || !request.draft.trim() || request.draft.length > 1000 ||
@@ -106,6 +106,63 @@ Deno.serve(async (req: Request) => {
   const { data: tenant, error: tenantError } = await admin.from("cithela_tenants")
     .select("status").eq("id", tenantId).maybeSingle();
   if (tenantError || tenant?.status !== "active") return reply({ ok: false, code: "inactive_tenant" }, 403);
+
+  if (request.action === "check_otp_template") {
+    // Read-only Meta template preflight. Never sends OTPs, changes Auth settings,
+    // creates users, or touches the supervised-message outbox.
+    const senderId = Deno.env.get("META_WHATSAPP_PHONE_NUMBER_ID");
+    const metaToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+    if (!senderId || !metaToken) return reply({ ok: false, code: "sender_not_configured" }, 503);
+    const { data: connection, error: connectionError } = await admin.from("cithela_channel_connections")
+      .select("id").eq("tenant_id", tenantId).eq("channel", "whatsapp")
+      .eq("external_account_id", senderId).eq("status", "active").maybeSingle();
+    if (connectionError || !connection) return reply({ ok: false, code: "connection_not_found" }, 403);
+
+    const templateName = Deno.env.get("META_WHATSAPP_OTP_TEMPLATE")?.trim() || "";
+    if (!templateName) return reply({ ok: true, code: "otp_template_not_configured", diagnostic: "read_only" });
+    if (!/^[a-z][a-z0-9_]{0,511}$/.test(templateName))
+      return reply({ ok: false, code: "otp_template_invalid_name" }, 503);
+    const language = Deno.env.get("META_WHATSAPP_OTP_LANGUAGE")?.trim() || "es_AR";
+    if (!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language))
+      return reply({ ok: false, code: "otp_template_invalid_language" }, 503);
+    // This instance currently has a single CITHELA pilot WABA. Override with
+    // META_WHATSAPP_WABA_ID before provisioning a different sender or tenant.
+    const wabaId = Deno.env.get("META_WHATSAPP_WABA_ID")?.trim() || "1418360383843069";
+    if (!/^\d{10,25}$/.test(wabaId)) return reply({ ok: false, code: "otp_waba_invalid" }, 503);
+    const graphVersion = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
+    if (!/^v\d+\.\d+$/.test(graphVersion)) return reply({ ok: false, code: "meta_version_invalid" }, 503);
+    try {
+      const endpoint = new URL("https://graph.facebook.com/" + graphVersion + "/" + wabaId + "/message_templates");
+      endpoint.searchParams.set("name", templateName);
+      endpoint.searchParams.set("fields", "name,language,category,status");
+      endpoint.searchParams.set("limit", "100");
+      const result = await fetch(endpoint, {
+        method: "GET",
+        headers: { Authorization: "Bearer " + metaToken },
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await result.json().catch(() => null);
+      if (!result.ok) {
+        const metaCode = data?.error?.code;
+        const diagnostic = Number.isInteger(metaCode) && metaCode > 0 && metaCode < 1000000
+          ? "meta_code_" + metaCode : "meta_http_" + result.status;
+        return reply({ ok: false, code: "otp_template_check_failed", diagnostic_code: diagnostic }, 502);
+      }
+      const entry = Array.isArray(data?.data)
+        ? data.data.find(t => t?.name === templateName && t?.language === language)
+        : null;
+      if (!entry) return reply({ ok: true, code: "otp_template_not_found", diagnostic: "read_only" });
+      if (entry.category !== "AUTHENTICATION")
+        return reply({ ok: true, code: "otp_template_wrong_category", diagnostic: "read_only" });
+      return reply({
+        ok: true, code: entry.status === "APPROVED" ? "otp_template_approved" :
+          entry.status === "REJECTED" ? "otp_template_rejected" : "otp_template_pending",
+        diagnostic: "read_only",
+      });
+    } catch {
+      return reply({ ok: false, code: "otp_template_check_unavailable" }, 503);
+    }
+  }
 
   if (request.action === "check_credentials") {
     // Read-only check using the actual Supabase Meta token; no message, outbox, or patient access.
