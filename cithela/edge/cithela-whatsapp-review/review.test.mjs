@@ -345,7 +345,7 @@ async function inboxUI(inbox = []) {
     },
   };
   const setup = new Function("escHtml", "$", "CithelaCloud", "document", script.slice(begin, end) +
-    "\nreturn {cloudWaMessageMarkup,cloudLoadWhatsappInbox};");
+    "\nreturn {cloudWaMessageMarkup,cloudLoadWhatsappInbox,cloudWaSetFilter};");
   return { ...setup(esc, $, cloud, document), list, counts };
 }
 const sample = (id, time, text, outbound = null) =>
@@ -358,6 +358,9 @@ test("UI sorts latest first and shows reply inside its original message", async 
   });
   const view = await inboxUI([old, latest]);
   await view.cloudLoadWhatsappInbox();
+  assert.match(view.list.innerHTML,/Consulta anterior/);
+  assert.doesNotMatch(view.list.innerHTML,/Mañana a las 14/,"default filter shows only unanswered");
+  view.cloudWaSetFilter("all");
   assert.ok(view.list.innerHTML.indexOf(TEST_TWO) < view.list.innerHTML.indexOf(TEST_ONE));
   assert.match(view.counts.textContent, /Sin responder: 1/);
   assert.match(view.counts.textContent, /Meta aceptó: 1/);

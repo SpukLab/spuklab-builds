@@ -25,9 +25,15 @@ function harness(){
     addEventListener(event,fn){this.listeners[event]=fn;}};
   const pane={visible:true,classList:{contains(name){return name==="on"&&pane.visible;}}};
   const nav={textContent:"Mensajes",ariaLabel:"",setAttribute(key,val){if(key==="aria-label")this.ariaLabel=val;}};
+  const filterButtons=Object.fromEntries(["pending","uncertain","all"].map(filter=>[
+    filter,{textContent:"",ariaPressed:"",
+      setAttribute(key,value){if(key==="aria-pressed")this.ariaPressed=value;}}
+  ]));
+  const hint={textContent:""};
   const elements={"cloud-wa-list":list,"cloud-wa-counts":counts,
     "cloud-wa-live-status":status,"cloud-wa-pilot":panel,
-    "p-medico-mensajes":pane,"cloud-wa-tab":nav};
+    "p-medico-mensajes":pane,"cloud-wa-tab":nav,"cloud-wa-filter-hint":hint,
+    ...Object.fromEntries(Object.entries(filterButtons).map(([filter,button])=>["cloud-wa-filter-"+filter,button]))};
   const makeRow=(id)=>({id,open:false,hidden:false,style:{},
     replaceWith(next){const index=list.rows.indexOf(this);if(index>=0)list.rows[index]=next;},
     remove(){list.rows=list.rows.filter(x=>x!==this);}});
@@ -59,11 +65,13 @@ function harness(){
       install:installCloudWaInboxPolling,
       getDraft:()=>cloudWaPendingDraft,
       setDraft:x=>{cloudWaPendingDraft=x;},
+      filter:cloudWaSetFilter,
+      getFilter:()=>cloudWaInboxFilter,
       tick:()=>installCloudWaInboxPolling()
     };
   `,context);
   return {
-    api:context.api,state,list,counts,status,panel,pane,nav,document,intervals,
+    api:context.api,state,list,counts,status,panel,pane,nav,hint,filterButtons,document,intervals,
     setItems(value){items=value;},get reviewCalls(){return reviewCalls;}
   };
 }
@@ -93,19 +101,51 @@ test("polling adds incoming messages without closing a draft card or dropping it
   assert.equal(h.nav.textContent,"Mensajes (2)");
   assert.match(h.nav.ariaLabel,/últimos 2/);
 });
-test("server response status transitions replace only the affected card",async()=>{
+test("a newly accepted outbound leaves pending without disappearing from history",async()=>{
   const h=harness();
   h.setItems([item(first,"2026-10-27T13:00:00Z"),item(second,"2026-10-27T12:00:00Z")]);
   await h.api.load();
-  const firstRow=h.list.rows[0],secondRow=h.list.rows[1];
-  firstRow.open=true;
+  const secondRow=h.list.rows[1];
   h.setItems([item(first,"2026-10-27T13:00:00Z",{status:"sent",reply_text:"OK"}),
     item(second,"2026-10-27T12:00:00Z")]);
   await h.api.load(null,true);
-  assert.notEqual(h.list.rows[0],firstRow);
-  assert.equal(h.list.rows[0].open,true);
-  assert.equal(h.list.rows[1],secondRow);
+  assert.equal(h.list.rows.length,1);
+  assert.equal(h.list.rows[0],secondRow);
   assert.match(h.counts.textContent,/Meta aceptó: 1/);
+  h.api.filter("all");
+  assert.equal(h.list.rows.length,2);
+  assert.equal(h.list.rows[0].id,"cloud-wa-event-"+first);
+  assert.equal(h.filterButtons.all.ariaPressed,"true");
+});
+test("filters separate unconfirmed sends from unanswered, without a retry action",async()=>{
+  const h=harness();
+  h.setItems([item(first,"2026-10-27T13:00:00Z"),
+    item(second,"2026-10-27T12:00:00Z",{status:"unknown",reply_text:"Intentado"})]);
+  await h.api.load();
+  assert.equal(h.list.rows.length,1);
+  assert.equal(h.list.rows[0].id,"cloud-wa-event-"+first);
+  assert.equal(h.filterButtons.pending.ariaPressed,"true");
+  h.api.filter("uncertain");
+  assert.equal(h.list.rows.length,1);
+  assert.equal(h.list.rows[0].id,"cloud-wa-event-"+second);
+  assert.match(h.hint.textContent,/no los reenvíes/i);
+  h.api.filter("pending");
+  assert.equal(h.list.rows[0].id,"cloud-wa-event-"+first);
+});
+test("changing filters preserves an in-progress draft and its textarea",async()=>{
+  const h=harness();
+  h.setItems([item(first,"2026-10-27T13:00:00Z"),item(second,"2026-10-27T12:00:00Z",{status:"sent",reply_text:"ok"})]);
+  await h.api.load();
+  const row=h.list.rows[0];
+  row.open=true;row.note={value:"Mantener lo escrito"};
+  h.api.setDraft({event_id:first,draft:"Pendiente"});
+  h.api.filter("uncertain");
+  assert.equal(h.list.rows.length,1);
+  assert.equal(h.list.rows[0],row);
+  assert.equal(h.list.rows[0].note.value,"Mantener lo escrito");
+  h.api.filter("all");
+  assert.equal(h.list.rows.find(x=>x.id==="cloud-wa-event-"+first),row);
+  assert.equal(row.note.value,"Mantener lo escrito");
 });
 test("polling refreshes only while the messages tab is visible",async()=>{
   const h=harness();
@@ -142,4 +182,11 @@ test("WhatsApp inbox lives in its own professional tab, not hidden in cloud conf
   assert.match(html,/id="cloud-wa-tab"[^>]*onclick="tab\('medico','mensajes',this\)"/);
   assert.match(html,/if\(sc==='medico'&&id==='mensajes'\)/);
   assert.match(html,/waTab\.style\.display=canUseWa\?'block':'none'/);
+});
+
+test("tab overflow exposes an accessible way to reach Reports and Config",()=>{
+  assert.match(html,/class="professional-tabbar"/);
+  assert.match(html,/id="professional-tabs-more"[^>]*onclick="scrollProfessionalTabs\(\)"/);
+  assert.match(html,/function scrollProfessionalTabs\(\)/);
+  assert.match(html,/function updateProfessionalTabArrow\(\)/);
 });
