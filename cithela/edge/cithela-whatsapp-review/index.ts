@@ -367,8 +367,8 @@ Deno.serve(async req => {
         ok: true, code: "needs_service", clarification: "multiple_services",
         services: names,
         draft: "Entiendo que necesitás " + label +
-          ". ¿Querés realizar todos los servicios en la misma visita? " +
-          "Un profesional revisará la duración total y los horarios disponibles antes de confirmar cualquier turno."
+          ". Para coordinarlos en una misma visita, un profesional revisará la duración total " +
+          "y los horarios disponibles. Todavía no hay ningún turno reservado."
       });
     }
     const service = matched.length === 1 ? matched[0] : null;
