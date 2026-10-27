@@ -133,6 +133,40 @@ test("asks for service if missing; never writes", async () => {
   assert.equal(result.body.code, "needs_service");
   assert.equal(h.calls.filter(x => x.rpc === "cithela_channel_command").length, 1);
 });
+test("explicit unlisted services are escalated instead of offering unrelated hair services", async () => {
+  for (const text of [
+    "Quiero un turno para tatuarme",
+    "Me das un turno para un tatuaje?",
+    "Necesito una cita de masaje",
+    "Quiero tatuarme"
+  ]) {
+    const h = await harness({text});
+    const result = await h.request("prepare");
+    assert.equal(result.status, 200, text);
+    assert.equal(result.body.code, "needs_service", text);
+    assert.equal(result.body.clarification, "unlisted_service", text);
+    assert.match(result.body.draft, /no encuentro ese servicio/i);
+    assert.match(result.body.draft, /no hay ning.n turno reservado/i);
+    assert.doesNotMatch(result.body.draft, /corte|coloraci.n/i);
+    assert.equal(h.calls.filter(x => x.rpc && x.args.p_command === "availability.query").length, 0);
+  }
+});
+test("generic scheduling and relatives still offer the configured catalog", async () => {
+  for (const text of [
+    "Quiero reservar un turno",
+    "Quiero un turno para mañana",
+    "Un turno para el jueves",
+    "Quiero un turno para mi hijo",
+    "Necesito una cita para las 14"
+  ]) {
+    const h = await harness({text});
+    const result = await h.request("prepare");
+    assert.equal(result.status,200,text);
+    assert.equal(result.body.code,"needs_service",text);
+    assert.equal(result.body.clarification,undefined,text);
+    assert.match(result.body.draft,/pod.s elegir entre/i,text);
+  }
+});
 test("two explicitly requested services are recognized and never converted to a single-service slot", async () => {
   const h = await harness({ text: "Hola quiero un corte y una coloración" });
   const result = await h.request("prepare");
