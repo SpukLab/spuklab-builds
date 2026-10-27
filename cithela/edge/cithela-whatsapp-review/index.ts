@@ -23,9 +23,9 @@ function secretKey() {
 const clean = (str) => String(str ?? "").normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, " ").trim();
-function matchService(text, services) {
+function matchingServices(text, services) {
   const haystack = " " + clean(text) + " ";
-  const found = services.filter(s => {
+  return services.filter(s => {
     const needle = clean(s.name);
     const direct = needle && haystack.includes(" " + needle + " ");
     // Conservative Spanish hair-service synonyms, resolved only against the
@@ -36,6 +36,9 @@ function matchService(text, services) {
     const haircut = /\bcorte\b/.test(needle);
     return direct || (dyeIntent && hairColor) || (cutIntent && haircut);
   });
+}
+function matchService(text, services) {
+  const found = matchingServices(text, services);
   return found.length === 1 ? found[0] : null;
 }
 function datesFromToday(tz, length = 7) {
@@ -350,7 +353,25 @@ Deno.serve(async req => {
     }
     const services = await command("catalog.services");
     if (!Array.isArray(services.items)) throw new Error("services_unavailable");
-    const service = matchService(text, services.items);
+    const matched = matchingServices(text, services.items);
+    if (matched.length > 1) {
+      // Multiple catalog matches are a real request, not an unknown service.
+      // Do not guess a combined duration or offer slots sized for one service.
+      if (matched.length > 4) return json({
+        ok: true, code: "manual_review",
+        draft: "Recibimos tu pedido de varios servicios. Un profesional revisará los detalles antes de ofrecerte un horario."
+      });
+      const names = matched.map(s => boundedText(s.name, 80));
+      const label = names.slice(0, -1).join(", ") + " y " + names[names.length - 1];
+      return json({
+        ok: true, code: "needs_service", clarification: "multiple_services",
+        services: names,
+        draft: "Entiendo que necesitás " + label +
+          ". ¿Querés realizar todos los servicios en la misma visita? " +
+          "Un profesional revisará la duración total y los horarios disponibles antes de confirmar cualquier turno."
+      });
+    }
+    const service = matched.length === 1 ? matched[0] : null;
     if (!service) {
       const choices = services.items.slice(0, 8).map(s => s.name).join(", ");
       return json({
