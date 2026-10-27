@@ -50,7 +50,7 @@ function harness(){
     }};
   const context={document,window,CithelaCloud,escHtml:x=>x,
     $:id=>elements[id]||list.rows.find(row=>row.id===id)||null};
-  vm.runInNewContext(source+\`
+  vm.runInNewContext(source+`
     globalThis.api={
       load:cloudLoadWhatsappInbox,
       install:installCloudWaInboxPolling,
@@ -58,7 +58,7 @@ function harness(){
       setDraft:x=>{cloudWaPendingDraft=x;},
       tick:()=>installCloudWaInboxPolling()
     };
-  \`,context);
+  `,context);
   return {
     api:context.api,state,list,counts,status,panel,document,intervals,
     setItems(value){items=value;},get reviewCalls(){return reviewCalls;}
