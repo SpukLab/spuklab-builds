@@ -157,7 +157,7 @@ test("a short professional note is appended unchanged without altering the appro
     action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT,note
   });
   assert.equal(result.data.code,"submitted_to_meta");
-  const approved=DRAFT+"\\n\\nNota del profesional: "+note;
+  const approved=DRAFT+"\n\nNota del profesional: "+note;
   assert.equal(h.calls.find(x=>x.kind==="meta").body,approved);
   assert.equal(h.calls.find(x=>x.kind==="insert").row.reply_text,approved);
   assert.equal((await h.send()).data.code,"already_attempted");
@@ -172,7 +172,7 @@ test("notes claiming an appointment is confirmed are rejected before reserving o
   }
 });
 test("invalid note types, lengths, and multiline content are rejected before sending",async()=>{
-  for(const note of [42,"a".repeat(241),"Línea uno\\nLínea dos"]){
+  for(const note of [42,"a".repeat(241),"Línea uno\nLínea dos"]){
     const h=await make();
     const result=await h.send("valid",{action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT,note});
     assert.equal(result.status,400);
