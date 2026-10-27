@@ -35,7 +35,7 @@ async function make({age=60,authorized=true,stale=false,metaCode=null,senderId="
       Response.json({id:senderId,display_phone_number:"+1 555-645-6422",quality_rating:"GREEN"});
   }
   if(String(url).includes("cithela-whatsapp-review")){calls.push({kind:"review"});return Response.json({ok:true,code:"needs_service",draft:stale?"outdated":DRAFT});}
-  if(String(url).includes("graph.facebook.com")){calls.push({kind:"meta",to:JSON.parse(opts.body).to});return metaCode?Response.json({error:{code:metaCode,message:"REDACTED"}},{status:400}):Response.json({messages:[{id:"wamid.mock"}]});}
+  if(String(url).includes("graph.facebook.com")){const payload=JSON.parse(opts.body);calls.push({kind:"meta",to:payload.to,body:payload.text.body});return metaCode?Response.json({error:{code:metaCode,message:"REDACTED"}},{status:400}):Response.json({messages:[{id:"wamid.mock"}]});}
   throw Error("unexpected URL");
  };
  new Function("Deno","createClient","fetch",clean)(Deno,()=>db,fetcher);
@@ -149,3 +149,33 @@ test("Meta diagnostic redacts tokens, patient phone, email, and URL before loggi
  assert.ok(result.includes("Denied"));
 });
 
+
+test("a short professional note is appended unchanged without altering the approved generated text",async()=>{
+  const h=await make();
+  const note="Podés venir diez minutos antes.";
+  const result=await h.send("valid",{
+    action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT,note
+  });
+  assert.equal(result.data.code,"submitted_to_meta");
+  const approved=DRAFT+"\\n\\nNota del profesional: "+note;
+  assert.equal(h.calls.find(x=>x.kind==="meta").body,approved);
+  assert.equal(h.calls.find(x=>x.kind==="insert").row.reply_text,approved);
+  assert.equal((await h.send()).data.code,"already_attempted");
+  assert.equal(h.calls.filter(x=>x.kind==="meta").length,1);
+});
+test("notes claiming an appointment is confirmed are rejected before reserving or contacting Meta",async()=>{
+  for(const note of ["Tu turno está confirmado","Quedó reservado","Ya tenés tu turno","El horario está asegurado"]){
+    const h=await make();
+    const result=await h.send("valid",{action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT,note});
+    assert.equal(result.data.code,"invalid_professional_note",note);
+    assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="meta"),false,note);
+  }
+});
+test("invalid note types, lengths, and multiline content are rejected before sending",async()=>{
+  for(const note of [42,"a".repeat(241),"Línea uno\\nLínea dos"]){
+    const h=await make();
+    const result=await h.send("valid",{action:"send",tenant_id:TENANT,event_id:EVENT,draft:DRAFT,note});
+    assert.equal(result.status,400);
+    assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="meta"),false);
+  }
+});
