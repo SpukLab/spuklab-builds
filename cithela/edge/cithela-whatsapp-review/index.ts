@@ -41,6 +41,18 @@ function matchService(text, services) {
   const found = matchingServices(text, services);
   return found.length === 1 ? found[0] : null;
 }
+
+// A specific unlisted request should not be answered with unrelated catalog
+// choices. Broad "quiero un turno" or date/time-only requests stay generic.
+function explicitUnlistedServiceRequest(text) {
+  const n = clean(text);
+  const target = /\b(?:turno|cita|reserva)\s+(?:para|de|por)\s+(?:(?:un|una|el|la)\s+)?([a-z0-9]+)/.exec(n)?.[1];
+  const schedulingWords = /^(?:hoy|manana|pasado|lunes|martes|miercoles|jueves|viernes|sabado|domingo|esta|este|proxima|proximo|semana|mes|ano|dia|fecha|hora|horario|las|los|tarde|noche|despues|antes|desde|mi|mis|tu|su|nuestro|otra|otro|alguien|dos|tres|[0-9]+)$/;
+  if (target && !schedulingWords.test(target)) return true;
+  const direct = /\b(?:quiero|necesito|quisiera|me gustaria)\s+([a-z]{4,})\b/.exec(n)?.[1];
+  return !!(direct && /(?:ar|er|ir)(?:me|te|se)?$/.test(direct)
+    && !/^(?:reservar|agendar|solicitar|consultar|preguntar|confirmar|cancelar|reprogramar|pedir|saber|hablar|ver|ir|tener)$/.test(direct));
+}
 function datesFromToday(tz, length = 7) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
@@ -373,6 +385,12 @@ Deno.serve(async req => {
     }
     const service = matched.length === 1 ? matched[0] : null;
     if (!service) {
+      if (explicitUnlistedServiceRequest(text)) return json({
+        ok: true, code: "needs_service", clarification: "unlisted_service",
+        draft: "No encuentro ese servicio entre los configurados en esta agenda. " +
+          "Si querés, podés detallarnos tu consulta para que la revise el profesional. " +
+          "Por ahora no hay ningún turno reservado.",
+      });
       const choices = services.items.slice(0, 8).map(s => s.name).join(", ");
       return json({
         ok: true, code: "needs_service",
