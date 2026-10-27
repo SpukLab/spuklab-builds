@@ -144,7 +144,8 @@ test("changing filters preserves an in-progress draft and its textarea",async()=
   assert.equal(h.list.rows[0],row);
   assert.equal(h.list.rows[0].note.value,"Mantener lo escrito");
   h.api.filter("all");
-  assert.equal(h.list.rows[0],row);
+  assert.equal(h.list.rows.find(x=>x.id==="cloud-wa-event-"+first),row);
+  assert.equal(row.note.value,"Mantener lo escrito");
 });
 test("polling refreshes only while the messages tab is visible",async()=>{
   const h=harness();
