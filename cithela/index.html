@@ -110,7 +110,16 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .nav-out{font-size:.74rem;font-weight:500;color:var(--ink3);background:none;border:none;cursor:pointer;}
 
 /* TABS */
-.tabs{background:var(--white);border-bottom:var(--line);display:flex;padding:0 16px;overflow-x:auto;}
+.tabs{background:var(--white);border-bottom:var(--line);display:flex;padding:0 12px;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth;}
+.tabs::-webkit-scrollbar{display:none}
+.professional-tabbar{display:flex;min-width:0;background:var(--white);border-bottom:var(--line)}
+.professional-tabbar>.tabs{min-width:0;flex:1;border-bottom:0}
+.professional-tabbar>.tabs-next{flex:0 0 38px;border:0;border-left:1px solid var(--border-color);background:var(--white);color:var(--teal2);font-size:1.2rem;cursor:pointer}
+.professional-tabbar>.tabs-next:focus-visible{outline:2px solid var(--teal);outline-offset:-3px}
+.cloud-wa-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:12px 0}
+.cloud-wa-filters button{border:1px solid var(--border-color);border-radius:9px;min-width:0;padding:9px 3px;color:var(--ink2);background:var(--white);font:inherit;font-size:.7rem;cursor:pointer}
+.cloud-wa-filters button[aria-pressed="true"]{border-color:var(--teal);color:var(--teal2);background:var(--teal-light);font-weight:700}
+.cloud-wa-filters button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .tab{font-size:.78rem;font-weight:500;padding:14px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink3);cursor:pointer;white-space:nowrap;transition:all .18s;}
 .tab.on{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
 .tab-icon{width:17px;height:17px;vertical-align:-3px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
@@ -435,13 +444,16 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
-  <div class="tabs">
+  <div class="professional-tabbar">
+  <div class="tabs" id="professional-tabs" aria-label="Secciones profesionales">
     <button class="tab on"  onclick="tab('medico','agenda',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3M8 18h7"/></svg>Agenda</button>
     <button class="tab js-person-plural" onclick="tab('medico','pacientes',this)">Pacientes</button>
     <button class="tab"     onclick="tab('medico','nuevo',this)">+ Turno</button>
     <button class="tab" id="cloud-wa-tab" type="button" style="display:none;" onclick="tab('medico','mensajes',this)" aria-label="Mensajes WhatsApp">Mensajes</button>
     <button class="tab"     onclick="tab('medico','reportes',this)">Reportes</button>
     <button class="tab"     onclick="tab('medico','config',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--white)"/><circle cx="16" cy="12" r="2" fill="var(--white)"/><circle cx="10" cy="18" r="2" fill="var(--white)"/></svg>Config</button>
+  </div>
+  <button class="tabs-next" id="professional-tabs-more" type="button" onclick="scrollProfessionalTabs()" aria-label="Ver Reportes y Configuración" title="Desplazar secciones">›</button>
   </div>
 
   <div id="p-medico-agenda" class="pane on">
@@ -515,7 +527,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <details class="cithela-weekly-preset" id="cloud-wa-pilot" open style="display:none;margin:0;">
         <summary>Bandeja de consultas ▾</summary>
         <div style="padding:4px 2px 14px;">
-          <p class="contact-note">Los mensajes nuevos aparecen arriba. Las respuestas y su estado quedan vinculados a cada consulta.</p>
+          <p class="contact-note">Priorizamos las consultas sin responder. Los envíos y el historial permanecen disponibles en los otros filtros.</p>
+          <div class="cloud-wa-filters" role="group" aria-label="Filtrar mensajes WhatsApp">
+            <button type="button" id="cloud-wa-filter-pending" aria-pressed="true" onclick="cloudWaSetFilter('pending')">Pendientes</button>
+            <button type="button" id="cloud-wa-filter-uncertain" aria-pressed="false" onclick="cloudWaSetFilter('uncertain')">Revisar envíos</button>
+            <button type="button" id="cloud-wa-filter-all" aria-pressed="false" onclick="cloudWaSetFilter('all')">Todos</button>
+          </div>
+          <p id="cloud-wa-filter-hint" class="contact-note" role="status">Solo consultas sin responder de los últimos 20 mensajes.</p>
           <button class="btn-main soft" type="button" onclick="cloudLoadWhatsappInbox()">Actualizar mensajes</button>
           <p class="contact-note" style="margin-top:8px">Actualización cada 20 segundos mientras estés en esta pestaña.</p>
           <p id="cloud-wa-live-status" class="contact-note" role="status"></p>
@@ -3153,12 +3171,39 @@ function goPac(){
   scr('paciente');renderMT();renderCalPac();renderHist();
 }
 
+function scrollProfessionalTabs(){
+  const tabs=$('professional-tabs');
+  if(!tabs)return;
+  const max=Math.max(0,tabs.scrollWidth-tabs.clientWidth);
+  const target=tabs.scrollLeft>=max-6?0:max;
+  tabs.scrollTo({left:target,behavior:'smooth'});
+}
+function updateProfessionalTabArrow(){
+  const tabs=$('professional-tabs'),arrow=$('professional-tabs-more');
+  if(!tabs||!arrow)return;
+  const max=Math.max(0,tabs.scrollWidth-tabs.clientWidth);
+  arrow.hidden=max<4;
+  const end=tabs.scrollLeft>=max-6;
+  arrow.textContent=end?'‹':'›';
+  arrow.setAttribute('aria-label',end?'Volver a Agenda y Pacientes':'Ver Reportes y Configuración');
+}
 function tab(sc,id,btn){
   const pfx=`p-${sc}-`;
   document.querySelectorAll(`[id^="${pfx}"]`).forEach(e=>e.classList.remove('on'));
   document.querySelectorAll(`#screen-${sc} .tab`).forEach(e=>e.classList.remove('on'));
   $(`${pfx}${id}`).classList.add('on');btn.classList.add('on');
-  if(sc==='medico')renderProfessionalMode();
+  if(sc==='medico'){
+    renderProfessionalMode();
+    const tabs=$('professional-tabs');
+    if(tabs&&btn&&tabs.contains(btn)){
+      const left=btn.offsetLeft-tabs.offsetLeft;
+      const right=left+btn.offsetWidth;
+      const viewLeft=tabs.scrollLeft,viewRight=viewLeft+tabs.clientWidth;
+      if(left<viewLeft||right>viewRight)
+        tabs.scrollTo({left:Math.max(0,left-(tabs.clientWidth-btn.offsetWidth)/2),behavior:'smooth'});
+    }
+    updateProfessionalTabArrow();
+  }
   if(sc==='medico'&&id==='pacientes')renderPacs();
   if(sc==='medico'&&id==='agenda'){renderCal('med');renderStats();renderAgenda();}
   if(sc==='medico'&&id==='nuevo')fillNT();
@@ -4704,6 +4749,21 @@ async function cloudCheckMetaCredentials(){
 let cloudWaBusy=false;
 let cloudWaPendingDraft=null;
 let cloudWaMessages=new Map();
+let cloudWaInboxFilter='pending';
+function cloudWaIsVisible(item){
+  if(cloudWaPendingDraft?.event_id===item.id)return true;
+  if(cloudWaInboxFilter==='pending')return !item.outbound;
+  if(cloudWaInboxFilter==='uncertain')return !!item.outbound&&item.outbound.status!=='sent';
+  return true;
+}
+function cloudWaSetFilter(filter){
+  if(!['pending','uncertain','all'].includes(filter))return;
+  cloudWaInboxFilter=filter;
+  const items=[...cloudWaMessages.values()].sort((a,b)=>
+    Date.parse(b.received_at||0)-Date.parse(a.received_at||0));
+  cloudWaMergeInboxItems(items);
+  cloudWaUpdateCounts(items);
+}
 
 function cloudWaStatusLabel(outbound){
   if(!outbound)return 'Sin responder';
@@ -4774,6 +4834,7 @@ function cloudWaInboxResetForTenant(tenantId){
   if(list)list.textContent='';
   if(counts)counts.textContent='';
   if(status)status.textContent='';
+  cloudWaInboxFilter='pending';
   const nav=$('cloud-wa-tab');
   if(nav){nav.textContent='Mensajes';nav.setAttribute('aria-label','Mensajes WhatsApp');}
 }
@@ -4785,6 +4846,19 @@ function cloudWaUpdateCounts(items){
   const pending=items.length-replied-uncertain;
   counts.textContent='Sin responder: '+pending+' · Meta aceptó: '+replied+
     ' · Intentos sin confirmación: '+uncertain+' (últimos '+items.length+' mensajes)';
+  for(const filter of ['pending','uncertain','all']){
+    const button=$('cloud-wa-filter-'+filter);
+    if(!button)continue;
+    const number=filter==='pending'?pending:filter==='uncertain'?uncertain:items.length;
+    button.textContent=(filter==='pending'?'Pendientes':filter==='uncertain'?'Revisar envíos':'Todos')+' ('+number+')';
+    button.setAttribute('aria-pressed',String(cloudWaInboxFilter===filter));
+  }
+  const hint=$('cloud-wa-filter-hint');
+  if(hint)hint.textContent=cloudWaInboxFilter==='pending'
+    ? 'Consultas sin responder de los últimos '+items.length+' mensajes.':
+    cloudWaInboxFilter==='uncertain'
+    ? 'Estos intentos requieren verificación manual: no los reenvíes sin comprobar su resultado en Meta.':
+    'Historial de los últimos '+items.length+' mensajes recibidos.';
   const nav=$('cloud-wa-tab');
   if(nav){
     nav.textContent='Mensajes'+(pending?' ('+pending+')':'');
@@ -4809,10 +4883,14 @@ function cloudWaMergeInboxItems(items,reopenId=null){
   if(!list)return;
   const previous=cloudWaMessages;
   const incoming=new Map(items.map(x=>[x.id,x]));
-  if(!items.length){list.textContent='Todavía no hay mensajes recibidos.';cloudWaMessages=incoming;return;}
+  const visible=items.filter(cloudWaIsVisible);
+  if(!items.length){
+    list.textContent='Todavía no hay mensajes recibidos.';
+    cloudWaMessages=incoming;return;
+  }
   if(!list.querySelector('.cloud-wa-item'))list.textContent='';
   // Add only new cards. Existing nodes (including active textareas) never move.
-  for(const item of [...items].reverse()){
+  for(const item of [...visible].reverse()){
     const row=$('cloud-wa-event-'+item.id);
     if(!row){cloudWaReplaceRow(item,item.id===reopenId);continue;}
     const old=previous.get(item.id);
@@ -4827,9 +4905,16 @@ function cloudWaMergeInboxItems(items,reopenId=null){
   // Remove cards no longer returned, unless an unsent draft is open.
   for(const row of [...list.querySelectorAll('.cloud-wa-item')]){
     const id=row.id.replace('cloud-wa-event-','');
-    if(!incoming.has(id)&&cloudWaPendingDraft?.event_id!==id)row.remove();
+    if((!incoming.has(id)||!visible.some(item=>item.id===id))&&
+       cloudWaPendingDraft?.event_id!==id)row.remove();
   }
-  if(reopenId&&incoming.has(reopenId)){
+  if(!visible.length&&!cloudWaPendingDraft)
+    list.textContent=cloudWaInboxFilter==='pending'
+      ? 'No hay consultas sin responder entre los últimos 20 mensajes.'
+      :cloudWaInboxFilter==='uncertain'
+      ? 'No hay intentos sin confirmar entre los últimos 20 mensajes.'
+      :'Todavía no hay mensajes para mostrar.';
+  if(reopenId&&incoming.has(reopenId)&&visible.some(item=>item.id===reopenId)){
     const row=$('cloud-wa-event-'+reopenId);
     if(row)row.open=true;
   }
@@ -4993,6 +5078,7 @@ function renderCloudStatus(){
   if(waPilot)waPilot.style.display=canUseWa?'block':'none';
   const waTab=$('cloud-wa-tab');
   if(waTab)waTab.style.display=canUseWa?'block':'none';
+  updateProfessionalTabArrow();
   if(!canUseWa){
     cloudWaInboxResetForTenant(null);
     if($('p-medico-mensajes')?.classList.contains('on')){
@@ -6023,6 +6109,10 @@ ensureServices();
 ensureResources();
 initPasswordVisibility();
 installCloudWaInboxPolling();
+const cithelaTabs=$('professional-tabs');
+if(cithelaTabs)cithelaTabs.addEventListener('scroll',updateProfessionalTabArrow,{passive:true});
+window.addEventListener('resize',updateProfessionalTabArrow);
+updateProfessionalTabArrow();
 applyBranding();
 setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
 CithelaCloud.init().then(resumeCloudSession).catch(()=>{
