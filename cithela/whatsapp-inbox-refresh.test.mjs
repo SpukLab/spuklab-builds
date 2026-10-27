@@ -23,8 +23,11 @@ function harness(){
   const counts={textContent:""};
   const panel={open:true,style:{display:"block"},listeners:{},
     addEventListener(event,fn){this.listeners[event]=fn;}};
+  const pane={visible:true,classList:{contains(name){return name==="on"&&pane.visible;}}};
+  const nav={textContent:"Mensajes",ariaLabel:"",setAttribute(key,val){if(key==="aria-label")this.ariaLabel=val;}};
   const elements={"cloud-wa-list":list,"cloud-wa-counts":counts,
-    "cloud-wa-live-status":status,"cloud-wa-pilot":panel};
+    "cloud-wa-live-status":status,"cloud-wa-pilot":panel,
+    "p-medico-mensajes":pane,"cloud-wa-tab":nav};
   const makeRow=(id)=>({id,open:false,hidden:false,style:{},
     replaceWith(next){const index=list.rows.indexOf(this);if(index>=0)list.rows[index]=next;},
     remove(){list.rows=list.rows.filter(x=>x!==this);}});
@@ -60,7 +63,7 @@ function harness(){
     };
   `,context);
   return {
-    api:context.api,state,list,counts,status,panel,document,intervals,
+    api:context.api,state,list,counts,status,panel,pane,nav,document,intervals,
     setItems(value){items=value;},get reviewCalls(){return reviewCalls;}
   };
 }
@@ -87,6 +90,8 @@ test("polling adds incoming messages without closing a draft card or dropping it
   assert.equal(opened.note.value,"Indicacion en curso");
   assert.equal(h.api.getDraft().draft,"Respuesta protegida");
   assert.match(h.counts.textContent,/Sin responder: 2/);
+  assert.equal(h.nav.textContent,"Mensajes (2)");
+  assert.match(h.nav.ariaLabel,/últimos 2/);
 });
 test("server response status transitions replace only the affected card",async()=>{
   const h=harness();
@@ -102,6 +107,17 @@ test("server response status transitions replace only the affected card",async()
   assert.equal(h.list.rows[1],secondRow);
   assert.match(h.counts.textContent,/Meta aceptó: 1/);
 });
+test("polling refreshes only while the messages tab is visible",async()=>{
+  const h=harness();
+  h.api.install();
+  assert.equal(h.intervals.length,1);
+  h.pane.visible=false;
+  h.intervals[0].fn();
+  assert.equal(h.reviewCalls,0,"hidden page must not poll");
+  h.pane.visible=true;
+  h.intervals[0].fn();
+  assert.equal(h.reviewCalls,1,"messages page must poll when shown");
+});
 test("polling pauses while hidden, closed or unauthenticated",async()=>{
   const h=harness();
   h.api.install();
@@ -114,4 +130,16 @@ test("polling pauses while hidden, closed or unauthenticated",async()=>{
   h.panel.open=true;h.state.signedIn=false;
   h.intervals[0].fn();
   assert.equal(h.reviewCalls,0);
+});
+
+test("WhatsApp inbox lives in its own professional tab, not hidden in cloud configuration",()=>{
+  const index=html.indexOf('id="p-medico-mensajes"');
+  const settings=html.indexOf('id="cfg-section-cloud"');
+  assert.ok(index>0&&settings>0);
+  assert.ok(html.indexOf('id="cloud-wa-pilot"',index)>index,"inbox must be in messages pane");
+  assert.ok(html.indexOf('id="cloud-wa-pilot"',settings)<0||html.indexOf('id="cloud-wa-pilot"',settings)>index,
+    "inbox should not be nested inside cloud configuration");
+  assert.match(html,/id="cloud-wa-tab"[^>]*onclick="tab\('medico','mensajes',this\)"/);
+  assert.match(html,/if\(sc==='medico'&&id==='mensajes'\)/);
+  assert.match(html,/waTab\.style\.display=canUseWa\?'block':'none'/);
 });
