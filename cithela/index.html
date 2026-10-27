@@ -547,6 +547,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
           <p class="contact-note" style="margin-bottom:10px;">Comprobá las credenciales sin enviar ningún mensaje.</p>
           <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
           <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
+          <button class="btn-main soft" style="margin-top:12px" type="button" onclick="cloudCheckMetaOtpTemplate()">Comprobar plantilla OTP (sin enviar)</button>
+          <p id="cloud-wa-otp-template-status" role="status" class="contact-note" style="margin-top:8px;"></p>
         </div>
       </details>
     </div>
@@ -4745,6 +4747,43 @@ async function cloudCheckMetaCredentials(){
     };
     if(status)status.textContent=descriptions[err?.message]||'No se pudo comprobar la conexión. Código: '+(err?.message||'desconocido');
   }finally{cloudWaCheckBusy=false;}
+}
+let cloudWaOtpChecking=false;
+async function cloudCheckMetaOtpTemplate(){
+  if(cloudWaOtpChecking)return;
+  const s=CithelaCloud.state(),status=$('cloud-wa-otp-template-status');
+  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
+  const tenantId=s.tenant.id;
+  cloudWaOtpChecking=true;
+  if(status)status.textContent='Consultando plantilla de autenticación en Meta; no se enviará ningún código.';
+  try{
+    const result=await CithelaCloud.whatsappSend({action:'check_otp_template',tenant_id:tenantId});
+    if(CithelaCloud.state().tenant?.id!==tenantId)return;
+    const messages={
+      otp_template_not_configured:'Falta registrar META_WHATSAPP_OTP_TEMPLATE en las variables secretas de Supabase.',
+      otp_template_not_found:'Meta no encuentra una plantilla con ese nombre e idioma en la cuenta de WhatsApp.',
+      otp_template_wrong_category:'La plantilla encontrada no es de tipo AUTHENTICATION. Hace falta una plantilla de código OTP.',
+      otp_template_pending:'La plantilla existe, pero todavía no figura aprobada en Meta.',
+      otp_template_rejected:'Meta rechazó la plantilla. Revisá la causa en WhatsApp Manager.',
+      otp_template_approved:'Plantilla OTP aprobada en Meta. Todavía falta verificar el Send SMS Hook de Supabase y probar un código real antes de habilitarla en CITHELA.'
+    };
+    if(status)status.textContent=messages[result.code]||'Meta devolvió un estado que no reconocemos.';
+  }catch(err){
+    if(CithelaCloud.state().tenant?.id!==tenantId)return;
+    const messages={
+      otp_template_check_failed:'Meta no permite consultar las plantillas. Revisá permisos de WhatsApp Business Management.',
+      otp_template_check_unavailable:'No se pudo contactar a Meta. Probá nuevamente más tarde.',
+      otp_waba_invalid:'La cuenta WABA configurada en Supabase no es válida.',
+      otp_template_invalid_name:'El nombre configurado de la plantilla OTP no es válido.',
+      otp_template_invalid_language:'El idioma configurado de la plantilla OTP no es válido.',
+      sender_not_configured:'Falta configurar el token o número de WhatsApp en Supabase.',
+      connection_not_found:'Este establecimiento no tiene una conexión de WhatsApp activa.',
+      unauthenticated:'La sesión expiró. Volvé a iniciar sesión.',
+      forbidden:'Solo el propietario o administrador puede verificar las plantillas.'
+    };
+    if(status)status.textContent=messages[err?.message]||
+      'No se pudo consultar la plantilla. Código: '+String(err?.message||'desconocido').slice(0,60);
+  }finally{cloudWaOtpChecking=false;}
 }
 let cloudWaBusy=false;
 let cloudWaPendingDraft=null;

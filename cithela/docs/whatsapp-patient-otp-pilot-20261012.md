@@ -14,6 +14,47 @@ Do not activate unattended reservations.
 - Phone login currently chooses the native WhatsApp channel, which Supabase documents for Twilio and Twilio Verify. For the Meta custom Send SMS Hook, switch to the SMS channel only AFTER hook activation.
 - Do not claim OTP sign-in works until a complete code delivery + verify + invite redemption test passes.
 
+
+## Updated preflight (27 October 2026)
+
+- Confirmed in Supabase: the `cithela-whatsapp-otp` Edge Function is deployed
+  with `verify_jwt=false` because it validates Supabase Auth's signed webhook
+  itself, **before** accessing Meta or attempting any message.
+- Confirmed in CITHELA frontend: `signInWithOtp` uses the `sms` channel
+  required for a custom Meta Send SMS Hook; `verifyOtp` uses `type:'sms'`.
+  This path is still gated by `CITHELA_PHONE_OTP_ENABLED=false`.
+- Confirmed in WhatsApp operational pilot: ordinary supervised messaging works.
+  This **does not** validate an AUTHENTICATION template or an Auth Hook.
+- Added a read-only template preflight in the authenticated professional
+  **Mensajes > Diagnóstico de conexión Meta** pane. Only owner/admin can query it.
+  It checks name, language, category, and approval status against the pilot WABA
+  using the existing server-side Meta token. It sends no messages, changes no
+  Auth settings, and never exposes the token or verification codes.
+- The preflight uses the known CITHELA pilot WABA `1418360383843069` if
+  `META_WHATSAPP_WABA_ID` is absent. For another tenant/sender, configure
+  their WABA ID explicitly; never reuse this pilot fallback.
+
+### Remaining gates before a real six-digit code test
+1. WhatsApp Manager > Plantillas de mensajes: create an
+   `AUTHENTICATION` / `COPY_CODE` template for the **SpukLab** WhatsApp
+   account (not the legacy test account), wait for `APPROVED`, and record
+   exact template name and language.
+2. Supabase > Edge Functions > Secrets: configure
+   `META_WHATSAPP_OTP_TEMPLATE`, `META_WHATSAPP_OTP_LANGUAGE` and
+   `META_WHATSAPP_WABA_ID`, keeping the token secret; never paste tokens here.
+   Run **Comprobar plantilla OTP (sin enviar)** in CITHELA to confirm approval.
+3. Supabase > Authentication > Providers > Phone: enable phone auth without
+   auto-confirm, then > Authentication > Hooks > Send SMS: configure the
+   `cithela-whatsapp-otp` HTTPS function and matching
+   `SEND_SMS_HOOK_SECRET` (Supabase Standard Webhooks signing secret).
+   Neither dashboard configuration is observable through the current tools.
+4. Run one controlled real phone OTP test **before enabling the UI gate**,
+   verifying Meta submission and actual receipt on the intended WhatsApp,
+   Supabase `verifyOtp`, the 48-hour invite redemption, logout and tenant
+   isolation. If any prerequisite fails, **keep email as fallback and do not
+   flip the gate**. Require consent and avoid sending real patient information
+   during tests.
+
 ## Durable Meta access
 In Meta Business Settings, create a dedicated SYSTEM USER, assign the SpukLab HuB
 application and this WABA. Issue a system-user token with
