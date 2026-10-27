@@ -69,7 +69,7 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
       assert.equal(name, "cithela_channel_command");
       assert.equal(args.p_external_account_id, "test_phone_id");
       if (args.p_command === "catalog.services")
-        return { data: { ok: true, items: [{ name: "Corte", id: "svc" }, { name: "Consulta", id: "con" }], timezone: "America/Argentina/Buenos_Aires" }, error: null };
+        return { data: { ok: true, items: [{ name: "Corte", id: "svc" }, { name: "Consulta", id: "con" }, { name: "Coloración", id: "color" }], timezone: "America/Argentina/Buenos_Aires" }, error: null };
       if (args.p_command === "catalog.resources")
         return { data: { ok: true, items: Array.from({ length: resourceCount }, (_, i) => ({ id: "res" + i })) }, error: null };
       if (args.p_command === "availability.query")
