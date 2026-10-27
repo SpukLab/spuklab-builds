@@ -69,7 +69,7 @@ async function harness({ role = "owner", text = "Quiero reservar un turno", reso
       assert.equal(name, "cithela_channel_command");
       assert.equal(args.p_external_account_id, "test_phone_id");
       if (args.p_command === "catalog.services")
-        return { data: { ok: true, items: [{ name: "Corte", id: "svc" }, { name: "Consulta", id: "con" }], timezone: "America/Argentina/Buenos_Aires" }, error: null };
+        return { data: { ok: true, items: [{ name: "Corte", id: "svc" }, { name: "Consulta", id: "con" }, { name: "Coloración", id: "color" }], timezone: "America/Argentina/Buenos_Aires" }, error: null };
       if (args.p_command === "catalog.resources")
         return { data: { ok: true, items: Array.from({ length: resourceCount }, (_, i) => ({ id: "res" + i })) }, error: null };
       if (args.p_command === "availability.query")
@@ -133,6 +133,33 @@ test("asks for service if missing; never writes", async () => {
   assert.equal(result.body.code, "needs_service");
   assert.equal(h.calls.filter(x => x.rpc === "cithela_channel_command").length, 1);
 });
+test("two explicitly requested services are recognized and never converted to a single-service slot", async () => {
+  const h = await harness({ text: "Hola quiero un corte y una coloración" });
+  const result = await h.request("prepare");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.code, "needs_service");
+  assert.equal(result.body.clarification, "multiple_services");
+  assert.deepEqual(result.body.services, ["Corte", "Coloración"]);
+  assert.match(result.body.draft, /Corte y Coloración/);
+  assert.match(result.body.draft, /misma visita/);
+  assert.doesNotMatch(result.body.draft, /estos horarios est.n disponibles/i);
+  assert.equal(h.calls.filter(x => x.rpc).length, 1);
+  assert.equal(h.calls.filter(x => x.rpc && x.args.p_command === "availability.query").length, 0);
+});
+test("combined natural haircut and dye wording is not treated as unknown service", async () => {
+  const h = await harness({ text: "Quiero cortarme y hacerme tintura" });
+  const result = await h.request("prepare");
+  assert.equal(result.body.clarification, "multiple_services");
+  assert.match(result.body.draft, /Corte y Coloración/);
+});
+test("a single haircut continues to receive real availability slots", async () => {
+  const h = await harness({ text: "Quiero cortarme mañana" });
+  const result = await h.request("prepare");
+  assert.equal(result.body.code, "slots_preview");
+  assert.equal(result.body.service, "Corte");
+  assert.equal(result.body.slots.length, 3);
+});
+
 test("suggests three provider slots, without booking", async () => {
   const h = await harness({ text: "Necesito turno para Corte" });
   const result = await h.request("prepare");
