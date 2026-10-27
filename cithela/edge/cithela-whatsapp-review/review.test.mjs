@@ -276,10 +276,30 @@ async function inboxUI(inbox = []) {
   const begin = script.indexOf("let cloudWaBusy=false;");
   const end = script.indexOf("async function cloudPrepareWhatsappDraft(", begin);
   assert.ok(begin >= 0 && end > begin);
-  const list = { textContent: "", innerHTML: "", querySelector: () => null };
+  const list = {
+    rows: [], content: "",
+    get textContent(){return this.content;},
+    set textContent(value){this.content=value;this.rows=[];},
+    get innerHTML(){return this.rows.map(row=>row.innerHTML).join("");},
+    get firstChild(){return this.rows[0]||null;},
+    querySelector(){return this.rows[0]||null;},
+    querySelectorAll(){return [...this.rows];},
+    insertBefore(row){this.rows.unshift(row);}
+  };
   const counts = { textContent: "" };
-  const nodes = { "cloud-wa-list": list, "cloud-wa-counts": counts };
-  const $ = id => nodes[id] || null;
+  const nodes = { "cloud-wa-list": list, "cloud-wa-counts": counts, "cloud-wa-live-status": {textContent:""} };
+  const $ = id => nodes[id] || list.rows.find(row=>row.id===id) || null;
+  const document = {createElement:()=>({
+    firstElementChild:null,
+    set innerHTML(value){
+      const id=/id="(cloud-wa-event-[0-9a-f-]{36})"/.exec(value)?.[1];
+      this.firstElementChild=id?{
+        id,innerHTML:value,open:false,
+        replaceWith(replacement){const i=list.rows.indexOf(this);if(i>=0)list.rows[i]=replacement;},
+        remove(){list.rows=list.rows.filter(x=>x!==this);}
+      }:null;
+    }
+  })};
   const esc = value => String(value ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const cloud = {
@@ -290,9 +310,9 @@ async function inboxUI(inbox = []) {
       return { ok: true, items: inbox };
     },
   };
-  const setup = new Function("escHtml", "$", "CithelaCloud", script.slice(begin, end) +
+  const setup = new Function("escHtml", "$", "CithelaCloud", "document", script.slice(begin, end) +
     "\nreturn {cloudWaMessageMarkup,cloudLoadWhatsappInbox};");
-  return { ...setup(esc, $, cloud), list, counts };
+  return { ...setup(esc, $, cloud, document), list, counts };
 }
 const sample = (id, time, text, outbound = null) =>
   ({ id, received_at: time, text_body: text, sender_name: "Paciente", outbound });
