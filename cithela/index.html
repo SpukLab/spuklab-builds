@@ -750,6 +750,8 @@ textarea.inp{resize:vertical;min-height:72px;}
           <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
           <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
           <button class="btn-main soft" type="button" onclick="cloudLoadWhatsappInbox()">Ver mensajes recibidos</button>
+          <p class="contact-note" style="margin-top:8px">Actualización cada 20 segundos mientras esta bandeja permanezca abierta.</p>
+          <p id="cloud-wa-live-status" class="contact-note" role="status"></p>
           <p id="cloud-wa-counts" class="contact-note" role="status" style="margin:12px 0;"></p>
           <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
         </div>
@@ -4710,36 +4712,116 @@ function cloudWaResetApproval(){
   }
   cloudWaPendingDraft=null;
 }
-async function cloudLoadWhatsappInbox(reopenId=null){
-  if(cloudWaBusy)return;
-  const s=CithelaCloud.state(),list=$('cloud-wa-list'),counts=$('cloud-wa-counts');
-  if(!s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||''))return;
-  const previouslyOpen=reopenId||list?.querySelector('.cloud-wa-item[open]')?.id?.replace('cloud-wa-event-','');
+let cloudWaInboxFetching=false,cloudWaInboxLoaded=false,cloudWaInboxTenantId=null;
+let cloudWaInboxPollingInstalled=false;
+
+function cloudWaInboxTenant(){
+  const s=CithelaCloud.state();
+  return s?.signedIn&&s.tenant&&['owner','admin'].includes(s.membership?.role||'')
+    ?s.tenant.id:null;
+}
+function cloudWaInboxResetForTenant(tenantId){
+  if(cloudWaInboxTenantId===tenantId)return;
+  cloudWaInboxTenantId=tenantId;
+  cloudWaInboxLoaded=false;
+  cloudWaMessages=new Map();
   cloudWaResetApproval();
-  cloudWaBusy=true;
-  if(list)list.textContent='Consultando mensajes y respuestas...';
+  const list=$('cloud-wa-list'),counts=$('cloud-wa-counts'),status=$('cloud-wa-live-status');
+  if(list)list.textContent='';
   if(counts)counts.textContent='';
+  if(status)status.textContent='';
+}
+function cloudWaUpdateCounts(items){
+  const counts=$('cloud-wa-counts');
+  if(!counts)return;
+  const replied=items.filter(x=>x.outbound?.status==='sent').length;
+  const uncertain=items.filter(x=>x.outbound&&x.outbound.status!=='sent').length;
+  const pending=items.length-replied-uncertain;
+  counts.textContent='Sin responder: '+pending+' · Meta aceptó: '+replied+
+    ' · Intentos sin confirmación: '+uncertain;
+}
+function cloudWaReplaceRow(item,reopen=false){
+  const wrapper=document.createElement('div');
+  wrapper.innerHTML=cloudWaMessageMarkup(item);
+  const replacement=wrapper.firstElementChild;
+  if(!replacement)return null;
+  const old=$('cloud-wa-event-'+item.id);
+  if(old)old.replaceWith(replacement);
+  else $('cloud-wa-list').insertBefore(replacement,$('cloud-wa-list').firstChild);
+  if(reopen)replacement.open=true;
+  return replacement;
+}
+function cloudWaMergeInboxItems(items,reopenId=null){
+  const list=$('cloud-wa-list');
+  if(!list)return;
+  const previous=cloudWaMessages;
+  const incoming=new Map(items.map(x=>[x.id,x]));
+  if(!items.length){list.textContent='Todavía no hay mensajes recibidos.';cloudWaMessages=incoming;return;}
+  if(!list.querySelector('.cloud-wa-item'))list.textContent='';
+  // Add only new cards. Existing nodes (including active textareas) never move.
+  for(const item of [...items].reverse()){
+    const row=$('cloud-wa-event-'+item.id);
+    if(!row){cloudWaReplaceRow(item,item.id===reopenId);continue;}
+    const old=previous.get(item.id);
+    const changed=(old?.outbound?.status||'')!==(item.outbound?.status||'')||
+      (old?.outbound?.reply_text||'')!==(item.outbound?.reply_text||'');
+    if(!changed)continue;
+    // Another operator may have already sent it; discard only that obsolete approval.
+    if(cloudWaPendingDraft?.event_id===item.id&&item.outbound)cloudWaResetApproval();
+    if(cloudWaPendingDraft?.event_id===item.id)continue;
+    cloudWaReplaceRow(item,row.open||item.id===reopenId);
+  }
+  // Remove cards no longer returned, unless an unsent draft is open.
+  for(const row of [...list.querySelectorAll('.cloud-wa-item')]){
+    const id=row.id.replace('cloud-wa-event-','');
+    if(!incoming.has(id)&&cloudWaPendingDraft?.event_id!==id)row.remove();
+  }
+  if(reopenId&&incoming.has(reopenId)){
+    const row=$('cloud-wa-event-'+reopenId);
+    if(row)row.open=true;
+  }
+  cloudWaMessages=incoming;
+}
+async function cloudLoadWhatsappInbox(reopenId=null,silent=false){
+  if(cloudWaBusy||cloudWaInboxFetching)return;
+  const tenantId=cloudWaInboxTenant();
+  if(!tenantId)return;
+  cloudWaInboxResetForTenant(tenantId);
+  const list=$('cloud-wa-list'),status=$('cloud-wa-live-status');
+  cloudWaInboxFetching=true;
+  if(!silent&&!cloudWaInboxLoaded&&list)list.textContent='Consultando mensajes y respuestas...';
+  if(status&&!silent)status.textContent='Consultando mensajes...';
   try{
-    const data=await CithelaCloud.whatsappReview({action:'list',tenant_id:s.tenant.id});
-    if(!list)return;
+    const data=await CithelaCloud.whatsappReview({action:'list',tenant_id:tenantId});
+    // A closed session or workspace switch must not expose the old workspace inbox.
+    if(cloudWaInboxTenant()!==tenantId||cloudWaInboxTenantId!==tenantId)return;
     const items=(data.items||[])
       .filter(x=>/^[0-9a-f-]{36}$/i.test(x.id))
       .sort((a,b)=>Date.parse(b.received_at||0)-Date.parse(a.received_at||0));
-    cloudWaMessages=new Map(items.map(x=>[x.id,x]));
-    if(!items.length){list.textContent='Todavía no hay mensajes recibidos.';return;}
-    const replied=items.filter(x=>x.outbound?.status==='sent').length;
-    const uncertain=items.filter(x=>x.outbound&&x.outbound.status!=='sent').length;
-    const pending=items.length-replied-uncertain;
-    if(counts)counts.textContent='Sin responder: '+pending+' · Meta aceptó: '+replied+
-      ' · Intentos sin confirmación: '+uncertain;
-    list.innerHTML=items.map(cloudWaMessageMarkup).join('');
-    if(previouslyOpen&&cloudWaMessages.has(previouslyOpen)){
-      const row=$('cloud-wa-event-'+previouslyOpen);if(row)row.open=true;
-    }
+    cloudWaMergeInboxItems(items,reopenId);
+    cloudWaUpdateCounts(items);
+    cloudWaInboxLoaded=true;
+    if(status)status.textContent='Actualizado: '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   }catch(err){
-    if(list)list.textContent=err?.message||'No fue posible recuperar los mensajes.';
-    cloudWaMessages=new Map();
-  }finally{cloudWaBusy=false;}
+    if(status)status.textContent='No se pudo actualizar la bandeja. Podés intentar otra vez.';
+    if(list&&!list.querySelector('.cloud-wa-item')&&!cloudWaInboxLoaded)
+      list.textContent='No fue posible recuperar los mensajes.';
+  }finally{cloudWaInboxFetching=false;}
+}
+function installCloudWaInboxPolling(){
+  if(cloudWaInboxPollingInstalled)return;
+  cloudWaInboxPollingInstalled=true;
+  const panel=$('cloud-wa-pilot');
+  if(!panel)return;
+  const tick=()=>{
+    if(!panel.open||panel.style.display==='none'||document.visibilityState==='hidden'||
+      cloudWaBusy||cloudWaInboxFetching||!cloudWaInboxTenant())return;
+    cloudLoadWhatsappInbox(null,cloudWaInboxLoaded);
+  };
+  panel.addEventListener('toggle',()=>{if(panel.open)tick();});
+  window.addEventListener('focus',tick);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')tick();});
+  window.setInterval(tick,20000);
 }
 async function cloudPrepareWhatsappDraft(eventId){
   if(cloudWaBusy||!/^[0-9a-f-]{36}$/i.test(String(eventId||'')))return;
@@ -5875,6 +5957,7 @@ document.addEventListener('visibilitychange',()=>{
 ensureServices();
 ensureResources();
 initPasswordVisibility();
+installCloudWaInboxPolling();
 applyBranding();
 setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
 CithelaCloud.init().then(resumeCloudSession).catch(()=>{
