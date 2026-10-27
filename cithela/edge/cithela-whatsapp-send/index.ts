@@ -93,7 +93,8 @@ Deno.serve(async (req: Request) => {
   if (!request || !["send", "check_credentials"].includes(String(request.action)) ||
     !UUID.test(String(request.tenant_id)) ||
     (request.action === "send" && (!UUID.test(String(request.event_id)) ||
-      typeof request.draft !== "string" || !request.draft.trim() || request.draft.length > 1000))) {
+      typeof request.draft !== "string" || !request.draft.trim() || request.draft.length > 1000 ||
+       (request.note !== undefined && (typeof request.note !== "string" || request.note.length > 240))))) {
     return reply({ ok: false, code: "invalid_payload" }, 400);
   }
   const tenantId = String(request.tenant_id);
@@ -188,12 +189,23 @@ Deno.serve(async (req: Request) => {
     return reply({ ok: false, code: "stale_or_unsupported_draft" }, 409);
   }
 
+  // The automated availability/selection text is immutable. The professional can only
+  // append one short, single-line note. Reject language claiming a booking is confirmed.
+  const note = typeof request.note === "string" ? request.note.trim() : "";
+  const notePlain = note.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (note && (/\p{C}/u.test(note) ||
+    /\b(confirmad[oa]s?|reservad[oa]s?|agendad[oa]s?|asegurad[oa]s?|garantizad[oa]s?)\b/.test(notePlain) ||
+    /\bya (?:tenes|tienes|tiene) (?:el |tu )?turno\b/.test(notePlain))) {
+    return reply({ ok: false, code: "invalid_professional_note" }, 400);
+  }
+  const approvedText = preview.draft + (note ? "\n\nNota del profesional: " + note : "");
+
   // A single inbound message authorizes at most ONE response. A new patient message
   // supplies the next event. Never retry uncertain network deliveries automatically.
   const { data: record, error: reserveError } = await admin.from("cithela_channel_outbox")
     .insert({
       tenant_id: tenantId, inbox_event_id: eventId, connection_id: event.connection_id,
-      actor_user_id: identity.user.id, reply_text: preview.draft, status: "sending",
+      actor_user_id: identity.user.id, reply_text: approvedText, status: "sending",
     }).select("id").single();
   if (reserveError) return reply({
     ok: false, code: reserveError.code === "23505" ? "already_attempted" : "outbox_unavailable",
@@ -209,7 +221,7 @@ Deno.serve(async (req: Request) => {
       headers: { Authorization: "Bearer " + metaToken, "Content-Type": "application/json" },
       body: JSON.stringify({
         messaging_product: "whatsapp", to: metaRecipient(to, senderId), type: "text",
-        text: { preview_url: false, body: preview.draft },
+        text: { preview_url: false, body: approvedText },
       }),
       signal: AbortSignal.timeout(15000),
     });

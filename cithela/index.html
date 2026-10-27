@@ -4683,6 +4683,10 @@ function cloudWaMessageMarkup(item){
       '<div id="cloud-wa-draft-box-'+id+'" class="cloud-wa-draft" hidden>'+
         '<strong>Respuesta propuesta para este mensaje</strong>'+
         '<div id="cloud-wa-draft-'+id+'" class="cloud-wa-reply-text" role="status"></div>'+
+        '<label class="lbl" for="cloud-wa-note-'+id+'" style="margin-top:12px">Aclaración del profesional (opcional)</label>'+
+        '<textarea class="inp" id="cloud-wa-note-'+id+'" rows="2" maxlength="240" '+
+        'placeholder="Una indicación breve que se agregará al final de la respuesta"></textarea>'+
+        '<p class="contact-note">Solo esta aclaración es editable. Los horarios y avisos de reserva se verifican en el servidor.</p>'+
         '<button class="btn-main" type="button" id="cloud-wa-send-'+id+
           '" style="display:none;margin-top:10px" onclick="cloudSendWhatsappDraft(\''+id+'\')">Aprobar y enviar esta respuesta</button>'+
         '<p id="cloud-wa-status-'+id+'" class="cloud-wa-status-line" role="status"></p>'+
@@ -4751,6 +4755,8 @@ async function cloudPrepareWhatsappDraft(eventId){
   if(box)box.hidden=false;
   cloudWaBusy=true;
   if(preview)preview.textContent='Consultando servicios y disponibilidad...';
+  const noteInput=$('cloud-wa-note-'+eventId);
+  if(noteInput)noteInput.value='';
   if(send)send.style.display='none';
   try{
     const data=await CithelaCloud.whatsappReview({action:'prepare',tenant_id:s.tenant.id,event_id:eventId});
@@ -4768,10 +4774,15 @@ async function cloudSendWhatsappDraft(eventId){
   if(cloudWaBusy||!p||p.event_id!==eventId||!item||item.outbound||
     !s?.signedIn||!s.tenant||!['owner','admin'].includes(s.membership?.role||'')||
     p.tenant_id!==s.tenant.id)return;
+  const note=($('cloud-wa-note-'+eventId)?.value||'').trim();
+  if(note.length>240||/[\r\n\u0000-\u001f\u007f]/.test(note)){
+    toast('La aclaración debe tener hasta 240 caracteres en una sola línea.');return;
+  }
   const receivedAt=p.received_at?new Date(p.received_at).toLocaleString('es-AR'):'fecha no disponible';
+  const approvedText=p.draft+(note?'\n\nNota del profesional: '+note:'');
   const ok=confirm('¿Aprobar y enviar esta respuesta por WhatsApp?\n\n'+
     'DESTINATARIO: '+p.sender_name+'\nMENSAJE RECIBIDO ('+receivedAt+'):\n'+p.source_text.slice(0,200)+
-    '\n\nRESPUESTA A ENVIAR:\n'+p.draft.slice(0,700)+'\n\nNo se creará ningún turno.');
+    '\n\nRESPUESTA A ENVIAR:\n'+approvedText.slice(0,1200)+'\n\nNo se creará ningún turno.');
   if(!ok)return;
   cloudWaBusy=true;
   const send=$('cloud-wa-send-'+eventId),status=$('cloud-wa-status-'+eventId);
@@ -4779,7 +4790,7 @@ async function cloudSendWhatsappDraft(eventId){
   if(status)status.textContent='Enviando respuesta aprobada a Meta...';
   let refresh=false;
   try{
-    await CithelaCloud.whatsappSend({action:'send',tenant_id:p.tenant_id,event_id:p.event_id,draft:p.draft});
+    await CithelaCloud.whatsappSend({action:'send',tenant_id:p.tenant_id,event_id:p.event_id,draft:p.draft,note});
     cloudWaPendingDraft=null;
     if(send)send.style.display='none';
     if(status)status.textContent='Meta aceptó este envío. Se actualizará su estado en la bandeja.';
@@ -4789,6 +4800,7 @@ async function cloudSendWhatsappDraft(eventId){
       conversation_window_expired:'La ventana de WhatsApp venció. El paciente debe escribir nuevamente antes de responder.',
       already_attempted:'Este mensaje ya tuvo un intento de envío. No se repetirá para evitar duplicados.',
       stale_or_unsupported_draft:'El borrador cambió o perdió vigencia. Volvé a tocar Preparar.',
+      invalid_professional_note:'La aclaración no puede afirmar que el turno ya está confirmado o reservado.',
       sender_not_configured:'El número remitente o las credenciales Meta no están configurados.',
       delivery_unconfirmed:'Meta no confirmó el envío. No reintentes este mensaje sin revisar el estado.',
       meta_unauthorized:'Meta rechazó la autenticación. Revisá el token de WhatsApp en Supabase.',
