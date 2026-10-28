@@ -40,6 +40,20 @@ const { pathToFileURL } = require('node:url');
         'calendar arrows too small at '+width);
       assert.ok(geometry.statsAfterList, 'weekly stats should follow agenda tasks');
       assert.ok(geometry.hasMessages, 'WhatsApp Messages navigation must survive UX merge');
+      // Exercise the real tab handler and the reports round trip (no data writes).
+      await page.locator('#medico-tab-config').click();
+      assert.equal(await page.locator('#p-medico-config').evaluate(el => el.classList.contains('on')), true,
+        'Ajustes tab did not open at '+width);
+      await page.locator('.settings-report-link').click();
+      assert.equal(await page.locator('#p-medico-reportes').evaluate(el => el.classList.contains('on')), true,
+        'Reportes link did not open at '+width);
+      await page.locator('.report-back').click();
+      assert.equal(await page.locator('#p-medico-config').evaluate(el => el.classList.contains('on')), true,
+        'Reports back navigation did not return to Ajustes at '+width);
+      await page.locator('#medico-tab-agenda').click();
+      assert.equal(await page.locator('#p-medico-agenda').evaluate(el => el.classList.contains('on')), true,
+        'Return to Agenda failed at '+width);
+      console.log('PASS tab navigation '+width+'px');
       // Visual snapshot for human review in Actions artifacts, without patient details.
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
