@@ -46,6 +46,23 @@ test('configuration prioritizes daily use; nested details remain balanced',()=>{
  assert.equal(depth,0,'every details closes');
 });
 
+test('report shortcut follows operational configuration and infrastructure',()=>{
+ const cfg=slice('id="p-medico-config"','<div class="byline">');
+ const reportPos=cfg.indexOf('class="mb ghost settings-report-link"');
+ assert.ok(reportPos>cfg.indexOf('id="cfg-section-hours"'),'horarios first');
+ assert.ok(reportPos>cfg.indexOf('id="cfg-section-security"'),'reports are last');
+ assert.match(cfg.slice(0,reportPos),/Agenda y atención[\s\S]*?Establecimiento[\s\S]*?Cuenta y herramientas/);
+});
+
+test('login is CITHELA branded rather than tenant palette or local workspace',()=>{
+ const loginCss=html.slice(html.indexOf('#screen-login{'),html.indexOf('}',html.indexOf('#screen-login{')));
+ for(const css of ['--teal:#2f7d73','--teal2:#23665e','--ink:#243733','--bg:#f5f7f4'])
+   assert.ok(loginCss.includes(css),'missing fixed login color '+css);
+ assert.match(html,/if\(lb\)lb\.textContent='CITHELA'/);
+ assert.match(html,/if\(lm\)lm\.textContent='Agenda · Organiza · Conecta'/);
+ assert.match(html,/function renderProfessionalMode\(\)[\s\S]*?applyCithelaTheme\(tenant\?\.brand_theme\|\|'sage'\)/);
+});
+
 test('mobile supports zoom, minimum touch targets and keyboard calendar',()=>{
  assert.match(html,/name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/);
  assert.doesNotMatch(html,/<meta[^>]*maximum-scale=1/);
