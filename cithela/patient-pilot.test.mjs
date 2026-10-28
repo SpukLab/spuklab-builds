@@ -160,3 +160,50 @@ test('OTP verification uses Supabase phone SMS type',()=>{
  const source=extract('  async function verifyPatientPhoneOtp(phone,token){','  async function issuePatientPhoneInvite(');
  assert.match(source,/verifyOtp\(\{phone:clean,token:code,type:'sms'\}\)/);
 });
+
+const phoneEnrollFns=extract('  async function enrollExistingPatientPhone(phone){','  async function issuePatientPhoneInvite(');
+function enrollmentHarness({profiles=[{person_id:'patient'}],userId='existing-user'}={}){
+ let user={id:userId,email:'patient@example.test',email_confirmed_at:'2026-10-28T00:00:00Z',phone:''};
+ const calls=[];
+ const client={auth:{
+  getUser:async()=>({data:{user},error:null}),
+  updateUser:async({phone})=>{calls.push({op:'updateUser',phone});return {error:null};},
+  verifyOtp:async({phone,token,type})=>{
+   calls.push({op:'verifyOtp',phone,token,type});
+   user={...user,phone,phone_confirmed_at:'2026-10-28T20:00:00Z'};
+   return {error:null};
+  }
+ }};
+ const fn=new Function('getClient','patientPortal','refresh',phoneEnrollFns+
+   '\nreturn {start:enrollExistingPatientPhone,confirm:confirmExistingPatientPhone};')(
+     async()=>client,async()=>({profiles}),async()=>({signedIn:true}));
+ return {...fn,calls,swapUser:next=>{user={...user,...next}}};
+}
+test('enrollment sends phone_change rather than creating another Auth account',async()=>{
+ const h=enrollmentHarness();
+ const start=await h.start('+5492211234567');
+ assert.equal(start.userId,'existing-user');
+ assert.deepEqual(h.calls,[{op:'updateUser',phone:'+5492211234567'}]);
+ const result=await h.confirm('+5492211234567','123456',start.userId);
+ assert.equal(result.userId,start.userId);
+ assert.equal(result.phone,'+5492211234567');
+ assert.equal(h.calls[1].type,'phone_change');
+});
+test('patient profile membership is required before enrolling a phone',async()=>{
+ const h=enrollmentHarness({profiles:[]});
+ await assert.rejects(h.start('+5492211234567'),/patient_profile_required/);
+ assert.equal(h.calls.length,0);
+});
+test('a changed user identity aborts verification without requesting a code',async()=>{
+ const h=enrollmentHarness();
+ const start=await h.start('+5492211234567');
+ h.swapUser({id:'unexpected-user'});
+ await assert.rejects(h.confirm('+5492211234567','123456',start.userId),/identity_changed/);
+ assert.equal(h.calls.length,1);
+});
+test('patient portal keeps global phone-first invitations gated until migration is verified',()=>{
+ assert.match(script,/const CITHELA_PHONE_OTP_ENABLED=false;/);
+ assert.match(html,/id="patient-enroll-panel"/);
+ assert.match(html,/aria-describedby="patient-enroll-hint"/);
+ assert.match(script,/phone_change/);
+});
