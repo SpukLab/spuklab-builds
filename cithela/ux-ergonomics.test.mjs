@@ -63,6 +63,32 @@ test('login is CITHELA branded rather than tenant palette or local workspace',()
  assert.match(html,/function renderProfessionalMode\(\)[\s\S]*?applyCithelaTheme\(tenant\?\.brand_theme\|\|'sage'\)/);
 });
 
+test('establishment is the primary brand in professional header without recoloring login',()=>{
+ const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"');
+ assert.match(nav,/id="professional-brand"/);
+ assert.match(nav,/id="professional-business-name"/);
+ assert.match(nav,/Agenda con CITHELA/);
+ assert.match(nav,/id="professional-tenant-logo"/);
+ assert.doesNotMatch(nav,/class="nb1 js-app-brand"/);
+ const render=slice('function renderProfessionalMode(){','function renderReportSource(){');
+ assert.match(render,/displayName=active/);
+ assert.match(render,/tenant\?\.display_name/);
+ assert.match(render,/businessName\.textContent=displayName/);
+ assert.match(render,/classList\.toggle\('has-tenant-logo',!!url\)/);
+ assert.match(html,/\.professional-brand\.has-tenant-logo::before\{display:none/);
+ assert.match(html,/#screen-login\{/);
+});
+
+test('patient workspace uses larger company logo or tenant monogram and keeps names escaped',()=>{
+ const portal=slice('function renderPatientPortalCards(){','async function patientRefreshPortal(){');
+ assert.match(portal,/class="tenant-card-logo"/);
+ assert.match(portal,/class="tenant-card-fallback"/);
+ assert.match(portal,/class="tenant-business-title"/);
+ assert.match(portal,/escHtml\(profile\.tenant_name\|\|'Establecimiento'\)/);
+ assert.match(portal,/escHtml\(profile\.name\)/);
+ assert.match(html,/\.patient-workspace \.tenant-card-logo,\.patient-workspace \.tenant-card-fallback\{width:64px;height:64px/);
+});
+
 test('mobile supports zoom, minimum touch targets and keyboard calendar',()=>{
  assert.match(html,/name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/);
  assert.doesNotMatch(html,/<meta[^>]*maximum-scale=1/);
