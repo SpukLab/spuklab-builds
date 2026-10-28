@@ -983,6 +983,22 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   <div class="patient-portal-content">
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
+    <details id="patient-enroll-panel" class="patient-shared-panel" hidden style="margin:12px 0;">
+      <summary>Vincular mi WhatsApp a esta cuenta</summary>
+      <div style="padding:12px 0 4px;">
+        <p class="contact-note">Primero ingresaste por correo. Ahora podés verificar tu teléfono sin crear otra cuenta y sin cambiar tus turnos. Esto no modifica el número de contacto que guarda el establecimiento.</p>
+        <label class="lbl" for="patient-enroll-phone">Número de WhatsApp</label>
+        <input class="inp" type="tel" id="patient-enroll-phone" placeholder="+5492211234567" autocomplete="tel" aria-describedby="patient-enroll-hint">
+        <p class="contact-note" id="patient-enroll-hint">En Argentina, agregá <strong>+54 9</strong> + código de área + número, sin 0 ni 15.</p>
+        <button class="btn-main soft" id="patient-enroll-send" type="button" onclick="patientEnrollStart()">Enviar código por WhatsApp</button>
+        <div id="patient-enroll-verify" hidden>
+          <label class="lbl" for="patient-enroll-code">Código de seis dígitos</label>
+          <input class="inp" id="patient-enroll-code" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+          <button class="btn-main" id="patient-enroll-confirm" type="button" onclick="patientEnrollConfirm()">Confirmar vinculación</button>
+        </div>
+        <p class="contact-note" id="patient-enroll-message" role="status" aria-live="polite"></p>
+      </div>
+    </details>
     <button class="btn-main soft patient-refresh" type="button" onclick="patientRefreshPortal()" style="margin:12px 0 18px;">Actualizar mis turnos</button>
     <div id="patient-cloud-list" aria-live="polite"></div>
     <p class="contact-note" style="margin-top:20px;">Podés confirmar tus turnos hasta el inicio y cancelar o reprogramar con al menos 2 horas de anticipación. Para nuevas reservas, elegí «Reservar nuevo turno» en tu espacio. El turno quedará pendiente hasta su confirmación.</p>
@@ -1779,6 +1795,36 @@ const CithelaCloud=(()=>{
     if(error)throw error;
     return refresh();
   }
+  async function enrollExistingPatientPhone(phone){
+    const c=await getClient();
+    const {data:{user},error:userError}=await c.auth.getUser();
+    if(userError)throw userError;
+    if(!user?.id||!user.email||!user.email_confirmed_at)throw Error('verified_email_required');
+    if(user.phone&&user.phone_confirmed_at)throw Error('phone_already_linked');
+    const portal=await patientPortal();
+    if(!portal.profiles?.length)throw Error('patient_profile_required');
+    // Supabase sends a phone_change OTP via the signed Meta Send SMS hook.
+    // Do not signInWithOtp here: that creates a second auth identity.
+    const {error}=await c.auth.updateUser({phone});
+    if(error)throw error;
+    return {userId:user.id};
+  }
+  async function confirmExistingPatientPhone(phone,token,expectedUserId){
+    const c=await getClient();
+    const before=await c.auth.getUser();
+    if(before.error)throw before.error;
+    if(before.data?.user?.id!==expectedUserId)throw Error('identity_changed');
+    const {error}=await c.auth.verifyOtp({phone,token,type:'phone_change'});
+    if(error)throw error;
+    const after=await c.auth.getUser();
+    if(after.error)throw after.error;
+    const user=after.data?.user;
+    if(!user||user.id!==expectedUserId)throw Error('identity_changed');
+    if(String(user.phone||'').replace(/^\+/,'')!==phone.replace(/^\+/,'')||
+       !user.phone_confirmed_at)throw Error('phone_not_attached');
+    await refresh();
+    return {phone:user.phone,userId:user.id};
+  }
   async function issuePatientPhoneInvite({tenantId,personId,phone}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_patient_invite_issue_phone',{
@@ -2122,7 +2168,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2304,6 +2350,7 @@ function openPatientWhatsApp(patientId){
 
 let patientPortalData=null,patientPortalRequest=0;
 let patientWhatsappOtpSent=false;
+let patientEnrollPending=null,patientEnrollBusy=false;
 let patientMagicLinkSending=false;
 const CITHELA_PATIENT_MAGIC_LINK_COOLDOWN_KEY='cithela_patient_magic_link_next_send_at';
 function patientMagicLinkNextAllowedAt(){
@@ -2577,6 +2624,70 @@ let patientRescheduleState=null;
 let patientSlotRequest=0;
 let patientMutationBusy=false;
 
+function patientEnrollError(err){
+  const msg=String(err?.message||'');
+  if(/already registered|already been registered|already in use|already exists|phone.*exists|phone.*taken|duplicate|unique constraint/i.test(msg))
+    return 'Ese WhatsApp pertenece a otra cuenta (posiblemente la cuenta OTP del laboratorio). No fusionamos cuentas automáticamente.';
+  if(/rate limit|too many/i.test(msg))return 'Límite de intentos alcanzado. Evitá solicitar códigos repetidamente.';
+  if(msg==='verified_email_required')return 'Primero verificá el correo de esta cuenta.';
+  if(msg==='phone_already_linked')return 'Este usuario ya tiene un WhatsApp verificado.';
+  if(msg==='patient_profile_required')return 'Tu usuario todavía no tiene una ficha vinculada.';
+  if(msg==='identity_changed'||msg==='phone_not_attached')
+    return 'No se pudo confirmar que el número se asociara a la misma identidad. Mantené el acceso por correo.';
+  return msg||'No fue posible completar la vinculación.';
+}
+function renderPatientEnroll(){
+  const panel=$('patient-enroll-panel');
+  if(!panel)return;
+  const s=CithelaCloud.state();
+  const allowed=!!(me?.cloud&&me.role==='paciente'&&s.signedIn&&s.email&&!s.phone&&patientPortalData?.profiles?.length);
+  panel.hidden=!allowed;
+  if(!allowed)return;
+  $('patient-enroll-phone').readOnly=!!patientEnrollPending||patientEnrollBusy;
+  $('patient-enroll-send').disabled=!!patientEnrollPending||patientEnrollBusy;
+  $('patient-enroll-verify').hidden=!patientEnrollPending;
+  $('patient-enroll-confirm').disabled=patientEnrollBusy;
+}
+async function patientEnrollStart(){
+  if(patientEnrollBusy||patientEnrollPending||!patientPortalData?.profiles?.length)return;
+  const state=CithelaCloud.state();
+  if(!me?.cloud||me.role!=='paciente'||!state.email||state.phone||
+     me.identity!==patientCloudIdentity())return;
+  const phone=String($('patient-enroll-phone').value||'').replace(/[\s()-]/g,'');
+  if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){
+    $('patient-enroll-message').textContent='Ingresá el número internacional, por ejemplo +5492211234567.';
+    return;
+  }
+  patientEnrollBusy=true;renderPatientEnroll();
+  $('patient-enroll-message').textContent='Solicitando código de verificación…';
+  try{
+    const result=await CithelaCloud.enrollExistingPatientPhone(phone);
+    patientEnrollPending={phone,userId:result.userId};
+    $('patient-enroll-message').textContent='Revisá WhatsApp e ingresá el código recibido para confirmar la vinculación.';
+  }catch(err){$('patient-enroll-message').textContent=patientEnrollError(err);}
+  finally{patientEnrollBusy=false;renderPatientEnroll();}
+}
+async function patientEnrollConfirm(){
+  if(patientEnrollBusy||!patientEnrollPending)return;
+  const code=String($('patient-enroll-code').value||'').trim();
+  if(!/^\d{6}$/.test(code)){
+    $('patient-enroll-message').textContent='Ingresá los seis dígitos enviados por WhatsApp.';return;
+  }
+  const pending=patientEnrollPending;
+  patientEnrollBusy=true;renderPatientEnroll();
+  $('patient-enroll-message').textContent='Verificando que se conserve tu cuenta original…';
+  try{
+    const result=await CithelaCloud.confirmExistingPatientPhone(pending.phone,code,pending.userId);
+    const state=CithelaCloud.state();
+    me.phone=state.phone||result.phone;
+    me.identity=patientCloudIdentity();
+    patientEnrollPending=null;
+    $('patient-enroll-code').value='';
+    await patientRefreshPortal();
+    toast('WhatsApp vinculado a tu misma cuenta. Conservaste tus turnos.',5200);
+  }catch(err){$('patient-enroll-message').textContent=patientEnrollError(err);}
+  finally{patientEnrollBusy=false;renderPatientEnroll();}
+}
 function patientCloudIdentity(){
   const s=CithelaCloud.state();
   return s.phone?'phone:'+s.phone:(s.email?'email:'+String(s.email).toLowerCase():'');
@@ -3074,6 +3185,7 @@ async function patientRefreshPortal(){
       }
     }
     renderPatientPortalCards();
+    renderPatientEnroll();
   }catch(err){
     if(request!==patientPortalRequest)return;
     if(!patientPortalData)el.innerHTML='<p class="ops-note">'+
@@ -3247,6 +3359,7 @@ async function logout(){
   patientRescheduleState=null;
   patientPortalData=null;
   patientWhatsappOtpSent=false;
+  patientEnrollPending=null;patientEnrollBusy=false;
   patientSharedDrafts.clear();patientSharedOpen.clear();
   hideVisiblePasswords();
   me={};
@@ -3267,6 +3380,7 @@ function goPac(){
   applyBranding();applyCithelaTheme('sage');
   if(me.cloud){
     scr('patient-cloud');
+    renderPatientEnroll();
     patientRefreshPortal();
     return;
   }
