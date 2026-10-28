@@ -1,0 +1,35 @@
+name: CITHELA UX browser smoke
+on:
+  push:
+    paths:
+      - 'cithela/index.html'
+      - 'cithela/ux-browser-smoke.cjs'
+      - '.github/workflows/cithela-ux-browser-smoke.yml'
+  pull_request:
+    paths:
+      - 'cithela/index.html'
+      - 'cithela/ux-browser-smoke.cjs'
+      - '.github/workflows/cithela-ux-browser-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Chromium browser
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - name: Verify 320/390/768/1280px layouts without Supabase access
+        run: node cithela/ux-browser-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cithela-ux-layout-snapshots
+          path: cithela-layout-*.png
+          retention-days: 7
