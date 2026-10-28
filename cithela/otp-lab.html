@@ -1,94 +1,14 @@
 <!doctype html>
 <html lang="es-AR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
-<title>CITHELA · Prueba OTP WhatsApp</title>
-<style>
-:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#243631;background:#f6f8f7;color-scheme:light}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px 15px}
-main{width:min(100%,480px);background:#fff;border:1px solid #dce8e3;box-shadow:0 12px 40px #183c3420;border-radius:18px;padding:26px}
-header{display:flex;gap:12px;align-items:center;margin-bottom:20px}.brand{width:46px;height:46px;background:#e8f4f0;color:#28675d;display:grid;place-items:center;border-radius:13px;font-weight:800;font-size:26px}
-h1{font-size:1.25rem;margin:0;letter-spacing:.08em}h2{font-size:1rem;margin:20px 0 12px}p{line-height:1.5;color:#587269}small{color:#587269}
-label{display:block;font-weight:650;font-size:.92rem;margin:16px 0 8px}
-input{width:100%;padding:14px 16px;border-radius:12px;border:1px solid #9fbdb5;background:#fafcfb;font:inherit;font-size:1.05rem}
-button{width:100%;padding:14px 16px;margin-top:12px;border:0;border-radius:12px;background:#347b71;color:#fff;font:inherit;font-weight:650;min-height:48px}
-button:disabled{opacity:.5}#verify-panel{display:none;border-top:1px solid #dfebe6;margin-top:22px}
-#status{min-height:32px;background:#f1f6f4;border-radius:12px;padding:13px 14px;font-size:.95rem;margin-top:18px;white-space:pre-wrap;word-break:break-word}
-#status.error{color:#a32947;background:#fff0f2}#status.ok{color:#135d50;background:#e6f5ef}
-.footer{font-size:.78rem;margin-top:20px}a{color:#236d61}
-</style>
+<title>CITHELA · Laboratorio OTP finalizado</title>
+<style>body{font-family:system-ui,-apple-system,Arial;background:#f5f8f6;color:#243934;min-height:100vh;display:grid;place-items:center;margin:0;padding:18px}main{max-width:440px;background:white;border:1px solid #dce8e3;border-radius:18px;padding:28px;line-height:1.6}h1{letter-spacing:.14em;font-size:1.6rem}p{color:#536f65}a{display:block;background:#47877d;color:white;text-decoration:none;border-radius:12px;text-align:center;font-weight:600;padding:14px}</style>
 </head>
-<body>
-<main>
-<header><div class="brand" aria-hidden="true">C</div><div><h1>CITHELA</h1><small>Laboratorio privado · WhatsApp OTP</small></div></header>
-<p>Probá el código de seis dígitos con <strong>tu propio WhatsApp</strong>. Esta página no da acceso a turnos ni crea fichas de pacientes. No uses números de terceros.</p>
-<form id="send-form">
-<label for="phone">Número de tu WhatsApp</label>
-<p id="phone-help" style="font-size:.9rem;margin:0 0 10px;">En Argentina: <strong>+54 9</strong> + código de área + número, sin 0 ni 15. Ejemplo: <strong>+5492211234567</strong>.</p>
-<input type="tel" id="phone" name="phone" aria-describedby="phone-help" placeholder="+5492211234567" pattern="\+[1-9][0-9]{7,14}" inputmode="tel" autocomplete="tel" required spellcheck="false">
-<button id="send-button" type="submit">Enviar código por WhatsApp</button>
-</form>
-<section id="verify-panel">
-<h2>Verificar el código recibido</h2>
-<form id="verify-form">
-<label for="code">Código de 6 dígitos</label>
-<input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000">
-<button id="verify-button" type="submit">Verificar código</button>
-</form>
-</section>
-<div id="status" role="status" aria-live="polite">Preparado para la prueba. El número no se guarda en este sitio.</div>
-<p class="footer">Usa Supabase Auth y la función oficial de CITHELA. La sesión de prueba no se conserva al cerrar esta página. <a href="./">Volver a CITHELA</a></p>
-</main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2"></script>
-<script>
-'use strict';
-(() => {
- const URL='https://mcqknmqhtmihegmifuka.supabase.co';
- const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
- const $=id=>document.getElementById(id);
- const status=(message,kind='')=>{const el=$('status');el.className=kind;el.textContent=message;};
- let client=null,requestedPhone='';
- function auth(){
-  if(client)return client;
-  if(!window.supabase?.createClient)throw new Error('No se pudo cargar Supabase. Revisá la conexión.');
-  client=window.supabase.createClient(URL,KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  return client;
- }
- $('send-form').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const phone=$('phone').value.trim();
-  if(!/^\+[1-9]\d{7,14}$/.test(phone))return status('Ingresá un número válido en formato internacional (+549...).','error');
-  $('send-button').disabled=true;status('Solicitando código a Supabase…');
-  try{
-   const {error}=await auth().auth.signInWithOtp({phone,options:{channel:'sms',shouldCreateUser:true}});
-   if(error)throw error;
-   requestedPhone=phone;
-   $('phone').readOnly=true;
-   $('verify-panel').style.display='block';
-   status('Supabase aceptó la solicitud. Revisá WhatsApp. La aceptación aún no confirma la entrega.','ok');
-  }catch(err){
-   $('send-button').disabled=false;
-   status('No se pudo solicitar el código: '+(err?.message||String(err)),'error');
-  }
- });
- $('verify-form').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const code=$('code').value.trim();
-  if(!requestedPhone||!/^\d{6}$/.test(code))return status('Ingresá seis dígitos.','error');
-  $('verify-button').disabled=true;status('Validando el código…');
-  try{
-   const {error}=await auth().auth.verifyOtp({phone:requestedPhone,token:code,type:'sms'});
-   if(error)throw error;
-   status('PRUEBA EXITOSA: Supabase verificó el código recibido por WhatsApp. No se vinculó ninguna ficha ni turno.','ok');
-   $('send-button').disabled=true;$('verify-button').disabled=true;$('code').value='';
-  }catch(err){
-   $('verify-button').disabled=false;
-   status('No se pudo verificar: '+(err?.message||String(err)),'error');
-  }
- });
-})();
-</script>
-</body>
-</html>
+<body><main><h1>CITHELA</h1>
+<h2>Prueba técnica finalizada</h2>
+<p>La autenticación de seis dígitos por WhatsApp ya fue validada. Esta página de laboratorio está desactivada para evitar crear cuentas telefónicas duplicadas.</p>
+<p>Para acceder como paciente, usá tu invitación y el portal de CITHELA. Quienes ya tengan cuenta por correo podrán vincular su WhatsApp allí.</p>
+<a href="./">Abrir CITHELA</a>
+</main></body></html>
