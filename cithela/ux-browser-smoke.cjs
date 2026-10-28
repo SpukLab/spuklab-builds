@@ -14,6 +14,22 @@ const { pathToFileURL } = require('node:url');
       page.on('pageerror', e => errors.push(e.message));
       await page.route('http**/*', route => route.abort());
       await page.goto(pathToFileURL(path.join(__dirname, 'index.html')).href, { waitUntil: 'domcontentloaded' });
+      // The branded landing is always CITHELA teal, even when a tenant uses clay.
+      const colors = await page.evaluate(() => {
+        applyCithelaTheme('clay');
+        const landing = getComputedStyle(document.getElementById('screen-login'));
+        const workspace = getComputedStyle(document.getElementById('screen-medico'));
+        return {
+          loginAccent: landing.getPropertyValue('--teal').trim(),
+          workspaceAccent: workspace.getPropertyValue('--teal').trim(),
+          loginTitle: document.getElementById('login-brand').textContent.trim(),
+          loginAction: getComputedStyle(document.getElementById('professional-login-button')).backgroundColor
+        };
+      });
+      assert.deepEqual(colors, {
+        loginAccent:'#2f7d73', workspaceAccent:'#84472f', loginTitle:'CITHELA',
+        loginAction:'rgb(47, 125, 115)'
+      }, 'tenant palette must not recolor login at '+width);
       await page.evaluate(() => {
         document.getElementById('screen-login').classList.remove('active');
         document.getElementById('screen-medico').classList.add('active');
