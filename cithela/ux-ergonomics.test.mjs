@@ -13,11 +13,12 @@ test('application JS parses, with no duplicate HTML ids',()=>{
  assert.equal(ids.length,new Set(ids).size,'HTML ids are unique');
 });
 
-test('professional navigation has four primary tasks; reports remain reachable',()=>{
+test('professional navigation has five primary tasks; reports remain reachable',()=>{
  const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"').match(/<div class="tabs">([\s\S]*?)<\/div>/)?.[1];
  assert.ok(nav);
- assert.equal((nav.match(/<button /g)||[]).length,4);
+ assert.equal((nav.match(/<button /g)||[]).length,5);
  for(const id of ['agenda','personas','nuevo','config'])assert.ok(nav.includes('id="medico-tab-'+id+'"'));
+ assert.ok(nav.includes('id="cloud-wa-tab"'));
  assert.doesNotMatch(nav,/>Reportes<\/button>/);
  assert.match(html,/id="p-medico-config"[\s\S]*?Reportes y exportaciones/);
  assert.match(html,/id="p-medico-reportes"[\s\S]*?Volver a Ajustes/);

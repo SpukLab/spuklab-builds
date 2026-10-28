@@ -18,7 +18,7 @@ Conservar portal cloud de «Mis turnos» y reserva autenticada. No introducir nu
 | Urgencia | Hallazgo validado sobre código | Cambio en rama UX | Validación pendiente |
 |---|---|---|---|
 | P0-UX | Viewport bloqueaba ampliación de página con `maximum-scale=1` | Se elimina limitación y se añade `viewport-fit=cover` | Zoom/pellizco y VoiceOver en Safari |
-| P1 | Cinco pestañas horizontales compiten por ancho móvil | Cuatro pestañas primarias; reportes dentro de Ajustes | 320, 375 y 430 px sin truncar controles |
+| P1 | Seis pestañas horizontales incluyendo Mensajes compiten por ancho móvil | Cinco pestañas primarias; reportes dentro de Ajustes | 320, 375 y 430 px sin truncar controles |
 | P1 | Reportes/diagnósticos se encontraban al mismo nivel que la agenda | Reportes accesible desde Ajustes, conservando los IDs y funciones originales | Exportar CSV y volver a Ajustes sin perder contexto |
 | P1 | La agenda abría con estadísticas, dejando turnos por debajo | Nuevo turno visible tras calendario; pendientes y turnos preceden resumen | Un profesional encuentra su turno del día rápidamente |
 | P1 | El directorio abría mostrando siempre el formulario de alta | Primero búsqueda, formulario bajo `details` | Guardar, cerrar, buscar y ver ficha |
@@ -48,7 +48,7 @@ Conservar portal cloud de «Mis turnos» y reserva autenticada. No introducir nu
 
 ## Matriz de aceptación visual y operativa (manual, antes de merge)
 
-1. **iPhone estrecho (320–375 px):** cuatro pestañas legibles; pestaña Ajustes sin desbordes; semana navegable con el pulgar; permitir zoom; no tapa acciones el teclado.
+1. **iPhone estrecho (320–375 px):** cinco pestañas legibles con desplazamiento accesible; pestaña Ajustes sin desbordes; semana navegable con el pulgar; permitir zoom; no tapa acciones el teclado.
 2. **iPhone 14 (390 px):** crear turno cloud, cerrar formulario/volver a agenda, confirmar/reprogramar/cancelar, estado visible tras sincronización y vuelta desde WhatsApp.
 3. **iPad vertical y horizontal / PC:** búsqueda/alta de persona, todas las secciones de Ajustes, reportes y exportaciones. No pierde datos al cambiar de pestaña.
 4. **Paciente:** enlace de invitación → sesión → reserva, confirmación/cancelación y regreso a Mis turnos; sin exponer datos locales del demo.

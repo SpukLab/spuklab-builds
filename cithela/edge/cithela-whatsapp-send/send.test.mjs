@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const TENANT="50b3e3eb-77a5-413d-af3b-9aa5b56e833e", EVENT="2903949d-f170-48c4-9273-2abad48a715d", DRAFT="¿Qué servicio necesitás?";
-async function make({age=60,authorized=true,stale=false,metaCode=null,senderId="phone-id",recipient="+5491123456789"}={}){
+async function make({age=60,authorized=true,stale=false,metaCode=null,senderId="phone-id",recipient="+5491123456789",
+otpConfigured=true,templateStatus="APPROVED",templateCategory="AUTHENTICATION",templateLanguage="es_AR"}={}){
  let handler, reserved=false;
  const calls=[];
- const env={SUPABASE_URL:"https://test.invalid",SUPABASE_SERVICE_ROLE_KEY:"secret-test",META_WHATSAPP_PHONE_NUMBER_ID:senderId,META_WHATSAPP_ACCESS_TOKEN:"test-only"};
+ const env={SUPABASE_URL:"https://test.invalid",SUPABASE_SERVICE_ROLE_KEY:"secret-test",META_WHATSAPP_PHONE_NUMBER_ID:senderId,META_WHATSAPP_ACCESS_TOKEN:"test-only",
+  META_WHATSAPP_OTP_TEMPLATE:otpConfigured?"cithela_login_code":undefined,META_WHATSAPP_OTP_LANGUAGE:"es_AR",META_WHATSAPP_WABA_ID:"1418360383843069"};
  const Deno={env:{get:k=>env[k]},serve:fn=>{handler=fn;}};
  const db={
   auth:{getUser:async token=>token==="valid"?{data:{user:{id:"user-test"}},error:null}:{data:{},error:{message:"invalid"}}},
@@ -29,6 +31,11 @@ async function make({age=60,authorized=true,stale=false,metaCode=null,senderId="
  const src=await readFile(new URL("./index.ts",import.meta.url),"utf8");
  const clean=src.replace(/^import .*?;\s*$/m,"").replace("Deno.serve(async (req: Request)","Deno.serve(async (req)").replace("payload: unknown","payload").replace("providerTime: unknown","providerTime").replace("value: unknown","value").replace("let request: Record<string, unknown>","let request").replace("let preview: Record<string, unknown>","let preview").replace("let providerMessageId: string | null","let providerMessageId").replace("let errCode: string | null","let errCode").replace("function metaRecipient(to: string, senderId: string)","function metaRecipient(to, senderId)");
  const fetcher=async (url,opts)=>{
+  if(String(url).includes("/message_templates")){
+    calls.push({kind:"otp_template_read",method:opts.method,url:String(url)});
+    return metaCode?Response.json({error:{code:metaCode}},{status:403}):
+      Response.json({data:[{name:"cithela_login_code",language:templateLanguage,category:templateCategory,status:templateStatus}]});
+  }
   if(String(url).includes("fields=id,display_phone_number,quality_rating")){
     calls.push({kind:"meta_read",method:opts.method});
     return metaCode?Response.json({error:{code:metaCode}},{status:403}):
@@ -178,4 +185,44 @@ test("invalid note types, lengths, and multiline content are rejected before sen
     assert.equal(result.status,400);
     assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="meta"),false);
   }
+});
+
+test("OTP preflight is read-only and checks the actual approved Authentication template",async()=>{
+ const h=await make();
+ const result=await h.send("valid",{action:"check_otp_template",tenant_id:TENANT});
+ assert.equal(result.status,200);
+ assert.equal(result.data.code,"otp_template_approved");
+ assert.equal(result.data.diagnostic,"read_only");
+ assert.equal(h.calls.filter(x=>x.kind==="otp_template_read").length,1);
+ assert.equal(h.calls.find(x=>x.kind==="otp_template_read").method,"GET");
+ assert.equal(h.calls.filter(x=>x.kind==="meta").length,0);
+ assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="update"),false);
+ assert.equal(h.calls.some(x=>x.table==="cithela_channel_inbox"),false);
+});
+test("OTP preflight distinguishes missing setup, unapproved status and wrong category",async()=>{
+ for(const [setup,expected] of [
+  [{otpConfigured:false},"otp_template_not_configured"],
+  [{templateStatus:"PENDING"},"otp_template_pending"],
+  [{templateStatus:"REJECTED"},"otp_template_rejected"],
+  [{templateCategory:"UTILITY"},"otp_template_wrong_category"],
+  [{templateLanguage:"en_US"},"otp_template_not_found"]
+ ]){
+  const h=await make(setup);
+  const result=await h.send("valid",{action:"check_otp_template",tenant_id:TENANT});
+  assert.equal(result.data.code,expected,JSON.stringify(setup));
+  assert.equal(h.calls.some(x=>x.kind==="insert"||x.kind==="update"),false);
+ }
+});
+test("OTP preflight rejects non-admins before consulting Meta",async()=>{
+ const h=await make({authorized:false});
+ const result=await h.send("valid",{action:"check_otp_template",tenant_id:TENANT});
+ assert.equal(result.status,403);
+ assert.equal(h.calls.some(x=>x.kind==="otp_template_read"),false);
+});
+test("OTP preflight returns numeric Meta error only, without credential or patient details",async()=>{
+ const h=await make({metaCode:190});
+ const result=await h.send("valid",{action:"check_otp_template",tenant_id:TENANT});
+ assert.equal(result.status,502);
+ assert.equal(result.data.diagnostic_code,"meta_code_190");
+ assert.equal(JSON.stringify(result.data).includes("test-only"),false);
 });
