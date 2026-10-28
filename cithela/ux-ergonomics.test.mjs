@@ -103,3 +103,27 @@ test('old local backup clearly does not represent a Supabase cloud backup',()=>{
  const reports=slice('id="p-medico-reportes"','id="p-medico-config"');
  assert.match(reports,/No respalda datos de Supabase Cloud/);
 });
+
+test('logo upload accepts iPhone image formats and prepares photos before sending to Storage',()=>{
+ assert.match(html,/id="cloud-brand-logo"[^>]*accept="image\/\*,\.heic,\.heif"/);
+ assert.match(html,/function imageTypeForBrand\(file\)/);
+ assert.match(html,/async function prepareCloudBrandImage\(file\)/);
+ assert.match(html,/file\.size>15\*1024\*1024/);
+ assert.match(html,/canvas\.toBlob\(resolve,'image\/jpeg',quality\)/);
+ assert.match(html,/blob\.size<=524288/);
+ assert.match(html,/new File\(\[blob\],'logo\.jpg',\{type:'image\/jpeg'\}\)/);
+ assert.match(html,/async function selectCloudBrandLogo\(input\)/);
+ assert.match(html,/await prepareCloudBrandImage\(selected\)/);
+ assert.match(html,/id="cloud-brand-feedback"[^>]*role="status"/);
+ assert.match(html,/class="cloud-brand-selected"/);
+ assert.match(html,/uploadBrandLogo\(\{/);
+});
+
+test('logo failures remain visible, without modifying booking or Storage policy',()=>{
+ assert.match(html,/cloudBrandFeedback\('No se guardó el logo: '\+message\)/);
+ assert.match(html,/cloudBrandFeedback\('Logo subido\. Vinculándolo al establecimiento…'\)/);
+ assert.match(html,/cloudBrandFeedback\('Identidad visual guardada correctamente/);
+ assert.match(html,/cloudBrandSelectionId/);
+ assert.match(html,/cloudBrandProcessing/);
+ assert.match(html,/clearCloudBrandPreview\(\)/);
+});

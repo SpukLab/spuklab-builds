@@ -95,6 +95,32 @@ const { pathToFileURL } = require('node:url');
       assert.ok(identity.nameBeforeExit&&identity.iconHidden&&identity.screenWidth<=width+2,
         'Long tenant branding overflow or duplicate CITHELA symbol at '+width+': '+JSON.stringify(identity));
       console.log('PASS establishment branding '+width+'px');
+      // Generate a synthetic oversized photo entirely in-browser, with no upload.
+      if(width===390){
+        const prepared=await page.evaluate(async()=>{
+          const canvas=document.createElement('canvas');
+          canvas.width=1024;canvas.height=840;
+          const context=canvas.getContext('2d'),pix=context.createImageData(canvas.width,canvas.height);
+          let seed=2018;
+          for(let i=0;i<pix.data.length;i+=4){
+            seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;
+            pix.data[i]=seed&255;pix.data[i+1]=(seed>>>8)&255;
+            pix.data[i+2]=(seed>>>16)&255;pix.data[i+3]=255;
+          }
+          context.putImageData(pix,0,0);
+          const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+          const input=new File([blob],'foto-iphone.png',{type:'image/png'});
+          const output=await prepareCloudBrandImage(input);
+          const magic=Array.from(new Uint8Array(await output.slice(0,3).arrayBuffer()));
+          return {original:input.size,compressed:output.size,type:output.type,magic};
+        });
+        assert.ok(prepared.original>524288,'synthetic original should exceed logo limit');
+        assert.ok(prepared.compressed<=524288&&prepared.compressed>0,
+          'logo preparation should fit 512 KB: '+JSON.stringify(prepared));
+        assert.equal(prepared.type,'image/jpeg');
+        assert.deepEqual(prepared.magic,[255,216,255],'compressed image must be valid JPEG');
+        console.log('PASS iPhone-size photo conversion '+JSON.stringify(prepared));
+      }
       // Visual snapshot for human review in Actions artifacts, without patient details.
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
