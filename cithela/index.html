@@ -419,6 +419,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   .professional-brand .nb1{font-size:1rem;}
   .patient-workspace .tenant-card-logo,.patient-workspace .tenant-card-fallback{width:58px;height:58px;}
 }
+.cloud-brand-selected{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap;}
+.cloud-brand-selected img{display:block;width:78px;height:78px;object-fit:contain;background:var(--white);border:var(--line);border-radius:12px;padding:4px;}
+.cloud-brand-selected span{font-weight:600;color:var(--ink2);}
 </style>
 
 </head>
@@ -827,10 +830,11 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <label class="lbl" style="margin-top:14px;">Paleta de color</label>
       <div class="brand-palette" id="cloud-brand-palette" role="group" aria-label="Paleta del establecimiento"></div>
       <label class="lbl" for="cloud-brand-logo">Logo del establecimiento (opcional)</label>
-      <input class="inp" id="cloud-brand-logo" type="file" accept="image/png,image/jpeg,image/webp" onchange="selectCloudBrandLogo(this)">
-      <p class="contact-note">PNG, JPG o WebP, hasta 512 KB. Recomendado: imagen cuadrada y fondo transparente.</p>
+      <input class="inp" id="cloud-brand-logo" type="file" accept="image/*,.heic,.heif" onchange="selectCloudBrandLogo(this)">
+      <p class="contact-note">Podés elegir una foto o logo de hasta 15 MB, incluso HEIC/HEIF del iPhone. CITHELA lo adapta automáticamente al límite de 512 KB. Las imágenes grandes se convierten a JPG con fondo blanco.</p>
       <p class="contact-note">El logo y el nombre del establecimiento se muestran en la cabecera de la agenda profesional y en la tarjeta que ve el paciente. La portada de acceso mantiene la identidad CITHELA.</p>
       <div id="cloud-brand-preview" class="contact-note" style="margin:12px 0;"></div>
+      <p id="cloud-brand-feedback" class="contact-note" role="status" aria-live="polite" style="margin:8px 0 12px;"></p>
       <button class="mb ghost" id="cloud-brand-remove" type="button" onclick="removeCloudBrandLogo()" style="display:none;margin:5px 0 12px;">Quitar logo</button>
       <button class="btn-main" id="cloud-brand-save" type="button" onclick="saveCloudBranding()">Guardar identidad visual</button>
     </div>
@@ -1939,7 +1943,12 @@ const CithelaCloud=(()=>{
     const {error}=await c.storage.from('cithela-branding').upload(path,file,{
       cacheControl:'3600',upsert:false,contentType:file.type
     });
-    if(error)throw error;
+    if(error){
+      const code=String(error.statusCode||error.status||'');
+      if(code==='413')throw Error('El servidor rechazó el tamaño del logo.');
+      if(code==='401'||code==='403')throw Error('No tenés permisos para subir el logo. Volvé a iniciar sesión.');
+      throw Error('Falló la subida del logo ('+String(error.message||'Error de almacenamiento')+').');
+    }
     return path;
   }
   async function removeBrandLogo(path){
@@ -4679,12 +4688,75 @@ el.innerHTML=`
 
 let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
 let cloudBrandFile=null,cloudBrandRemove=false,cloudBrandDirty=false,cloudBrandBusy=false;
+let cloudBrandProcessing=false,cloudBrandSelectionId=0,cloudBrandPreviewUrl=null;
+function cloudBrandFeedback(message){
+  const el=$('cloud-brand-feedback');
+  if(el)el.textContent=message||'';
+}
+function clearCloudBrandPreview(){
+  if(cloudBrandPreviewUrl)URL.revokeObjectURL(cloudBrandPreviewUrl);
+  cloudBrandPreviewUrl=null;
+}
+function imageTypeForBrand(file){
+  const mime=String(file?.type||'').toLowerCase();
+  const ext=String(file?.name||'').split('.').pop()?.toLowerCase();
+  const byExt={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',
+    heic:'image/heic',heif:'image/heif'};
+  return ['image/png','image/jpeg','image/webp','image/heic','image/heif'].includes(mime)
+    ?mime:(mime?null:byExt[ext]||null);
+}
+// Convert in-browser; uploadBrandLogo still validates the final 512 KB file signature.
+// A large iPhone picture is not sent to Storage until resizing succeeds.
+async function prepareCloudBrandImage(file){
+  if(!file||!file.size||file.size>15*1024*1024)
+    throw Error('Elegí una foto o logo de hasta 15 MB.');
+  const mime=imageTypeForBrand(file);
+  if(!mime)throw Error('Formato no compatible. Elegí una foto JPG, PNG, WebP o HEIC.');
+  if(['image/jpeg','image/png','image/webp'].includes(mime)&&file.size<=524288){
+    // Browsers can omit MIME for files selected from Files; normalize the MIME tag.
+    return mime===file.type?file:new File([file],file.name,{type:mime});
+  }
+  const source=URL.createObjectURL(file);
+  let image;
+  try{
+    image=await new Promise((resolve,reject)=>{
+      const el=new Image();
+      el.onload=()=>resolve(el);
+      el.onerror=()=>reject(Error('No se pudo abrir esa imagen. Si es HEIC, exportala como JPG y probá de nuevo.'));
+      el.src=source;
+    });
+    if(!image.naturalWidth||!image.naturalHeight)
+      throw Error('La imagen no tiene dimensiones válidas.');
+    const canvas=document.createElement('canvas');
+    const context=canvas.getContext('2d');
+    if(!context)throw Error('No se pudo procesar la imagen en este navegador.');
+    for(const maxSide of [1200,960,768,640,512]){
+      const scale=Math.min(1,maxSide/Math.max(image.naturalWidth,image.naturalHeight));
+      canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
+      canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+      context.fillStyle='#ffffff';
+      context.fillRect(0,0,canvas.width,canvas.height);
+      context.drawImage(image,0,0,canvas.width,canvas.height);
+      for(const quality of [0.84,0.70,0.56]){
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+        if(!blob)throw Error('El navegador no pudo convertir la imagen a JPG.');
+        if(blob.size&&blob.size<=524288)
+          return new File([blob],'logo.jpg',{type:'image/jpeg'});
+      }
+    }
+    throw Error('No se pudo reducir la imagen a 512 KB. Probá con una foto más pequeña.');
+  }finally{
+    URL.revokeObjectURL(source);
+  }
+}
 function renderCloudBrandConfig(s){
   const box=$('cloud-brand-form');if(!box)return;
   const tenant=s?.tenant,tenantId=tenant?.id||null;
   if(cloudBrandTenantId!==tenantId){
+    ++cloudBrandSelectionId;clearCloudBrandPreview();cloudBrandProcessing=false;
     cloudBrandTenantId=tenantId;cloudBrandDirty=false;cloudBrandFile=null;
     cloudBrandRemove=false;cloudBrandVersion=null;
+    cloudBrandFeedback('');
   }
   const editable=!!(tenant&&['owner','admin'].includes(s?.membership?.role||''));
   box.style.display=editable?'block':'none';
@@ -4703,10 +4775,13 @@ function renderCloudBrandConfig(s){
       '</span>'+p.label+'</button>').join('');
   const current=cloudBrandRemove?'':tenant.logo_object_path;
   const url=cithelaBrandLogoUrl(current,tenantId,tenant.branding_updated_at);
-  $('cloud-brand-preview').innerHTML=cloudBrandFile
-    ?'Logo seleccionado: '+escHtml(cloudBrandFile.name)
-    :url?'<img class="tenant-card-logo" src="'+escHtml(url)+'" alt="Logo actual">':
-      'Sin logo, la agenda muestra el símbolo CITHELA y el paciente ve la inicial del establecimiento.';
+  $('cloud-brand-preview').innerHTML=cloudBrandProcessing
+    ?'Preparando la imagen…'
+    :cloudBrandFile&&cloudBrandPreviewUrl
+      ?'<div class="cloud-brand-selected"><img src="'+escHtml(cloudBrandPreviewUrl)+'" alt="Vista previa del logo seleccionado">'+
+        '<span>Lista para guardar · '+Math.ceil(cloudBrandFile.size/1024)+' KB</span></div>'
+      :url?'<img class="tenant-card-logo" src="'+escHtml(url)+'" alt="Logo actual">':
+        'Sin logo, la agenda muestra el símbolo CITHELA y el paciente ve la inicial del establecimiento.';
   $('cloud-brand-remove').style.display=
     (cloudBrandFile||tenant.logo_object_path)&&!cloudBrandRemove?'block':'none';
 }
@@ -4715,23 +4790,49 @@ function selectCloudBrandTheme(id){
   cloudBrandTheme=id;cloudBrandDirty=true;
   renderCloudBrandConfig(CithelaCloud.state());
 }
-function selectCloudBrandLogo(input){
-  if(cloudBrandBusy)return;
-  const file=input?.files?.[0]||null;
-  if(file&&(!['image/png','image/jpeg','image/webp'].includes(file.type)
-    ||!file.size||file.size>524288)){
-    input.value='';toast('Elegí un logo PNG, JPG o WebP de hasta 512 KB.');return;
-  }
-  cloudBrandFile=file;cloudBrandRemove=false;cloudBrandDirty=true;
+async function selectCloudBrandLogo(input){
+  if(cloudBrandBusy||cloudBrandProcessing)return;
+  const selected=input?.files?.[0]||null;
+  if(!selected)return;
+  const selectionId=++cloudBrandSelectionId,tenantId=cloudBrandTenantId;
+  cloudBrandProcessing=true;
+  cloudBrandFeedback('Preparando la imagen…');
+  $('cloud-brand-save').disabled=true;
   renderCloudBrandConfig(CithelaCloud.state());
+  try{
+    const file=await prepareCloudBrandImage(selected);
+    if(selectionId!==cloudBrandSelectionId||tenantId!==cloudBrandTenantId)return;
+    clearCloudBrandPreview();
+    cloudBrandFile=file;cloudBrandRemove=false;cloudBrandDirty=true;
+    cloudBrandPreviewUrl=URL.createObjectURL(file);
+    cloudBrandFeedback('Imagen preparada. Tocá Guardar identidad visual para subirla.');
+  }catch(err){
+    if(selectionId===cloudBrandSelectionId){
+      input.value='';
+      cloudBrandFeedback(err?.message||'No se pudo preparar el logo.');
+      toast(err?.message||'No se pudo preparar el logo.',5000);
+    }
+  }finally{
+    if(selectionId===cloudBrandSelectionId){
+      cloudBrandProcessing=false;
+      $('cloud-brand-save').disabled=false;
+      renderCloudBrandConfig(CithelaCloud.state());
+    }
+  }
 }
 function removeCloudBrandLogo(){
   if(cloudBrandBusy)return;
+  ++cloudBrandSelectionId;cloudBrandProcessing=false;clearCloudBrandPreview();
   cloudBrandRemove=true;cloudBrandFile=null;cloudBrandDirty=true;
   $('cloud-brand-logo').value='';
+  cloudBrandFeedback('El logo se quitará al guardar.');
+  $('cloud-brand-save').disabled=false;
   renderCloudBrandConfig(CithelaCloud.state());
 }
 async function saveCloudBranding(){
+  if(cloudBrandProcessing){
+    cloudBrandFeedback('Terminá de preparar la imagen antes de guardar.');return;
+  }
   if(cloudBrandBusy||!professionalCloudReady())return;
   const s=CithelaCloud.state(),tenant=s.tenant;
   if(!tenant||!['owner','admin'].includes(s.membership?.role||'')
@@ -4742,17 +4843,21 @@ async function saveCloudBranding(){
   const oldPath=tenant.logo_object_path||null;
   let path=cloudBrandRemove?null:oldPath,uploaded=null;
   cloudBrandBusy=true;$('cloud-brand-save').disabled=true;
+  cloudBrandFeedback(cloudBrandFile?'Subiendo el logo a CITHELA Cloud…':'Guardando la identidad visual…');
   try{
     if(cloudBrandFile){
       uploaded=await CithelaCloud.uploadBrandLogo({
         tenantId:tenant.id,file:cloudBrandFile});
       path=uploaded;
+      cloudBrandFeedback('Logo subido. Vinculándolo al establecimiento…');
     }
     await CithelaCloud.tenantBrandingUpdate({
       tenantId:tenant.id,expectedUpdatedAt:cloudBrandVersion,
       theme:cloudBrandTheme,logoPath:path});
     cloudBrandDirty=false;cloudBrandRemove=false;cloudBrandFile=null;
+    clearCloudBrandPreview();
     $('cloud-brand-logo').value='';
+    cloudBrandFeedback('Identidad visual guardada correctamente. Ya aparece en la agenda y el portal del paciente.');
     toast('Identidad visual guardada en CITHELA Cloud.');
     if(oldPath&&oldPath!==path){
       try{await CithelaCloud.removeBrandLogo(oldPath);}catch{}
@@ -4766,7 +4871,11 @@ async function saveCloudBranding(){
       cloudBrandDirty=false;cloudBrandFile=null;cloudBrandRemove=false;
       await CithelaCloud.refresh();
       toast('La identidad cambió en otro dispositivo. Revisá la configuración.',5000);
-    }else toast(err?.message||'No se pudo guardar la identidad visual.',5000);
+    }else{
+      const message=err?.message||'No se pudo guardar la identidad visual.';
+      cloudBrandFeedback('No se guardó el logo: '+message);
+      toast('No se guardó el logo: '+message,5500);
+    }
   }finally{
     cloudBrandBusy=false;$('cloud-brand-save').disabled=false;
     renderCloudBrandConfig(CithelaCloud.state());
