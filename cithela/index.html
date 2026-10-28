@@ -41,7 +41,16 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .screen.active{display:flex;}
 
 /* LOGIN */
-#screen-login{background:var(--white);align-items:center;justify-content:center;padding:44px 28px;overflow-y:auto;}
+/* Product entrance has CITHELA's own fixed palette; tenant colors belong to the workspace.
+   Scope variables here so even a stale tenant theme on :root cannot recolor login. */
+#screen-login{
+  --bg:#f5f7f4;--white:#fff;
+  --teal:#2f7d73;--teal2:#23665e;--teal-light:#e6f2ee;--teal-mid:#aed2c7;
+  --ink:#243733;--ink2:#536961;--ink3:#60766e;--ink4:#b8cbc3;
+  --border-color:#dce8e3;--surface-soft:#f0f6f2;
+  --shadow-color:rgba(28,79,71,.08);
+  background:var(--white);align-items:center;justify-content:center;padding:44px 28px;overflow-y:auto;
+}
 @media(max-height:820px){#screen-login{justify-content:flex-start;}}
 .login-inner{width:100%;max-width:360px;}
 .login-mark{width:60px;height:60px;border-radius:16px;background-color:var(--white);border:var(--line);background-image:url('https://raw.githubusercontent.com/SpukLab/spuklab-builds/b935ebbc0eb2cd2de7626caaad1d3442450dfe43/cithela-brand-board.png');background-repeat:no-repeat;background-size:362px 272px;background-position:-229px -98px;margin-bottom:24px;}
@@ -638,9 +647,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-config" class="pane">
-    <p class="settings-intro">Configurá primero la atención. Las opciones de cuenta y mantenimiento están al final.</p>
-    <button class="mb ghost settings-report-link" type="button"
-      onclick="tab('medico','reportes',document.getElementById('medico-tab-config'))">Reportes y exportaciones</button>
+    <p class="settings-intro">Configurá horarios, ausencias y servicios. Los reportes y las herramientas de mantenimiento están al final.</p>
     <h2 class="settings-group-title">Agenda y atención</h2>
 <details class="cithela-config-group" id="cfg-section-hours">
       <summary>Horarios de atención<span aria-hidden="true">⌄</span></summary>
@@ -883,6 +890,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <p style="font-size:.68rem;color:var(--ink3);margin-top:12px;line-height:1.6;">Si olvidás la clave podés restablecerla borrando los datos del sitio desde la configuración de tu navegador (Configuración → Privacidad → Borrar datos de navegación, o similar según el navegador que uses).</p>
     </div>
     </details>
+    <h2 class="settings-group-title">Informes y datos</h2>
+    <button class="mb ghost settings-report-link" type="button"
+      onclick="tab('medico','reportes',document.getElementById('medico-tab-config'))">Reportes y exportaciones</button>
   </div>
 
   <div class="byline"><p>by <span>SpukLab</span></p></div>
@@ -2151,9 +2161,9 @@ function applyBranding(){
   document.querySelectorAll('#screen-medico .js-app-sub')
     .forEach(el=>el.textContent=business);
   const lb=$('login-brand'),lm=$('login-meta');
-  if(lb)lb.textContent=product;
-  if(lm)lm.textContent=cloud?'Agenda · Organiza · Conecta':
-    [c.consultorio,c.nombre,c.dir].filter(Boolean).join(' · ')||'Agenda · Organiza · Conecta';
+  // La portada es siempre CITHELA, incluso si el espacio de trabajo usa otra marca o paleta.
+  if(lb)lb.textContent='CITHELA';
+  if(lm)lm.textContent='Agenda · Organiza · Conecta';
   applyTerminology();
 }
 function dayDistance(fecha){
