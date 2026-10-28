@@ -396,6 +396,29 @@ textarea.inp{resize:vertical;min-height:72px;}
   .modal{padding-bottom:calc(28px + env(safe-area-inset-bottom));}
 }
 textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px 14px;}
+
+/* Workspace header foregrounds the establishment. The CITHELA login stays institutional. */
+#screen-medico nav{min-height:70px;height:auto;padding:8px 18px;gap:12px;}
+#screen-medico nav .pill{flex:none;}
+#screen-medico nav .nav-out{flex:none;min-height:44px;padding:8px 4px;}
+.professional-brand{flex:1;min-width:0;gap:11px;}
+.professional-brand.has-tenant-logo::before{display:none;}
+.professional-brand .tenant-nav-logo{width:48px;height:48px;padding:3px;border-radius:10px;object-fit:contain;}
+.professional-brand-copy{flex:1;min-width:0;}
+.professional-brand .nb1{display:block;font-size:1.04rem;line-height:1.2;letter-spacing:.005em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;}
+.professional-brand .nb2{font-size:.69rem;line-height:1.45;color:var(--ink3);}
+.patient-workspace .tenant-card-head{gap:14px;min-height:64px;margin-bottom:16px;}
+.patient-workspace .tenant-card-logo,.patient-workspace .tenant-card-fallback{width:64px;height:64px;flex:none;border-radius:12px;}
+.patient-workspace .tenant-card-logo{padding:4px;object-fit:contain;background:#fff;}
+.patient-workspace .tenant-card-fallback{display:flex;justify-content:center;align-items:center;background:var(--teal-light);color:var(--teal2);font-size:1.35rem;font-weight:700;border:1px solid var(--teal-mid);}
+.patient-workspace .tenant-card-title{min-width:0;flex:1;overflow-wrap:anywhere;}
+.patient-workspace .tenant-business-title{font-size:1.08rem;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.25;color:var(--ink);margin:0 0 5px;}
+@media(max-width:600px){
+  #screen-medico nav{padding:9px 14px;gap:8px;}
+  #screen-medico nav .pill{display:none;}
+  .professional-brand .nb1{font-size:1rem;}
+  .patient-workspace .tenant-card-logo,.patient-workspace .tenant-card-fallback{width:58px;height:58px;}
+}
 </style>
 
 </head>
@@ -480,7 +503,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
 <div id="screen-medico" class="screen">
   <nav>
-    <div class="nav-brand"><img id="professional-tenant-logo" class="tenant-nav-logo" alt="Logo del establecimiento"><div><span class="nb1 js-app-brand">CITHELA</span><span class="nb2 js-app-sub">Odontología</span></div></div>
+    <div class="nav-brand professional-brand" id="professional-brand">
+      <img id="professional-tenant-logo" class="tenant-nav-logo" alt="" loading="lazy">
+      <div class="professional-brand-copy">
+        <span class="nb1" id="professional-business-name">Agenda profesional</span>
+        <span class="nb2">Agenda con CITHELA</span>
+      </div>
+    </div>
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
@@ -800,6 +829,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <label class="lbl" for="cloud-brand-logo">Logo del establecimiento (opcional)</label>
       <input class="inp" id="cloud-brand-logo" type="file" accept="image/png,image/jpeg,image/webp" onchange="selectCloudBrandLogo(this)">
       <p class="contact-note">PNG, JPG o WebP, hasta 512 KB. Recomendado: imagen cuadrada y fondo transparente.</p>
+      <p class="contact-note">El logo y el nombre del establecimiento se muestran en la cabecera de la agenda profesional y en la tarjeta que ve el paciente. La portada de acceso mantiene la identidad CITHELA.</p>
       <div id="cloud-brand-preview" class="contact-note" style="margin:12px 0;"></div>
       <button class="mb ghost" id="cloud-brand-remove" type="button" onclick="removeCloudBrandLogo()" style="display:none;margin:5px 0 12px;">Quitar logo</button>
       <button class="btn-main" id="cloud-brand-save" type="button" onclick="saveCloudBranding()">Guardar identidad visual</button>
@@ -2985,9 +3015,12 @@ function renderPatientPortalCards(){
       style="margin-bottom:16px;${brandStyle}">
       <div class="tenant-card-head">
         ${brandLogo?`<img class="tenant-card-logo" src="${escHtml(brandLogo)}"
-          alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`:''}
-        <div><p class="sh" style="margin-top:0;">${escHtml(profile.tenant_name)}</p>
-          <p class="contact-note">${escHtml(profile.name)}</p></div>
+          alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`
+          :`<span class="tenant-card-fallback" aria-hidden="true">${escHtml(String(profile.tenant_name||'C').trim().charAt(0).toUpperCase()||'C')}</span>`}
+        <div class="tenant-card-title">
+          <p class="sh tenant-business-title">${escHtml(profile.tenant_name||'Establecimiento')}</p>
+          <p class="contact-note">${escHtml(profile.name)}</p>
+        </div>
       </div>
       <button class="btn-main patient-booking-toggle" type="button"
         onclick="patientOpenBooking('${profile.tenant_id}','${profile.person_id}')">
@@ -3281,13 +3314,21 @@ function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
   applyCithelaTheme(tenant?.brand_theme||'sage');
-  const businessName=document.querySelector('#screen-medico .js-app-sub');
-  if(businessName&&tenant)businessName.textContent=tenant.display_name||'Establecimiento';
-  const logo=$('professional-tenant-logo');
+  const businessName=$('professional-business-name');
+  const displayName=active
+    ? String(tenant?.display_name||'').trim()||'Establecimiento'
+    : String(getCfg().consultorio||'').trim()||'Agenda profesional';
+  if(businessName){
+    businessName.textContent=displayName;
+    businessName.title=displayName;
+  }
+  const logo=$('professional-tenant-logo'),brand=$('professional-brand');
   if(logo){
     const url=tenant?cithelaBrandLogoUrl(
       tenant.logo_object_path,tenant.id,tenant.branding_updated_at):'';
     logo.style.display=url?'block':'none';
+    logo.alt=url?'Logo de '+displayName:'';
+    brand?.classList.toggle('has-tenant-logo',!!url);
     if(url)logo.src=url;else logo.removeAttribute('src');
   }
   const phoneLabel=document.querySelector('label[for="new-person-phone"]');
@@ -4665,7 +4706,7 @@ function renderCloudBrandConfig(s){
   $('cloud-brand-preview').innerHTML=cloudBrandFile
     ?'Logo seleccionado: '+escHtml(cloudBrandFile.name)
     :url?'<img class="tenant-card-logo" src="'+escHtml(url)+'" alt="Logo actual">':
-      'Se mostrará el símbolo de CITHELA hasta que cargues un logo.';
+      'Sin logo, la agenda muestra el símbolo CITHELA y el paciente ve la inicial del establecimiento.';
   $('cloud-brand-remove').style.display=
     (cloudBrandFile||tenant.logo_object_path)&&!cloudBrandRemove?'block':'none';
 }
