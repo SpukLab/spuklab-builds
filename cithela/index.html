@@ -2715,8 +2715,16 @@ async function patientLinkedPhoneVerify(){
     $('patient-login-phone-code').value='';
     $('l-patient-email').value='';
     await patientEnter();
-  }catch(err){$('patient-login-phone-status').textContent=patientLinkedPhoneError(err);}
-  finally{
+  }catch(err){
+    $('patient-login-phone-status').textContent=patientLinkedPhoneError(err);
+    if(err?.message==='patient_profile_required'||err?.message==='phone_not_verified'){
+      patientLinkedPhonePending=null;
+      $('patient-login-phone').readOnly=false;
+      $('patient-login-phone-send').disabled=false;
+      $('patient-linked-phone-code').hidden=true;
+      $('patient-login-phone-code').value='';
+    }
+  }finally{
     patientLinkedPhoneBusy=false;
     $('patient-login-phone-verify').disabled=false;
   }
