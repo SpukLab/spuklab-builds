@@ -70,6 +70,31 @@ const { pathToFileURL } = require('node:url');
       assert.equal(await page.locator('#p-medico-agenda').evaluate(el => el.classList.contains('on')), true,
         'Return to Agenda failed at '+width);
       console.log('PASS tab navigation '+width+'px');
+      // Test a long tenant name with a logo locally; no Supabase session or upload.
+      const identity = await page.evaluate(() => {
+        const name = document.getElementById('professional-business-name');
+        const brand = document.getElementById('professional-brand');
+        const image = document.getElementById('professional-tenant-logo');
+        name.textContent = 'Estudio de atención y tratamientos profesionales del barrio';
+        brand.classList.add('has-tenant-logo');
+        image.style.display = 'block';
+        image.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%232f7d73"/%3E%3C/svg%3E';
+        const imageRect = image.getBoundingClientRect();
+        const nameRect = name.getBoundingClientRect();
+        const exitRect = document.querySelector('#screen-medico .nav-out').getBoundingClientRect();
+        return {
+          logoWidth:imageRect.width, logoHeight:imageRect.height,
+          nameBeforeExit:nameRect.right<=exitRect.left+1,
+          iconHidden:getComputedStyle(brand,'::before').display==='none',
+          screenWidth:document.documentElement.scrollWidth,
+          title:name.getAttribute('title')
+        };
+      });
+      assert.ok(identity.logoWidth>=46&&identity.logoHeight>=46,
+        'Tenant logo too small at '+width+': '+JSON.stringify(identity));
+      assert.ok(identity.nameBeforeExit&&identity.iconHidden&&identity.screenWidth<=width+2,
+        'Long tenant branding overflow or duplicate CITHELA symbol at '+width+': '+JSON.stringify(identity));
+      console.log('PASS establishment branding '+width+'px');
       // Visual snapshot for human review in Actions artifacts, without patient details.
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
