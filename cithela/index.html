@@ -476,6 +476,22 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <button id="patient-switch-account" class="mb ghost" type="button" style="display:none;margin:0 0 12px;" onclick="patientSwitchAccount()">Cambiar de cuenta en este dispositivo</button>
       <p id="patient-invite-hint" class="contact-note" role="status" style="margin:0 0 12px;">Si ya usaste CITHELA en este dispositivo, podés entrar directamente.</p>
       <button id="patient-primary-access" class="btn-main" type="button" onclick="patientPrimaryAccess()">Continuar</button>
+      <details id="patient-linked-phone-login" class="patient-shared-panel" style="margin:16px 0;">
+        <summary>Ya vinculé mi WhatsApp</summary>
+        <div style="padding:12px 0 4px;">
+          <p class="contact-note">Esta opción es solo para pacientes que ya vincularon su WhatsApp a su cuenta por correo. No crea nuevas cuentas.</p>
+          <label class="lbl" for="patient-login-phone">WhatsApp vinculado</label>
+          <input class="inp" type="tel" id="patient-login-phone" autocomplete="tel" placeholder="+5492211234567" aria-describedby="patient-login-phone-hint">
+          <p class="contact-note" id="patient-login-phone-hint">En Argentina: <strong>+54 9</strong> + área + número, sin 0 ni 15.</p>
+          <button class="btn-main soft" id="patient-login-phone-send" type="button" onclick="patientLinkedPhoneSend()">Enviar código por WhatsApp</button>
+          <div id="patient-linked-phone-code" hidden>
+            <label class="lbl" for="patient-login-phone-code">Código de seis dígitos</label>
+            <input class="inp" id="patient-login-phone-code" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="000000">
+            <button class="btn-main" id="patient-login-phone-verify" type="button" onclick="patientLinkedPhoneVerify()">Entrar a mis turnos</button>
+          </div>
+          <p class="contact-note" id="patient-login-phone-status" role="status" aria-live="polite"></p>
+        </div>
+      </details>
       <div id="patient-whatsapp-otp" style="display:none;margin-top:14px;">
         <label class="lbl" for="l-patient-otp">Código recibido por WhatsApp</label>
         <input class="inp" id="l-patient-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
@@ -1795,6 +1811,30 @@ const CithelaCloud=(()=>{
     if(error)throw error;
     return refresh();
   }
+  async function sendLinkedPatientPhoneOtp(phone){
+    const c=await getClient();
+    const {error}=await c.auth.signInWithOtp({
+      phone,options:{channel:'sms',shouldCreateUser:false}
+    });
+    if(error)throw error;
+    return {ok:true};
+  }
+  async function verifyLinkedPatientPhoneOtp(phone,token){
+    const c=await getClient();
+    const {error}=await c.auth.verifyOtp({phone,token,type:'sms'});
+    if(error)throw error;
+    const {data:{user},error:userError}=await c.auth.getUser();
+    if(userError)throw userError;
+    if(!user||String(user.phone||'').replace(/^\+/,'')!==phone.replace(/^\+/,'')||
+      !user.phone_confirmed_at)throw Error('phone_not_verified');
+    const result=await patientPortal();
+    if(!result.profiles?.length){
+      await c.auth.signOut();
+      await refresh();
+      throw Error('patient_profile_required');
+    }
+    return refresh();
+  }
   async function enrollExistingPatientPhone(phone){
     const c=await getClient();
     const {data:{user},error:userError}=await c.auth.getUser();
@@ -2168,7 +2208,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -2351,6 +2391,7 @@ function openPatientWhatsApp(patientId){
 let patientPortalData=null,patientPortalRequest=0;
 let patientWhatsappOtpSent=false;
 let patientEnrollPending=null,patientEnrollBusy=false;
+let patientLinkedPhonePending=null,patientLinkedPhoneBusy=false;
 let patientMagicLinkSending=false;
 const CITHELA_PATIENT_MAGIC_LINK_COOLDOWN_KEY='cithela_patient_magic_link_next_send_at';
 function patientMagicLinkNextAllowedAt(){
@@ -2403,6 +2444,8 @@ function renderPatientLoginSession(){
   const copy=$('patient-access-copy');
   const primary=$('patient-primary-access');
   const otpWrap=$('patient-whatsapp-otp');
+  const linkedLogin=$('patient-linked-phone-login');
+  if(linkedLogin)linkedLogin.hidden=Boolean(session.signedIn||hasInvite||targetEmail||targetPhone);
   if(targetEmail&&!$('l-patient-email').value)$('l-patient-email').value=targetEmail;
   if(emailWrap)emailWrap.hidden=Boolean(targetPhone)||hasInvite||Boolean(session.signedIn);
   if(otpWrap)otpWrap.style.display=targetPhone&&patientWhatsappOtpSent&&!session.signedIn?'block':'none';
@@ -2457,6 +2500,8 @@ async function patientSwitchAccount(){
     patientRescheduleState=null;
     patientPortalData=null;
     patientWhatsappOtpSent=false;
+    patientLinkedPhonePending=null;patientLinkedPhoneBusy=false;
+    patientEnrollPending=null;patientEnrollBusy=false;
     patientNoLinkedProfile=false;
     if($('l-patient-email'))$('l-patient-email').value=pendingPatientInviteEmail()||'';
     if($('l-patient-otp'))$('l-patient-otp').value='';
@@ -2624,6 +2669,58 @@ let patientRescheduleState=null;
 let patientSlotRequest=0;
 let patientMutationBusy=false;
 
+function patientLinkedPhoneError(err){
+  const msg=String(err?.message||'');
+  if(msg==='patient_profile_required')return 'Este número no tiene una ficha vinculada. Ingresá por correo y vinculá WhatsApp desde Mis turnos.';
+  if(msg==='phone_not_verified')return 'El código no confirmó el WhatsApp esperado.';
+  if(/rate limit|too many/i.test(msg))return 'Esperá antes de solicitar otro código.';
+  if(/invalid|expired/i.test(msg))return 'El código no es válido o venció.';
+  return 'No pudimos ingresar con ese número. Si no lo vinculaste antes, usá el acceso por correo.';
+}
+async function patientLinkedPhoneSend(){
+  if(patientLinkedPhoneBusy||patientLinkedPhonePending||CithelaCloud.state().signedIn||
+     pendingPatientInvite())return;
+  const phone=String($('patient-login-phone').value||'').replace(/[\s()-]/g,'');
+  if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){
+    $('patient-login-phone-status').textContent='Ingresá el formato internacional. Ejemplo: +5492211234567.';return;
+  }
+  patientLinkedPhoneBusy=true;
+  $('patient-login-phone-send').disabled=true;
+  $('patient-login-phone-status').textContent='Solicitando código para la cuenta existente…';
+  try{
+    await CithelaCloud.sendLinkedPatientPhoneOtp(phone);
+    patientLinkedPhonePending=phone;
+    $('patient-linked-phone-code').hidden=false;
+    $('patient-login-phone').readOnly=true;
+    $('patient-login-phone-status').textContent='Código solicitado. Revisá el WhatsApp vinculado.';
+  }catch(err){$('patient-login-phone-status').textContent=patientLinkedPhoneError(err);}
+  finally{
+    patientLinkedPhoneBusy=false;
+    $('patient-login-phone-send').disabled=!!patientLinkedPhonePending;
+  }
+}
+async function patientLinkedPhoneVerify(){
+  if(patientLinkedPhoneBusy||!patientLinkedPhonePending)return;
+  const code=String($('patient-login-phone-code').value||'').trim();
+  if(!/^\d{6}$/.test(code)){
+    $('patient-login-phone-status').textContent='Ingresá los seis dígitos del código.';return;
+  }
+  const phone=patientLinkedPhonePending;
+  patientLinkedPhoneBusy=true;
+  $('patient-login-phone-verify').disabled=true;
+  $('patient-login-phone-status').textContent='Verificando código y ficha vinculada…';
+  try{
+    await CithelaCloud.verifyLinkedPatientPhoneOtp(phone,code);
+    patientLinkedPhonePending=null;
+    $('patient-login-phone-code').value='';
+    $('l-patient-email').value='';
+    await patientEnter();
+  }catch(err){$('patient-login-phone-status').textContent=patientLinkedPhoneError(err);}
+  finally{
+    patientLinkedPhoneBusy=false;
+    $('patient-login-phone-verify').disabled=false;
+  }
+}
 function patientEnrollError(err){
   const msg=String(err?.message||'');
   if(/already registered|already been registered|already in use|already exists|phone.*exists|phone.*taken|duplicate|unique constraint/i.test(msg))
@@ -3360,6 +3457,7 @@ async function logout(){
   patientPortalData=null;
   patientWhatsappOtpSent=false;
   patientEnrollPending=null;patientEnrollBusy=false;
+  patientLinkedPhonePending=null;patientLinkedPhoneBusy=false;
   patientSharedDrafts.clear();patientSharedOpen.clear();
   hideVisiblePasswords();
   me={};
