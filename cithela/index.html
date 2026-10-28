@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>CITHELA</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
@@ -134,12 +134,12 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 /* WEEK NAV */
 .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .wn-lbl{font-size:.84rem;font-weight:600;color:var(--ink2);}
-.wn-btn{width:30px;height:30px;border-radius:8px;border:var(--line);background:var(--white);color:var(--ink3);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;}
+.wn-btn{width:44px;height:44px;min-width:44px;border-radius:8px;border:var(--line);background:var(--white);color:var(--ink3);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;}
 .wn-btn:hover{color:var(--teal);}
 
 /* CALENDAR */
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:20px;}
-.cday{text-align:center;padding:7px 2px;border-radius:9px;cursor:pointer;border:1.5px solid transparent;transition:all .15s;}
+.cday{text-align:center;min-height:48px;padding:7px 2px;border-radius:9px;cursor:pointer;border:1.5px solid transparent;transition:all .15s;}
 .cday:hover{background:var(--teal-light);}
 .cday.sel{background:var(--teal);border-color:var(--teal);}
 .cday.sel .dn,.cday.sel .dd{color:#fff;}
@@ -355,6 +355,37 @@ textarea.inp{resize:vertical;min-height:72px;}
 .cloud-wa-draft[hidden]{display:none}
 .cloud-wa-reply-text{font-size:.8rem;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;margin:8px 0}
 .cloud-wa-status-line{font-size:.76rem;line-height:1.4;margin-top:9px}
+
+.cday{width:100%;min-width:0;background:transparent;font:inherit;color:inherit;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+.cday:focus-visible{outline:3px solid var(--teal2);outline-offset:1px;}
+/* Pilot UX ergonomics: smaller menu, visible tasks, readable and thumb-sized controls. */
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.agenda-primary-action{margin:-2px 0 16px;}
+.agenda-primary-action .btn-main{min-height:48px;}
+.settings-intro{font-size:.83rem;line-height:1.5;color:var(--ink2);margin-bottom:12px;}
+.settings-group-title{font-size:.83rem;font-weight:700;color:var(--teal2);letter-spacing:.02em;margin:22px 0 10px;}
+.settings-report-link{width:100%;min-height:44px;text-align:left;}
+.settings-page-title{font-size:1.1rem;margin:12px 0;color:var(--ink);}
+.report-back{min-height:44px;}
+.person-create{margin-bottom:14px;}
+.tabs .tab:focus-visible,.wn-btn:focus-visible,.seg-btn:focus-visible{outline:3px solid var(--teal2);outline-offset:-3px;}
+@media(max-width:600px){
+  .tabs{padding:0 6px;overflow-x:auto;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  #screen-medico .tab{flex:1;min-height:48px;padding:12px 6px;font-size:.8rem;}
+  #screen-medico .tab-icon{width:16px;margin-right:3px;}
+  .pane{padding:18px 14px;}
+  .wn-btn{width:44px;height:44px;min-width:44px;font-size:1.25rem;}
+  .cday{min-height:48px;padding:10px 2px;}
+  .seg-btn,.btn-main,.mb,.nav-out{min-height:44px;}
+  .nav-out{padding:9px 12px;}
+  .lbl{font-size:.75rem;}
+  .contact-note,.hint,.ops-note,.block-meta,.slot-note{font-size:.75rem;line-height:1.45;color:var(--ink2);}
+  .hint{color:var(--ink3);}
+  .dn,.sl{font-size:.65rem;}
+  .toast{max-width:calc(100vw - 28px);white-space:normal;text-align:center;bottom:calc(16px + env(safe-area-inset-bottom));}
+  .modal{padding-bottom:calc(28px + env(safe-area-inset-bottom));}
+}
 textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px 14px;}
 </style>
 
@@ -446,14 +477,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </nav>
   <div class="professional-tabbar">
   <div class="tabs" id="professional-tabs" aria-label="Secciones profesionales">
-    <button class="tab on"  onclick="tab('medico','agenda',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3M8 18h7"/></svg>Agenda</button>
-    <button class="tab js-person-plural" onclick="tab('medico','pacientes',this)">Pacientes</button>
-    <button class="tab"     onclick="tab('medico','nuevo',this)">+ Turno</button>
+    <button class="tab on" id="medico-tab-agenda" onclick="tab('medico','agenda',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3M8 18h7"/></svg>Agenda</button>
+    <button class="tab js-person-plural" id="medico-tab-personas" onclick="tab('medico','pacientes',this)">Pacientes</button>
+    <button class="tab" id="medico-tab-nuevo" onclick="tab('medico','nuevo',this)">+ Turno</button>
     <button class="tab" id="cloud-wa-tab" type="button" style="display:none;" onclick="tab('medico','mensajes',this)" aria-label="Mensajes WhatsApp">Mensajes</button>
-    <button class="tab"     onclick="tab('medico','reportes',this)">Reportes</button>
-    <button class="tab"     onclick="tab('medico','config',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--white)"/><circle cx="16" cy="12" r="2" fill="var(--white)"/><circle cx="10" cy="18" r="2" fill="var(--white)"/></svg>Config</button>
+    <button class="tab" id="medico-tab-config" onclick="tab('medico','config',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--white)"/><circle cx="16" cy="12" r="2" fill="var(--white)"/><circle cx="10" cy="18" r="2" fill="var(--white)"/></svg>Ajustes</button>
   </div>
-  <button class="tabs-next" id="professional-tabs-more" type="button" onclick="scrollProfessionalTabs()" aria-label="Ver Reportes y Configuración" title="Desplazar secciones">›</button>
+  <button class="tabs-next" id="professional-tabs-more" type="button" onclick="scrollProfessionalTabs()" aria-label="Ver más secciones" title="Desplazar secciones">›</button>
   </div>
 
   <div id="p-medico-agenda" class="pane on">
@@ -464,7 +494,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <button class="wn-btn" onclick="changeWeek(1)">›</button>
     </div>
     <div class="cal" id="cal-med"></div>
-    <div class="stats" id="stats"></div>
+    <div class="agenda-primary-action"><button class="btn-main" type="button"
+      onclick="tab('medico','nuevo',document.getElementById('medico-tab-nuevo'))">+ Nuevo turno</button></div>
     <div id="ops-queue-wrap" style="display:none;">
       <p class="sh" id="ops-queue-title">Pendientes próximos</p>
       <div id="ops-queue"></div>
@@ -472,22 +503,27 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <p class="sh">Turnos activos del día</p>
     <div id="agenda-list"></div>
     <div id="agenda-history-wrap"></div>
+    <p class="sh">Resumen semanal</p>
+    <div class="stats" id="stats"></div>
   </div>
 
   <div id="p-medico-pacientes" class="pane">
     <p class="ops-note" id="mode-pacientes" role="status" style="display:none;margin-bottom:12px;"></p>
-    <div class="form-card" style="margin-bottom:14px;">
-      <p class="sh" style="margin:0 0 10px;">Agregar persona</p>
-      <label class="lbl" for="new-person-name">Nombre completo</label>
-      <input class="inp" id="new-person-name" autocomplete="name" placeholder="Nombre y apellido">
-      <label class="lbl" for="new-person-phone">WhatsApp (opcional)</label>
-      <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" placeholder="+54 9 11 0000-0000">
-      <button class="btn-main" onclick="crearPersona()">Guardar persona</button>
-    </div>
     <div class="search-row">
-      <span style="color:var(--ink3);">⌕</span>
-      <input id="s-pac" placeholder="Buscar persona..." oninput="renderPacs()">
+      <span style="color:var(--ink3);" aria-hidden="true">⌕</span>
+      <label class="visually-hidden" for="s-pac">Buscar persona</label>
+      <input id="s-pac" type="search" placeholder="Buscar por nombre, teléfono o correo" oninput="renderPacs()">
     </div>
+    <details class="cithela-config-group person-create" id="person-create-details">
+      <summary>+ Agregar persona <span aria-hidden="true">⌄</span></summary>
+      <div class="form-card" style="margin:0 12px 14px;">
+        <label class="lbl" for="new-person-name">Nombre completo</label>
+        <input class="inp" id="new-person-name" autocomplete="name" placeholder="Nombre y apellido">
+        <label class="lbl" for="new-person-phone">WhatsApp (opcional)</label>
+        <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" placeholder="+54 9 11 0000-0000">
+        <button class="btn-main" type="button" onclick="crearPersona()">Guardar persona</button>
+      </div>
+    </details>
     <div id="pacs-wrap" style="background:var(--white);border-radius:var(--r);padding:4px 16px;border:var(--line);"></div>
   </div>
 
@@ -554,6 +590,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
   <div id="p-medico-reportes" class="pane">
+    <button class="mb ghost report-back" type="button" onclick="tab('medico','config',document.getElementById('medico-tab-config'))">‹ Volver a Ajustes</button>
+    <h2 class="settings-page-title">Reportes y exportaciones</h2>
     <p class="sh">Exportar datos</p>
     <p class="contact-note" id="report-source" role="status"></p>
     <div class="form-card" style="margin-bottom:14px;">
@@ -589,10 +627,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <div id="integrity-result" style="margin-top:14px;"></div>
     </div>
 
-    <p class="sh">Respaldo local</p>
+    <p class="sh">Respaldo de demostración local</p>
     <div class="form-card">
       <p style="font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:4px;">Backup de la app</p>
-      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Guarda pacientes, turnos, bloqueos, configuración y registro operativo en un archivo JSON. La clave de acceso no se exporta. El archivo puede contener datos privados: guardalo en un lugar seguro.</p>
+      <p style="font-size:.77rem;color:var(--ink3);margin-bottom:14px;line-height:1.55;">Solo exporta datos guardados en este navegador. No respalda datos de Supabase Cloud. Guarda pacientes, turnos, bloqueos, configuración y registro operativo en un archivo JSON. La clave de acceso no se exporta. El archivo puede contener datos privados: guardalo en un lugar seguro.</p>
       <button class="btn-main" onclick="exportBackup()">⬇ Descargar backup</button>
       <button class="btn-main soft" style="margin-top:8px;" onclick="document.getElementById('restore-input').click()">Restaurar backup</button>
       <input type="file" id="restore-input" accept=".json,application/json" style="display:none" onchange="restoreBackup(this)">
@@ -600,64 +638,50 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-config" class="pane">
-    <details class="cithela-config-group" id="cfg-section-business">
-      <summary>Datos del negocio<span aria-hidden="true">⌄</span></summary>
+    <p class="settings-intro">Configurá primero la atención. Las opciones de cuenta y mantenimiento están al final.</p>
+    <button class="mb ghost settings-report-link" type="button"
+      onclick="tab('medico','reportes',document.getElementById('medico-tab-config'))">Reportes y exportaciones</button>
+    <h2 class="settings-group-title">Agenda y atención</h2>
+<details class="cithela-config-group" id="cfg-section-hours">
+      <summary>Horarios de atención<span aria-hidden="true">⌄</span></summary>
+      <div class="form-card" style="margin-bottom:14px;">
+      <div id="cloud-hours-form" style="display:none;margin-top:18px;">
+        <p class="contact-note" style="margin-bottom:8px;">Activá los días de trabajo y modificá sus franjas horarias cuando lo necesites.</p>
+        
+        <details class="cithela-weekly-preset"><summary>Aplicar un horario predeterminado ▾</summary>
+          <strong style="font-size:.85rem;">Configuración rápida de la semana</strong>
+          <p class="contact-note">Lunes a viernes 09:00–13:00 / 14:00–18:00; sábado 09:00–13:00. Domingo cerrado. Podés editar cada día después.</p>
+          <button class="btn-main soft" type="button" onclick="cloudApplyWeeklyPreset()">Aplicar horario semanal</button>
+          <p class="contact-note">Solo cambia los horarios futuros de atención. Los turnos existentes no se cancelan ni se mueven.</p>
+        </details>
+        <div id="cloud-hours-list"></div>
+      </div>
+      </div>
+    </details>
+<details class="cithela-config-group" id="cfg-section-availability">
+      <summary>Ausencias y bloqueos<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <label class="lbl">Nombre de la app / marca</label>
-      <input class="inp" id="cfg-brand" placeholder="CITHELA">
-      <p class="hint" style="margin-top:-8px;">Podés cambiarlo más adelante sin modificar el módulo de turnos.</p>
-      <label class="lbl">Nombre del profesional</label>
-      <input class="inp" id="cfg-nombre" placeholder="Nombre del profesional o equipo">
-      <label class="lbl">Nombre del negocio / espacio</label>
-      <input class="inp" id="cfg-consultorio" placeholder="Consultorio, estudio, salón...">
-      <label class="lbl">Actividad / rubro</label>
-      <input class="inp" id="cfg-activity" placeholder="Odontología, peluquería, tatuajes, estética...">
-      <label class="lbl">Cómo llamar a quien reserva</label>
-      <select class="inp" id="cfg-person-term">
-        <option value="paciente">Paciente</option>
-        <option value="cliente">Cliente</option>
-      </select>
-      <label class="lbl">Dirección</label>
-      <input class="inp" id="cfg-dir" placeholder="Dirección de atención (opcional)">
-      <label class="lbl">Teléfono / WhatsApp del consultorio</label>
-      <input class="inp" id="cfg-tel" placeholder="+54 9 11 0000-0000">
-      <button class="btn-main" onclick="guardarConfig()">Guardar datos</button>
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Bloqueá un día completo o un horario puntual. Los turnos existentes no se eliminan: el bloqueo solo impide nuevas reservas y reprogramaciones.</p>
+      <div class="inline-grid">
+        <div>
+          <label class="lbl">Fecha</label>
+          <input class="inp" type="date" id="cfg-block-fecha">
+        </div>
+        <div>
+          <label class="lbl">Alcance</label>
+          <select class="inp" id="cfg-block-hora">
+            <option value="">Día completo</option>
+          </select>
+        </div>
+      </div>
+      <label class="lbl">Motivo (opcional)</label>
+      <input class="inp" id="cfg-block-motivo" placeholder="Vacaciones, capacitación, consultorio cerrado...">
+      <button class="btn-main" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
+      <div id="cfg-block-list" style="margin-top:14px;"></div>
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-payments">
-      <summary>Cobros y señas<span aria-hidden="true">⌄</span></summary>
-    <div class="form-card" id="cloud-payment-form" style="margin-bottom:14px;display:none;">
-      <p class="contact-note" style="margin-bottom:14px;">Alias del establecimiento para solicitar transferencias por WhatsApp. Solo propietario y administradores pueden modificarlo. CITHELA no cobra ni acredita pagos.</p>
-      <label class="lbl" for="cloud-transfer-alias">Alias de transferencia</label>
-      <input class="inp" id="cloud-transfer-alias" maxlength="20"
-        autocapitalize="none" autocorrect="off" autocomplete="off"
-        placeholder="ejemplo.salon" oninput="cloudPaymentEditing=true">
-      <label class="lbl" for="cloud-transfer-holder">Titular de la cuenta (opcional)</label>
-      <input class="inp" id="cloud-transfer-holder" maxlength="120" autocomplete="off"
-        placeholder="Nombre que figura en el banco" oninput="cloudPaymentEditing=true">
-      <p class="contact-note" id="cloud-payment-info" role="status" style="margin-bottom:12px;">Dejá el alias vacío para solicitar la seña sin datos de transferencia.</p>
-      <button class="btn-main" id="cloud-payment-save" type="button"
-        onclick="saveCloudPaymentConfig()">Guardar datos de transferencia</button>
-    </div>
-
-    </details>
-    <details class="cithela-config-group" id="cfg-section-branding">
-      <summary>Identidad visual<span aria-hidden="true">⌄</span></summary>
-    <div class="form-card" id="cloud-brand-form" style="margin-bottom:14px;display:none;">
-      <p class="contact-note">Elegí una paleta completa para fondos, tarjetas, botones y detalles. Cada establecimiento conserva la suya. El logo será público; no subas documentos personales.</p>
-      <label class="lbl" style="margin-top:14px;">Paleta de color</label>
-      <div class="brand-palette" id="cloud-brand-palette" role="group" aria-label="Paleta del establecimiento"></div>
-      <label class="lbl" for="cloud-brand-logo">Logo del establecimiento (opcional)</label>
-      <input class="inp" id="cloud-brand-logo" type="file" accept="image/png,image/jpeg,image/webp" onchange="selectCloudBrandLogo(this)">
-      <p class="contact-note">PNG, JPG o WebP, hasta 512 KB. Recomendado: imagen cuadrada y fondo transparente.</p>
-      <div id="cloud-brand-preview" class="contact-note" style="margin:12px 0;"></div>
-      <button class="mb ghost" id="cloud-brand-remove" type="button" onclick="removeCloudBrandLogo()" style="display:none;margin:5px 0 12px;">Quitar logo</button>
-      <button class="btn-main" id="cloud-brand-save" type="button" onclick="saveCloudBranding()">Guardar identidad visual</button>
-    </div>
-
-    </details>
-    <details class="cithela-config-group" id="cfg-section-services">
+<details class="cithela-config-group" id="cfg-section-services">
       <summary>Servicios<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Definí cada tarea con su duración. La disponibilidad del profesional se calculará con ese tiempo. Podés crear un servicio combinado, como “Corte + coloración”. Los turnos ya reservados conservan su duración original.</p>
@@ -701,7 +725,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-resources">
+<details class="cithela-config-group" id="cfg-section-resources">
       <summary>Profesionales / recursos<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Cada recurso tiene su propia agenda. Puede ser un odontólogo, peluquero, tatuador, box, sillón o cualquier unidad que no deba recibir dos turnos al mismo tiempo.</p>
@@ -714,9 +738,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-reminders">
-      <summary>Recordatorios WhatsApp<span aria-hidden="true">⌄</span></summary>
+<details class="cithela-config-group" id="cfg-section-reminders">
+      <summary>Recordatorios y mensajes manuales<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
+      <p class="contact-note" style="margin:0 0 14px;">Configura preferencias de este dispositivo. La plantilla de mensajes supervisados del servidor no se cambia aquí.</p>
       <label class="lbl">Mostrar pendientes con anticipación</label>
       <select class="inp" id="cfg-reminder-days">
         <option value="0">Solo el mismo día</option>
@@ -732,46 +757,67 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-hours">
-      <summary>Horarios de atención<span aria-hidden="true">⌄</span></summary>
-      <div class="form-card" style="margin-bottom:14px;">
-      <div id="cloud-hours-form" style="display:none;margin-top:18px;">
-        <p class="contact-note" style="margin-bottom:8px;">Activá los días de trabajo y modificá sus franjas horarias cuando lo necesites.</p>
-        
-        <details class="cithela-weekly-preset"><summary>Aplicar un horario predeterminado ▾</summary>
-          <strong style="font-size:.85rem;">Configuración rápida de la semana</strong>
-          <p class="contact-note">Lunes a viernes 09:00–13:00 / 14:00–18:00; sábado 09:00–13:00. Domingo cerrado. Podés editar cada día después.</p>
-          <button class="btn-main soft" type="button" onclick="cloudApplyWeeklyPreset()">Aplicar horario semanal</button>
-          <p class="contact-note">Solo cambia los horarios futuros de atención. Los turnos existentes no se cancelan ni se mueven.</p>
-        </details>
-        <div id="cloud-hours-list"></div>
-      </div>
-      </div>
-    </details>
-    <details class="cithela-config-group" id="cfg-section-availability">
-      <summary>Ausencias y bloqueos<span aria-hidden="true">⌄</span></summary>
+    <h2 class="settings-group-title">Establecimiento</h2>
+<details class="cithela-config-group" id="cfg-section-business">
+      <summary>Preferencias de este dispositivo<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Bloqueá un día completo o un horario puntual. Los turnos existentes no se eliminan: el bloqueo solo impide nuevas reservas y reprogramaciones.</p>
-      <div class="inline-grid">
-        <div>
-          <label class="lbl">Fecha</label>
-          <input class="inp" type="date" id="cfg-block-fecha">
-        </div>
-        <div>
-          <label class="lbl">Alcance</label>
-          <select class="inp" id="cfg-block-hora">
-            <option value="">Día completo</option>
-          </select>
-        </div>
-      </div>
-      <label class="lbl">Motivo (opcional)</label>
-      <input class="inp" id="cfg-block-motivo" placeholder="Vacaciones, capacitación, consultorio cerrado...">
-      <button class="btn-main" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
-      <div id="cfg-block-list" style="margin-top:14px;"></div>
+      <p class="contact-note" style="margin:0 0 14px;">Estos ajustes se guardan en este navegador. No modifican el nombre público ni los datos de CITHELA Cloud.</p>
+       <label class="lbl">Nombre de la app / marca</label>
+      <input class="inp" id="cfg-brand" placeholder="CITHELA">
+      <p class="hint" style="margin-top:-8px;">Podés cambiarlo más adelante sin modificar el módulo de turnos.</p>
+      <label class="lbl">Nombre del profesional</label>
+      <input class="inp" id="cfg-nombre" placeholder="Nombre del profesional o equipo">
+      <label class="lbl">Nombre del negocio / espacio</label>
+      <input class="inp" id="cfg-consultorio" placeholder="Consultorio, estudio, salón...">
+      <label class="lbl">Actividad / rubro</label>
+      <input class="inp" id="cfg-activity" placeholder="Odontología, peluquería, tatuajes, estética...">
+      <label class="lbl">Cómo llamar a quien reserva</label>
+      <select class="inp" id="cfg-person-term">
+        <option value="paciente">Paciente</option>
+        <option value="cliente">Cliente</option>
+      </select>
+      <label class="lbl">Dirección</label>
+      <input class="inp" id="cfg-dir" placeholder="Dirección de atención (opcional)">
+      <label class="lbl">Teléfono / WhatsApp del consultorio</label>
+      <input class="inp" id="cfg-tel" placeholder="+54 9 11 0000-0000">
+      <button class="btn-main" onclick="guardarConfig()">Guardar preferencias locales</button>
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-cloud">
+<details class="cithela-config-group" id="cfg-section-branding">
+      <summary>Identidad visual<span aria-hidden="true">⌄</span></summary>
+    <div class="form-card" id="cloud-brand-form" style="margin-bottom:14px;display:none;">
+      <p class="contact-note">Elegí una paleta completa para fondos, tarjetas, botones y detalles. Cada establecimiento conserva la suya. El logo será público; no subas documentos personales.</p>
+      <label class="lbl" style="margin-top:14px;">Paleta de color</label>
+      <div class="brand-palette" id="cloud-brand-palette" role="group" aria-label="Paleta del establecimiento"></div>
+      <label class="lbl" for="cloud-brand-logo">Logo del establecimiento (opcional)</label>
+      <input class="inp" id="cloud-brand-logo" type="file" accept="image/png,image/jpeg,image/webp" onchange="selectCloudBrandLogo(this)">
+      <p class="contact-note">PNG, JPG o WebP, hasta 512 KB. Recomendado: imagen cuadrada y fondo transparente.</p>
+      <div id="cloud-brand-preview" class="contact-note" style="margin:12px 0;"></div>
+      <button class="mb ghost" id="cloud-brand-remove" type="button" onclick="removeCloudBrandLogo()" style="display:none;margin:5px 0 12px;">Quitar logo</button>
+      <button class="btn-main" id="cloud-brand-save" type="button" onclick="saveCloudBranding()">Guardar identidad visual</button>
+    </div>
+
+    </details>
+<details class="cithela-config-group" id="cfg-section-payments">
+      <summary>Cobros y señas<span aria-hidden="true">⌄</span></summary>
+    <div class="form-card" id="cloud-payment-form" style="margin-bottom:14px;display:none;">
+      <p class="contact-note" style="margin-bottom:14px;">Alias del establecimiento para solicitar transferencias por WhatsApp. Solo propietario y administradores pueden modificarlo. CITHELA no cobra ni acredita pagos.</p>
+      <label class="lbl" for="cloud-transfer-alias">Alias de transferencia</label>
+      <input class="inp" id="cloud-transfer-alias" maxlength="20"
+        autocapitalize="none" autocorrect="off" autocomplete="off"
+        placeholder="ejemplo.salon" oninput="cloudPaymentEditing=true">
+      <label class="lbl" for="cloud-transfer-holder">Titular de la cuenta (opcional)</label>
+      <input class="inp" id="cloud-transfer-holder" maxlength="120" autocomplete="off"
+        placeholder="Nombre que figura en el banco" oninput="cloudPaymentEditing=true">
+      <p class="contact-note" id="cloud-payment-info" role="status" style="margin-bottom:12px;">Dejá el alias vacío para solicitar la seña sin datos de transferencia.</p>
+      <button class="btn-main" id="cloud-payment-save" type="button"
+        onclick="saveCloudPaymentConfig()">Guardar datos de transferencia</button>
+    </div>
+
+    </details>
+    <h2 class="settings-group-title">Cuenta y herramientas</h2>
+<details class="cithela-config-group" id="cfg-section-cloud">
       <summary>Cuenta y conexión<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="cloud-status"></div>
@@ -816,16 +862,17 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-infrastructure">
+<details class="cithela-config-group" id="cfg-section-infrastructure">
       <summary>Infraestructura<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="infra-status"></div>
     </div>
 
     </details>
-    <details class="cithela-config-group" id="cfg-section-security">
-      <summary>Seguridad<span aria-hidden="true">⌄</span></summary>
+<details class="cithela-config-group" id="cfg-section-security">
+      <summary>Clave de demostración local<span aria-hidden="true">⌄</span></summary>
     <div class="form-card">
+      <p class="contact-note" style="margin:0 0 14px;">Esta clave sólo protege la demostración local. No cambia la contraseña de tu cuenta CITHELA Cloud.</p>
       <label class="lbl">Clave actual</label>
       <input class="inp" type="password" id="cfg-clave-actual" placeholder="••••••">
       <label class="lbl">Nueva clave</label>
@@ -3187,7 +3234,7 @@ function updateProfessionalTabArrow(){
   arrow.hidden=max<4;
   const end=tabs.scrollLeft>=max-6;
   arrow.textContent=end?'‹':'›';
-  arrow.setAttribute('aria-label',end?'Volver a Agenda y Pacientes':'Ver Reportes y Configuración');
+  arrow.setAttribute('aria-label',end?'Volver a Agenda y Personas':'Ver Mensajes y Ajustes');
 }
 function tab(sc,id,btn){
   const pfx=`p-${sc}-`;
@@ -3265,10 +3312,12 @@ function renderCal(who){
     const dot=turns.some(t=>t.fecha===key&&isOpenAppointment(t));
     const closed=cloudMode?!cloudDayOpen(key):isDayBlocked(key);
     const sel=selDate===key;
-    return`<div class="cday${sel?' sel':''}${key===tod?' tod':''}" style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
-      <div class="dn">${DN[i]}</div><div class="dd">${d.getDate()}</div>
-      ${dot&&!sel?'<div class="ddot"></div>':'<div style="height:7px"></div>'}
-    </div>`;
+    return`<button type="button" class="cday${sel?' sel':''}${key===tod?' tod':''}"
+      aria-pressed="${sel}" aria-label="${fmt(d)}${closed?' · día sin disponibilidad':''}"
+      style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
+      <span class="dn">${DN[i]}</span><span class="dd">${d.getDate()}</span>
+      ${dot&&!sel?'<span class="ddot"></span>':'<span style="height:7px"></span>'}
+    </button>`;
   }).join('');
 }
 function pickDay(key,who){selDate=key;if(who==='med'){renderCal('med');renderAgenda();}else{renderCal('pac');renderSlots();}}
@@ -4213,6 +4262,7 @@ async function crearPersona(){
       if(!r?.ok)throw new Error(r?.code||'No se pudo guardar');
       await CithelaCloud.refresh();
       $('new-person-name').value='';$('new-person-phone').value='';
+      $('person-create-details').open=false;
       toast(r.code==='person_created'?'Persona guardada en la nube ✓':'La persona ya existía en la nube');
     }catch(err){toast(err?.message||'No se pudo guardar la persona',4200);}
     return;
@@ -4224,6 +4274,7 @@ async function crearPersona(){
   ps.push(p);DB.sp(ps);
   recordEvent('person_created',{personId:p.id});
   $('new-person-name').value='';$('new-person-phone').value='';
+  $('person-create-details').open=false;
   renderPacs();fillNT();toast('Persona guardada ✓');
 }
 
@@ -4572,7 +4623,7 @@ el.innerHTML=`
     <div class="block-main"><div class="block-title">Sincronización en vivo</div><div class="block-meta">${cloud?.realtimeStatus==='SUBSCRIBED'?'Cambios cloud recibidos mientras la app está abierta':'Respaldo automático al volver y cada 45 segundos'}</div></div>
     <span class="tag ${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'c':'p'}">${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'EN VIVO':'RESPALDO'}</span>
   </div>
-  <p class="contact-note">La agenda del profesional ya puede operar contra Supabase. El flujo de paciente público sigue local hasta incorporar autenticación/identidad de cliente.</p>`;
+  <p class="contact-note">La agenda profesional y el portal autenticado del paciente usan Supabase. El modo de demostración local no se sincroniza.</p>`;
 }
 
 let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
