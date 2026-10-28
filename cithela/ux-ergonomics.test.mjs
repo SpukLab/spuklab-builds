@@ -14,7 +14,7 @@ test('application JS parses, with no duplicate HTML ids',()=>{
 });
 
 test('professional navigation has five primary tasks; reports remain reachable',()=>{
- const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"').match(/<div class="tabs">([\s\S]*?)<\/div>/)?.[1];
+ const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"').match(/<div class="tabs"[^>]*>([\s\S]*?)<\/div>/)?.[1];
  assert.ok(nav);
  assert.equal((nav.match(/<button /g)||[]).length,5);
  for(const id of ['agenda','personas','nuevo','config'])assert.ok(nav.includes('id="medico-tab-'+id+'"'));
