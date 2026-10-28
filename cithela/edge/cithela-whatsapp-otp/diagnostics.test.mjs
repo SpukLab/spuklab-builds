@@ -13,6 +13,13 @@ test("other countries and malformed numbers",()=>{
  assert.equal(metaRecipient("+12025550123",META_TEST_SENDER_ID),"12025550123");
  assert.throws(()=>metaRecipient("123",META_TEST_SENDER_ID),/invalid_phone/);
 });
+test("Supabase Auth hook strips plus without changing destination",()=>{
+ assert.equal(metaRecipient("5492215723664","production-number"),"5492215723664");
+ assert.equal(metaRecipient("5492215723664",META_TEST_SENDER_ID),"542215723664");
+ assert.equal(metaRecipient("12025550123","production-number"),"12025550123");
+ assert.throws(()=>metaRecipient("++5492215723664","production-number"),/invalid_phone/);
+ assert.throws(()=>metaRecipient("","production-number"),/invalid_phone/);
+});
 test("Meta errors are summarized without raw body",()=>{
  assert.equal(safeMetaError(400,{error:{code:131005,message:"private info"}}),"meta_code_131005");
  assert.equal(safeMetaError(401,{error:{message:"private info"}}),"meta_http_401");
