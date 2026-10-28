@@ -561,7 +561,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <label class="lbl" for="new-person-name">Nombre completo</label>
         <input class="inp" id="new-person-name" autocomplete="name" placeholder="Nombre y apellido">
         <label class="lbl" for="new-person-phone">WhatsApp (opcional)</label>
-        <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" placeholder="+54 9 11 0000-0000">
+        <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" aria-describedby="new-person-phone-hint" placeholder="+5492211234567">
+        <p id="new-person-phone-hint" class="contact-note" style="margin:7px 0 12px;">En Argentina: <strong>+54 9</strong> + código de área + número, sin 0 ni 15. Ejemplo: <strong>+5492211234567</strong>.</p>
         <button class="btn-main" type="button" onclick="crearPersona()">Guardar persona</button>
       </div>
     </details>
@@ -3341,11 +3342,11 @@ function renderProfessionalMode(){
     if(url)logo.src=url;else logo.removeAttribute('src');
   }
   const phoneLabel=document.querySelector('label[for="new-person-phone"]');
-  if(phoneLabel)phoneLabel.textContent=active?'WhatsApp E.164 (obligatorio)':'WhatsApp (opcional)';
+  if(phoneLabel)phoneLabel.textContent=active?'WhatsApp (obligatorio)':'WhatsApp (opcional)';
   const phoneField=$('new-person-phone');
   if(phoneField){
     phoneField.required=active;
-    phoneField.placeholder=active?'+5492210000000':'+54 9 11 0000-0000';
+    phoneField.placeholder='+5492211234567';
   }
   const note='Modo local: los turnos y pacientes de este dispositivo NO se sincronizan con CITHELA Cloud. Conectá la cuenta cloud antes de operar.';
   for(const id of ['mode-agenda','mode-pacientes','mode-nuevo']){
@@ -4291,8 +4292,8 @@ async function cloudVerFicha(id){
         <details style="margin-top:14px;">
           <summary class="contact-note" style="cursor:pointer;">Verificación por WhatsApp (próximamente)</summary>
           <p class="contact-note" style="padding-top:8px;">
-            La plantilla OTP de Meta no está habilitada para el número de prueba.
-            Las invitaciones por teléfono no están disponibles; evitamos enviar enlaces que aún no permiten ingresar.
+            La autenticación de WhatsApp superó la prueba técnica de código. El acceso telefónico de pacientes sigue en validación para preservar las fichas existentes.
+            Por ahora, enviá la invitación por correo.
           </p>
         </details>
       </div><hr class="divider">`:''}
@@ -4312,7 +4313,7 @@ async function crearPersona(){
   const tel=$('new-person-phone').value.trim();
   if(!nombre){toast('Ingresá el nombre');return;}
   if(professionalCloudReady()){
-    if(!/^\+[1-9][0-9]{7,14}$/.test(tel)){toast('En nube usá WhatsApp E.164, por ejemplo +549221...');return;}
+    if(!/^\+[1-9][0-9]{7,14}$/.test(tel)){toast('Usá +54 9 + área + número (sin 0 ni 15). Ejemplo: +5492211234567.');return;}
     try{
       const s=CithelaCloud.state();
       const r=await CithelaCloud.resolvePerson({
