@@ -83,7 +83,7 @@ test('patient workspace uses larger company logo or tenant monogram and keeps na
  const portal=slice('function renderPatientPortalCards(){','async function patientRefreshPortal(){');
  assert.match(portal,/class="tenant-card-logo"/);
  assert.match(portal,/class="tenant-card-fallback"/);
- assert.match(portal,/class="tenant-business-title"/);
+ assert.match(portal,/class="sh tenant-business-title"/);
  assert.match(portal,/escHtml\(profile\.tenant_name\|\|'Establecimiento'\)/);
  assert.match(portal,/escHtml\(profile\.name\)/);
  assert.match(html,/\.patient-workspace \.tenant-card-logo,\.patient-workspace \.tenant-card-fallback\{width:64px;height:64px/);
