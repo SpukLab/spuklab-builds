@@ -207,3 +207,34 @@ test('patient portal keeps global phone-first invitations gated until migration 
  assert.match(html,/aria-describedby="patient-enroll-hint"/);
  assert.match(script,/phone_change/);
 });
+
+const linkedPhoneSource=extract('  async function sendLinkedPatientPhoneOtp(phone){','  async function enrollExistingPatientPhone(phone){');
+test('linked WhatsApp login never creates a new Supabase user',async()=>{
+ const sent=[];
+ let verified=false;
+ const fake={auth:{
+  signInWithOtp:async x=>{sent.push(x);return {error:null};},
+  verifyOtp:async x=>{verified=true;assert.equal(x.type,'sms');return {error:null};},
+  getUser:async()=>({data:{user:{id:'existing',phone:'+5492211234567',phone_confirmed_at:'2026-10-28T00:00:00Z'}},error:null})
+ }};
+ const fn=new Function('getClient','patientPortal','refresh',linkedPhoneSource+
+   '\nreturn {send:sendLinkedPatientPhoneOtp,verify:verifyLinkedPatientPhoneOtp};')(
+     async()=>fake,async()=>({profiles:[{person_id:'patient'}]}),async()=>({signedIn:true}));
+ await fn.send('+5492211234567');
+ assert.deepEqual(sent,[{phone:'+5492211234567',options:{channel:'sms',shouldCreateUser:false}}]);
+ await fn.verify('+5492211234567','123456');
+ assert.equal(verified,true);
+});
+test('phone OTP login cannot access portal without matching patient link',async()=>{
+ let signOuts=0;
+ const fake={auth:{
+  verifyOtp:async()=>({error:null}),
+  getUser:async()=>({data:{user:{id:'otp-lab',phone:'+5492211234567',phone_confirmed_at:'2026-10-28T00:00:00Z'}},error:null}),
+  signOut:async()=>{signOuts++;return {error:null}}
+ }};
+ const fn=new Function('getClient','patientPortal','refresh',linkedPhoneSource+
+   '\nreturn verifyLinkedPatientPhoneOtp;')(
+     async()=>fake,async()=>({profiles:[]}),async()=>({signedIn:false}));
+ await assert.rejects(fn('+5492211234567','123456'),/patient_profile_required/);
+ assert.equal(signOuts,1);
+});
