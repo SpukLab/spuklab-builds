@@ -19,9 +19,12 @@ Probar dos comercios independientes **A** (piloto actual) y **B** (nuevo estable
 
 ### Preparación manual del establecimiento B
 
-1. Utilizar un **correo/identidad profesional diferente** al owner de A. Confirmar el correo del nuevo operador; el correo de prueba de Supabase tiene cuota limitada. Ingresar como profesional y crear un workspace **solo una vez** mediante el flujo normal `bootstrap_tenant`.
-2. Configurar nombre público, logo, color, servicio con duración, un recurso, semana de trabajo y días bloqueados. Registrar un teléfono de prueba autorizado.
-3. Entrar con el operador de A en un navegador y el de B en otro (o en perfiles/sesiones separadas). Nunca compartir sesiones ni tokens.
+1. Utilizar un **correo/identidad profesional diferente** al owner de A. Registrar la cuenta de operador **de manera supervisada** en Supabase Auth y confirmar su correo; la cuota de correo de prueba es limitada. No crear otro workspace desde el usuario dueño de A.
+2. En una **sesión privada o navegador separado**, abrir `https://spuklab.github.io/spuklab-builds/cithela/?pilotTenant=1`. Seleccionar **Profesional** e ingresar con el nuevo correo y contraseña. Después de validar la sesión, CITHELA muestra **Nuevo establecimiento · piloto controlado** si la cuenta todavía no tiene membresía y no corresponde a una ficha de paciente. Escribir un nombre y tocar **Crear establecimiento de prueba** una sola vez. Si ya tiene membresía, accede al establecimiento existente (no duplica).
+3. Configurar nombre público, logo, color, servicio con duración, un recurso, semana de trabajo y días bloqueados. Registrar un teléfono de prueba autorizado.
+4. Entrar con el operador de A en un navegador y el de B en otro (o en perfiles/sesiones separadas). Nunca compartir sesiones ni tokens. El parámetro `pilotTenant=1` es **solo una compuerta visual de prueba**, no una política de autorización; el control real sigue en Auth, RPC y RLS.
+
+**Nota para comercialización:** el alta de cuentas profesionales nuevas desde SpukLab Web se mantiene pendiente. La segunda cuenta se gestiona manualmente y **no** debe usarse la clave de demostración local para crear espacios.
 
 ### Comprobaciones de aislamiento obligatorias
 
