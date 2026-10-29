@@ -140,3 +140,12 @@ test('operations queue summarizes pending confirmations, deposits and reminders 
  assert.match(html,/Esta acción NO realiza ningún cobro/);
  assert.match(html,/Abrir WhatsApp no confirma envío, recepción ni lectura/);
 });
+
+test('cloud patient list separates identity and thumb-sized actions on mobile',()=>{
+ assert.match(html,/class="prow cloud-person-row"/);
+ assert.match(html,/class="cloud-person-actions"/);
+ assert.match(html,/\.cloud-person-row\{display:grid;grid-template-columns:38px minmax\(0,1fr\)/);
+ assert.match(html,/\.cloud-person-actions \.mb\{width:100%;min-height:44px;\}/);
+ assert.match(html,/onclick="cloudVerFicha\('/);
+ assert.match(html,/onclick="openPatientWhatsApp\('/);
+});
