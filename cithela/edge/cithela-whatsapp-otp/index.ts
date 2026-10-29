@@ -1,4 +1,4 @@
-import {metaRecipient,safeMetaError} from './diagnostics.mjs';
+import {hookRecipientPhone,metaRecipient,safeMetaError} from './diagnostics.mjs';
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 
 function env(name: string): string {
@@ -20,7 +20,7 @@ function verifyHook(payload: string, headers: Headers, rawSecrets: string) {
     try {
       return new Webhook(secret).verify(payload, headerObject) as {
         user?: { phone?: string };
-        sms?: { otp?: string };
+        sms?: { otp?: string; phone?: string };
       };
     } catch (error) {
       lastError = error;
@@ -39,12 +39,15 @@ Deno.serve(async (req: Request) => {
     const hookSecret = env("SEND_SMS_HOOK_SECRET");
     const event = verifyHook(payload, req.headers, hookSecret);
 
-    const phone = event?.user?.phone;
-    const otp = event?.sms?.otp;
-
-    if (!phone || !/^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s()-]/g, ""))) {
+    // Supabase Auth supplies sms.phone as the destination, including phone_change.
+    // user.phone remains the old number until phone_change is verified.
+    let phone: string;
+    try {
+      phone = hookRecipientPhone(event);
+    } catch {
       return Response.json({ error: "invalid phone" }, { status: 400 });
     }
+    const otp = event?.sms?.otp;
     if (!otp || !/^\d{6}$/.test(otp)) {
       return Response.json({ error: "invalid otp" }, { status: 400 });
     }
