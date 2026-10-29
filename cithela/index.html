@@ -473,6 +473,15 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <button class="mb ghost" type="button" style="width:100%;margin-top:10px;" onclick="requestProfessionalPasswordReset()">Olvidé mi contraseña</button>
         <p class="hint" style="margin:10px 0 0;">La sesión queda iniciada en este dispositivo.</p>
       </div>
+      <div id="professional-workspace-setup" hidden style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-color);">
+        <p class="sh">Nuevo establecimiento · piloto controlado</p>
+        <p class="contact-note">Esta cuenta profesional ya está autenticada, pero todavía no tiene un establecimiento. Creá su espacio independiente. No se copiarán pacientes, turnos ni servicios del piloto actual.</p>
+        <label class="lbl" for="professional-workspace-name">Nombre del establecimiento</label>
+        <input class="inp" id="professional-workspace-name" maxlength="160" autocomplete="organization" placeholder="Ej. Salón de prueba B">
+        <button class="btn-main" id="professional-workspace-create" type="button" onclick="professionalCreatePilotWorkspace()">Crear establecimiento de prueba</button>
+        <button class="mb ghost" style="width:100%;margin-top:10px;" type="button" onclick="professionalCancelPilotWorkspace()">Salir de esta cuenta</button>
+        <p class="contact-note" id="professional-workspace-status" role="status" aria-live="polite"></p>
+      </div>
       <div id="professional-password-recovery" style="display:none;">
         <p class="patient-login-guidance">Creá una nueva contraseña para tu cuenta profesional.</p>
         <label class="lbl" for="l-new-password">Nueva contraseña</label>
@@ -1122,6 +1131,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 let role='medico', me={}, wkOff=0, selDate=null, selSlot=null, reprogTurnoId=null, reprogHora=null;
 const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud session.
 const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
+// Pilot-only UI gate; NOT an authorization boundary. RPC validates auth and membership.
+const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams(location.search).get('pilotTenant')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -3380,6 +3391,11 @@ async function resumeCloudSession(){
   if(s.membership&&s.tenant){
     await loginWithCloudSession();return;
   }
+  if(CITHELA_SECOND_TENANT_PILOT&&s.email){
+    setRole('medico');
+    showProfessionalWorkspaceSetup();
+    return;
+  }
   // Patient accounts do not receive tenant memberships. A linked account
   // may resume its own portal without re-entering any invitation.
   const result=await CithelaCloud.patientPortal();
@@ -3395,6 +3411,64 @@ async function resumeCloudSession(){
     patientNoLinkedProfile=true;
     renderPatientLoginSession();
   }
+}
+function showProfessionalWorkspaceSetup(){
+  const state=CithelaCloud.state();
+  if(!CITHELA_SECOND_TENANT_PILOT||!state.signedIn||!state.email||
+     state.membership||state.tenant)return false;
+  const login=$('professional-login-fields');
+  const setup=$('professional-workspace-setup');
+  if(!setup)return false;
+  if(login)login.style.display='none';
+  setup.hidden=false;
+  $('professional-workspace-status').textContent='Conectado: '+state.email;
+  return true;
+}
+async function professionalCancelPilotWorkspace(){
+  const button=$('professional-workspace-create');
+  if(button?.disabled)return;
+  try{
+    await CithelaCloud.signOut();
+    $('professional-workspace-setup').hidden=true;
+    $('professional-login-fields').style.display='block';
+    $('professional-workspace-name').value='';
+    $('l-cloud-password').value='';
+    toast('Sesión de prueba cerrada');
+  }catch(err){toast(err?.message||'No se pudo cerrar la sesión',4300);}
+}
+async function professionalCreatePilotWorkspace(){
+  const state=CithelaCloud.state();
+  if(!CITHELA_SECOND_TENANT_PILOT||!state.signedIn||!state.email||
+     state.membership||state.tenant)return;
+  const name=$('professional-workspace-name').value.trim();
+  if(name.length<2||name.length>160){
+    $('professional-workspace-status').textContent='Ingresá un nombre entre 2 y 160 caracteres.';
+    return;
+  }
+  const button=$('professional-workspace-create');
+  if(button.disabled)return;
+  button.disabled=true;
+  $('professional-workspace-status').textContent='Comprobando identidad y creando establecimiento…';
+  try{
+    // A linked patient account is not an operator registration.
+    const portal=await CithelaCloud.patientPortal();
+    if(portal?.profiles?.length)throw Error('patient_account_not_eligible');
+    const result=await CithelaCloud.bootstrap(name);
+    if(!result?.ok||!['workspace_created','workspace_exists'].includes(result.code))
+      throw Error(result?.code||'No se pudo crear el establecimiento');
+    const refreshed=CithelaCloud.state();
+    if(!refreshed.membership||!refreshed.tenant)throw Error('workspace_not_visible');
+    $('professional-workspace-setup').hidden=true;
+    $('professional-login-fields').style.display='block';
+    $('professional-workspace-name').value='';
+    toast(result.code==='workspace_created'?'Establecimiento independiente creado':'Establecimiento existente recuperado',4800);
+    await loginWithCloudSession();
+  }catch(err){
+    const reason=String(err?.message||'');
+    $('professional-workspace-status').textContent=reason==='patient_account_not_eligible'
+      ?'Este usuario ya pertenece a una ficha de paciente. Utilizá otra cuenta de operador para el piloto.'
+      :reason==='workspace_not_visible'?'No pudimos verificar el establecimiento; no vuelvas a crearlo hasta comprobar la cuenta.':reason;
+  }finally{button.disabled=false;}
 }
 function showProfessionalPasswordRecovery(){
   const login=$('professional-login-fields'),recovery=$('professional-password-recovery');
@@ -3417,6 +3491,11 @@ async function professionalPasswordLogin(){
     // Confirm once before treating the account as unassigned.
     if(s.signedIn&&(!s.membership||!s.tenant))s=await CithelaCloud.refresh();
     if(!s.membership||!s.tenant){
+      $('l-cloud-password').value='';
+      if(CITHELA_SECOND_TENANT_PILOT&&s.signedIn&&s.email&&showProfessionalWorkspaceSetup()){
+        toast('Creá el establecimiento de prueba para esta cuenta nueva.',4400);
+        return;
+      }
       await CithelaCloud.signOut();
       toast('Esta cuenta no tiene un espacio CITHELA profesional asignado.',4800);
       return;
