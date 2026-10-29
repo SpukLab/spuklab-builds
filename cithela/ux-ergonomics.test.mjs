@@ -178,3 +178,73 @@ test('professional cloud status avoids developer-only SDK and AUTH labels',()=>{
  assert.match(html,/const sdk=s\.sdk\?'Cuenta CITHELA':'Conectando cuenta'/);
  assert.match(html,/s\.signedIn\?'CONECTADO':'LOCAL'/);
 });
+
+
+test('second-tenant onboarding is hidden behind an explicit pilot mode and distinct Auth membership',()=>{
+  assert.match(html,/const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams\(location.search\)\.get\('pilotTenant'\)==='1'/);
+  const login=slice('id="professional-login-fields"','id="professional-password-recovery"');
+  assert.match(login,/id="professional-workspace-setup" hidden/);
+  assert.match(login,/id="professional-workspace-name"/);
+  const fnStart=html.indexOf('function showProfessionalWorkspaceSetup(){');
+  const fnEnd=html.indexOf('async function professionalCancelPilotWorkspace(){',fnStart);
+  assert.ok(fnStart>=0&&fnEnd>fnStart);
+  const src=html.slice(fnStart,fnEnd);
+  function attempt(enabled,state){
+    const el={
+      'professional-login-fields':{style:{}},
+      'professional-workspace-setup':{hidden:true},
+      'professional-workspace-status':{textContent:''}
+    };
+    const fn=new Function('CITHELA_SECOND_TENANT_PILOT','CithelaCloud','$',
+      src+'\nreturn showProfessionalWorkspaceSetup;')(
+      enabled,{state:()=>state},id=>el[id]);
+    return {result:fn(),el};
+  }
+  assert.equal(attempt(false,{signedIn:true,email:'a@example.test',tenant:null,membership:null}).result,false);
+  assert.equal(attempt(true,{signedIn:false,email:'a@example.test',tenant:null,membership:null}).result,false);
+  assert.equal(attempt(true,{signedIn:true,email:'a@example.test',tenant:{id:'tenantA'},membership:{role:'owner'}}).result,false);
+  const eligible=attempt(true,{signedIn:true,email:'b@example.test',tenant:null,membership:null});
+  assert.equal(eligible.result,true);
+  assert.equal(eligible.el['professional-workspace-setup'].hidden,false);
+  assert.match(eligible.el['professional-workspace-status'].textContent,/b@example.test/);
+});
+
+test('second-tenant registration checks patient links and never creates a tenant for an existing member',async()=>{
+  const start=html.indexOf('async function professionalCreatePilotWorkspace(){');
+  const end=html.indexOf('function showProfessionalPasswordRecovery(){',start);
+  assert.ok(start>=0&&end>start);
+  const src=html.slice(start,end);
+  let state={signedIn:true,email:'operatorB@example.test',tenant:null,membership:null};
+  let profiles=[],calls=0,enterCount=0;
+  const inputs={
+    'professional-workspace-name':{value:'Establecimiento B'},
+    'professional-workspace-create':{disabled:false},
+    'professional-workspace-status':{textContent:''},
+    'professional-workspace-setup':{hidden:false},
+    'professional-login-fields':{style:{}}
+  };
+  const cloud={
+    state:()=>state,
+    patientPortal:async()=>({ok:true,profiles}),
+    bootstrap:async name=>{
+      calls++;
+      assert.equal(name,'Establecimiento B');
+      state={...state,membership:{role:'owner'},tenant:{id:'tenantB'}};
+      return {ok:true,code:'workspace_created'};
+    }
+  };
+  const run=new Function('CITHELA_SECOND_TENANT_PILOT','CithelaCloud','$','toast','loginWithCloudSession',
+    src+'\nreturn professionalCreatePilotWorkspace;')(
+      true,cloud,id=>inputs[id],()=>{},async()=>{enterCount++});
+  profiles=[{person_id:'existing-patient'}];
+  await run();
+  assert.equal(calls,0,'must reject an existing patient account');
+  assert.match(inputs['professional-workspace-status'].textContent,/ficha de paciente/);
+  profiles=[];
+  await run();
+  assert.equal(calls,1);
+  assert.equal(enterCount,1);
+  assert.equal(inputs['professional-workspace-setup'].hidden,true);
+  await run();
+  assert.equal(calls,1,'existing member cannot create another tenant through pilot setup');
+});
