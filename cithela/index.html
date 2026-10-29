@@ -360,6 +360,9 @@ textarea.inp{resize:vertical;min-height:72px;}
 .patient-shared-panel summary:focus-visible{outline:3px solid var(--teal2);outline-offset:3px;}
 .patient-shared-panel .btn-main{margin-top:12px;min-height:44px;}
 
+.cithela-diagnostic-details{border-top:1px solid var(--border-color);padding-top:13px;}
+.cithela-diagnostic-details>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:.8rem;color:var(--ink2);font-weight:600;}
+.cithela-diagnostic-details>summary:focus-visible{outline:2px solid var(--teal2);outline-offset:2px;}
 .cithela-config-group{border:1px solid var(--border-color);border-radius:13px;background:var(--white);margin-bottom:12px;overflow:hidden}.cithela-config-group>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:16px;font-weight:600;list-style:none}.cithela-config-group>summary::-webkit-details-marker,.cithela-day>summary::-webkit-details-marker{display:none}.cithela-config-group[open]>summary span{transform:rotate(180deg)}.cithela-config-group>.form-card{margin:0 12px 14px!important}.cithela-day{border-bottom:1px solid var(--border-color)}.cithela-day>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 0;cursor:pointer;list-style:none}.cithela-day>.day-editor{padding:8px 0 12px}.cithela-day .tag{font-size:.67rem;max-width:70%;text-align:right;white-space:normal}
 
 .cithela-weekly-preset{margin:8px 0 14px;border:1px solid var(--border-color);border-radius:10px;padding:0 12px}.cithela-weekly-preset>summary{cursor:pointer;padding:12px 2px;list-style:none;font-weight:600;font-size:.82rem;color:var(--teal2)}.cithela-weekly-preset>summary::-webkit-details-marker{display:none}
@@ -817,19 +820,22 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <details class="cithela-config-group" id="cfg-section-reminders">
       <summary>Recordatorios y mensajes manuales<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <p class="contact-note" style="margin:0 0 14px;">Configura preferencias de este dispositivo. La plantilla de mensajes supervisados del servidor no se cambia aquí.</p>
-      <label class="lbl">Mostrar pendientes con anticipación</label>
+      <p class="contact-note" style="margin:0 0 14px;">Elegí con cuánta anticipación querés ver turnos para recordar en este dispositivo. Los avisos se preparan desde Agenda y se envían manualmente.</p>
+      <label class="lbl" for="cfg-reminder-days">Mostrar turnos para recordar</label>
       <select class="inp" id="cfg-reminder-days">
         <option value="0">Solo el mismo día</option>
         <option value="1">1 día antes</option>
         <option value="2">2 días antes</option>
         <option value="3">3 días antes</option>
       </select>
-      <label class="lbl">Plantilla del recordatorio</label>
-      <textarea class="inp" id="cfg-reminder-template" style="min-height:150px;" placeholder="Hola {paciente}..."></textarea>
-      <p class="hint" style="margin-top:-8px;line-height:1.5;">Variables: {paciente}, {fecha}, {hora}, {servicio}, {recurso}, {motivo}, {consultorio}, {profesional}, {direccion}.</p>
-      <button class="btn-main soft" type="button" onclick="resetReminderTemplate()">Restablecer plantilla</button>
-      <button class="btn-main" style="margin-top:8px;" type="button" onclick="guardarConfig()">Guardar recordatorios</button>
+      <p class="contact-note" id="cfg-reminder-cloud-note" hidden>En CITHELA Cloud, cada aviso de WhatsApp se prepara con los datos actuales del turno. Podés revisar y editar el texto desde <strong>Agenda → Preparar recordatorio</strong>. La plantilla local no modifica los mensajes de la nube.</p>
+      <div id="cfg-reminder-local-template">
+        <label class="lbl" for="cfg-reminder-template">Plantilla local (solo este dispositivo)</label>
+        <textarea class="inp" id="cfg-reminder-template" style="min-height:150px;" placeholder="Hola {paciente}..."></textarea>
+        <p class="hint" style="margin-top:-8px;line-height:1.5;">Variables: {paciente}, {fecha}, {hora}, {servicio}, {recurso}, {motivo}, {consultorio}, {profesional}, {direccion}.</p>
+        <button class="btn-main soft" type="button" onclick="resetReminderTemplate()">Restablecer plantilla</button>
+      </div>
+      <button class="btn-main" style="margin-top:8px;" type="button" onclick="guardarRecordatoriosConfig()">Guardar anticipación</button>
     </div>
 
     </details>
@@ -920,9 +926,11 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudSignOut()">Cerrar sesión cloud</button>
       </div>
 
-      <div id="cloud-probe-form" style="display:none;margin-top:18px;">
-        <p class="sh" style="margin-top:0;">Prueba multi-dispositivo</p>
-        <p class="contact-note">Crea un turno únicamente en el backend cloud para comprobar que dos dispositivos conectados al mismo workspace ven el mismo estado. No se mezcla todavía con la agenda local.</p>
+      <details class="cithela-diagnostic-details" id="cloud-diagnostics" style="margin-top:18px;">
+        <summary>Herramientas técnicas de diagnóstico (avanzado)</summary>
+        <div id="cloud-probe-form" style="display:none;margin-top:18px;">
+          <p class="sh" style="margin-top:0;">Prueba multi-dispositivo</p>
+          <p class="ops-note">Esta herramienta crea una persona y un turno REALES en la agenda compartida. No la uses con pacientes de producción. Para verificar sincronización, compará la agenda desde dos dispositivos.</p>
         <label class="lbl">Nombre de prueba</label>
         <input class="inp" id="cloud-probe-name" placeholder="Ej. Prueba Denis">
         <label class="lbl">Teléfono E.164</label>
@@ -936,7 +944,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <button class="btn-main soft" type="button" onclick="cloudProbeAvailability()">Buscar disponibilidad cloud</button>
         <div id="cloud-probe-slots" style="margin-top:10px;"></div>
         <div id="cloud-probe-summary" style="margin-top:10px;"></div>
-      </div>
+        </div>
+      </details>
     </div>
 
     </details>
@@ -5578,8 +5587,8 @@ function renderCloudStatus(){
     el.innerHTML='<p class="contact-note">Bridge cloud aún no inicializado.</p>';
     return;
   }
-  const sdk=s.sdk?'SDK listo':'Cargando SDK';
-  const session=s.signedIn?(s.email||'Sesión activa'):'Sin sesión cloud';
+  const sdk=s.sdk?'Cuenta CITHELA':'Conectando cuenta';
+  const session=s.signedIn?(s.email||'Sesión activa'):'Sin sesión de nube';
   const tenant=s.tenant?escHtml(s.tenant.display_name):'Sin workspace';
   const role=s.membership?.role?escHtml(s.membership.role):'—';
   const hours=s.tenant?`${s.workingHoursCount} tramo${s.workingHoursCount===1?'':'s'} horario${s.workingHoursCount===1?'':'s'}`:'—';
@@ -5588,7 +5597,7 @@ function renderCloudStatus(){
   el.innerHTML=`
     <div class="block-row">
       <div class="block-main"><div class="block-title">${sdk}</div><div class="block-meta">${session}</div></div>
-      <span class="tag ${s.error?'x':s.signedIn?'c':'p'}">${s.error?'ERROR':s.signedIn?'AUTH':'LOCAL'}</span>
+      <span class="tag ${s.error?'x':s.signedIn?'c':'p'}">${s.error?'ERROR':s.signedIn?'CONECTADO':'LOCAL'}</span>
     </div>
     ${s.signedIn?`<div class="block-row">
       <div class="block-main"><div class="block-title">${tenant}</div><div class="block-meta">Rol: ${role} · Servicios: ${s.serviceCount} · Recursos: ${s.resourceCount} · ${hours} · ${appointments} · ${sync}</div></div>
@@ -5602,6 +5611,7 @@ function renderCloudStatus(){
     if(name&&!name.value)name.value=getCfg().consultorio||getCfg().brand||'CITHELA';
   }
   if(actions)actions.style.display=s.signedIn?'block':'none';
+  renderReminderSettingsMode();
   const waPilot=$('cloud-wa-pilot');
   const canUseWa=!!(s.signedIn&&s.tenant&&['owner','admin'].includes(s.membership?.role||''));
   if(waPilot)waPilot.style.display=canUseWa?'block':'none';
@@ -5694,6 +5704,7 @@ async function cloudCreateProbeAppointment(slot){
   if(!s.signedIn||!s.tenant||!r){toast('Buscá primero disponibilidad cloud');return;}
   if(!name){toast('Ingresá un nombre de prueba');return;}
   if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){toast('Usá teléfono E.164, por ejemplo +549221...');return;}
+  if(!confirm('Esta prueba creará una persona y un TURNO REAL en CITHELA Cloud. Ocupará un horario disponible y se verá en los demás dispositivos. ¿Confirmar creación de datos de prueba?'))return;
   try{
     const person=await CithelaCloud.resolvePerson({
       tenantId:s.tenant.id,
@@ -5935,6 +5946,7 @@ $('cfg-dir').value=c.dir||'';
 $('cfg-tel').value=c.tel||'';
 $('cfg-reminder-days').value=String(c.reminderDays??1);
 $('cfg-reminder-template').value=c.reminderTemplate||DEFAULT_REMINDER_TEMPLATE;
+renderReminderSettingsMode();
 $('cfg-block-fecha').min=today();
 if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
 const blockHours=professionalCloudReady()?Array.from({length:48},(_,i)=>minToHM(i*30)):HORAS;
@@ -6145,7 +6157,7 @@ const cloud=professionalCloudReady();
 const editor=$('cfg-resource-local-editor');if(editor)editor.style.display=cloud?'none':'block';
 if(cloud){
   const list=CithelaCloud.state().resources||[];
-  el.innerHTML='<p class="contact-note">Recursos cloud · solo lectura. La edición remota de profesionales y recursos está pendiente.</p>'+
+  el.innerHTML='<p class="contact-note">Recursos disponibles en esta agenda. Durante el piloto se muestran en modo consulta; no se agregan recursos nuevos desde esta pantalla.</p>'+
     list.map(r=>`<div class="block-row"><div class="block-main">
       <div class="block-title">${escHtml(r.name)}</div>
       <div class="block-meta">Agenda independiente · nube</div>
@@ -6286,6 +6298,22 @@ async function removeAvailabilityBlock(id){
   renderAvailabilityBlocks();renderCal('med');renderAgenda();toast('Bloqueo quitado');
 }
 
+function renderReminderSettingsMode(){
+  const cloud=professionalCloudReady();
+  const local=$('cfg-reminder-local-template');
+  const note=$('cfg-reminder-cloud-note');
+  if(local)local.hidden=cloud;
+  if(note)note.hidden=!cloud;
+}
+function guardarRecordatoriosConfig(){
+  const c=getCfg();
+  const requested=Number($('cfg-reminder-days')?.value);
+  c.reminderDays=[0,1,2,3].includes(requested)?requested:1;
+  if(!professionalCloudReady())
+    c.reminderTemplate=$('cfg-reminder-template').value.trim()||DEFAULT_REMINDER_TEMPLATE;
+  saveCfg(c);
+  toast('Anticipación guardada en este dispositivo');
+}
 function resetReminderTemplate(){
 const el=$('cfg-reminder-template');if(!el)return;
 el.value=DEFAULT_REMINDER_TEMPLATE;
@@ -6301,7 +6329,7 @@ c.activity=$('cfg-activity').value.trim();
 c.personTerm=$('cfg-person-term').value||'paciente';
 c.dir=$('cfg-dir').value.trim();
 c.tel=$('cfg-tel').value.trim();
-c.reminderDays=Number($('cfg-reminder-days').value||1);
+c.reminderDays=Number($('cfg-reminder-days').value ?? 1);
 c.reminderTemplate=$('cfg-reminder-template').value.trim()||DEFAULT_REMINDER_TEMPLATE;
 saveCfg(c);applyBranding();
 toast('Datos guardados ✓');
