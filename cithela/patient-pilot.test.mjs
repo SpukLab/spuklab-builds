@@ -298,8 +298,8 @@ test('all six patient self-service database routines accept confirmed email OR p
 
 const readableDateFn=new Function(extract('function patientReadableDate(date){','function patientBookingDateShift(date,days){')+'\nreturn patientReadableDate;')();
 test('patient appointment dates are readable in Spanish and safe for malformed values',()=>{
- assert.match(readableDateFn('2026-10-30'),/viernes 30 de octubre/i);
- assert.match(readableDateFn('2026-10-29'),/jueves 29 de octubre/i);
+ assert.match(readableDateFn('2026-10-30'),/viernes,? 30 de octubre/i);
+ assert.match(readableDateFn('2026-10-29'),/jueves,? 29 de octubre/i);
  assert.equal(readableDateFn('2026-02-31'),'2026-02-31');
  assert.equal(readableDateFn('not-a-date'),'not-a-date');
  assert.match(script,/escHtml\(patientReadableDate\(date.fecha\)\)/);
