@@ -295,3 +295,16 @@ test('all six patient self-service database routines accept confirmed email OR p
  assert.equal((phoneVerifiedSql.match(/CREATE OR REPLACE FUNCTION cithela_private\./g)||[]).length,6);
  assert.match(script,/identity_not_verified:'Primero verificá tu WhatsApp o tu correo\.'/);
 });
+
+const readableDateFn=new Function(extract('function patientReadableDate(date){','function patientBookingDateShift(date,days){')+'\nreturn patientReadableDate;')();
+test('patient appointment dates are readable in Spanish and safe for malformed values',()=>{
+ assert.match(readableDateFn('2026-10-30'),/viernes 30 de octubre/i);
+ assert.match(readableDateFn('2026-10-29'),/jueves 29 de octubre/i);
+ assert.equal(readableDateFn('2026-02-31'),'2026-02-31');
+ assert.equal(readableDateFn('not-a-date'),'not-a-date');
+ assert.match(script,/escHtml\(patientReadableDate\(date.fecha\)\)/);
+});
+test('reservation confirmation does not assert pending when authoritative status may be confirmed',()=>{
+ assert.match(script,/toast\('Turno registrado\. Revisá su estado actualizado en Mis turnos\.'/);
+ assert.doesNotMatch(script,/toast\('Turno reservado; quedó pendiente de confirmación/);
+});
