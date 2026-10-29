@@ -1379,13 +1379,12 @@ const CITHELA_SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const CITHELA_SUPABASE_PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const CITHELA_SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2';
 const CITHELA_PUBLIC_URL='https://spuklab.github.io/spuklab-builds/cithela/';
-// Pilot: Meta's test WABA cannot create an authentication template yet.
-// Keep phone OTP gated until the approved template, Auth SMS Hook and E2E test are ready.
-// Meta Cloud API is the transport through our Supabase Send SMS Hook.
-// Never set this to true until Phone Auth, the signed hook, an approved
-// AUTHENTICATION/COPY_CODE template and end-to-end delivery are verified.
+// Phone-first patient invitations enabled for the supervised pilot only after
+// the approved Meta authentication template, signed SMS hook and verified E2E
+// phone OTP, phone_change and linked-patient sign-in tests (2026-10-29).
+// Meta Cloud API transports Supabase's channel:'sms' via the signed SMS hook.
 // Explicit channel:'whatsapp' is a Twilio-only Supabase provider path.
-const CITHELA_PHONE_OTP_ENABLED=false;
+const CITHELA_PHONE_OTP_ENABLED=true;
 const CITHELA_PENDING_INVITE_KEY='cl_pending_patient_invite_v1';
 const CITHELA_PENDING_INVITE_TTL=30*60*1000;
 function patientInviteLink(code,email){
@@ -4257,7 +4256,7 @@ function renderPacs(){
         <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
         <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''} · nube</div></div>
         <button class="mb ghost" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
-        ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">WhatsApp</button>`:''}
+        ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">Mensaje</button>`:''}
       </div>`;
     }).join('');
     return;
@@ -4296,12 +4295,12 @@ async function cloudIssuePhoneInvite(personId){
     const link=patientPhoneInviteLink(r.invite_code,r.phone);
     if(!link)throw Error('No se pudo construir el enlace de acceso');
     if(el)el.innerHTML=`<div class="form-card" style="padding:12px;margin:0;">
-      <p class="contact-note" style="margin:0 0 9px;">Acceso personal para ${escHtml(r.phone)}, válido durante 48 horas y de un solo uso.</p>
+      <p class="contact-note" style="margin:0 0 9px;">Acceso personal para ${escHtml(r.phone)}, válido durante 48 horas y de un solo uso. Comprobá el destinatario en WhatsApp antes de tocar Enviar. CITHELA no envía el mensaje automáticamente.</p>
       <input class="inp" id="cloud-whatsapp-invite-link" readonly autocomplete="off" value="${escHtml(link)}">
       <button type="button" class="btn-main soft" onclick="sharePatientPhoneInviteWhatsApp('${personId}')">Abrir WhatsApp nuevamente</button>
     </div>`;
     sharePatientPhoneInviteWhatsApp(personId);
-    toast('Acceso preparado. Enviá el mensaje por WhatsApp.',4200);
+    toast('Invitación preparada. Comprobá el contacto y enviá el mensaje desde WhatsApp.',5100);
   }catch(err){
     if(el)el.innerHTML='';
     const messages={
@@ -4490,7 +4489,7 @@ async function cloudVerFicha(id){
           <div style="font-size:.68rem;color:var(--ink3);margin-top:4px;">${contact}</div>
         </div>
       </div>
-      ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Abrir WhatsApp</button>`:''}
+      ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Enviar mensaje libre</button>`:''}
       <hr class="divider">
       <p class="sh" style="margin:0 0 7px;">Información compartida por la persona</p>
       <p style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84rem;margin-bottom:15px;">${shared}</p>
@@ -4503,21 +4502,23 @@ async function cloudVerFicha(id){
       ${professionalCloudWritable()?`<div style="margin:14px 0 18px;">
         <p class="sh" style="margin:0 0 8px;">Acceso del paciente · piloto</p>
         <p class="contact-note" style="margin-bottom:12px;">
-          Prepará un enlace personal para el correo del paciente y, si tiene WhatsApp,
-          enviáselo por ahí. El paciente verifica su correo y entra a CITHELA
-          para reservar y gestionar sus turnos.
+          Enviá una invitación personal por WhatsApp para que la persona verifique su número,
+          ingrese a CITHELA y reserve sus turnos, sin necesitar correo.
+          Antes de enviarla, comprobá que el chat corresponda al destinatario correcto.
         </p>
-        <label class="lbl" for="cloud-invite-email">Correo del paciente</label>
-        <input class="inp" type="email" autocomplete="off" id="cloud-invite-email"
-          placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
-        <button type="button" class="btn-main" onclick="cloudIssueInvite('${p.id}')">Preparar invitación por correo</button>
-        <div id="cloud-invite-result" style="margin-top:10px;"></div>
+        ${wa?`<button type="button" class="btn-main" onclick="cloudIssuePhoneInvite('${p.id}')">Preparar invitación por WhatsApp</button>
+          <div id="cloud-whatsapp-invite-result" style="margin-top:10px;"></div>`
+          :'<p class="ops-note">La ficha necesita un WhatsApp válido para enviar la invitación.</p>'}
         <details style="margin-top:14px;">
-          <summary class="contact-note" style="cursor:pointer;">Verificación por WhatsApp (próximamente)</summary>
-          <p class="contact-note" style="padding-top:8px;">
-            La autenticación de WhatsApp superó la prueba técnica de código. El acceso telefónico de pacientes sigue en validación para preservar las fichas existentes.
-            Por ahora, enviá la invitación por correo.
-          </p>
+          <summary class="contact-note" style="cursor:pointer;">Acceso por correo (alternativo)</summary>
+          <div style="padding-top:12px;">
+            <p class="contact-note">El paciente también puede ingresar con correo verificado.</p>
+            <label class="lbl" for="cloud-invite-email">Correo del paciente</label>
+            <input class="inp" type="email" autocomplete="off" id="cloud-invite-email"
+              placeholder="paciente@correo.com" value="${escHtml(p.contact_email||'')}">
+            <button type="button" class="btn-main soft" onclick="cloudIssueInvite('${p.id}')">Preparar invitación por correo</button>
+            <div id="cloud-invite-result" style="margin-top:10px;"></div>
+          </div>
         </details>
       </div><hr class="divider">`:''}
       <p class="sh">Últimos turnos (${appointments.length}${appointments.length===50?'+':''})</p>
