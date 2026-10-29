@@ -127,3 +127,16 @@ test('logo failures remain visible, without modifying booking or Storage policy'
  assert.match(html,/cloudBrandProcessing/);
  assert.match(html,/clearCloudBrandPreview\(\)/);
 });
+
+test('operations queue summarizes pending confirmations, deposits and reminders without sending automatically',()=>{
+ const agenda=slice('id="p-medico-agenda"','id="p-medico-pacientes"');
+ assert.match(agenda,/id="ops-queue-summary"[^>]*role="status"/);
+ assert.match(agenda,/Abrir el chat no confirma envío ni lectura/);
+ assert.match(html,/const pendingCount=all.filter/);
+ assert.match(html,/const depositCount=all.filter/);
+ assert.match(html,/const reminderCount=all.filter/);
+ assert.match(html,/class="aitem ops-queue-card"/);
+ assert.match(html,/\.ops-queue-card \.aitem-actions\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);\}/);
+ assert.match(html,/Esta acción NO realiza ningún cobro/);
+ assert.match(html,/Abrir WhatsApp no confirma envío, recepción ni lectura/);
+});
