@@ -244,7 +244,16 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .prow{display:flex;align-items:center;gap:13px;padding:13px 0;border-bottom:var(--line);}
 .prow:last-child{border-bottom:none;}
 .ava{width:38px;height:38px;border-radius:10px;background:var(--teal-light);color:var(--teal2);font-size:.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.prow-info{flex:1;}
+.prow-info{flex:1;min-width:0;overflow-wrap:anywhere;}
+.cloud-person-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.cloud-person-actions .mb{min-height:44px;white-space:normal;}
+@media(max-width:600px){
+  .cloud-person-row{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px 12px;align-items:center;}
+  .cloud-person-row .ava{grid-column:1;grid-row:1;}
+  .cloud-person-row .prow-info{grid-column:2;grid-row:1;}
+  .cloud-person-actions{grid-column:1 / -1;grid-row:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .cloud-person-actions .mb{width:100%;min-height:44px;}
+}
 .prow-info .pname{font-size:.9rem;font-weight:600;color:var(--ink);}
 .prow-info .pmeta{font-size:.71rem;color:var(--ink3);margin-top:1px;}
 
@@ -4295,11 +4304,13 @@ function renderPacs(){
     el.innerHTML=ps.map(p=>{
       const n=turns.filter(t=>String(t.pacienteId)===String(p.id)).length;
       const wa=normalizePhone(p.phone_e164||'');
-      return`<div class="prow">
+      return`<div class="prow cloud-person-row">
         <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
         <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''} · nube</div></div>
-        <button class="mb ghost" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
-        ${wa?`<button class="mb wa" onclick="openPatientWhatsApp('${p.id}')">Mensaje</button>`:''}
+        <div class="cloud-person-actions">
+          <button class="mb ghost" type="button" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
+          ${wa?`<button class="mb wa" type="button" onclick="openPatientWhatsApp('${p.id}')">Mensaje</button>`:''}
+        </div>
       </div>`;
     }).join('');
     return;
