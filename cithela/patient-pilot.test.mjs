@@ -275,3 +275,23 @@ test('resume and redeem use same full-number comparison',()=>{
  assert.match(enter,/code&&invitedPhone&&!sameInvitePhoneNumber\(invitedPhone,s\.phone\)/);
  assert.match(resume,/targetPhone&&!sameInvitePhoneNumber\(targetPhone,s\.phone\)/);
 });
+
+const phoneVerifiedSql=await readFile(new URL('./supabase/cithela_patient_verified_email_or_phone_20261029.sql',import.meta.url),'utf8');
+test('all six patient self-service database routines accept confirmed email OR phone',()=>{
+ const names=['patient_booking_catalog','patient_booking_slots','patient_booking_create',
+   'patient_appointment_command','patient_reschedule_slots','patient_shared_note_update'];
+ for(const name of names){
+   const fnStart=phoneVerifiedSql.indexOf('CREATE OR REPLACE FUNCTION cithela_private.'+name+'(');
+   assert.ok(fnStart>=0,'Missing '+name);
+   const next=phoneVerifiedSql.indexOf('$function$;',fnStart);
+   assert.ok(next>fnStart,'Missing closing function '+name);
+   const def=phoneVerifiedSql.slice(fnStart,next);
+   assert.match(def,/auth\.uid\(\)/);
+   assert.match(def,/coalesce\(u\.email_confirmed_at,u\.phone_confirmed_at\)/);
+   assert.match(def,/identity_not_verified/);
+   assert.match(def,/cithela_patient_links/,'Tenant/person linkage must remain enforced: '+name);
+   assert.doesNotMatch(def,/select u\.email_confirmed_at into v_verified/);
+ }
+ assert.equal((phoneVerifiedSql.match(/CREATE OR REPLACE FUNCTION cithela_private\./g)||[]).length,6);
+ assert.match(script,/identity_not_verified:'Primero verificá tu WhatsApp o tu correo\.'/);
+});
