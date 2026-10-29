@@ -28,16 +28,17 @@ function simulateLogin({phone='',email='',invited=false,signedIn=false,sessionEm
    'pendingPatientInvite','CITHELA_PHONE_OTP_ENABLED','role','patientWhatsappOtpSent','patientNoLinkedProfile',
     login+'\nreturn renderPatientLoginSession;')(
       id=>refs[id],{state:()=>({signedIn,email:sessionEmail,phone:'',membership})},
-      ()=>email,()=>phone,()=>invited?'abc':'',false,'paciente',false,unlinked);
+      ()=>email,()=>phone,()=>invited?'abc':'',true,'paciente',false,unlinked);
  run();return refs;
 }
-test('pilot explicitly prevents broken phone OTP enrollment',()=>{
- assert.match(script,/const CITHELA_PHONE_OTP_ENABLED=false;/);
+test('supervised WhatsApp-first invitation requests OTP only for the bound invite number',()=>{
+ assert.match(script,/const CITHELA_PHONE_OTP_ENABLED=true;/);
  assert.match(primary,/if\(!CITHELA_PHONE_OTP_ENABLED\)/);
  assert.match(professional,/if\(!CITHELA_PHONE_OTP_ENABLED\)/);
  const r=simulateLogin({phone:'+5492215723664',invited:true});
- assert.equal(r['patient-primary-access'].disabled,true);
- assert.match(r['patient-invite-hint'].textContent,/invitación.*correo/i);
+ assert.equal(r['patient-primary-access'].disabled,false);
+ assert.match(r['patient-primary-access'].textContent,/Enviar código por WhatsApp/);
+ assert.match(r['patient-invite-hint'].textContent,/mismo número/i);
  assert.equal(r['patient-whatsapp-otp'].style.display,'none');
 });
 test('email invitation still offers email link, prefilled with intended recipient',()=>{
@@ -46,11 +47,13 @@ test('email invitation still offers email link, prefilled with intended recipien
  assert.equal(r['patient-primary-access'].textContent,'Continuar');
  assert.equal(r['l-patient-email'].value,'pilot@example.org');
 });
-test('professional account now exposes email invite instead of unusable phone invite',()=>{
+test('professional can prepare a phone-first invite and retains alternative email invitation',()=>{
  assert.match(ficha,/Acceso del paciente · piloto/);
+ assert.match(ficha,/Preparar invitación por WhatsApp/);
  assert.match(ficha,/Preparar invitación por correo/);
- assert.doesNotMatch(ficha,/onclick="cloudIssuePhoneInvite/);
+ assert.match(ficha,/onclick="cloudIssuePhoneInvite/);
  assert.match(script,/Compartir invitación por WhatsApp/);
+ assert.match(script,/CITHELA verificará tu número con un código de 6 dígitos/);
 });
 test('patient booking remains authenticated and server-authoritative',()=>{
  assert.match(script,/async function patientBookingCreate\(/);
@@ -213,11 +216,12 @@ test('a changed user identity aborts verification without requesting a code',asy
  await assert.rejects(h.confirm('+5492211234567','123456',start.userId),/identity_changed/);
  assert.equal(h.calls.length,1);
 });
-test('patient portal keeps global phone-first invitations gated until migration is verified',()=>{
- assert.match(script,/const CITHELA_PHONE_OTP_ENABLED=false;/);
+test('existing accounts can still enroll phone securely while supervised invites are enabled',()=>{
+ assert.match(script,/const CITHELA_PHONE_OTP_ENABLED=true;/);
  assert.match(html,/id="patient-enroll-panel"/);
  assert.match(html,/aria-describedby="patient-enroll-hint"/);
  assert.match(script,/phone_change/);
+ assert.match(script,/shouldCreateUser:false/);
 });
 
 const linkedPhoneSource=extract('  async function sendLinkedPatientPhoneOtp(phone){','  async function enrollExistingPatientPhone(phone){');
