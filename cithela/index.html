@@ -1425,6 +1425,13 @@ function pendingPatientInvitePhone(){
   return typeof value?.phone==='string'&&/^\+[1-9][0-9]{7,14}$/.test(value.phone)
     ?value.phone:'';
 }
+// Supabase stores Auth phone without '+', while patient invitations use E.164.
+// Compare full international digits only; never compare suffixes or partial numbers.
+function sameInvitePhoneNumber(invited,verified){
+  const a=String(invited||'').trim().replace(/^\+/,'');
+  const b=String(verified||'').trim().replace(/^\+/,'');
+  return /^[1-9][0-9]{7,14}$/.test(a)&&a===b;
+}
 function clearPendingPatientInvite(){
   try{localStorage.removeItem(CITHELA_PENDING_INVITE_KEY);}catch{}
 }
@@ -2635,7 +2642,7 @@ async function patientEnter(){
       toast('La invitación es para otro correo. Tocá Cambiar de cuenta.',4700);
       return;
     }
-    if(code&&invitedPhone&&invitedPhone!==String(s.phone||'')){
+    if(code&&invitedPhone&&!sameInvitePhoneNumber(invitedPhone,s.phone)){
       toast('La invitación es para otro WhatsApp. Tocá Cambiar de cuenta.',4700);
       return;
     }
@@ -3320,7 +3327,7 @@ async function resumeCloudSession(){
         toast('La invitación es para otra cuenta. Tocá Cambiar de cuenta.',5500);
         return;
       }
-      if(targetPhone&&targetPhone!==String(s.phone||'')){
+      if(targetPhone&&!sameInvitePhoneNumber(targetPhone,s.phone)){
         toast('La invitación es para otro WhatsApp. Tocá Cambiar de cuenta.',5500);
         return;
       }
