@@ -110,7 +110,19 @@ test('patient email success rate guards duplicate requests without leaving submi
  assert.equal(h.els['patient-primary-access'].disabled,false);
  await h.send();
  assert.equal(h.attempts,1);
- assert.match(h.messages.at(-1),/Ya se solicitó/);
+ assert.match(h.messages.at(-1),/No se envió otro enlace/);
+});
+test('Supabase short per-address cooldown is not confused with hourly email quota',async()=>{
+ const h=createMagicLinkHarness({send:async()=>{
+   throw Object.assign(new Error('For security purposes, you can only request this after 27 seconds.'),{code:'over_email_send_rate_limit'});
+ }});
+ const started=Date.now();
+ await h.send();
+ assert.equal(h.attempts,1);
+ assert.match(h.messages.at(-1),/Por seguridad/);
+ assert.match(h.messages.at(-1),/No se envió otro enlace/);
+ const remaining=h.until()-started;
+ assert.ok(remaining>=27000&&remaining<=40000,'Short email cooldown must not become 10 minutes');
 });
 test('patient email invalid address never triggers Supabase call',async()=>{
  const h=createMagicLinkHarness({email:'not-an-email'});
