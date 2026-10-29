@@ -149,3 +149,32 @@ test('cloud patient list separates identity and thumb-sized actions on mobile',(
  assert.match(html,/onclick="cloudVerFicha\('/);
  assert.match(html,/onclick="openPatientWhatsApp\('/);
 });
+
+test('cloud reminders show only actionable device advance settings, not a misleading local template',()=>{
+ const section=slice('id="cfg-section-reminders"','id="cfg-section-business"');
+ assert.match(section,/id="cfg-reminder-days"/);
+ assert.match(section,/id="cfg-reminder-cloud-note" hidden/);
+ assert.match(section,/Agenda → Preparar recordatorio/);
+ assert.match(section,/id="cfg-reminder-local-template"/);
+ assert.match(section,/onclick="guardarRecordatoriosConfig\(\)"/);
+ assert.match(html,/function renderReminderSettingsMode\(\)/);
+ assert.match(html,/if\(local\)local\.hidden=cloud/);
+ assert.match(html,/if\(note\)note\.hidden=!cloud/);
+ assert.match(html,/renderReminderSettingsMode\(\)/);
+ assert.match(html,/c\.reminderDays=\[0,1,2,3\]\.includes\(requested\)\?requested:1/);
+ assert.match(html,/if\(!professionalCloudReady\(\)\)\s+c\.reminderTemplate=/);
+});
+test('real multi-device probe is hidden under advanced details with explicit opt-in',()=>{
+ const config=slice('id="cfg-section-cloud"','id="cfg-section-infrastructure"');
+ assert.match(config,/<details class="cithela-diagnostic-details" id="cloud-diagnostics"/);
+ assert.match(config,/id="cloud-probe-form"/);
+ assert.match(config,/crea una persona y un turno REALES/);
+ assert.match(html,/Esta prueba creará una persona y un TURNO REAL/);
+ assert.match(html,/function cloudCreateProbeAppointment\(slot\)/);
+ assert.match(html,/if\(!confirm\('Esta prueba creará/);
+ assert.match(html,/s\.signedIn&&s\.tenant/);
+});
+test('professional cloud status avoids developer-only SDK and AUTH labels',()=>{
+ assert.match(html,/const sdk=s\.sdk\?'Cuenta CITHELA':'Conectando cuenta'/);
+ assert.match(html,/s\.signedIn\?'CONECTADO':'LOCAL'/);
+});
