@@ -254,3 +254,24 @@ test('phone OTP login cannot access portal without matching patient link',async(
  await assert.rejects(fn('+5492211234567','123456'),/patient_profile_required/);
  assert.equal(signOuts,1);
 });
+
+const invitationPhoneCompare=extract('function sameInvitePhoneNumber(invited,verified){','function clearPendingPatientInvite(){');
+const sameInvitePhoneNumber=new Function(invitationPhoneCompare+'\nreturn sameInvitePhoneNumber;')();
+test('phone invitation accepts exact verified Auth number with and without leading plus',()=>{
+ assert.equal(sameInvitePhoneNumber('+5492216551930','5492216551930'),true);
+ assert.equal(sameInvitePhoneNumber('+5492216551930','+5492216551930'),true);
+ assert.equal(sameInvitePhoneNumber('5492216551930','+5492216551930'),true);
+});
+test('phone invitation rejects another number, truncated digits, and missing identity',()=>{
+ assert.equal(sameInvitePhoneNumber('+5492216551930','5492216551931'),false);
+ assert.equal(sameInvitePhoneNumber('+5492216551930','2216551930'),false);
+ assert.equal(sameInvitePhoneNumber('+5492216551930',''),false);
+ assert.equal(sameInvitePhoneNumber('','5492216551930'),false);
+ assert.equal(sameInvitePhoneNumber('++5492216551930','5492216551930'),false);
+});
+test('resume and redeem use same full-number comparison',()=>{
+ const enter=extract('async function patientEnter(){','let patientRescheduleState=null;');
+ const resume=extract('async function resumeCloudSession(){','function showProfessionalPasswordRecovery(){');
+ assert.match(enter,/code&&invitedPhone&&!sameInvitePhoneNumber\(invitedPhone,s\.phone\)/);
+ assert.match(resume,/targetPhone&&!sameInvitePhoneNumber\(targetPhone,s\.phone\)/);
+});
