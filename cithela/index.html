@@ -2404,10 +2404,12 @@ function patientMagicLinkSetCooldown(ms){
 function patientMagicLinkErrorMessage(err){
   const message=String(err?.message||'');
   const code=String(err?.code||'');
-  if(/email rate limit exceeded|over_email_send_rate_limit/i.test(message+' '+code))
-    return 'CITHELA alcanzó el límite de correos del proveedor de prueba. No se envió otro enlace. Si tenés la sesión abierta en Mail u otro navegador, volvé a esa ventana. Si no, esperá antes de intentar nuevamente.';
-  if(/for security purposes|after [0-9]+ seconds|over_request_rate_limit/i.test(message+' '+code))
-    return 'Por seguridad hay que esperar antes de pedir otro enlace. Revisá primero el correo recibido.';
+  // The same Supabase error code can accompany either a short per-address cooldown
+  // or an hourly SMTP quota. The message takes precedence over the shared code.
+  if(/for security purposes|after [0-9]+ seconds/i.test(message))
+    return 'Supabase todavía no permite solicitar otro enlace para este correo. Usá el más reciente: no se envió uno nuevo.';
+  if(/email rate limit exceeded|over_email_send_rate_limit|over_request_rate_limit/i.test(message+' '+code))
+    return 'Se alcanzó el límite de envío de correos de Supabase. No se envió otro enlace. Usá el último que recibiste o elegí otro método de acceso.';
   return message||'No se pudo solicitar el enlace de acceso.';
 }
 // Authentication is not proof that this account is linked to any patient record.
@@ -2589,7 +2591,8 @@ async function patientSendMagicLink(){
   }
   const nextAllowedAt=patientMagicLinkNextAllowedAt();
   if(nextAllowedAt>Date.now()){
-    toast('Ya se solicitó un enlace recientemente. Revisá tu correo o esperá antes de volver a intentar.',6000);
+    const seconds=Math.max(1,Math.ceil((nextAllowedAt-Date.now())/1000));
+    toast('No se envió otro enlace. Revisá el correo más reciente. Podés volver a solicitarlo en '+seconds+' segundos; los enlaces anteriores pueden quedar invalidados.',6500);
     return;
   }
   const button=$('patient-primary-access');
@@ -2598,15 +2601,15 @@ async function patientSendMagicLink(){
   try{
     await CithelaCloud.sendPatientMagicLink(email);
     patientMagicLinkSetCooldown(90*1000);
-    toast('Revisá tu correo y abrí el enlace en el mismo navegador. No hace falta pedir otro.',6500);
+    toast('Solicitud de correo aceptada. Abrí únicamente el enlace MÁS RECIENTE, una sola vez, desde el navegador donde querés usar CITHELA.',7000);
   }catch(err){
     const message=String(err?.message||'');
     const code=String(err?.code||'');
-    if(/email rate limit exceeded|over_email_send_rate_limit/i.test(message+' '+code))
-      patientMagicLinkSetCooldown(10*60*1000);
-    else if(/for security purposes|after [0-9]+ seconds|over_request_rate_limit/i.test(message+' '+code)){
+    if(/for security purposes|after [0-9]+ seconds/i.test(message)){
       const seconds=Number(message.match(/after (\d+) seconds/i)?.[1]||60);
-      patientMagicLinkSetCooldown(Math.max(60,Math.min(120,seconds+5))*1000);
+      patientMagicLinkSetCooldown(Math.max(5,Math.min(120,seconds+5))*1000);
+    }else if(/email rate limit exceeded|over_email_send_rate_limit|over_request_rate_limit/i.test(message+' '+code)){
+      patientMagicLinkSetCooldown(10*60*1000);
     }
     toast(patientMagicLinkErrorMessage(err),11000);
   }finally{
