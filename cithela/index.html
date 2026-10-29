@@ -3391,14 +3391,14 @@ async function resumeCloudSession(){
   if(s.membership&&s.tenant){
     await loginWithCloudSession();return;
   }
-  if(CITHELA_SECOND_TENANT_PILOT&&s.email){
+  // A patient profile always has precedence over pilot operator onboarding.
+  // Patient accounts do not receive tenant memberships and must retain access.
+  const result=await CithelaCloud.patientPortal();
+  if(CITHELA_SECOND_TENANT_PILOT&&s.email&&!result?.profiles?.length){
     setRole('medico');
     showProfessionalWorkspaceSetup();
     return;
   }
-  // Patient accounts do not receive tenant memberships. A linked account
-  // may resume its own portal without re-entering any invitation.
-  const result=await CithelaCloud.patientPortal();
   setRole('paciente');$('l-patient-email').value=s.email||'';
   if(result?.profiles?.length){
     patientNoLinkedProfile=false;
