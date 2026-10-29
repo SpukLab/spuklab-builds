@@ -171,6 +171,15 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .aitem-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:var(--line);flex-wrap:wrap;gap:6px;}
 .aitem-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
+/* Compact operator queue, with readable action hierarchy on mobile. */
+.ops-queue-summary{font-size:.79rem;font-weight:650;line-height:1.45;color:var(--ink2);margin:0 0 5px;}
+.ops-queue-guidance{margin:0 0 12px;max-width:680px;}
+.ops-queue-card .aitem-actions{gap:8px;}
+.ops-queue-card .aitem-actions .mb{min-height:44px;white-space:normal;}
+@media(max-width:600px){
+  .ops-queue-card .aitem-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ops-queue-card .aitem-actions .mb{width:100%;padding:9px 8px;}
+}
 /* Read-only daily history: separate from actionable appointments. */
 .agenda-history{margin-top:20px;padding-top:13px;border-top:var(--line);}
 .agenda-history summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;
@@ -554,7 +563,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <div class="agenda-primary-action"><button class="btn-main" type="button"
       onclick="tab('medico','nuevo',document.getElementById('medico-tab-nuevo'))">+ Nuevo turno</button></div>
     <div id="ops-queue-wrap" style="display:none;">
-      <p class="sh" id="ops-queue-title">Pendientes próximos</p>
+      <p class="sh" id="ops-queue-title">Próximos asuntos a gestionar</p>
+      <p id="ops-queue-summary" class="ops-queue-summary" role="status" aria-live="polite"></p>
+      <p class="contact-note ops-queue-guidance">Los avisos de WhatsApp se preparan para revisión y envío manual. Abrir el chat no confirma envío ni lectura.</p>
       <div id="ops-queue"></div>
     </div>
     <p class="sh">Turnos activos del día</p>
@@ -2951,6 +2962,16 @@ function patientBookingProfile(tenantId,personId){
   if(!me.identity||patientCloudIdentity()!==me.identity)return null;
   return patientPortalData?.profiles?.find(p=>p.tenant_id===tenantId&&p.person_id===personId)||null;
 }
+function patientReadableDate(date){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))return String(date||'');
+  const [year,month,day]=date.split('-').map(Number);
+  const d=new Date(Date.UTC(year,month-1,day,12));
+  if(d.getUTCFullYear()!==year||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)
+    return String(date||'');
+  return new Intl.DateTimeFormat('es-AR',{
+    weekday:'long',day:'numeric',month:'long',timeZone:'UTC'
+  }).format(d);
+}
 function patientBookingDateShift(date,days){
   const value=new Date(date+'T12:00:00Z');
   value.setUTCDate(value.getUTCDate()+days);
@@ -3104,7 +3125,7 @@ async function patientSubmitBooking(hour){
     return;
   }
   if(!confirm('¿Reservar '+service.name+' ('+service.duration_min+' min) con '+
-    resource.name+' el '+s.date+' de '+hour+' a '+
+    resource.name+' el '+patientReadableDate(s.date)+' de '+hour+' a '+
     minToHM(hmToMin(hour)+Number(service.duration_min))+
     '? El turno quedará pendiente de confirmación.'+
     (Number(service.deposit_amount_minor)>0
@@ -3122,7 +3143,7 @@ async function patientSubmitBooking(hour){
         resource_id:s.resourceId,starts_at:start,reason:s.reason.trim()}
     });
     ++patientBookingRequest;patientBookingState=null;
-    toast('Turno reservado; quedó pendiente de confirmación ✓',4800);
+    toast('Turno registrado. Revisá su estado actualizado en Mis turnos.',4800);
     await patientRefreshPortal();
   }catch(err){
     toast(patientActionErrorMessage(err?.message),4600);
@@ -3230,7 +3251,7 @@ function renderPatientPortalCards(){
         </div>`;
       }
       return `<div class="aitem patient-appointment-card">
-        <div class="aitem-time">${escHtml(date.fecha)} · ${escHtml(date.hora)} hs</div>
+        <div class="aitem-time">${escHtml(patientReadableDate(date.fecha))} · ${escHtml(date.hora)} hs</div>
         <div class="aitem-name">${escHtml(a.service_name||'Consulta')}</div>
         <div class="aitem-motivo">${Number(a.duration_min)||30} min · ${escHtml(a.resource_name||'Profesional')}</div>
         ${patientDepositNote(a)?`<p class="contact-note" style="margin-top:8px;">${escHtml(patientDepositNote(a))}</p>`:''}
@@ -3238,7 +3259,7 @@ function renderPatientPortalCards(){
           ${mayConfirm||mayModify?`<div class="aitem-actions patient-appointment-actions">
             ${mayConfirm?`<button class="mb confirm" type="button" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','confirm')">Confirmar turno</button>`:''}
             ${mayModify?`<button class="mb teal" type="button" onclick="patientShowReschedule('${profile.tenant_id}','${a.id}')">Reprogramar</button>
-              <button class="mb cancel" type="button" aria-label="Cancelar turno del ${date.fecha} a las ${date.hora}" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
+              <button class="mb cancel" type="button" aria-label="Cancelar turno del ${escHtml(patientReadableDate(date.fecha))} a las ${date.hora}" onclick="patientApplyAction('${profile.tenant_id}','${a.id}','cancel')">Cancelar turno</button>`:''}
           </div>`:''}
         </div>
         ${upcomingCard&&!mayModify?'<p class="contact-note" style="margin-top:10px;">Para modificar este turno, contactá al establecimiento.</p>':''}
@@ -3646,7 +3667,18 @@ function renderOpsQueue(){
         return dayDistance(t.fecha)<=reminderDays()&&validPhone(p?.tel||'');
       })
       .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
-    $('ops-queue-title').textContent='Pendientes y recordatorios';
+    $('ops-queue-title').textContent='Próximos asuntos a gestionar';
+    const pendingCount=all.filter(t=>t.estado==='pendiente').length;
+    const depositCount=all.filter(t=>{
+      const a=cloudAppointmentRaw(t.id);
+      return Number(a?.deposit_amount_minor)>0&&a?.deposit_status==='requested';
+    }).length;
+    const reminderCount=all.filter(t=>t.estado==='confirmado'&&dayDistance(t.fecha)<=reminderDays()&&
+      validPhone(cloudPersonById(t.pacienteId)?.tel||'')).length;
+    const summary=$('ops-queue-summary');
+    if(summary)summary.textContent=
+      pendingCount+' por confirmar · '+depositCount+' señas pendientes · '+
+      reminderCount+' turnos dentro del plazo de recordatorio';
     wrap.style.display=all.length?'block':'none';
     if(!all.length){el.innerHTML='';return;}
     const items=all.slice(0,12);
@@ -3657,7 +3689,7 @@ function renderOpsQueue(){
       const appt=cloudAppointmentRaw(t.id);
       const depositDue=Number(appt?.deposit_amount_minor)>0&&appt?.deposit_status==='requested';
       const kind=pending?'':(depositDue&&d>reminderDays()?'deposit':'reminder');
-      return`<div class="aitem" style="padding:13px 15px;">
+      return`<div class="aitem ops-queue-card" style="padding:13px 15px;">
         <div class="aitem-time">${escHtml(queueTurnoDateTime(t.fecha,t.hora))}</div>
         <div class="aitem-name">${escHtml(p.nombre)}</div>
         <div class="ops-note">${pending?'Pendiente de confirmación':depositDue?'Confirmado · seña pendiente':'Confirmado · recordatorio para revisar'} · ${escHtml(t.servicioNombre)}</div>
@@ -3678,12 +3710,14 @@ function renderOpsQueue(){
     .filter(t=>t.estado==='pendiente'&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<=reminderDays())
     .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
   wrap.style.display=items.length?'block':'none';
+  const summary=$('ops-queue-summary');
+  if(summary)summary.textContent=items.length+' turnos pendientes de confirmación (solo en este dispositivo)';
   if(!items.length){el.innerHTML='';return;}
   el.innerHTML=items.map(t=>{
     const p=pacs.find(x=>x.id===t.pacienteId)||{nombre:'—',tel:''};
     const state=t.recordatorioAt?'Recordado · esperando confirmación':'Recordatorio pendiente';
     const waN=normalizePhone(p.tel);
-    return`<div class="aitem" style="padding:13px 15px;">
+    return`<div class="aitem ops-queue-card" style="padding:13px 15px;">
       <div class="aitem-time">${escHtml(queueTurnoDateTime(t.fecha,t.hora))}</div>
       <div class="aitem-name">${escHtml(p.nombre)}</div>
       <div class="${t.recordatorioAt?'contact-note':'ops-note'}">${state}</div>
