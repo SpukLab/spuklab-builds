@@ -65,6 +65,10 @@ try {
         const btn=page.locator('a[href="../../../cithela/"]');
         assert.ok(await btn.isVisible(),'Professional access link hidden');
       }
+      if(process.env.CAPTURE_HUB_INLINE_PREVIEW==='1' && viewport.width===375){
+        const image = await page.screenshot({type:'jpeg',quality:36,fullPage:false});
+        console.log('HUB_VISUAL_PREVIEW '+site.title.replace(/\\s+/g,'-')+' '+image.toString('base64'));
+      }
       if(process.env.CAPTURE_HUB_SCREENSHOTS==='1'){
         const fs=await import('node:fs/promises');
         await fs.mkdir('hub/screenshots',{recursive:true});
