@@ -363,6 +363,7 @@ textarea.inp{resize:vertical;min-height:72px;}
 .cithela-diagnostic-details{border-top:1px solid var(--border-color);padding-top:13px;}
 .cithela-diagnostic-details>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:.8rem;color:var(--ink2);font-weight:600;}
 .cithela-diagnostic-details>summary:focus-visible{outline:2px solid var(--teal2);outline-offset:2px;}
+#cfg-section-security[hidden]{display:none!important;}
 .cithela-config-group{border:1px solid var(--border-color);border-radius:13px;background:var(--white);margin-bottom:12px;overflow:hidden}.cithela-config-group>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:16px;font-weight:600;list-style:none}.cithela-config-group>summary::-webkit-details-marker,.cithela-day>summary::-webkit-details-marker{display:none}.cithela-config-group[open]>summary span{transform:rotate(180deg)}.cithela-config-group>.form-card{margin:0 12px 14px!important}.cithela-day{border-bottom:1px solid var(--border-color)}.cithela-day>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 0;cursor:pointer;list-style:none}.cithela-day>.day-editor{padding:8px 0 12px}.cithela-day .tag{font-size:.67rem;max-width:70%;text-align:right;white-space:normal}
 
 .cithela-weekly-preset{margin:8px 0 14px;border:1px solid var(--border-color);border-radius:10px;padding:0 12px}.cithela-weekly-preset>summary{cursor:pointer;padding:12px 2px;list-style:none;font-weight:600;font-size:.82rem;color:var(--teal2)}.cithela-weekly-preset>summary::-webkit-details-marker{display:none}
@@ -3745,6 +3746,7 @@ function tab(sc,id,btn){
 function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
+  renderLocalDemoKeySection();
   applyCithelaTheme(tenant?.brand_theme||'sage');
   const businessName=$('professional-business-name');
   const displayName=active
@@ -6087,7 +6089,17 @@ async function cloudSignOut(){
     toast('Sesión cloud cerrada');
   }catch(err){toast(err?.message||'No se pudo cerrar la sesión',3200);}
 }
+function renderLocalDemoKeySection(){
+  const panel=$('cfg-section-security');
+  if(!panel)return;
+  // This key protects only local demo data. Professional cloud accounts
+  // use Supabase Auth and must never see or manage the legacy key.
+  const localDemoOnly=CITHELA_DEMO_MODE&&!professionalCloudReady();
+  panel.hidden=!localDemoOnly;
+  if(!localDemoOnly)panel.open=false;
+}
 function cargarConfig(){
+renderLocalDemoKeySection();
 const c=getCfg();
 $('cfg-brand').value=c.brand||'CITHELA';
 $('cfg-nombre').value=c.nombre||'';
@@ -6488,6 +6500,7 @@ toast('Datos guardados ✓');
 }
 
 function cambiarClave(){
+if(!CITHELA_DEMO_MODE||professionalCloudReady())return;
 const actual=$('cfg-clave-actual').value;
 const nueva=$('cfg-clave-nueva').value;
 const rep=$('cfg-clave-rep').value;
