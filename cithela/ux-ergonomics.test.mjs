@@ -334,3 +334,53 @@ test('legacy demonstration key never appears in a cloud professional account',()
  assert.match(html,/function renderProfessionalMode\(\)\{[\s\S]*?renderLocalDemoKeySection\(\)/);
  assert.match(html,/function cambiarClave\(\)\{\s*if\(!CITHELA_DEMO_MODE\|\|professionalCloudReady\(\)\)return;/);
 });
+
+test('iPad WhatsApp uses HTTPS universal link, avoiding unsupported app URL schemes',()=>{
+ const from=html.indexOf('function openWhatsAppMessage(phone,message){');
+ const to=html.indexOf('function openWhatsApp(turnoId){',from);
+ assert.ok(from>0&&to>from);
+ const code=html.slice(from,to);
+ assert.doesNotMatch(code,/whatsapp:\/\//);
+ assert.match(code,/https:\/\/wa\.me\//);
+ const calls=[];
+ const wrapper=new Function('normalizePhone','validPhone','toast','navigator','window',
+  code+'\nreturn openWhatsAppMessage;');
+ const run=(agent,platform,maxTouchPoints)=>{
+   const fn=wrapper(v=>String(v||'').replace(/\D/g,''),v=>v.length>=8&&v.length<=16,
+    ()=>{}, {userAgent:agent,platform,maxTouchPoints},
+    {location:{assign:x=>calls.push(x)},open:(x)=>calls.push('new-tab:'+x)});
+   return fn('+5492216551930','Invitación con enlace #invite y espacios');
+ };
+ assert.equal(run('Mozilla/5.0 (iPad; CPU OS 26_1 like Mac OS X)','iPad',5),true);
+ assert.match(calls.at(-1),/^https:\/\/wa\.me\/5492216551930\?text=/);
+ assert.match(calls.at(-1),/Invitaci%C3%B3n/);
+ assert.equal(run('Mozilla/5.0 (Macintosh; Intel Mac OS X)','MacIntel',5),true);
+ assert.match(calls.at(-1),/^https:\/\/wa\.me\//);
+ assert.equal(run('Mozilla/5.0 (Macintosh; Intel Mac OS X)','MacIntel',0),true);
+ assert.match(calls.at(-1),/^new-tab:https:\/\/wa\.me\//);
+ assert.equal(calls.some(x=>x.includes('whatsapp://')),false);
+});
+test('cloud scheduling clearly closes a day, hides inactive fields, and requires saving',()=>{
+ const from=html.indexOf('function renderCloudWorkingHours(s){');
+ const to=html.indexOf('async function cloudApplyWeeklyPreset(){',from);
+ assert.ok(from>0&&to>from);
+ const code=html.slice(from,to);
+ assert.match(code,/Atiende este día/);
+ assert.match(code,/Este día está cerrado/);
+ assert.match(code,/Guardar día cerrado/);
+ assert.match(code,/id="cloud-wh-\$\{day\}-shifts"/);
+ assert.match(code,/if\(shifts\)shifts\.style\.display=checked\?'':'none'/);
+ assert.match(code,/button\.textContent=checked\?'Guardar horario':'Guardar día cerrado'/);
+ assert.match(html,/const periods=pairs\.filter/);
+ assert.match(html,/weekday:Number\(day\),\s*periods/);
+ assert.match(html,/setWorkingHours\(\{/);
+});
+test('phone invite allows copying personal URL on iPad without WhatsApp installed',()=>{
+ const from=html.indexOf('async function cloudIssuePhoneInvite(personId){');
+ const to=html.indexOf('async function cloudIssueInvite(personId){',from);
+ const code=html.slice(from,to);
+ assert.match(code,/copyPatientPhoneInviteLink\(\)/);
+ assert.match(code,/Copiar enlace para enviarlo desde otro dispositivo/);
+ assert.match(code,/navigator\.clipboard\?\.writeText/);
+ assert.match(code,/document\.execCommand\('copy'\)/);
+});
