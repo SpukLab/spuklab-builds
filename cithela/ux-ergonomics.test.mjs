@@ -308,3 +308,29 @@ test('pilot operator registration validates inputs before any Supabase Auth sign
     source+'\nreturn professionalCreatePilotAccount;')(false,cloud,id=>ui[id])();
   assert.equal(calls,1,'No signup from ordinary login route');
 });
+
+test('legacy demonstration key never appears in a cloud professional account',()=>{
+ const cfg=slice('id="cfg-section-security"','id="cfg-section-reports"');
+ assert.match(html,/<details class="cithela-config-group" id="cfg-section-security" hidden>/);
+ assert.match(html,/#cfg-section-security\[hidden\]\{display:none!important;\}/);
+ const from=html.indexOf('function renderLocalDemoKeySection(){');
+ const to=html.indexOf('function cargarConfig(){',from);
+ assert.ok(from>0&&to>from);
+ const body=html.slice(from,to);
+ const panel={hidden:true,open:true};
+ function visibility(demo,cloud){
+   panel.hidden=true;panel.open=true;
+   const fn=new Function('$','CITHELA_DEMO_MODE','professionalCloudReady',
+     body+'\nreturn renderLocalDemoKeySection;')(
+       id=>id==='cfg-section-security'?panel:null,demo,()=>cloud);
+   fn();
+   return {hidden:panel.hidden,open:panel.open};
+ }
+ assert.deepEqual(visibility(false,true),{hidden:true,open:false});
+ assert.deepEqual(visibility(false,false),{hidden:true,open:false});
+ assert.deepEqual(visibility(true,true),{hidden:true,open:false});
+ assert.deepEqual(visibility(true,false),{hidden:false,open:true});
+ assert.match(html,/function cargarConfig\(\)\{\s*renderLocalDemoKeySection\(\)/);
+ assert.match(html,/function renderProfessionalMode\(\)\{[\s\S]*?renderLocalDemoKeySection\(\)/);
+ assert.match(html,/function cambiarClave\(\)\{\s*if\(!CITHELA_DEMO_MODE\|\|professionalCloudReady\(\)\)return;/);
+});
