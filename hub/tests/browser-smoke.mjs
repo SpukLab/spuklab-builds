@@ -23,14 +23,14 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 const errors = [];
 const cases = [
-  {path:'/hub/', title:'SpukLab Hub'},
+  {path:'/hub/', title:'SpukLab'},
   {path:'/hub/productos/cithela/', title:'CITHELA'},
   {path:'/hub/productos/dahzea/', title:'DAHZEA'},
 ];
 let browser;
 try {
   browser = await chromium.launch({headless:true, args:['--no-sandbox']});
-  for (const viewport of [{width:375,height:812,label:'mobile-375'}, {width:1280,height:850,label:'desktop-1280'}]) {
+  for (const viewport of [{width:320,height:740,label:'mobile-320'}, {width:390,height:844,label:'iphone-390'}, {width:768,height:1024,label:'tablet-768'}, {width:1280,height:850,label:'desktop-1280'}]) {
     const context = await browser.newContext({viewport:{width:viewport.width,height:viewport.height}, deviceScaleFactor:1, reducedMotion:'reduce'});
     const page = await context.newPage();
     page.on('pageerror', e => errors.push(e.message));
@@ -65,7 +65,7 @@ try {
         const btn=page.locator('a[href="../../../cithela/"]');
         assert.ok(await btn.isVisible(),'Professional access link hidden');
       }
-      if(process.env.CAPTURE_HUB_INLINE_PREVIEW==='1' && viewport.width===375){
+      if(process.env.CAPTURE_HUB_INLINE_PREVIEW==='1' && viewport.width===390){
         await page.evaluate(() => window.scrollTo(0,0));
         const image = await page.screenshot({type:'jpeg',quality:36,fullPage:false});
         console.log('HUB_VISUAL_PREVIEW '+site.title.split(' ').join('-')+' '+image.toString('base64'));
@@ -79,7 +79,7 @@ try {
     await context.close();
   }
   assert.deepEqual(errors, [], 'Page JS errors');
-  console.log('PASS: Hub + CITHELA + DAHZEA, 375px and 1280px, links, DAHZEA tab interactions and JS errors');
+  console.log('PASS: Hub + CITHELA + DAHZEA, 320px, 390px, 768px and 1280px, links, DAHZEA tab interactions and JS errors');
 } finally {
   await browser?.close();
   await new Promise((resolve, reject) => server.close((e) => e ? reject(e):resolve()));
