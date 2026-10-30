@@ -18,11 +18,25 @@ Se publica mediante GitHub Pages desde la rama `main` y la raíz del repositorio
 
 **Seguridad:** el HTML no incluye llaves ni credenciales. No confundir esta landing con el panel operativo de los productos. Actualizar contenido al pasar de piloto a producción.
 
-## DAHZEA: sitio comercial externo
+## Catálogo de páginas comerciales (propuesta en revisión)
 
-La tarjeta DAHZEA enlaza a la landing creada anteriormente en ChatGPT Sites:
-https://dahzea.dentrix-8m.chatgpt.site/
+En el mismo GitHub Pages, sin nuevo backend:
 
-Esta landing comercial con demostración interactiva es independiente de la app operativa privada en Render y no expone su panel de operador ni credenciales. En el Hub se conserva un enlace alternativo por correo para consultas sobre el piloto.
+- **Hub:** `/hub/` (catálogo institucional y enlaces a las páginas comerciales).
+- **CITHELA:** `/hub/productos/cithela/` (web informativa, consulta de piloto y acceso separado a `/cithela/`).
+- **DAHZEA:** `/hub/productos/dahzea/` (ventas, paquetería, postventa, atención con IA y demo ficticia). El panel operativo de Render **no** se publica ni enlaza.
+- **SURKARA:** pendiente de ficha propia. Conserva su tarjeta informativa en el Hub.
 
-**Validación de publicación pendiente:** comprobar desde navegador de incógnito (sin cuenta del propietario) que la configuración de compartir del ChatGPT Site permita acceso público. El metadato de la biblioteca mostraba estado activo pero acceso personalizado; no asumir disponibilidad anónima hasta probarlo. Si está restringida, ajustar la audiencia desde el Site original en ChatGPT antes de difundir el enlace.
+Estas nuevas rutas funcionarán públicamente **solo después de integrar y desplegar la rama**; no confundir el PR con publicación.
+
+La web anterior de DAHZEA en ChatGPT Sites (https://dahzea.dentrix-8m.chatgpt.site/) sigue existiendo independientemente. Este cambio no la edita ni modifica su acceso; reemplaza únicamente el destino de la tarjeta del Hub al integrarse.
+
+## Protección y mantenimiento
+
+- Se comparten marca y navegación, **no** datos entre productos ni organizaciones.
+- No hay registros públicos, cobros, claves privadas, acceso al panel DAHZEA, conexión a APIs de tiendas ni chatbot comercial real.
+- Las demostraciones comerciales son ficticias; no utilizar capturas de tiendas sin autorización o con datos personales.
+- Las habilitaciones futuras deben hacerse desde servidor y con autorización por producto/tenant.
+- Las pruebas automáticas `node --test hub/tests/commercial-pages.test.mjs` revisan enlaces, delimitación de funcionalidades y ausencia de credenciales en las páginas. No reemplazan la inspección visual de iPhone/iPad ni las pruebas de aislamiento multitenant de CITHELA.
+
+Ver `hub/ARQUITECTURA-COMERCIAL.md` y las instrucciones específicas `hub/productos/dahzea/README.md`.

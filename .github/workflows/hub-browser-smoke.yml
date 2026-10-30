@@ -1,0 +1,34 @@
+name: SpukLab Hub visual browser smoke
+on:
+  pull_request:
+    paths:
+      - "hub/**"
+      - ".github/workflows/hub-browser-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  responsive-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test runner
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test mobile/desktop viewport, links and interactive tabs
+        env:
+          CAPTURE_HUB_SCREENSHOTS: "1"
+          CAPTURE_HUB_INLINE_PREVIEW: "1"
+        run: node hub/tests/browser-smoke.mjs
+      - name: Preserve responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hub-responsive-screenshots
+          path: hub/screenshots/*.png
+          if-no-files-found: ignore
