@@ -2400,25 +2400,27 @@ function markReminderSent(id){
   recordEvent('reminder_marked_sent',{turnoId:id});
   renderAgenda();toast('Recordatorio marcado como enviado ✓');
 }
-// Avoid blank _blank browser views after switching to WhatsApp on iOS.
+// Use WhatsApp's supported universal HTTPS link, including iPad without the native app.
+// On iOS navigate in the same tab to avoid a blank popup after an async invitation.
 function openWhatsAppMessage(phone,message){
   const n=normalizePhone(phone);
   if(!validPhone(n)||!String(message||'').trim()){
     toast('Revisá el teléfono y el mensaje de WhatsApp');return false;
   }
-  const text=encodeURIComponent(String(message));
+  const url='https://wa.me/'+n+'?text='+encodeURIComponent(String(message));
   const isIOS=/iPad|iPhone|iPod/i.test(String(navigator.userAgent||''))||
     (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   try{
     if(isIOS){
-      // Native app deep link in the current view; CITHELA remains behind WhatsApp.
-      window.location.assign('whatsapp://send?phone='+n+'&text='+text);
+      window.location.assign(url);
     }else{
-      window.open('https://wa.me/'+n+'?text='+text,'_blank','noopener,noreferrer');
+      const opened=window.open(url,'_blank','noopener,noreferrer');
+      // A popup blocker may prevent window.open after an asynchronous RPC.
+      if(!opened)window.location.assign(url);
     }
     return true;
   }catch{
-    toast('No se pudo abrir WhatsApp. Copiá el mensaje y pegalo manualmente.');
+    toast('No se pudo abrir WhatsApp. Copiá el enlace de la invitación y compartilo manualmente.');
     return false;
   }
 }
@@ -4515,6 +4517,7 @@ async function cloudIssuePhoneInvite(personId){
       <p class="contact-note" style="margin:0 0 9px;">Acceso personal para ${escHtml(r.phone)}, válido durante 48 horas y de un solo uso. Comprobá el destinatario en WhatsApp antes de tocar Enviar. CITHELA no envía el mensaje automáticamente.</p>
       <input class="inp" id="cloud-whatsapp-invite-link" readonly autocomplete="off" value="${escHtml(link)}">
       <button type="button" class="btn-main soft" onclick="sharePatientPhoneInviteWhatsApp('${personId}')">Abrir WhatsApp nuevamente</button>
+      <button type="button" class="btn-main ghost" style="margin-top:8px;" onclick="copyPatientPhoneInviteLink()">Copiar enlace para enviarlo desde otro dispositivo</button>
     </div>`;
     sharePatientPhoneInviteWhatsApp(personId);
     toast('Invitación preparada. Comprobá el contacto y enviá el mensaje desde WhatsApp.',5100);
@@ -4527,6 +4530,18 @@ async function cloudIssuePhoneInvite(personId){
       rate_limited:'Se alcanzó el límite de invitaciones por hora.'
     };
     toast(messages[err?.message]||err?.message||'No se pudo preparar el acceso',4800);
+  }
+}
+async function copyPatientPhoneInviteLink(){
+  const input=$('cloud-whatsapp-invite-link');
+  if(!input||!professionalCloudReady())return;
+  try{
+    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(input.value);
+    else{input.focus();input.select();if(!document.execCommand('copy'))throw Error('copy unavailable');}
+    toast('Enlace personal copiado. Podés enviarlo desde tu WhatsApp del celular.');
+  }catch{
+    input.focus();input.select();
+    toast('Seleccioná el enlace y elegí Copiar.');
   }
 }
 function sharePatientPhoneInviteWhatsApp(personId){
@@ -5922,8 +5937,9 @@ function renderCloudWorkingHours(s){
     const p1=ps[0]||{},p2=ps[1]||{},advanced=ps.length>2;
     return `<details class="cithela-day" data-weekday="${day}"><summary>
       <strong>${label}</strong><span class="tag ${ps.length?'c':'p'}">${ps.length?ps.map(p=>cloudTime(p.starts_local)+'–'+cloudTime(p.ends_local)).join(' / '):'CERRADO'} ▾</span></summary>
-      <div class="day-editor"><label class="contact-note"><input type="checkbox" id="cloud-wh-${day}-active" ${ps.length?'checked':''} onchange="cloudToggleWorkingDay(${day})"> Día activo</label>
-      <div class="cloud-shift-stack">
+      <div class="day-editor"><label class="contact-note"><input type="checkbox" id="cloud-wh-${day}-active" ${ps.length?'checked':''} onchange="cloudToggleWorkingDay(${day})"> Atiende este día</label>
+      <p class="contact-note" style="margin:5px 0 12px;">${ps.length?'Para cerrar, desmarcá la casilla y tocá Guardar día cerrado.':'Este día está cerrado. Marcá la casilla si querés habilitar horarios.'} Los cambios se aplican solo al guardar.</p>
+      <div class="cloud-shift-stack" id="cloud-wh-${day}-shifts" style="${ps.length?'':'display:none;'}">
         <div class="cloud-shift">
           <div class="cloud-shift-title">Tramo 1</div>
           <div class="cloud-time-grid">
@@ -5948,7 +5964,7 @@ function renderCloudWorkingHours(s){
         </div>
       </div>
       ${advanced?'<p class="ops-note">Este día tiene más de dos tramos. No se modifica desde esta vista simplificada.</p>':''}
-      <button class="btn-main soft" style="margin-top:8px;" type="button" ${advanced?'disabled':''} onclick="cloudSaveWorkingHours(${day})">Guardar ${label.toLowerCase()}</button>
+      <button class="btn-main soft" id="cloud-wh-${day}-save" style="margin-top:8px;" type="button" ${advanced?'disabled':''} onclick="cloudSaveWorkingHours(${day})">${ps.length?'Guardar horario':'Guardar día cerrado'}</button>
       </div></details>`;
   }).join('');
 }
@@ -5957,6 +5973,8 @@ function cloudToggleWorkingDay(day){
   const checked=$('cloud-wh-'+day+'-active')?.checked;
   const shifts=$('cloud-wh-'+day+'-shifts');
   if(shifts)shifts.style.display=checked?'':'none';
+  const button=$('cloud-wh-'+day+'-save');
+  if(button)button.textContent=checked?'Guardar horario':'Guardar día cerrado';
   if(checked&&!$('cloud-wh-'+day+'-s1')?.value){
     $('cloud-wh-'+day+'-s1').value='09:00';
     $('cloud-wh-'+day+'-e1').value=day===6?'13:00':'13:00';
