@@ -19,6 +19,14 @@ test('Hub: cards de CITHELA y DAHZEA conducen a páginas comerciales separadas',
   assert.match(html, /class="product cithela"[\s\S]*?href="productos\/cithela\/"/);
   assert.match(html, /class="product dahzea"[\s\S]*?href="productos\/dahzea\/"/);
   assert.match(html, /SURKARA/);
+  assert.match(html, /Operaciones y logística agro/);
+  assert.match(html, /campo y transporte/i);
+  assert.match(html, /class="showcase-panel showcase-cithela"/);
+  assert.match(html, /class="showcase-panel showcase-dahzea"/);
+  assert.match(html, /class="showcase-panel showcase-surkara"/);
+  assert.match(html, /id="enfoque"/);
+  assert.doesNotMatch(html, /orbit-frame|SPUKLAB HUB|multicliente|diagrama|id="plataforma"/i);
+
   assert.doesNotMatch(html, /href="https:\/\/dahzea\.dentrix-8m\.chatgpt\.site\/"/);
 });
 
@@ -55,7 +63,7 @@ for (const page of pages) {
 test('CITHELA comercial: separado del acceso profesional y con límites de piloto', () => {
   const html = read(pages[1]);
   assert.match(html, /href="\.\.\/\.\.\/\.\.\/cithela\/"/);
-  assert.match(html, /registro comercial automático todavía no está habilitado/i);
+  assert.match(html, /Incorporación al piloto mediante invitación/i);
   assert.match(html, /piloto supervisado/i);
   assert.doesNotMatch(html, /<script\b/i);
 });
@@ -81,4 +89,16 @@ test('Documentación: producto ≠ plataforma comercial ≠ datos de clientes', 
   assert.match(contract, /RLS/);
   assert.match(contract, /DAHZEA como asistente comercial/);
   assert.match(contract, /No poner claves de servicio/);
+});
+
+test('CITHELA: información comercial no exhibe arquitectura multitenant', () => {
+  const html = read(pages[1]);
+  assert.match(html, /Tu marca,/);
+  assert.match(html, /TU IDENTIDAD/);
+  assert.doesNotMatch(html, /cuentas organizacionales|pruebas multitenant|aislamiento entre establecimientos|Cada establecimiento necesita/);
+});
+test('Dominio: raíz redirige relativamente a la portada de SpukLab', () => {
+  const html = read('index.html');
+  assert.match(html, /url=\.\/hub\//);
+  assert.match(html, /href="\.\/hub\/"/);
 });
