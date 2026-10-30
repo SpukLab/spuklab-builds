@@ -248,3 +248,63 @@ test('second-tenant registration checks patient links and never creates a tenant
   await run();
   assert.equal(calls,1,'existing member cannot create another tenant through pilot setup');
 });
+
+
+test('pilot login visibly exposes professional signup, without exposing it in ordinary mode',()=>{
+  const login=slice('id="professional-login-fields"','id="professional-workspace-setup"');
+  assert.match(login,/id="professional-signup-toggle" hidden/);
+  assert.match(login,/Crear cuenta profesional \(piloto\)/);
+  assert.match(login,/id="professional-signup-panel" hidden/);
+  for(const id of ['professional-signup-email','professional-signup-password',
+    'professional-signup-password-confirm','professional-signup-button','professional-signup-status'])
+    assert.match(login,new RegExp('id="'+id+'"'));
+  assert.match(html,/signup\.hidden=!\(r==='medico'&&CITHELA_SECOND_TENANT_PILOT\)/);
+  assert.match(html,/professionalShowPilotSignUp\(\)/);
+  assert.match(html,/professionalHidePilotSignUp\(\)/);
+  assert.match(html,/options:\{emailRedirectTo:redirect\}/);
+  assert.match(html,/CITHELA_PUBLIC_URL\+'\?pilotTenant=1'/);
+});
+
+test('pilot operator registration validates inputs before any Supabase Auth signUp',async()=>{
+  const begin=html.indexOf('async function professionalCreatePilotAccount(){');
+  const end=html.indexOf('function showProfessionalWorkspaceSetup(){',begin);
+  assert.ok(begin>=0&&end>begin);
+  const source=html.slice(begin,end);
+  const ui={
+    'professional-signup-email':{value:'invalid'},
+    'professional-signup-password':{value:'secreto123'},
+    'professional-signup-password-confirm':{value:'secreto123'},
+    'professional-signup-button':{disabled:false},
+    'professional-signup-status':{textContent:''},
+    'l-cloud-email':{value:''},
+    'professional-signup-panel':{hidden:false},
+    'professional-login-fields':{style:{}}
+  };
+  let calls=0;let signedIn=false;
+  const cloud={
+    state:()=>({signedIn:false}),
+    signUp:async(email,password)=>{
+      calls++;assert.equal(email,'nuevo@example.test');assert.equal(password,'secreto123');
+      return {signedIn};
+    }
+  };
+  const run=new Function('CITHELA_SECOND_TENANT_PILOT','CithelaCloud','$','showProfessionalWorkspaceSetup',
+    source+'\nreturn professionalCreatePilotAccount;')(true,cloud,id=>ui[id],()=>true);
+  await run();
+  assert.equal(calls,0);
+  assert.match(ui['professional-signup-status'].textContent,/correo electrónico válido/);
+  ui['professional-signup-email'].value='nuevo@example.test';
+  ui['professional-signup-password-confirm'].value='distinta';
+  await run();
+  assert.equal(calls,0);
+  assert.match(ui['professional-signup-status'].textContent,/no coinciden/);
+  ui['professional-signup-password-confirm'].value='secreto123';
+  await run();
+  assert.equal(calls,1);
+  assert.match(ui['professional-signup-status'].textContent,/Verificá|Revisá el correo/);
+  assert.equal(ui['professional-signup-password'].value,'');
+  assert.equal(ui['professional-signup-button'].disabled,false);
+  await new Function('CITHELA_SECOND_TENANT_PILOT','CithelaCloud','$',
+    source+'\nreturn professionalCreatePilotAccount;')(false,cloud,id=>ui[id])();
+  assert.equal(calls,1,'No signup from ordinary login route');
+});
