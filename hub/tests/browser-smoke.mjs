@@ -66,8 +66,9 @@ try {
         assert.ok(await btn.isVisible(),'Professional access link hidden');
       }
       if(process.env.CAPTURE_HUB_INLINE_PREVIEW==='1' && viewport.width===375){
+        await page.evaluate(() => window.scrollTo(0,0));
         const image = await page.screenshot({type:'jpeg',quality:36,fullPage:false});
-        console.log('HUB_VISUAL_PREVIEW '+site.title.replace(/\\s+/g,'-')+' '+image.toString('base64'));
+        console.log('HUB_VISUAL_PREVIEW '+site.title.split(' ').join('-')+' '+image.toString('base64'));
       }
       if(process.env.CAPTURE_HUB_SCREENSHOTS==='1'){
         const fs=await import('node:fs/promises');
