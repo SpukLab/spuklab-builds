@@ -1,6 +1,6 @@
-# SpukLab Hub — sitio institucional (v0.1)
+# SpukLab — web institucional y portafolio de productos
 
-Landing estática y responsive de SpukLab Hub. No incluye autenticación, bases de datos, contratación automática ni funciones multitenant; presenta la visión y los productos en piloto/desarrollo.
+Landing estática y responsive de SpukLab. No incluye autenticación, bases de datos, contratación automática ni funciones multitenant; presenta la visión y los productos en piloto/desarrollo.
 
 ## URL pública
 
@@ -18,16 +18,16 @@ Se publica mediante GitHub Pages desde la rama `main` y la raíz del repositorio
 
 **Seguridad:** el HTML no incluye llaves ni credenciales. No confundir esta landing con el panel operativo de los productos. Actualizar contenido al pasar de piloto a producción.
 
-## Catálogo de páginas comerciales (propuesta en revisión)
+## Catálogo de páginas comerciales (publicado)
 
 En el mismo GitHub Pages, sin nuevo backend:
 
-- **Hub:** `/hub/` (catálogo institucional y enlaces a las páginas comerciales).
+- **SpukLab:** `/hub/` (portafolio institucional y enlaces a las páginas comerciales).
 - **CITHELA:** `/hub/productos/cithela/` (web informativa, consulta de piloto y acceso separado a `/cithela/`).
 - **DAHZEA:** `/hub/productos/dahzea/` (ventas, paquetería, postventa, atención con IA y demo ficticia). El panel operativo de Render **no** se publica ni enlaza.
-- **SURKARA:** pendiente de ficha propia. Conserva su tarjeta informativa en el Hub.
+- **SURKARA:** pendiente de ficha propia. Su tarjeta presenta operaciones y logística de campo/transporte.
 
-Estas nuevas rutas funcionarán públicamente **solo después de integrar y desplegar la rama**; no confundir el PR con publicación.
+Las rutas están publicadas en GitHub Pages; la revisión editorial y adaptación a un futuro dominio se trabaja por separado.
 
 La web anterior de DAHZEA en ChatGPT Sites (https://dahzea.dentrix-8m.chatgpt.site/) sigue existiendo independientemente. Este cambio no la edita ni modifica su acceso; reemplaza únicamente el destino de la tarjeta del Hub al integrarse.
 
@@ -40,3 +40,7 @@ La web anterior de DAHZEA en ChatGPT Sites (https://dahzea.dentrix-8m.chatgpt.si
 - Las pruebas automáticas `node --test hub/tests/commercial-pages.test.mjs` revisan enlaces, delimitación de funcionalidades y ausencia de credenciales en las páginas. No reemplazan la inspección visual de iPhone/iPad ni las pruebas de aislamiento multitenant de CITHELA.
 
 Ver `hub/ARQUITECTURA-COMERCIAL.md` y las instrucciones específicas `hub/productos/dahzea/README.md`.
+
+## Dominio Cloudflare
+
+La entrada raíz `index.html` redirige de forma relativa a `/hub/`, sin tocar sitios o aplicaciones operativas. Para asignar un dominio real, consultar [`DOMINIO-CLOUDFLARE.md`](DOMINIO-CLOUDFLARE.md). No crear CNAME ni activar DNS hasta conocer el nombre definitivo.
