@@ -57,8 +57,8 @@ try {
         assert.ok(await page.locator('#demo-ventas').isVisible(), 'Sales panel hidden');
       }
       if(site.path === '/hub/') {
-        const c=page.locator('a[href="productos/cithela/"]');
-        const d=page.locator('a[href="productos/dahzea/"]');
+        const c=page.locator('a.product-footer[href="productos/cithela/"]');
+        const d=page.locator('a.product-footer[href="productos/dahzea/"]');
         assert.ok(await c.isVisible() && await d.isVisible(),'Product links hidden');
       }
       if(site.path.includes('/cithela/')) {
