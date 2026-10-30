@@ -471,7 +471,21 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <input class="inp" id="l-cloud-password" type="password" autocomplete="current-password" placeholder="Tu contraseña">
         <button class="btn-main" id="professional-login-button" type="button" onclick="professionalPasswordLogin()">Ingresar</button>
         <button class="mb ghost" type="button" style="width:100%;margin-top:10px;" onclick="requestProfessionalPasswordReset()">Olvidé mi contraseña</button>
+        <button class="mb ghost" id="professional-signup-toggle" hidden type="button" style="width:100%;margin-top:10px;" onclick="professionalShowPilotSignUp()">Crear cuenta profesional (piloto)</button>
         <p class="hint" style="margin:10px 0 0;">La sesión queda iniciada en este dispositivo.</p>
+      </div>
+      <div id="professional-signup-panel" hidden style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-color);">
+        <p class="sh">Crear cuenta profesional · piloto</p>
+        <p class="contact-note">Usá un correo distinto al del establecimiento actual. Primero deberás confirmar ese correo; después podrás crear tu propia agenda. Esta alta es de prueba, sin contratar ni pagar un servicio.</p>
+        <label class="lbl" for="professional-signup-email">Correo de la nueva cuenta</label>
+        <input class="inp" id="professional-signup-email" type="email" autocomplete="email" inputmode="email" placeholder="nuevo@correo.com">
+        <label class="lbl" for="professional-signup-password">Contraseña nueva</label>
+        <input class="inp" id="professional-signup-password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+        <label class="lbl" for="professional-signup-password-confirm">Repetí la contraseña</label>
+        <input class="inp" id="professional-signup-password-confirm" type="password" autocomplete="new-password" placeholder="Repetí la contraseña">
+        <button class="btn-main" id="professional-signup-button" type="button" onclick="professionalCreatePilotAccount()">Crear cuenta y verificar correo</button>
+        <button class="mb ghost" style="width:100%;margin-top:10px;" type="button" onclick="professionalHidePilotSignUp()">Volver a ingresar</button>
+        <p class="contact-note" id="professional-signup-status" role="status" aria-live="polite"></p>
       </div>
       <div id="professional-workspace-setup" hidden style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-color);">
         <p class="sh">Nuevo establecimiento · piloto controlado</p>
@@ -1781,9 +1795,11 @@ const CithelaCloud=(()=>{
 
   async function signUp(email,password){
     const c=await getClient();
+    const redirect=CITHELA_SECOND_TENANT_PILOT
+      ? CITHELA_PUBLIC_URL+'?pilotTenant=1' : CITHELA_PUBLIC_URL;
     const {data,error}=await c.auth.signUp({
       email,password,
-      options:{emailRedirectTo:CITHELA_PUBLIC_URL}
+      options:{emailRedirectTo:redirect}
     });
     if(error)throw error;
     if(data?.session)await refresh();
@@ -3412,6 +3428,61 @@ async function resumeCloudSession(){
     renderPatientLoginSession();
   }
 }
+function professionalShowPilotSignUp(){
+  if(!CITHELA_SECOND_TENANT_PILOT||CithelaCloud.state().signedIn)return;
+  $('professional-login-fields').style.display='none';
+  $('professional-signup-panel').hidden=false;
+  $('professional-signup-status').textContent='';
+  $('professional-signup-email').value=String($('l-cloud-email').value||'').trim();
+  $('l-cloud-password').value='';
+}
+function professionalHidePilotSignUp(){
+  $('professional-signup-panel').hidden=true;
+  $('professional-signup-password').value='';
+  $('professional-signup-password-confirm').value='';
+  $('professional-login-fields').style.display='block';
+}
+async function professionalCreatePilotAccount(){
+  if(!CITHELA_SECOND_TENANT_PILOT||CithelaCloud.state().signedIn)return;
+  const email=String($('professional-signup-email').value||'').trim().toLowerCase();
+  const password=$('professional-signup-password').value;
+  const confirmPassword=$('professional-signup-password-confirm').value;
+  const status=$('professional-signup-status');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    status.textContent='Ingresá un correo electrónico válido.';return;
+  }
+  if(password.length<8){
+    status.textContent='Elegí una contraseña de al menos 8 caracteres.';return;
+  }
+  if(password!==confirmPassword){
+    status.textContent='Las contraseñas no coinciden.';return;
+  }
+  const button=$('professional-signup-button');
+  if(button.disabled)return;
+  button.disabled=true;
+  status.textContent='Solicitando creación de cuenta…';
+  try{
+    const result=await CithelaCloud.signUp(email,password);
+    $('professional-signup-password').value='';
+    $('professional-signup-password-confirm').value='';
+    $('l-cloud-email').value=email;
+    if(result.signedIn){
+      $('professional-signup-panel').hidden=true;
+      $('professional-login-fields').style.display='block';
+      if(!showProfessionalWorkspaceSetup())
+        status.textContent='Cuenta creada. Volvé a ingresar para continuar con tu establecimiento.';
+    }else{
+      // Supabase intentionally does not reveal whether an email is already registered.
+      // Never claim that a brand-new account was definitely created.
+      status.textContent='Revisá el correo y abrí el enlace de verificación. Después volvé a este acceso de piloto, ingresá con tu contraseña y creá el establecimiento. Si el correo no llega, evitá solicitarlo repetidamente.';
+    }
+  }catch(err){
+    const message=String(err?.message||'');
+    status.textContent=/rate limit|email rate limit|too many requests/i.test(message)
+      ?'Se alcanzó el límite de correos. No solicites más enlaces por ahora.'
+      :message||'No pudimos solicitar la cuenta.';
+  }finally{button.disabled=false;}
+}
 function showProfessionalWorkspaceSetup(){
   const state=CithelaCloud.state();
   if(!CITHELA_SECOND_TENANT_PILOT||!state.signedIn||!state.email||
@@ -3568,6 +3639,8 @@ function setRole(r){
   $('patient-demo-controls').style.display=r==='paciente'&&CITHELA_DEMO_MODE?'block':'none';
   const s=CithelaCloud.state();
   if(r==='medico'&&s.passwordRecovery)showProfessionalPasswordRecovery();
+  const signup=$('professional-signup-toggle');
+  if(signup)signup.hidden=!(r==='medico'&&CITHELA_SECOND_TENANT_PILOT);
   renderPatientLoginSession();
 }
 
