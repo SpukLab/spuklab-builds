@@ -18,6 +18,12 @@ Se publica mediante GitHub Pages desde la rama `main` y la raíz del repositorio
 
 **Seguridad:** el HTML no incluye llaves ni credenciales. No confundir esta landing con el panel operativo de los productos. Actualizar contenido al pasar de piloto a producción.
 
+## Entrada comercial prioritaria: DAHZEA
+
+En la portada, el visitante es recibido por DAHZEA y puede elegir qué problema resolver (turnos, ventas/pedidos, campo/transporte) para llegar a la ficha del producto y consultar por su incorporación. Es un recorrido **guiado, sin IA generativa**; aún no se cobra ni se crean cuentas desde la web.
+
+Este asistente es el mecanismo central del sitio; el catálogo está disponible como navegación alternativa. Para la futura conexión conversacional segura con el motor DAHZEA consultar [DAHZEA-COMERCIAL.md](DAHZEA-COMERCIAL.md).
+
 ## Catálogo de páginas comerciales (publicado)
 
 En el mismo GitHub Pages, sin nuevo backend:
