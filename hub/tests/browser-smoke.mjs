@@ -60,6 +60,28 @@ try {
         const c=page.locator('a.product-footer[href="productos/cithela/"]');
         const d=page.locator('a.product-footer[href="productos/dahzea/"]');
         assert.ok(await c.isVisible() && await d.isVisible(),'Product links hidden');
+        const assistant = page.locator('[data-dahzea-guide]');
+        assert.ok(await assistant.isVisible(), 'DAHZEA assistant not visible');
+        assert.ok(await assistant.getByText('Hola, soy DAHZEA').count(), 'Missing welcome message');
+        await assistant.getByRole('button',{name:'Agenda y turnos'}).click();
+        await assistant.getByRole('button',{name:'Trabajo por mi cuenta'}).click();
+        assert.ok(await assistant.locator('a[href="productos/cithela/"]').isVisible(),'CITHELA recommendation missing');
+        assert.ok((await assistant.locator('a[href^="mailto:"]').getAttribute('href')).includes('CITHELA'), 'CITHELA handoff absent');
+        await assistant.getByRole('button',{name:/Reiniciar orientación/}).click();
+        await assistant.getByRole('button',{name:'Ventas y pedidos'}).click();
+        await assistant.getByRole('button',{name:'Preparar pedidos y envíos'}).click();
+        assert.ok(await assistant.locator('a[href="productos/dahzea/"]').isVisible(),'DAHZEA recommendation missing');
+        assert.ok((await assistant.locator('a[href^="mailto:"]').getAttribute('href')).includes('DAHZEA'), 'DAHZEA handoff absent');
+        await assistant.getByRole('button',{name:/Reiniciar orientación/}).click();
+        await assistant.getByRole('button',{name:'Campo y transporte'}).click();
+        await assistant.getByRole('button',{name:'Movimientos y transporte'}).click();
+        assert.ok(await assistant.locator('a[href="#surkara"]').isVisible(),'SURKARA recommendation missing');
+        assert.ok(await assistant.getByText('no disponible para contratar').count(),'SURKARA not marked as development');
+        await assistant.getByRole('button',{name:/Reiniciar orientación/}).click();
+        await assistant.getByRole('button',{name:'No sé qué producto necesito'}).click();
+        assert.ok(await assistant.getByRole('button',{name:'Vendo productos online'}).isVisible(),'Orientation fallback missing');
+        await assistant.getByRole('button',{name:/Reiniciar orientación/}).click();
+
       }
       if(site.path.includes('/cithela/')) {
         const btn=page.locator('a[href="../../../cithela/"]');
