@@ -21,10 +21,8 @@ test('Hub: cards de CITHELA y DAHZEA conducen a páginas comerciales separadas',
   assert.match(html, /SURKARA/);
   assert.match(html, /Operaciones y logística agro/);
   assert.match(html, /campo y transporte/i);
-  assert.match(html, /class="showcase-panel showcase-cithela"/);
-  assert.match(html, /class="showcase-panel showcase-dahzea"/);
-  assert.match(html, /class="showcase-panel showcase-surkara"/);
   assert.match(html, /id="enfoque"/);
+  assert.match(html, /id="asistente" data-dahzea-guide/);
   assert.doesNotMatch(html, /orbit-frame|SPUKLAB HUB|multicliente|diagrama|id="plataforma"/i);
 
   assert.doesNotMatch(html, /href="https:\/\/dahzea\.dentrix-8m\.chatgpt\.site\/"/);
