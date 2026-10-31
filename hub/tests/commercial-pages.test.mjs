@@ -102,3 +102,25 @@ test('Dominio: raíz redirige relativamente a la portada de SpukLab', () => {
   assert.match(html, /url=\.\/hub\//);
   assert.match(html, /href="\.\/hub\/"/);
 });
+
+test('DAHZEA comercial recibe al visitante y ofrece orientación real, sin checkout ficticio', () => {
+  const html = read('hub/index.html');
+  const script = read('hub/assets/dahzea-commercial.js');
+  const styles = read('hub/assets/dahzea-commercial.css');
+  assert.match(html, /id="asistente" data-dahzea-guide/);
+  assert.match(html, /DAHZEA<\/strong><small>Asistente comercial de SpukLab/);
+  assert.match(html, /href="assets\/dahzea-commercial.css"/);
+  assert.match(html, /src="assets\/dahzea-commercial.js"/);
+  assert.match(html, /Sin IA generativa ni pagos por ahora/);
+  assert.match(script, /Agenda y turnos/);
+  assert.match(script, /Ventas y pedidos/);
+  assert.match(script, /Campo y transporte/);
+  assert.match(script, /No sé qué producto necesito/);
+  assert.match(script, /Conocer /);
+  assert.match(script, /mailto:spuklab@gmail.com\?subject=/);
+  assert.match(styles, /@media\(max-width:760px\)/);
+  assert.doesNotMatch(script, /\bfetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|document\.cookie/);
+  assert.doesNotMatch(script, /\bservice_role\b|MERCADOLIBRE_CLIENT_SECRET|OPENAI_API_KEY/);
+  assert.doesNotMatch(html, /Pasar al pago|Comprar ahora|Contratar inmediatamente/);
+  assert.match(read('hub/DAHZEA-COMERCIAL.md'), /guía determinista/);
+});
