@@ -61,13 +61,21 @@ test('trial SQL: disabled gate, verified owner, consent, isolation, expiry and i
  const first=await start(A);assert.equal(first.code,'trial_started');
  const again=await start(A);assert.equal(again.code,'account_exists');assert.equal(again.tenant_id,first.tenant_id);assert.equal(again.trial_ends_at,first.trial_ends_at);
  const duration=await db.query("select extract(epoch from trial_ends_at-trial_started_at) seconds from cithela_private.commercial_accounts");assert.equal(Number(duration.rows[0].seconds),604800);
+ const canWrite=async(id)=> (await db.query('select cithela_private.commercial_tenant_writable($1) writable',[id])).rows[0].writable;
+ assert.equal(await canWrite(first.tenant_id),true);
+ assert.equal(await canWrite('00000000-0000-4000-8000-000000009999'),false);
  assert.equal((await rpc(B,'cithela_commercial_status')).code,'not_enrolled');
  assert.equal((await rpc(A,'cithela_commercial_status')).can_accept_bookings,true);
  // Force simulated clock boundary by shifting both immutable endpoints in fixture admin context.
  await db.exec("update cithela_private.commercial_accounts set trial_started_at=now()-interval '8 days',trial_ends_at=now()-interval '1 day'");
  assert.equal((await rpc(A,'cithela_commercial_status')).status,'trial_expired');
+ assert.equal(await canWrite(first.tenant_id),false);
  assert.equal((await rpc(A,'cithela_commercial_status')).can_accept_bookings,false);
  await db.exec("update cithela_private.commercial_accounts set status='active',current_period_end=null");
+ assert.equal(await canWrite(first.tenant_id),false);
+ await db.exec("update cithela_private.commercial_accounts set current_period_end=now()+interval '1 day'");
+ assert.equal(await canWrite(first.tenant_id),true);
+ await db.exec("update cithela_private.commercial_accounts set current_period_end=null");
  assert.equal((await rpc(A,'cithela_commercial_status')).status,'past_due');
  for(const status of ['canceled','suspended','payment_pending','past_due']){
   await db.query('update cithela_private.commercial_accounts set status=$1',[status]);
