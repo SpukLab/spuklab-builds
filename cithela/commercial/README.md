@@ -7,6 +7,11 @@
 - `mercadopago.mjs`: server-only adapter for pending subscription checkout, lookup and cancellation; explicit consent, fixed API origin, timeout, no network while disabled. HMAC verification binds resource/request/time, five-minute replay window. Payment matching checks merchant, reference, environment, currency, amount and approval time. An authorized subscription alone grants nothing.
 - `mercadopago.test.mjs`: 21 payment tests using synthetic data and mocked network, plus a PostgreSQL fixture test covering release gate, identity, consent, patient exclusion, trial idempotency, owner isolation, expiry and role-denied writes. Run `npm install --prefix cithela/commercial --ignore-scripts`, then `node --test cithela/commercial/*.test.mjs` from repository root. PGlite is a development-only test dependency.
 
+## Internal write-access predicate (draft, not integrated)
+- `cithela_private.commercial_tenant_writable(tenant_id)` evaluates current entitlement from database time; returns false for expired trials, active subscriptions without a future paid-through date, or all other statuses.
+- It is private and has no execute grant for `anon` or `authenticated`. Operational server-side RPCs must first authorize the actor and tenant, then call the predicate. It does **not** itself authenticate a patient, authorize an owner, or block existing write endpoints.
+- Fixture assertions cover valid trial, unknown tenant, expired trial, missing paid-through date and valid paid-through date. The whole SQL remains disabled and unapplied to production.
+
 ## Not implemented / release blockers
 This is NOT an operational subscription system. SQL is tested with disposable in-memory PostgreSQL (PGlite), using minimal operational table/bootstrap fixtures. It has NOT been applied to Supabase. No public signup/payment button may be connected to it yet.
 1. Block direct legacy bootstrap bypass for commercial accounts without breaking existing pilots. Add entitlement checks inside ALL mutation/bookings/channel RPCs, including patient reservations. A status query alone does not restrict writes.
