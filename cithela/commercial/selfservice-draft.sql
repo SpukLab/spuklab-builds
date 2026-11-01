@@ -76,6 +76,29 @@ begin
     'trial_ends_at',account.trial_ends_at,'current_period_end',account.current_period_end,
     'can_accept_bookings',writable,'server_now',clock_timestamp());
 end $fn$;
+-- Internal entitlement predicate for operational RPCs to call AFTER their own
+-- tenant/role authorization checks. Never expose as a public RPC or use it
+-- as a substitute for checking that the actor may operate on this tenant.
+-- Legacy pilots intentionally have no commercial account: this predicate is
+-- only for newly enrolled commercial tenants.
+create function cithela_private.commercial_tenant_writable(p_tenant uuid)
+returns boolean language sql stable security definer set search_path=''
+as $fn$
+  select exists (
+    select 1 from cithela_private.commercial_accounts a
+    where a.tenant_id = p_tenant
+      and (
+        (a.status = 'trialing' and now() < a.trial_ends_at)
+        or
+        (a.status = 'active' and a.current_period_end is not null
+         and now() < a.current_period_end)
+      )
+  );
+$fn$;
+revoke all on function cithela_private.commercial_tenant_writable(uuid) from public,anon,authenticated;
+-- Function owner can invoke this from authorized SECURITY DEFINER RPCs.
+-- Do not grant direct execute on this predicate to client roles.
+
 revoke all on function cithela_private.commercial_start(text,text,text),cithela_private.commercial_status() from public,anon,authenticated;
 grant execute on function cithela_private.commercial_start(text,text,text),cithela_private.commercial_status() to authenticated;
 -- Private schema is already used by existing wrappers; no new broad schema grants.
