@@ -67,3 +67,12 @@ Entitlement: `organization_id, tenant_id, product='cithela', plan_id, subscripti
 7. Baja/reembolso/arrepentimiento según condiciones aplicables, sin contactar al creador para ejecutar acciones rutinarias.
 
 **Estado actual:** sólo contrato de implementación. NO modificar flags `pilotTenant` ni la base operativa para lanzar autoservicio hasta pasar los bloqueantes.
+
+## Implementación incremental — 01/11/2026
+- Web comercial publicada mediante SpukLab-web PR #9: recorrido de cinco pasos al comienzo de /cithela/, CTA, prueba y vencimiento propuestos, funciones verificadas/pending. Cloudflare build de producción exitoso en commit 12e12a5d35e8c0f7e063ebe71feace06fbad9cca; contenido comprobado en navegador desktop. Safari iPhone/iPad todavía pendiente.
+- Fundamentos de servidor en `commercial/`, sin importar desde index.html, sin despliegue ni credenciales. Adaptador MP con 21 pruebas simuladas y SQL de trial/consentimiento/estado con prueba PostgreSQL aislada (PGlite). 22/22 pruebas; NO aplicado a Supabase.
+- Se reutiliza `cithela_private.bootstrap_tenant`; no se reconstruye Auth ni se conecta pilotTenant a la web. El asistente de configuración todavía debe conectarse a catálogo, disponibilidad y branding existentes.
+- Ensayo RLS de lectura en ambos sentidos bajo rol authenticated y subject transaccional de cada propietario: una membresía visible por contexto y cero filas cruzadas en tenants, people, appointments, services, resources, working_hours y channel_connections. Transacciones READ ONLY + ROLLBACK; sin valores personales devueltos. No equivale a JWT/OTP/escrituras/multidispositivo completos.
+- Hallazgo servidor: bootstrap legado no exige email_confirmed_at ni descarta patient_links; ambas comprobaciones aparecen en la ruta comercial propuesta. Cerrar bypass legado antes de abrir altas.
+- Próximo bloque técnico: ampliar fixture a RPC operativas/concurrencia, controles de entitlement en todas las mutaciones/reservas/RPC/canales y wizard conectado. Luego ledger duradero de pagos/webhooks, conciliación, sandbox, baja y recuperación/respaldo.
+- Ver `commercial/README.md` para evidencia, costos, límites y pruebas faltantes. ARS 18.000 sigue propuesto: tarifas MP verificadas públicamente; situación fiscal, facturación, consumo WhatsApp y neto real sin confirmar.
