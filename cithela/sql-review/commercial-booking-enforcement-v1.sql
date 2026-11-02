@@ -1,5 +1,7 @@
 -- CITHELA Commercial Booking Enforcement V1.
--- REVIEW / DO NOT DEPLOY until full transaction tests pass.
+-- DEPLOYED via Supabase migration cithela_commercial_booking_enforcement_20261102.
+-- ARCHIVED historical review version. Canonical deployed SQL: ../supabase/commercial-booking-enforcement-20261102.sql.
+-- Do NOT re-run this file as a new migration.
 -- All live tenants become legacy (uninterrupted bookings).
 -- New authorized tenants start a single 7-day trial inside bootstrap.
 -- No payment integration or public signup is enabled.
