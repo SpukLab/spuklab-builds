@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS cithela_private.cithela_mp_webhook_inbox (
   processing_status text NOT NULL DEFAULT 'received'
     CHECK (processing_status IN ('received','reconciled','ignored','failed')),
   -- Billing remains disabled; this table does not map an event to any tenant.
-  UNIQUE(event_id)
+  UNIQUE(event_id),
+  UNIQUE(request_id,resource_id)
 );
 ALTER TABLE cithela_private.cithela_mp_webhook_inbox ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON cithela_private.cithela_mp_webhook_inbox FROM PUBLIC,anon,authenticated;
@@ -53,19 +54,21 @@ BEGIN
    (event_id,topic,resource_id,request_id,merchant_user_id,live_mode,occurred_at)
   VALUES
    (p_event_id,p_topic,p_resource_id,p_request_id,p_merchant_user_id,p_live_mode,p_occurred_at)
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT DO NOTHING
   RETURNING id INTO v_id;
   IF v_id IS NOT NULL THEN
     RETURN jsonb_build_object('ok',true,'code','recorded');
   END IF;
   SELECT * INTO v_previous
   FROM cithela_private.cithela_mp_webhook_inbox i
-  WHERE i.event_id=p_event_id;
+  WHERE i.event_id=p_event_id OR (i.request_id=p_request_id AND i.resource_id=p_resource_id)
+  ORDER BY (i.event_id=p_event_id) DESC LIMIT 1;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok',false,'code','retry');
   END IF;
   -- Distinguish legitimate delivery retry from conflicting replay.
-  IF v_previous.topic IS DISTINCT FROM p_topic
+  IF v_previous.event_id IS DISTINCT FROM p_event_id
+    OR v_previous.topic IS DISTINCT FROM p_topic
     OR v_previous.resource_id IS DISTINCT FROM p_resource_id
     OR v_previous.merchant_user_id IS DISTINCT FROM p_merchant_user_id
     OR v_previous.live_mode IS DISTINCT FROM p_live_mode THEN
