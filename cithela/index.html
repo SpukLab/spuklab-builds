@@ -1209,7 +1209,14 @@ function recordEvent(type,payload={}){
 }
 
 const $=id=>document.getElementById(id);
-function toast(msg,d=2400){const t=$('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),d);}
+function toast(msg,d=2400){
+  const t=$('toast');
+  const code=String(msg||'');
+  t.textContent=code.includes('subscription_required')
+    ?'El acceso para nuevas reservas está pausado. Los turnos existentes y las cancelaciones siguen disponibles. Consultá las condiciones de continuidad con SpukLab.'
+    :code;
+  t.classList.add('on');setTimeout(()=>t.classList.remove('on'),d);
+}
 function dk(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function today(){return dk(new Date());}
 function dp(s){return new Date(s+'T12:00:00');}
@@ -2900,6 +2907,9 @@ function patientOwnAppointment(tenantId,appointmentId){
   return profile&&appointment?{profile,appointment}:null;
 }
 function patientActionErrorMessage(code){
+  if(String(code||'').includes('subscription_required')){
+    return 'Este establecimiento no está tomando nuevas reservas por ahora. Para consultar, comunicate con el profesional. Las cancelaciones de turnos existentes siguen disponibles.';
+  }
   return {
     stale_write:'El turno cambió en otro dispositivo. Actualizá y volvé a intentarlo.',
     too_late:'El turno está dentro del plazo mínimo de 2 horas. Contactá al consultorio.',
