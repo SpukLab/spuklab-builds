@@ -1,6 +1,6 @@
 # CITHELA — Estado comercial visible para profesionales
 
-Fecha: 2026-11-02. Alcance: **consulta de estado**; no se activan cobros, alta pública, checkout ni nuevas pruebas.
+Fecha: 2026-11-02. Estado: **RPC ya desplegado y verificado en Supabase**; interfaz en PR #111. Alcance: consulta de estado; no se activan cobros, alta pública, checkout ni nuevas pruebas.
 
 ## Función y permisos
 Se agregó `public.cithela_commercial_status(p_tenant_id uuid)`. Es el único punto de lectura de los datos comerciales para el navegador:
@@ -19,6 +19,8 @@ Se cargó la nueva función en `BEGIN`, con `SET LOCAL ROLE authenticated` y las
 3. El mismo usuario consulta B: `forbidden`.
 4. Bajo una modificación **transaccional y revertida** del entitlement A, se comprobó `trialing`, recuento de días del servidor y `trial_expired` con `can_book=false`.
 5. `ROLLBACK` dejó 2 cuentas `legacy`, 15 turnos y la función sin desplegar antes de la activación.
+
+**Despliegue posterior:** migración `cithela_commercial_status_owner_rpc_20261102` aplicada con `success=true`. Nueva prueba contra el RPC real: titular puede leer `legacy`, intento de tenant ajeno devuelve `forbidden`, operador no puede consultar estado comercial y `anon` no tiene permiso de ejecución. Todos los escenarios de sesión/rol se probaron con `BEGIN/ROLLBACK`. Resultado final: 2 tenants, 15 turnos, 2 entitlements `legacy`, sin modificaciones de reservas.
 
 ## Experiencia profesional
 El nuevo apartado *Estado del servicio* aparece en **Configuración** únicamente para el titular/administrador cloud del establecimiento. Los demás perfiles y el modo local no lo ven.
@@ -39,3 +41,5 @@ La consulta se añade al `CithelaCloud.refresh()` existente y no es bloqueante; 
 5. Confirmar respaldo/restauración y proceso de exportación/cancelación.
 
 **No se debe activar un botón «Pagar ahora» antes de tener checkout real y webhook verificado.**
+
+**No verificado aún:** interfaz visual completa desde Safari iPhone/iPad con sesión real. Los tests de interfaz y smoke GitHub verifican el comportamiento automatizado, no sustituyen esa prueba.
