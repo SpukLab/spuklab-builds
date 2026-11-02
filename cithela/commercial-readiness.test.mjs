@@ -4,7 +4,9 @@ import {readFileSync} from 'node:fs';
 
 const read = path => readFileSync(new URL(path,import.meta.url),'utf8');
 const html=read('./index.html');
-const sql=read('./sql-review/commercial-onboarding-gate.sql');
+const sql=read('./supabase/commercial-onboarding-activation-20261102.sql');
+const historical=read('./sql-review/commercial-onboarding-gate.sql');
+const rollback=read('./sql-review/rollback-onboarding-gate-20261102.sql');
 
 test('operational application remains gated until explicit commercial activation',()=>{
   assert.match(html,/const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams\(location\.search\)\.get\('pilotTenant'\)==='1'/);
@@ -24,7 +26,9 @@ test('professional sees readable responses when server denies onboarding',()=>{
 });
 
 test('candidate gate is not a public client decision or an unverified grant',()=>{
-  assert.match(sql,/REVIEW-ONLY proposal, NOT DEPLOYED/);
+  assert.match(historical,/APPLIED to CITHELA production/);
+  assert.match(sql,/canonical|DRYRUN PASS/);
+  assert.match(rollback,/EMERGENCY ROLLBACK/);
   assert.match(sql,/CREATE TABLE IF NOT EXISTS cithela_private\.cithela_onboarding_grants/);
   assert.match(sql,/REVOKE ALL ON cithela_private\.cithela_onboarding_grants FROM PUBLIC, anon, authenticated/);
   assert.match(sql,/SECURITY DEFINER\s+SET search_path TO ''/);
@@ -41,11 +45,18 @@ test('candidate gate is not a public client decision or an unverified grant',()=
   assert.doesNotMatch(sql,/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.cithela_bootstrap_tenant/i);
 });
 
-test('review-only SQL leaves appointments, patients and existing tenants untouched',()=>{
+test('deployed gate schema leaves appointments, patients and existing tenants untouched',()=>{
   assert.doesNotMatch(sql,/DROP TABLE|DELETE FROM public\.cithela_|TRUNCATE|UPDATE public\.cithela_(?:people|appointments|tenants)/i);
   assert.match(sql,/IF existing_tenant IS NOT NULL THEN/);
   assert.match(sql,/existing_tenant,existing_name/);
   const prior=sql.indexOf('IF existing_tenant IS NOT NULL THEN');
   const gate=sql.indexOf("code','onboarding_not_authorized");
   assert.ok(prior>0&&gate>prior,'existing workspace takes priority over new-account gate');
+});
+
+test('rollback preserves prior bootstrap function for incident response only',()=>{
+  assert.match(rollback,/CREATE OR REPLACE FUNCTION cithela_private\.bootstrap_tenant/);
+  assert.match(rollback,/workspace_exists/);
+  assert.doesNotMatch(rollback,/cithela_onboarding_grants/);
+  assert.doesNotMatch(rollback,/DELETE FROM|TRUNCATE|DROP TABLE/i);
 });
