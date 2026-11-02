@@ -1,5 +1,5 @@
 # CITHELA · Alta autoservicio y activación comercial (contrato V0)
-Fecha: 2026-11-01 · Estado: diseño de implementación / NO habilitado en producción
+Fecha inicial: 2026-11-01 · Actualización: 2026-11-02 · Alta y cobros automáticos NO habilitados
 
 ## Objetivo
 Cliente que llega desde SpukLab Web → resuelve dudas frecuentes SIN IA → conoce planes → verifica identidad profesional → crea un establecimiento aislado → configura agenda → comienza una prueba gratuita → decide pagar ARS 18.000/mes (precio propuesto; impuestos/condiciones por verificar) → mantiene acceso según su suscripción. Sin intervención humana habitual. Soporte humano para excepciones.
@@ -7,7 +7,7 @@ Cliente que llega desde SpukLab Web → resuelve dudas frecuentes SIN IA → con
 ## Evidencia técnica comprobada (sin consultar datos personales)
 - App actual: `https://spuklab.github.io/spuklab-builds/cithela/`, en este repositorio (`cithela/index.html`).
 - El registro profesional y creación de establecimientos YA EXISTEN, pero están limitados a `?pilotTenant=1`; gate visual de piloto, no una oferta comercial ni una medida de autorización.
-- `cithela_private.bootstrap_tenant` y wrapper `cithela_bootstrap_tenant`: crean tenant, rol owner, servicio y recurso bajo sesión Auth autenticada, si el usuario todavía no tiene membresía. No llamar desde SpukLab Web con service-role.
+- `cithela_private.bootstrap_tenant` y wrapper `cithela_bootstrap_tenant`: crean tenant, rol owner, servicio y recurso bajo sesión Auth autenticada **solo tras verificar correo y una autorización privada de servidor vigente** (desde migración `cithela_commercial_onboarding_guard_20261102`). La función sigue siendo idempotente para un miembro existente. No llamar desde SpukLab Web con service-role.
 - A 2026-11-01, Supabase CITHELA tiene 2 tenants y 2 memberships (conteos agregados). Existencia de 2 tenants NO acredita una prueba A/B de aislamiento.
 - Auth de profesional hoy usa correo/contraseña/confirmación de correo. WhatsApp OTP ya se probó para acceso de pacientes; no atribuirlo automáticamente al alta del profesional sin adaptar/verificar la función.
 - Sin tabla de suscripciones comerciales/entitlements en CITHELA; no activar planes a partir de parámetros URL o del navegador.
@@ -66,4 +66,4 @@ Entitlement: `organization_id, tenant_id, product='cithela', plan_id, subscripti
 6. Pago confirmado por webhook real en entorno autorizado; acceso activo sin operaciones manuales.
 7. Baja/reembolso/arrepentimiento según condiciones aplicables, sin contactar al creador para ejecutar acciones rutinarias.
 
-**Estado actual:** sólo contrato de implementación. NO modificar flags `pilotTenant` ni la base operativa para lanzar autoservicio hasta pasar los bloqueantes.
+**Estado actual (02/11/2026):** alta profesional protegida en Supabase por permiso privado, sin autorizaciones emitidas aún; sesiones/turnos existentes preservados. No hay alta autoservicio, trial activo ni cobro. Continuar con entitlements y validación comercial de forma independiente. No modificar `pilotTenant` ni abrir registro público hasta pasar los restantes bloqueantes. Ver `commercial-readiness-evidence-20261102.md`.
