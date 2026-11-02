@@ -33,10 +33,11 @@ Se cargó **toda** la migración propuesta en una transacción `BEGIN`, se ejecu
 1. Se generaron exactamente dos entitlements `legacy` en el ensayo, ambos con `can_book=true`.
 2. Con un tenant temporalmente en `trialing` cuyo fin ya pasó, el evaluador devolvió `trial_expired`, `can_book=false`; una reprogramación directa de la tabla produjo `cithela_subscription_required`.
 3. El mismo turno vencido pudo pasar a `cancelled` (no fue bloqueado por el control comercial).
-4. Con un usuario Auth confirmado sin tenant, se creó una autorización **exclusivamente de ensayo dentro de la transacción**; `cithela_bootstrap_tenant` creó un espacio con trial válido y siete días calculados por servidor. Repetir el alta con la misma sesión devolvió `workspace_exists`; el permiso quedó consumido, sin duplicar trial.
-5. Al completar ambos rollbacks: **2 tenants, 2 membresías, 15 turnos, 0 grants** y **sin tabla comercial instalada**.
+4. Al vencer la prueba, la confirmación de un turno previamente pendiente **siguió permitida**, mientras que intentar reactivar uno cancelado fue rechazado por el trigger central. Ambas modificaciones se revirtieron.
+5. Con un usuario Auth confirmado sin tenant, se creó una autorización **exclusivamente de ensayo dentro de la transacción**; `cithela_bootstrap_tenant` creó un espacio con trial válido y siete días calculados por servidor. Repetir el alta con la misma sesión devolvió `workspace_exists`; el permiso quedó consumido, sin duplicar trial.
+6. Al completar todos los rollbacks: **2 tenants, 2 membresías, 15 turnos, 0 grants** y **sin tabla comercial instalada**.
 
-La segunda ejecución se ajustó para que la verificación privada corriera como administrador: `authenticated` no puede ejecutar `commercial_entitlement_snapshot`, correctamente. Los tests anteriores con lectura de función privada desde `authenticated` fallaron por protección de permisos, no por fallas de onboarding.
+La prueba de confirmación/reactivación también utilizó un ensayo transaccional sin persistencia. La segunda ejecución de alta se ajustó para que la verificación privada corriera como administrador: `authenticated` no puede ejecutar `commercial_entitlement_snapshot`, correctamente. Los tests anteriores con lectura de función privada desde `authenticated` fallaron por protección de permisos, no por fallas de onboarding.
 
 ## Pendientes de la fase posterior
 - Comprobar UI en Safari iPhone/iPad, dos sesiones, y tratamiento de `subscription_required` en mensajes.
