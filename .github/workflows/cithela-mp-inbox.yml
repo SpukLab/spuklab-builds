@@ -1,0 +1,27 @@
+name: CITHELA Mercado Pago durable webhook inbox
+on:
+  pull_request:
+    paths:
+      - 'cithela/payments/mercadopago-webhook-handler.mjs'
+      - 'cithela/edge/cithela-mercadopago-webhook/index.ts'
+      - 'cithela/supabase/mercadopago-signed-webhook-inbox-20261102.sql'
+      - 'cithela/mercadopago-webhook-inbox.test.mjs'
+      - '.github/workflows/cithela-mp-inbox.yml'
+  push:
+    paths:
+      - 'cithela/payments/mercadopago-webhook-handler.mjs'
+      - 'cithela/edge/cithela-mercadopago-webhook/index.ts'
+      - 'cithela/supabase/mercadopago-signed-webhook-inbox-20261102.sql'
+      - 'cithela/mercadopago-webhook-inbox.test.mjs'
+      - '.github/workflows/cithela-mp-inbox.yml'
+permissions:
+  contents: read
+jobs:
+  verify-inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test cithela/mercadopago-webhook-signature.test.mjs cithela/mercadopago-webhook-inbox.test.mjs
