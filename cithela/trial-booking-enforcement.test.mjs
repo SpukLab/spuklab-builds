@@ -71,3 +71,20 @@ test('staging SQL remains review-only until verified deployment',()=>{
  assert.match(sql,/REVIEW \/ DO NOT DEPLOY until full transaction tests pass/);
  assert.ok(sql.length>30000,'all existing routines must be preserved verbatim');
 });
+
+test('professional and patient see readable messages for expired or suspended access',()=>{
+ const toastSource=app.match(/function toast\(msg,d=2400\)\{[\s\S]*?\n\}/)?.[0];
+ const patientSource=app.slice(app.indexOf('function patientActionErrorMessage(code){'),
+   app.indexOf('\nfunction ',app.indexOf('function patientActionErrorMessage(code){')+1));
+ assert.ok(toastSource,'toast handler missing');
+ assert.ok(patientSource.startsWith('function patientActionErrorMessage(code){'));
+ const fake={textContent:'',classList:{add(){},remove(){}}};
+ const toast=new Function('$','setTimeout',toastSource+';return toast;')(()=>fake,()=>{});
+ const patient=new Function(patientSource+';return patientActionErrorMessage;')();
+ toast('cithela_subscription_required');
+ assert.match(fake.textContent,/nuevas reservas está pausado/);
+ assert.doesNotMatch(fake.textContent,/cithela_subscription_required/);
+ assert.match(patient('subscription_required'),/comunicate con el profesional/);
+ assert.match(patient('cithela_subscription_required'),/comunicate con el profesional/);
+ assert.match(patient('slot_unavailable'),/Ese horario ya fue reservado/);
+});
