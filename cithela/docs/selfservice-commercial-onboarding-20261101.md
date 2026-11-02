@@ -10,7 +10,7 @@ Cliente que llega desde SpukLab Web → resuelve dudas frecuentes SIN IA → con
 - `cithela_private.bootstrap_tenant` y wrapper `cithela_bootstrap_tenant`: crean tenant, rol owner, servicio y recurso bajo sesión Auth autenticada **solo tras verificar correo y una autorización privada de servidor vigente** (desde migración `cithela_commercial_onboarding_guard_20261102`). La función sigue siendo idempotente para un miembro existente. No llamar desde SpukLab Web con service-role.
 - A 2026-11-01, Supabase CITHELA tiene 2 tenants y 2 memberships (conteos agregados). Existencia de 2 tenants NO acredita una prueba A/B de aislamiento.
 - Auth de profesional hoy usa correo/contraseña/confirmación de correo. WhatsApp OTP ya se probó para acceso de pacientes; no atribuirlo automáticamente al alta del profesional sin adaptar/verificar la función.
-- Sin tabla de suscripciones comerciales/entitlements en CITHELA; no activar planes a partir de parámetros URL o del navegador.
+- Tabla comercial privada `cithela_private.cithela_commercial_entitlements` ya desplegada: dos tenants existentes `legacy`, trials nuevos solo con permiso de alta y vencimiento del servidor. Sin pagos conectados; no activar planes por parámetros URL ni navegador.
 - Material previo: `docs/spuklab-web-second-tenant-pilot-20261029.md`, `docs/spuklab-hub-commercial-contract-20261011.md`.
 
 ## Experiencia deseada — 5 pasos
@@ -66,4 +66,4 @@ Entitlement: `organization_id, tenant_id, product='cithela', plan_id, subscripti
 6. Pago confirmado por webhook real en entorno autorizado; acceso activo sin operaciones manuales.
 7. Baja/reembolso/arrepentimiento según condiciones aplicables, sin contactar al creador para ejecutar acciones rutinarias.
 
-**Estado actual (02/11/2026):** alta profesional protegida en Supabase por permiso privado, sin autorizaciones emitidas aún; sesiones/turnos existentes preservados. No hay alta autoservicio, trial activo ni cobro. Continuar con entitlements y validación comercial de forma independiente. No modificar `pilotTenant` ni abrir registro público hasta pasar los restantes bloqueantes. Ver `commercial-readiness-evidence-20261102.md`.
+**Estado actual (02/11/2026, tras activación):** alta profesional protegida en Supabase mediante permiso privado y correo confirmado; creación de un trial único de 7 días con fecha del servidor, solo tras permiso. Control de nuevas reservas/reprogramaciones activo en RPC profesional, paciente, WhatsApp y trigger central, con cancelación y confirmación existentes permitidas. Los 2 establecimientos anteriores conservan el estado `legacy` y siguen operativos; no se emitieron permisos ni comenzaron trials. **Todavía NO hay alta autoservicio comercial, checkout, cobro, facturación ni baja automática.** No modificar `pilotTenant` ni abrir registro público hasta pasar los bloqueantes restantes. Ver `commercial-readiness-evidence-20261102.md` y `trial-booking-enforcement-20261102.md`.

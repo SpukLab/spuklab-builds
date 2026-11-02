@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const sql=readFileSync(new URL('./sql-review/commercial-booking-enforcement-v1.sql',import.meta.url),'utf8');
+const sql=readFileSync(new URL('./supabase/commercial-booking-enforcement-20261102.sql',import.meta.url),'utf8');
+const historical=readFileSync(new URL('./sql-review/commercial-booking-enforcement-v1.sql',import.meta.url),'utf8');
+const rollback=readFileSync(new URL('./sql-review/rollback-booking-enforcement-20261102.sql',import.meta.url),'utf8');
 const app=readFileSync(new URL('./index.html',import.meta.url),'utf8');
 const routine=name=>{
  const begin=sql.indexOf('CREATE OR REPLACE FUNCTION cithela_private.'+name+'(');
@@ -67,8 +69,14 @@ test('booking gating cannot be turned on from browser or success redirect',()=>{
  assert.doesNotMatch(sql,/mercadopago|checkout_url|webhook_paid|UPDATE public\.cithela_appointments SET status='paid'/i);
 });
 
-test('staging SQL remains review-only until verified deployment',()=>{
- assert.match(sql,/REVIEW \/ DO NOT DEPLOY until full transaction tests pass/);
+test('production SQL is versioned and an emergency rollback preserves former routines',()=>{
+ assert.match(sql,/Production activation candidate/);
+ assert.match(historical,/DEPLOYED via Supabase migration/);
+ assert.match(rollback,/emergency rollback/);
+ assert.match(rollback,/DROP TRIGGER IF EXISTS cithela_appointment_commercial_guard/);
+ for(const name of ['bootstrap_tenant','reservation_command','patient_booking_create','patient_appointment_command','patient_reschedule_slots','channel_command','channel_availability_core']){
+  assert.ok(rollback.includes('CREATE OR REPLACE FUNCTION cithela_private.'+name+'('),name+' rollback must be preserved');
+ }
  assert.ok(sql.length>30000,'all existing routines must be preserved verbatim');
 });
 
