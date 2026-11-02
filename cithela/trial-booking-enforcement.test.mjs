@@ -75,7 +75,7 @@ test('production SQL is versioned and an emergency rollback preserves former rou
  assert.match(rollback,/emergency rollback/);
  assert.match(rollback,/DROP TRIGGER IF EXISTS cithela_appointment_commercial_guard/);
  for(const name of ['bootstrap_tenant','reservation_command','patient_booking_create','patient_appointment_command','patient_reschedule_slots','channel_command','channel_availability_core']){
-  assert.match(rollback,new RegExp('CREATE OR REPLACE FUNCTION cithela_private\\\\.'+name+'\\\\('));
+  assert.ok(rollback.includes('CREATE OR REPLACE FUNCTION cithela_private.'+name+'('),name+' rollback must be preserved');
  }
  assert.ok(sql.length>30000,'all existing routines must be preserved verbatim');
 });
