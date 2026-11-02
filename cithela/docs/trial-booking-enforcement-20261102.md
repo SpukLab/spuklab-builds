@@ -1,6 +1,6 @@
 # CITHELA — Control de reservas durante y después del trial
 
-Actualizado: 2026-11-02. **Estado: propuesta probada en transacciones reversibles; aún no desplegada.**
+Actualizado: 2026-11-02. **Estado: control de vencimiento DESPLEGADO en Supabase mediante migración `cithela_commercial_booking_enforcement_20261102`; alta autoservicio y cobros NO habilitados.**
 
 ## Hallazgo de arquitectura
 La tabla central `public.cithela_appointments` recibe altas y cambios desde profesional, paciente y canales externos. El enfoque más seguro combina un control común en **BEFORE INSERT OR UPDATE** con respuestas explícitas `subscription_required` desde los RPC que usa la aplicación.
@@ -45,4 +45,10 @@ La prueba de confirmación/reactivación también utilizó un ensayo transaccion
 - Incorporar cobro explícito verificado (Mercado Pago/webhook), facturación y baja. Ningún trial debe renovarse automáticamente.
 - No habilitar página pública de alta gratuita ni emitir permisos masivos hasta completar estos puntos.
 
-**Decisión de despliegue:** desplegar solo tras completar revisión de la PR y aserciones de regresión con ambos tenants. Mantener habilitada la migración de bloqueo de altas de 02/11/2026 durante todo el proceso.
+**Despliegue realizado:** migración `cithela_commercial_booking_enforcement_20261102` aplicada a Supabase existente tras comprobar que las siete funciones originales se conservaron íntegras (100% de sus líneas anteriores presentes en el SQL ampliado). El ensayo previo en transacción revertida confirmó los dos legacy, vencimiento al límite exacto, reprogramación bloqueada, cancelación permitida, y ausencia de cambios tras ROLLBACK.
+
+**Verificación posterior a la migración:** 2 tenants, 2 memberships, 15 turnos, 0 autorizaciones de alta; 2 entitlements `legacy` con `can_book=true`, 0 trials. Trigger de protección instalado una única vez, permisos directos `anon/authenticated` sobre la tabla comercial denegados, ejecución directa del helper también denegada. Nuevo ensayo transaccional en el código real: cuenta legacy operativa, trial vencido bloquea RPC de nueva reserva y actualización directa, cancelación sigue permitida; ROLLBACK restablece estados. GitHub Pages se había desplegado con éxito desde la PR #109 antes de habilitar el SQL.
+
+**Rollback de emergencia:** `cithela/sql-review/rollback-booking-enforcement-20261102.sql` conserva las siete funciones originales y permite retirar el trigger sin eliminar historiales. Ejecutarlo únicamente ante incidencia verificada: quitarlo permitiría reservas incluso cuando la prueba haya vencido.
+
+**Límites restantes:** no se ha verificado aún una sesión real de iPhone/iPad tras activar el SQL; tampoco hay permisos emitidos para nuevos clientes, configuración de correo transaccional comercial validada, pagos, facturación ni baja automatizada. No anunciar «7 días gratis» como disponible hasta completar esas condiciones. Mantener costos sin cambios.
