@@ -1,7 +1,8 @@
--- CITHELA commercial onboarding: REVIEW-ONLY proposal, NOT DEPLOYED.
--- Apply only after explicit rollout approval, dry-run on an isolated clone,
--- and confirmation that existing two tenants and WhatsApp access are preserved.
--- This SQL is intentionally not under an auto-applied migrations directory.
+-- CITHELA commercial onboarding: HISTORICAL REVIEW PROPOSAL.
+-- APPLIED to CITHELA production as Supabase migration
+-- cithela_commercial_onboarding_guard_20261102 after transactional dry-run on 2026-11-02.
+-- The canonical deployed SQL is in ../supabase/commercial-onboarding-activation-20261102.sql.
+-- Do NOT rerun this historical file as a new migration.
 --
 -- Purpose: prevent any authenticated Supabase user from creating a tenant
 -- merely by calling cithela_bootstrap_tenant, bypassing the pilot URL gate.
