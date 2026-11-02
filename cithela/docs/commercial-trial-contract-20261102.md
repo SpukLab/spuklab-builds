@@ -1,6 +1,6 @@
 # CITHELA · período gratuito de siete días, contrato de servidor V0
 
-Estado: **propuesta validada en transacción y revertida; NO desplegada**. Fecha: 02/11/2026.
+Estado del diseño V0: **validado reversiblemente en la fase anterior**. ACTUALIZACIÓN 02/11/2026: control definitivo desplegado mediante `cithela_commercial_booking_enforcement_20261102`. La propuesta V0 se conserva como antecedente histórico; el SQL canónico está en `cithela/supabase/commercial-booking-enforcement-20261102.sql`.
 
 ## Objetivo comercial
 El profesional se registra, verifica su correo y recibe autorización de alta por backend. La creación de establecimiento inicia una sola prueba de **7 días**, sin tarjeta ni cobro; el servidor calcula inicio y fin. Al finalizar, puede ingresar, revisar y descargar información, pero no crear ni reprogramar reservas hasta aceptar una suscripción. El pago solo activa acceso después de validación del proveedor por webhook y nunca por parámetros del frontend.
@@ -27,6 +27,6 @@ El ensayo transaccional **NO** reemplaza un entorno de staging aislado ni una pr
 
 ## Estado real al cierre
 - **Ya aplicado:** protección de altas nuevas mediante `cithela_commercial_onboarding_guard_20261102`.
-- **Solo diseño probado reversiblemente:** período de prueba y entitlement (este archivo).
-- **No implementado:** activación transaccional de trial en nuevos tenants, restricción en todas las reservas, webhooks Mercado Pago, facturación, baja automatizada.
+- **Aplicado:** entitlement privado, 2 cuentas actuales `legacy`, inicio de trial de siete días para nuevas altas autorizadas, cálculo de vencimiento del servidor y bloqueo de nuevas reservas/reprogramaciones en paciente, profesional y canal externo. No se ha iniciado ningún trial real; no hay autorizaciones de alta emitidas.
+- **No implementado:** webhooks Mercado Pago, facturación, baja automatizada y autorización autoservicio pública. Falta test de flujo real multi-dispositivo tras desplegar el guard.
 - **No contratado:** infraestructura adicional. No cambiar de plan de Supabase por una advertencia del advisor sin presupuesto.
