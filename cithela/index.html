@@ -97,6 +97,23 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .btn-main.soft{background:var(--teal-light);color:var(--teal2);box-shadow:none;}
 .btn-main.excel{background:var(--teal2);color:#fff;}
 
+/* Primeros pasos: solo aparece para establecimientos cloud sin turnos. */
+.cithela-first-steps[hidden]{display:none!important;}
+.cithela-first-steps{margin:2px 0 20px;padding:20px 17px;border:1px solid var(--teal-mid);border-radius:var(--r);background:var(--surface-soft);}
+.cithela-first-steps__eyebrow{font-size:.65rem;letter-spacing:.08em;font-weight:700;color:var(--teal2);margin:0 0 10px;}
+.cithela-first-steps h2{font-family:'DM Serif Display',serif;font-size:1.26rem;font-weight:400;color:var(--ink);margin:0 0 7px;}
+.cithela-first-steps__intro{font-size:.79rem;line-height:1.6;color:var(--ink2);margin:0 0 14px;}
+.cithela-first-steps__items{display:grid;grid-template-columns:1fr;gap:7px;}
+.cithela-first-steps__item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;text-align:left;border:1px solid var(--border-color);border-radius:var(--r-sm);background:var(--white);font-family:'DM Sans',sans-serif;color:var(--ink);cursor:pointer;min-height:56px;}
+.cithela-first-steps__item:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+.cithela-first-steps__item>span:last-child{color:var(--teal);font-weight:700;font-size:1.1rem;}
+.cithela-first-steps__number{font-size:.75rem;font-weight:700;color:var(--teal2);min-width:24px;}
+.cithela-first-steps__text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.cithela-first-steps__text strong{font-size:.82rem;font-weight:600;}
+.cithela-first-steps__text small{font-size:.73rem;line-height:1.45;color:var(--ink2);}
+.cithela-first-steps__note{font-size:.7rem;line-height:1.5;color:var(--ink3);margin:12px 0 0;}
+#cfg-section-hours,#cfg-section-services,#person-create-details{scroll-margin-top:110px;}
+
 /* NAV */
 nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--sh);}
 .nav-brand{display:flex;align-items:center;gap:9px;min-width:0;}
@@ -589,6 +606,17 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-agenda" class="pane on">
+    <section id="cithela-first-steps" class="cithela-first-steps" hidden aria-labelledby="cithela-first-steps-title">
+      <p class="cithela-first-steps__eyebrow">PRIMEROS PASOS · AGENDA CLOUD</p>
+      <h2 id="cithela-first-steps-title">Prepará tu espacio</h2>
+      <p class="cithela-first-steps__intro">Configurá lo esencial usando las funciones que ya tiene CITHELA.</p>
+      <div class="cithela-first-steps__items">
+        <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('hours')"><span class="cithela-first-steps__number">01</span><span class="cithela-first-steps__text"><strong>Días y horarios</strong><small id="first-step-hours-state">Definí cuándo atendés</small></span><span aria-hidden="true">↗</span></button>
+        <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('services')"><span class="cithela-first-steps__number">02</span><span class="cithela-first-steps__text"><strong>Servicios y duración</strong><small id="first-step-services-state">Revisá los servicios</small></span><span aria-hidden="true">↗</span></button>
+        <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('people')"><span class="cithela-first-steps__number">03</span><span class="cithela-first-steps__text"><strong>Primer paciente</strong><small id="first-step-people-state">Prepará su ficha y el acceso</small></span><span aria-hidden="true">↗</span></button>
+      </div>
+      <p class="cithela-first-steps__note">Se oculta al registrar tu primer turno. Los ajustes quedan disponibles en sus pestañas.</p>
+    </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
       <button class="wn-btn" onclick="changeWeek(-1)">‹</button>
@@ -3784,6 +3812,28 @@ function renderProfessionalMode(){
     el.style.display=active?'none':'block';
     if(!active)el.textContent=note;
   }
+  renderCithelaFirstSteps(active?s:null);
+}
+function renderCithelaFirstSteps(s){
+  const card=$('cithela-first-steps');if(!card)return;
+  card.hidden=!(s?.tenant&&s?.membership&&Number(s.appointmentCount||0)===0);
+  if(card.hidden)return;
+  const hours=$('first-step-hours-state'),services=$('first-step-services-state'),people=$('first-step-people-state');
+  if(hours)hours.textContent=Number(s.workingHoursCount||0)>0
+    ?'Horarios guardados · podés modificarlos':'Definí cuándo atendés';
+  if(services)services.textContent=Number(s.serviceCount||0)>0
+    ?'Revisá duración y nombre del servicio':'Agregá tu primer servicio';
+  if(people)people.textContent=Number(s.peopleCount||0)>0
+    ?'Ficha creada · podés agregar otra':'Creá la ficha para compartir el acceso';
+}
+function openCithelaFirstSteps(section){
+  const destinations={hours:'cfg-section-hours',services:'cfg-section-services',people:'person-create-details'};
+  const id=destinations[section];if(!id||!professionalCloudReady())return;
+  if(section==='people')tab('medico','pacientes',$('medico-tab-personas'));
+  else tab('medico','config',$('medico-tab-config'));
+  const panel=$(id);if(!panel)return;
+  if(panel.tagName==='DETAILS')panel.open=true;
+  panel.scrollIntoView({block:'start',behavior:'smooth'});
 }
 function renderReportSource(){
   const el=$('report-source');if(!el)return;
