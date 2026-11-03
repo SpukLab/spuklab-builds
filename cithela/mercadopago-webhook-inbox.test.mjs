@@ -30,7 +30,7 @@ async function incoming(body=makeBody(),options={}){
   });
 }
 const configure=(storeSignedEvent,overrides={})=>({
-  enabled:true,secret,merchantUserId,liveMode:false,storeSignedEvent,...overrides
+  enabled:true,secret,merchantUserId,liveMode:false,nowMs:1783101234*1000,storeSignedEvent,...overrides
 });
 const result=async(response)=>({status:response.status,...await response.json()});
 
@@ -120,4 +120,31 @@ test('design never turns a signed notification into a paid entitlement',()=>{
   assert.match(sql,/UNIQUE\(request_id,resource_id\)/);
   assert.doesNotMatch(handler,/fetch\(|service_role|activate|checkout|update\(/i);
   assert.doesNotMatch(sql,/UPDATE cithela_private.cithela_commercial_entitlements|INSERT INTO cithela_private.cithela_commercial_entitlements/i);
+});
+
+test('signed stale events cannot be replayed outside a five-minute window',async()=>{
+  let calls=0;
+  const store=async()=>{calls++;return {ok:true,code:'recorded'};};
+  const old=await incoming();
+  const resultOld=await result(await handleMercadoPagoWebhook(old,configure(store,{
+    nowMs:1783101234*1000+5*60*1000+1000
+  })));
+  assert.deepEqual(resultOld,{status:401,ok:false,code:'signature_expired'});
+  assert.equal(calls,0);
+  const fresh=await incoming();
+  const resultFresh=await result(await handleMercadoPagoWebhook(fresh,configure(store,{
+    nowMs:1783101234*1000+4*60*1000
+  })));
+  assert.equal(resultFresh.status,200);
+  assert.equal(calls,1);
+});
+
+test('staging receiver is fail-closed without config and permanently test-mode only',()=>{
+  const source=readFileSync(new URL('./edge/cithela-mercadopago-webhook/index.ts',import.meta.url),'utf8');
+  assert.match(source,/CITHELA_MP_WEBHOOK_ENABLED/);
+  assert.match(source,/liveMode:false/);
+  assert.match(source,/webhookSecret\.length>=16/);
+  assert.match(source,/CITHELA_MP_MERCHANT_USER_ID/);
+  assert.doesNotMatch(source,/CITHELA_MP_EXPECT_LIVE_MODE|liveMode:true/);
+  assert.doesNotMatch(source,/\.from\(['"]cithela_commercial_entitlements/);
 });
