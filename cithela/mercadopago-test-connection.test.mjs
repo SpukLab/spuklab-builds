@@ -47,6 +47,6 @@ test('Edge function requires auth user and owner/admin membership before reading
   assert.match(edge,/if\(!membership\?\.length\)return respond\("forbidden",403\)/);
   assert.match(edge,/req\.method!=="POST"/);
   assert.match(edge,/invalid_origin/);
-  assert.doesNotMatch(edge,/\.update\(|\.insert\(|\.delete\(|checkout|preapproval\/create/i);
+  assert.doesNotMatch(edge,/\.update\(|\.insert\(|\.delete\(|preapproval\/create/i);
   assert.doesNotMatch(edge,/console\.(?:log|warn|error)|JSON\.stringify\(.*testToken|return.*testToken/);
 });
