@@ -148,3 +148,59 @@ test('staging receiver is fail-closed without config and permanently test-mode o
   assert.doesNotMatch(source,/CITHELA_MP_EXPECT_LIVE_MODE|liveMode:true/);
   assert.doesNotMatch(source,/\.from\(['"]cithela_commercial_entitlements/);
 });
+
+test('health reports only configured/not_configured without leaking credentials',async()=>{
+  const url='https://supabase.test/functions/v1/cithela-mercadopago-webhook?health=1';
+  const handler=async(config)=>result(await handleMercadoPagoWebhook(new Request(url,{method:'GET'}),config));
+  assert.deepEqual(await handler(configure(async()=>{})),{status:200,ok:true,code:'webhook_configured'});
+  const disabled=await handler(configure(async()=>{},{enabled:false}));
+  assert.deepEqual(disabled,{status:503,ok:false,code:'not_configured'});
+  assert.doesNotMatch(JSON.stringify(disabled),/mp_test_private|123456789|merchantUserId/);
+});
+
+test('HMAC-signed Mercado Pago panel simulation has a legacy inconsistent type and no merchant fields',async()=>{
+  const seen=[];
+  const body={
+    action:'updated',application_id:'8696856635112318',
+    data:{id:'123456'},date:'2021-11-01T02:02:02Z',
+    entity:'preapproval',id:'123456',type:'subscription_preapproval',version:8
+  };
+  const req=await incoming(body,{
+    resourceId:'123456',
+    type:'subscription_authorized_payment',
+    requestId:'simulator-request-001'
+  });
+  const reply=await result(await handleMercadoPagoWebhook(req,
+    configure(async(event)=>{seen.push(event);return {ok:true,code:'recorded'}})));
+  assert.deepEqual(reply,{status:200,ok:true,code:'recorded'});
+  assert.equal(seen.length,1);
+  assert.equal(seen[0].eventId,'sim_simulator-request-001');
+  assert.equal(seen[0].topic,'subscription_preapproval');
+  assert.equal(seen[0].resourceId,'123456');
+  assert.equal(seen[0].merchantUserId,merchantUserId);
+  assert.equal(seen[0].liveMode,false);
+  assert.equal(seen[0].occurredAt,null);
+});
+
+test('legacy simulator allowance is narrow; unsigned or production events never enter inbox',async()=>{
+  let count=0;
+  const store=async()=>{count++;return {ok:true,code:'recorded'};};
+  const base={
+    action:'updated',application_id:'8696856635112318',
+    data:{id:'123456'},date:'2021-11-01T02:02:02Z',
+    entity:'preapproval',id:'123456',type:'subscription_preapproval',version:8
+  };
+  for(const [data,config,options,expected] of [
+    [{...base,entity:'payment'},configure(store),{},403],
+    [{...base,live_mode:true},configure(store),{},403],
+    [{...base,user_id:123456789},configure(store),{},403],
+    [{...base,action:'created'},configure(store),{},403],
+    [base,configure(store,{liveMode:true}),{},403],
+    [base,configure(store),{signature:'ts=1783101234,v1='+'0'.repeat(64)},401]
+  ]){
+    const req=await incoming(data,{resourceId:'123456',type:'subscription_authorized_payment',...options});
+    const res=await result(await handleMercadoPagoWebhook(req,config));
+    assert.equal(res.status,expected,JSON.stringify({data,expected}));
+  }
+  assert.equal(count,0);
+});
