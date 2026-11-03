@@ -23,6 +23,12 @@ No devuelve nombres ni valores de secretos, identificador de vendedor o credenci
 
 URL de salud: `https://mcqknmqhtmihegmifuka.supabase.co/functions/v1/cithela-mercadopago-webhook?health=1`
 
+## Activación del correctivo
+
+El 03/11/2026 se desplegó el receptor `cithela-mercadopago-webhook` versión 5, con el diagnóstico GET y la compatibilidad limitada con el simulador. Las pruebas automáticas de HMAC, expiración y compatibilidad aprobaron. Se comprobó que no se alteraron el adaptador que fuerza entorno test ni el verificador HMAC original.
+
+La consulta HTTPS del diagnóstico no fue accesible desde las herramientas de red de esta sesión; **no se debe afirmar que el valor `CITHELA_MP_WEBHOOK_ENABLED` esté correctamente cargado** hasta observar `webhook_configured` en una consulta externa.
+
 ## Pasos de verificación
 
 1. Comprobar URL de salud. Con 503, revisar **Supabase → Edge Functions → Secrets** y confirmar exactamente los nombres `CITHELA_MP_WEBHOOK_SECRET`, `CITHELA_MP_MERCHANT_USER_ID`, `CITHELA_MP_WEBHOOK_ENABLED` (valor `true`), sin compartir sus valores.
