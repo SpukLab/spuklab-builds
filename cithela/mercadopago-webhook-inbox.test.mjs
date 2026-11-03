@@ -138,3 +138,13 @@ test('signed stale events cannot be replayed outside a five-minute window',async
   assert.equal(resultFresh.status,200);
   assert.equal(calls,1);
 });
+
+test('staging receiver is fail-closed without config and permanently test-mode only',()=>{
+  const source=readFileSync(new URL('./edge/cithela-mercadopago-webhook/index.ts',import.meta.url),'utf8');
+  assert.match(source,/CITHELA_MP_WEBHOOK_ENABLED/);
+  assert.match(source,/liveMode:false/);
+  assert.match(source,/webhookSecret\.length>=16/);
+  assert.match(source,/CITHELA_MP_MERCHANT_USER_ID/);
+  assert.doesNotMatch(source,/CITHELA_MP_EXPECT_LIVE_MODE|liveMode:true/);
+  assert.doesNotMatch(source,/\.from\(['"]cithela_commercial_entitlements/);
+});
