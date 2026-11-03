@@ -30,7 +30,12 @@ export async function handleMercadoPagoWebhook(request, config) {
   if(!ready)return respond(503,'not_configured');
   if(Number(request.headers.get('content-length')||0)>16384)return respond(413,'payload_too_large');
   const accepted=await verifyMercadoPagoSignature(request,config.secret);
-  if(!accepted)return respond(401,'invalid_signature');
+  if(!accepted){
+    // Only the rejection category is sent to the server's diagnostic logger.
+    // Do not log headers, timestamps, resource IDs or any request payload.
+    try {config.reportValidationFailure?.('invalid_signature');}catch{}
+    return respond(401,'invalid_signature');
+  }
   // Mercado Pago SDK recommends a five-minute timestamp tolerance. An
   // authentic but previously recorded signed payload must not be replayed
   // indefinitely, even if a database event has not yet been persisted.
@@ -43,7 +48,8 @@ export async function handleMercadoPagoWebhook(request, config) {
   if(!Number.isSafeInteger(timestampValue)||
      !Number.isFinite(epochMillis)||
      Math.abs(nowMillis-epochMillis)>5*60*1000)
-    return respond(401,'signature_expired');
+    {try {config.reportValidationFailure?.('signature_expired');}catch{}
+    return respond(401,'signature_expired');}
   const url=new URL(request.url);
   const types=url.searchParams.getAll('type');
   const ids=url.searchParams.getAll('data.id');
