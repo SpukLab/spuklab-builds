@@ -221,7 +221,7 @@ test('401 diagnosis reports only safe validation category to server logger',asyn
       nowMs:1783101234*1000+6*60*1000
     })));
   assert.deepEqual(staleReply,{status:401,ok:false,code:'signature_expired'});
-  assert.deepEqual(codes,['invalid_signature','signature_expired']);
+  assert.deepEqual(codes,['signature_hmac_mismatch','signature_expired']);
   assert.ok(codes.every(x=>!x.includes(secret)&&!x.includes(merchantUserId)));
 });
 
@@ -231,4 +231,29 @@ test('Edge security telemetry does not disclose secrets, raw headers or message 
   assert.match(edge,/code==='invalid_signature'\|\|code==='signature_expired'/);
   assert.match(edge,/console\.info\('cithela_mp_webhook_hmac', code\)/);
   assert.doesNotMatch(edge,/console\.(?:log|warn|info|error)\(.*(?:webhookSecret|request|signature|token|merchantUserId|body)/);
+});
+
+test('401 HMAC classification differentiates missing headers from wrong secret without logging values',async()=>{
+  const classify=async(request)=>{
+    let code='';
+    const result=await handleMercadoPagoWebhook(request,configure(
+      async()=>{throw Error('unexpected storage write')},
+      {reportValidationFailure:c=>{code=c;}}
+    ));
+    assert.equal(result.status,401);
+    return code;
+  };
+  const base=await incoming();
+  const noSig=new Headers(base.headers);noSig.delete('x-signature');
+  assert.equal(await classify(new Request(base.url,{method:'POST',headers:noSig,body:JSON.stringify(makeBody())})),
+    'signature_header_missing');
+  const noReq=new Headers(base.headers);noReq.delete('x-request-id');
+  assert.equal(await classify(new Request(base.url,{method:'POST',headers:noReq,body:JSON.stringify(makeBody())})),
+    'request_id_missing');
+  const malformed=new Headers(base.headers);malformed.set('x-signature','ts=invalid,v1=xyz');
+  assert.equal(await classify(new Request(base.url,{method:'POST',headers:malformed,body:JSON.stringify(makeBody())})),
+    'signature_header_malformed');
+  const mismatch=new Headers(base.headers);mismatch.set('x-signature','ts=1783101234,v1='+'f'.repeat(64));
+  assert.equal(await classify(new Request(base.url,{method:'POST',headers:mismatch,body:JSON.stringify(makeBody())})),
+    'signature_hmac_mismatch');
 });
