@@ -14,6 +14,34 @@ const idString=(value,max=120)=>{
   return null;
 };
 
+/**
+ * Diagnostic labels only: no header, resource, secret, hash or timestamp values.
+ * Never used as a bypass: verification still runs in every POST.
+ */
+export function classifyWebhookSignatureFailure(request) {
+  const signature=request?.headers?.get('x-signature');
+  if(!signature)return 'signature_header_missing';
+  const requestId=request.headers.get('x-request-id');
+  if(!requestId)return 'request_id_missing';
+  let resourceIds;
+  try { resourceIds=new URL(request.url).searchParams.getAll('data.id'); }
+  catch { return 'signed_resource_missing'; }
+  if(resourceIds.length!==1 || !resourceIds[0])return 'signed_resource_missing';
+  const parts=String(signature).split(',');
+  const attributes=new Map();
+  for(const part of parts) {
+    const index=part.indexOf('=');
+    if(index<1)return 'signature_header_malformed';
+    const key=part.slice(0,index).trim(),value=part.slice(index+1).trim();
+    if((key!=='ts'&&key!=='v1')||attributes.has(key))return 'signature_header_malformed';
+    attributes.set(key,value);
+  }
+  if(!/^\\d{10,16}$/.test(attributes.get('ts')||'') ||
+     !/^[a-fA-F0-9]{64}$/.test(attributes.get('v1')||''))
+     return 'signature_header_malformed';
+  return 'signature_hmac_mismatch';
+}
+
 export async function handleMercadoPagoWebhook(request, config) {
   const ready=!!(config?.enabled && config?.secret && config?.merchantUserId &&
      typeof config?.liveMode==='boolean' && typeof config?.storeSignedEvent==='function');
@@ -33,7 +61,7 @@ export async function handleMercadoPagoWebhook(request, config) {
   if(!accepted){
     // Only the rejection category is sent to the server's diagnostic logger.
     // Do not log headers, timestamps, resource IDs or any request payload.
-    try {config.reportValidationFailure?.('invalid_signature');}catch{}
+    try {config.reportValidationFailure?.(classifyWebhookSignatureFailure(request));}catch{}
     return respond(401,'invalid_signature');
   }
   // Mercado Pago SDK recommends a five-minute timestamp tolerance. An
