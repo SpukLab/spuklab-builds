@@ -1,5 +1,5 @@
 # CITHELA — relación privada entre cliente, agenda y suscripción MP
-Fecha: 03/11/2026 · Fase: **preparación técnica sin cargos ni nuevas altas**.
+Fecha: 03/11/2026 · Estado: **esquema privado DESPLEGADO y comprobado en Supabase; sin cargos ni nuevas altas**.
 
 ## Estado confirmado
 
@@ -12,7 +12,7 @@ Fecha: 03/11/2026 · Fase: **preparación técnica sin cargos ni nuevas altas**.
 `cithela_private.cithela_mp_subscription_intents` tiene `tenant_id`, `owner_user_id`, `external_reference`, `collector_id`, monto fijo en centavos ARS, aceptación explícita con versión y fecha, y el identificador de la suscripción del proveedor cuando existe.
 
 Protecciones:
-1. Datos en esquema privado con RLS; los roles `anon` y `authenticated` no tienen acceso. No hay API pública que permita crear pedidos.
+1. Datos en esquema privado con RLS; los roles `anon` y `authenticated` no tienen acceso. **Tampoco hay permiso directo `INSERT` de `service_role`**: la futura alta exigirá un RPC privilegiado limitado y una solicitud autenticada del titular. Hoy nadie puede abrir pedidos desde la aplicación.
 2. Al preparar un pedido, el titular debe tener rol `owner` en **ese establecimiento** y ser propietario de un entitlement comercial nuevo (`trialing`, `payment_pending` o `past_due`). Las cuentas `legacy` quedan excluidas, sin pedirles pagar.
 3. Consentimiento reciente y versión de términos. El backend que se implemente después **deberá verificar la acción real del propietario**; los campos enviados no bastan para acreditar aceptación.
 4. Referencia comercial única y suscripción MP única. Solo un pedido no cancelado por establecimiento, sin cruce de tenants.
@@ -44,11 +44,13 @@ Se ejecutó la migración propuesta en el Supabase real **solo dentro de `BEGIN/
 
 Después del rollback quedaron **2 tenants, 15 turnos, 2 legacy, 1 evento simulado y 0 intentos reales**.
 
+**Despliegue posterior:** migración `cithela_mp_tenant_billing_link_20261103` aplicada con `success=true`. Verificación en vivo: 2 tenants, 2 membresías, 15 turnos, 2 entitlements `legacy`, 0 `trialing`, 1 evento de prueba registrado y 0 filas en `cithela_mp_subscription_intents`. El clasificador devolvió `simulated_ignore` para el evento existente. Los roles `anon` y `authenticated` no pueden ejecutar el clasificador ni leer la tabla. El rol `service_role` puede ejecutar la clasificación, pero no insertar pedidos directamente. No se modificó el receptor Edge ni las reservas.
+
 ## Pendiente para activar la comercialización
 
 **No habilitar checkout todavía.** Faltan precio final y términos de contratación, endpoint autenticado de consentimiento y creación de pedido, suscripción de prueba realmente creada en Mercado Pago, reconciliación por período (con reembolsos y contracargos), idempotencia de cobranzas, cancelación efectiva confirmada por API y activación auditable de `entitlement`.
 
-El siguiente bloque debería construir el endpoint de consentimiento/autorización y, después, probar un pedido simulado en entorno de Mercado Pago sin recurrir a `legacy`. No usar credenciales productivas.
+El siguiente bloque debería construir un **RPC restringido al servidor** y un endpoint de consentimiento/autorización con sesión real del titular, y después probar un pedido simulado en el entorno de Mercado Pago sin recurrir a `legacy`. No usar credenciales productivas.
 
 Documentación oficial:
 - https://www.mercadopago.com.ar/developers/es/reference/online-payments/subscriptions/create-preapproval/post
