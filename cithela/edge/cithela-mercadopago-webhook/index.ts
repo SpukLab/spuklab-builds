@@ -1,5 +1,6 @@
 // CITHELA / Mercado Pago — credential-gated, server-only webhook receiver.
-// NOT deployed. Do not enable without real Mercado Pago secrets and reconciliation.
+// TEST INBOX ONLY: not a payment processor and never updates entitlements.
+// Deploy disabled. Only enable after saving TEST webhook HMAC secret in Supabase.
 // Use verify_jwt=false for the webhook only, guarded by provider HMAC.
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
 import {handleMercadoPagoWebhook} from "../../payments/mercadopago-webhook-handler.mjs";
@@ -17,14 +18,13 @@ Deno.serve(async (request: Request) => {
   const privateKey=secretKey();
   const webhookSecret=Deno.env.get("CITHELA_MP_WEBHOOK_SECRET")||"";
   const merchantUserId=Deno.env.get("CITHELA_MP_MERCHANT_USER_ID")||"";
-  const liveMode=Deno.env.get("CITHELA_MP_EXPECT_LIVE_MODE");
-  // Fail closed; no public endpoint is activated accidentally.
+  // Dedicated TEST endpoint: production notifications always fail closed.
+  // A future production receiver must use separate secrets and explicit review.
   const enabled=Deno.env.get("CITHELA_MP_WEBHOOK_ENABLED")==="true"
     &&!!supabaseUrl&&!!privateKey&&webhookSecret.length>=16
-    &&/^\d{1,30}$/.test(merchantUserId)
-    &&(liveMode==="true"||liveMode==="false");
+    &&/^\d{1,30}$/.test(merchantUserId);
   return handleMercadoPagoWebhook(request,{
-    enabled,secret:webhookSecret,merchantUserId,liveMode:liveMode==="true",
+    enabled,secret:webhookSecret,merchantUserId,liveMode:false,
     async storeSignedEvent(event) {
       if(!enabled||!privateKey)throw new Error("not_configured");
       const c=createClient(supabaseUrl,privateKey,{
