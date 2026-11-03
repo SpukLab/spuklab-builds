@@ -2,6 +2,12 @@
 
 Actualizado: 2026-11-03. **Sin pagos ni suscripciones reales.**
 
+## Receptor desplegado, sin recepción habilitada
+
+**Verificación real de Supabase (03/11/2026):** Edge Function `cithela-mercadopago-webhook` versión **1**, estado `ACTIVE`, `verify_jwt=false`, con los tres archivos internos (entrada, manejador, validador HMAC). El código solo acepta eventos si se configura explícitamente `CITHELA_MP_WEBHOOK_ENABLED=true`, junto con el identificador del vendedor y la Firma secreta. En ausencia de esas variables devuelve `not_configured` y no inserta eventos.
+
+**Pendiente:** aún no se hizo una simulación real firmada desde Mercado Pago ni se ha verificado vía HTTP el resultado del endpoint en vivo. Los ensayos de rama son automatizados con eventos simulados; la confirmación real se hará tras configurar la Firma secreta y pulsar `Simular notificación` en Mercado Pago.
+
 ## Receptor preparado
 
 - Nombre Supabase Edge Function: `cithela-mercadopago-webhook`.
