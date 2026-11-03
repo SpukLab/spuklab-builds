@@ -28,7 +28,11 @@ Deno.serve(async (request: Request) => {
     reportValidationFailure(code) {
       // Security telemetry: do not include request IDs, payloads, headers,
       // cryptographic material, timestamps or user/merchant identifiers.
-      if(code==='invalid_signature'||code==='signature_expired'){
+      if([
+        'signature_header_missing','request_id_missing',
+        'signed_resource_missing','signature_header_malformed',
+        'signature_hmac_mismatch','signature_expired'
+      ].includes(code)){
         console.info('cithela_mp_webhook_hmac', code);
       }
     },
