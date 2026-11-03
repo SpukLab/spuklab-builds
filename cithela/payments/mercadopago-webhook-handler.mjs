@@ -92,7 +92,7 @@ export async function handleMercadoPagoWebhook(request, config) {
     // email, IP address, patient notes or financial claims from this request.
     const result=await config.storeSignedEvent({
       eventId,topic:storedTopic,resourceId:signedResource,requestId,merchantUserId,
-      liveMode:body.live_mode,occurredAt
+      liveMode:simulated?false:body.live_mode,occurredAt
     });
     if(result?.ok && (result.code==='recorded'||result.code==='duplicate'))
       return respond(200,result.code);
