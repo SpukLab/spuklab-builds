@@ -26,7 +26,7 @@ export async function handleMercadoPagoWebhook(request, config) {
   // authentic but previously recorded signed payload must not be replayed
   // indefinitely, even if a database event has not yet been persisted.
   const signedHeader=request.headers.get('x-signature')||'';
-  const signedTimestamp=/(?:^|,)ts=(\\d{10,16})(?:,|$)/.exec(signedHeader)?.[1];
+  const signedTimestamp=/(?:^|,)ts=(\d{10,16})(?:,|$)/.exec(signedHeader)?.[1];
   const timestampValue=signedTimestamp?Number(signedTimestamp):NaN;
   const epochMillis=signedTimestamp&&signedTimestamp.length>=13
     ?timestampValue:timestampValue*1000;
