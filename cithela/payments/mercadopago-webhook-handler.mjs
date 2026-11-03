@@ -15,10 +15,19 @@ const idString=(value,max=120)=>{
 };
 
 export async function handleMercadoPagoWebhook(request, config) {
+  const ready=!!(config?.enabled && config?.secret && config?.merchantUserId &&
+     typeof config?.liveMode==='boolean' && typeof config?.storeSignedEvent==='function');
+  // No secret names, lengths, values or identities in the diagnostic response.
+  // Does not authenticate payments or change billing state.
+  if(request?.method==='GET'){
+    try{
+      const u=new URL(request.url);
+      if(u.searchParams.get('health')==='1')
+        return respond(ready?200:503,ready?'webhook_configured':'not_configured');
+    }catch{ /* malformed request */ }
+  }
   if(request?.method!=='POST')return respond(405,'method_not_allowed');
-  if(!config?.enabled || !config?.secret || !config?.merchantUserId ||
-     typeof config?.liveMode!=='boolean' || typeof config?.storeSignedEvent!=='function')
-     return respond(503,'not_configured');
+  if(!ready)return respond(503,'not_configured');
   if(Number(request.headers.get('content-length')||0)>16384)return respond(413,'payload_too_large');
   const accepted=await verifyMercadoPagoSignature(request,config.secret);
   if(!accepted)return respond(401,'invalid_signature');
@@ -51,22 +60,39 @@ export async function handleMercadoPagoWebhook(request, config) {
     return respond(400,'invalid_notification');
   const topic=types[0];
   const bodyResource=idString(body.data?.id,200);
-  const eventId=idString(body.id);
-  const merchantUserId=idString(body.user_id,30);
   const requestId=request.headers.get('x-request-id');
+  // Mercado Pago's "Simular notificaciones" uses a legacy payload without
+  // user_id/live_mode. It can also send subscription_authorized_payment in the
+  // query while the body says subscription_preapproval/entity=preapproval.
+  // Accept only this EXACT test-simulator shape after successful HMAC.
+  // Store it as a test inbox entry; never infer entitlement or payment status.
+  const simulated= config.liveMode===false &&
+    topic==='subscription_authorized_payment' &&
+    body?.type==='subscription_preapproval' &&
+    body?.entity==='preapproval' && body?.action==='updated' &&
+    Number.isSafeInteger(body.version) && body.version>=0 &&
+    body.user_id===undefined && body.live_mode===undefined &&
+    String(body.id||'')===signedResource &&
+    bodyResource===signedResource &&
+    typeof body.date==='string' && body.date.length<=50 &&
+    Number.isFinite(Date.parse(body.date));
+  const merchantUserId=simulated?config.merchantUserId:idString(body.user_id,30);
+  const storedTopic=simulated?'subscription_preapproval':topic;
+  const eventId=simulated && requestId?.length<=115
+    ?'sim_'+requestId:idString(body.id);
   if(!eventId || !requestId || bodyResource!==signedResource ||
-     topic!==body.type || merchantUserId!==config.merchantUserId ||
-     body.live_mode!==config.liveMode)
+     (!simulated && (topic!==body.type || body.live_mode!==config.liveMode)) ||
+     merchantUserId!==config.merchantUserId)
     return respond(403,'notification_mismatch');
-  const occurredAt=typeof body.date_created==='string' &&
+  const occurredAt=!simulated && typeof body.date_created==='string' &&
        body.date_created.length<=50 && Number.isFinite(Date.parse(body.date_created))
        ?new Date(body.date_created).toISOString():null;
   try {
     // Store minimal signed event metadata only. Never persist raw body, token,
     // email, IP address, patient notes or financial claims from this request.
     const result=await config.storeSignedEvent({
-      eventId,topic,resourceId:signedResource,requestId,merchantUserId,
-      liveMode:body.live_mode,occurredAt
+      eventId,topic:storedTopic,resourceId:signedResource,requestId,merchantUserId,
+      liveMode:simulated?false:body.live_mode,occurredAt
     });
     if(result?.ok && (result.code==='recorded'||result.code==='duplicate'))
       return respond(200,result.code);
