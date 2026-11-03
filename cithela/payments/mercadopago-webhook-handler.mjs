@@ -47,9 +47,10 @@ export async function handleMercadoPagoWebhook(request, config) {
   const nowMillis=Number.isFinite(config.nowMs)?config.nowMs:Date.now();
   if(!Number.isSafeInteger(timestampValue)||
      !Number.isFinite(epochMillis)||
-     Math.abs(nowMillis-epochMillis)>5*60*1000)
-    {try {config.reportValidationFailure?.('signature_expired');}catch{}
-    return respond(401,'signature_expired');}
+     Math.abs(nowMillis-epochMillis)>5*60*1000){
+    try {config.reportValidationFailure?.('signature_expired');}catch{}
+    return respond(401,'signature_expired');
+  }
   const url=new URL(request.url);
   const types=url.searchParams.getAll('type');
   const ids=url.searchParams.getAll('data.id');
