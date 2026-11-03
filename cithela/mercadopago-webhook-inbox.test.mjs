@@ -204,3 +204,31 @@ test('legacy simulator allowance is narrow; unsigned or production events never 
   }
   assert.equal(count,0);
 });
+
+test('401 diagnosis reports only safe validation category to server logger',async()=>{
+  const codes=[];
+  const reporter=(code)=>codes.push(code);
+  const tampered=await incoming(makeBody(),{
+    signature:'ts=1783101234,v1='+'0'.repeat(64)
+  });
+  const signatureReply=await result(await handleMercadoPagoWebhook(tampered,
+    configure(async()=>{throw Error('must not store');},{reportValidationFailure:reporter})));
+  assert.deepEqual(signatureReply,{status:401,ok:false,code:'invalid_signature'});
+  const signed=await incoming();
+  const staleReply=await result(await handleMercadoPagoWebhook(signed,
+    configure(async()=>{throw Error('must not store');},{
+      reportValidationFailure:reporter,
+      nowMs:1783101234*1000+6*60*1000
+    })));
+  assert.deepEqual(staleReply,{status:401,ok:false,code:'signature_expired'});
+  assert.deepEqual(codes,['invalid_signature','signature_expired']);
+  assert.ok(codes.every(x=>!x.includes(secret)&&!x.includes(merchantUserId)));
+});
+
+test('Edge security telemetry does not disclose secrets, raw headers or message bodies',()=>{
+  const edge=readFileSync(new URL('./edge/cithela-mercadopago-webhook/index.ts',import.meta.url),'utf8');
+  assert.match(edge,/cithela_mp_webhook_hmac/);
+  assert.match(edge,/code==='invalid_signature'\|\|code==='signature_expired'/);
+  assert.match(edge,/console\.info\('cithela_mp_webhook_hmac', code\)/);
+  assert.doesNotMatch(edge,/console\.(?:log|warn|info|error)\(.*(?:webhookSecret|request|signature|token|merchantUserId|body)/);
+});
