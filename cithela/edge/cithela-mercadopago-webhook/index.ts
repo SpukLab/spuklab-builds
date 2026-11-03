@@ -25,6 +25,13 @@ Deno.serve(async (request: Request) => {
     &&/^\d{1,30}$/.test(merchantUserId);
   return handleMercadoPagoWebhook(request,{
     enabled,secret:webhookSecret,merchantUserId,liveMode:false,
+    reportValidationFailure(code) {
+      // Security telemetry: do not include request IDs, payloads, headers,
+      // cryptographic material, timestamps or user/merchant identifiers.
+      if(code==='invalid_signature'||code==='signature_expired'){
+        console.info('cithela_mp_webhook_hmac', code);
+      }
+    },
     async storeSignedEvent(event) {
       if(!enabled||!privateKey)throw new Error("not_configured");
       const c=createClient(supabaseUrl,privateKey,{
