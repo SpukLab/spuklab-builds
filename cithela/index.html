@@ -98,7 +98,9 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .btn-main.excel{background:var(--teal2);color:#fff;}
 
 /* Server-authoritative subscription display; never authorizes bookings. */
-.cithela-commercial-panel[hidden]{display:none!important;}
+.cithela-commercial-panel[hidden],#cithela-mp-test-tools[hidden]{display:none!important;}
+#cithela-mp-test-tools{margin-top:14px;}
+#cithela-mp-test-tools button{margin-bottom:8px;}
 .cithela-commercial-panel{margin:0 0 18px;padding:17px 18px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-soft);}
 .cithela-commercial-panel__eyebrow{font-size:.65rem;letter-spacing:.09em;color:var(--teal2);font-weight:700;margin:0 0 7px;}
 .cithela-commercial-panel h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:1.14rem;margin:0 0 9px;color:var(--ink);}
@@ -784,6 +786,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <h2 id="cithela-commercial-title">Estado del servicio</h2>
       <p id="cithela-commercial-status" class="cithela-commercial-panel__status" role="status">Consultando el estado de tu cuenta…</p>
       <p id="cithela-commercial-detail" class="cithela-commercial-panel__detail">La información de vigencia se consulta al servidor.</p>
+      <div id="cithela-mp-test-tools" hidden>
+        <button id="cithela-mp-test-button" type="button" class="btn-main soft" onclick="checkCithelaMpTestConnection()">Comprobar Mercado Pago de prueba</button>
+        <p id="cithela-mp-test-result" class="contact-note" role="status" aria-live="polite">Solo se comprobará el acceso de lectura. No se crearán pagos.</p>
+      </div>
     </section>
     <h2 class="settings-group-title">Agenda y atención</h2>
 <details class="cithela-config-group" id="cfg-section-hours">
@@ -2328,7 +2334,22 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  async function checkMercadoPagoTestConnection(){
+    const ss=snapshot();
+    if(!ss.signedIn||!ss.tenant||!['owner','admin'].includes(ss.membership?.role||'')){
+      return {ok:false,code:'forbidden'};
+    }
+    try{
+      const c=await getClient();
+      const {data,error}=await c.functions.invoke('cithela-mp-test-connection',{body:{mode:'read-only'}});
+      if(error)return {ok:false,code:'connection_unavailable'};
+      return data&&typeof data.code==='string'?
+        {ok:data.ok===true,code:data.code}:{ok:false,code:'unexpected_response'};
+    }catch{
+      return {ok:false,code:'connection_unavailable'};
+    }
+  }
+  return Object.freeze({checkMercadoPagoTestConnection,init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -3852,6 +3873,9 @@ function renderCithelaCommercialPanel(s){
   if(!panel)return;
   panel.hidden=!(s?.tenant&&['owner','admin'].includes(s?.membership?.role||''));
   if(panel.hidden)return;
+  const lab=$('cithela-mp-test-tools');
+  if(lab)lab.hidden=!(typeof location!=='undefined'&&new URLSearchParams(location.search).get('mpTest')==='1'
+    &&['owner','admin'].includes(s?.membership?.role||''));
   const statusEl=$('cithela-commercial-status'),detailEl=$('cithela-commercial-detail');
   if(!statusEl||!detailEl)return;
   const c=s.commercialStatus;
@@ -3883,6 +3907,28 @@ function renderCithelaCommercialPanel(s){
     statusEl.textContent=title;
   }
   detailEl.textContent=description;
+}
+async function checkCithelaMpTestConnection(){
+  const button=$('cithela-mp-test-button'),label=$('cithela-mp-test-result');
+  if(!professionalCloudReady()||!button||!label||
+     new URLSearchParams(location.search).get('mpTest')!=='1')return;
+  button.disabled=true;
+  label.textContent='Comprobando acceso de solo lectura…';
+  const result=await CithelaCloud.checkMercadoPagoTestConnection();
+  const messages={
+    test_api_connected:'Conexión verificada. Mercado Pago acepta la credencial para consultar suscripciones. No se creó ningún pago.',
+    test_token_missing_or_invalid_format:'La credencial no está disponible en Supabase. Revisá el secreto CITHELA_MP_TEST_ACCESS_TOKEN.',
+    credential_rejected:'Mercado Pago rechazó el Access Token. Revisá que copiaste el de Credenciales de prueba.',
+    subscription_permission_denied:'La credencial no tiene permiso para consultar suscripciones. Revisá la integración en Mercado Pago.',
+    provider_rate_limited:'Mercado Pago limitó temporalmente las consultas. Reintentá más tarde.',
+    provider_unavailable:'No se pudo completar la consulta con Mercado Pago. Reintentá más tarde.',
+    connection_unavailable:'No se pudo acceder al verificador seguro de CITHELA. Revisá la sesión e intentá nuevamente.',
+    forbidden:'Tu cuenta no tiene permiso para esta comprobación.',
+    unexpected_provider_response:'Mercado Pago respondió con un formato inesperado. Se requiere revisión.',
+    unexpected_response:'CITHELA no recibió una respuesta válida del verificador.'
+  };
+  label.textContent=messages[result?.code]||'No se pudo verificar la conexión de prueba.';
+  button.disabled=false;
 }
 function renderCithelaFirstSteps(s){
   const card=$('cithela-first-steps');if(!card)return;
