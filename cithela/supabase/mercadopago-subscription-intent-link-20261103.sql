@@ -99,6 +99,19 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'invalid_commercial_stage_transition';
     END IF;
+    IF (OLD.stage<>'prepared' AND NEW.linked_at IS DISTINCT FROM OLD.linked_at)
+       OR (OLD.stage<>'linked'
+            AND NEW.cancel_requested_at IS DISTINCT FROM OLD.cancel_requested_at)
+       OR (OLD.stage<>'cancel_requested'
+            AND NEW.canceled_at IS DISTINCT FROM OLD.canceled_at)
+       OR (NEW.linked_at IS NOT NULL AND NEW.linked_at<NEW.opted_in_at)
+       OR (NEW.cancel_requested_at IS NOT NULL
+            AND NEW.cancel_requested_at<NEW.linked_at)
+       OR (NEW.canceled_at IS NOT NULL
+            AND NEW.canceled_at<NEW.cancel_requested_at)
+       THEN
+      RAISE EXCEPTION 'invalid_commercial_audit_dates';
+    END IF;
     NEW.updated_at:=statement_timestamp();
   END IF;
   RETURN NEW;
