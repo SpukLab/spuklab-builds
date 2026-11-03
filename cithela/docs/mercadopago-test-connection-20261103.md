@@ -22,6 +22,8 @@ Los tests del repositorio comprueban el modo GET, rechazo de token ausente, erro
 
 El despliegue se realiza con `verify_jwt=true`, separado de las funciones WhatsApp ya existentes. No se usa `verify_jwt=false`, no hay endpoint de notificaciones de pago activo y no se modifican las migraciones comerciales.
 
+**Despliegue efectuado el 03/11/2026:** función `cithela-mp-test-connection` instalada en Supabase, versión 1, `verify_jwt=true`, sin modificar los webhooks de WhatsApp ni el estado de suscripciones. Todas las pruebas automáticas de la PR #115 pasaron. **La consulta real a Mercado Pago sigue sin ejecutarse** hasta que el propietario pulse el botón desde una sesión profesional; por tanto, todavía no está verificado el contenido del secreto.
+
 **Limitación:** el prefijo de un Access Token no demuestra por sí solo que pertenece al entorno de prueba. Se usa el secreto guardado explícitamente bajo `CITHELA_MP_TEST_ACCESS_TOKEN` y la comprobación confirma que Mercado Pago lo acepta para consultas; no debe usarse en producción sin verificar credenciales.
 
 ## Uso
