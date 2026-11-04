@@ -1,6 +1,6 @@
 # CITHELA — autorización de intento de suscripción de prueba
 
-Fecha: 03/11/2026. Fase: **backend preparado, cobros y contratación pública inhabilitados**.
+Fecha: 03/11/2026. Estado: **RPC y Edge desplegados; endpoint de test inhabilitado por configuración, sin cobros ni contratación pública**.
 
 ## Qué se implementa
 
@@ -24,6 +24,8 @@ El adaptador `cithela/edge/cithela-mp-test-intent/index.ts` requiere **`verify_j
 Se aplicó el SQL en `BEGIN/ROLLBACK` contra la BD real para comprobar: permisos `anon`/`authenticated` denegados, usuario `legacy` denegado, cruce de tenant denegado, términos incorrectos rechazados, intención aceptada solo bajo estado comercial temporal, reintento idempotente con misma referencia, conflicto de precio rechazado y ausencia de pedidos duplicados.
 
 **Rollback verificado:** 2 establecimientos, 15 turnos, 2 `legacy`, 0 intentos reales, 1 simulación webhook. No se tocó el servidor de mensajería ni se registró una suscripción.
+
+**Despliegue confirmado:** migración `cithela_mp_test_intent_authorization_20261103` aplicada con `success=true`; Edge Function `cithela-mp-test-intent` versión 1, estado `ACTIVE`, `verify_jwt=true`. La habilitación interna requiere `CITHELA_MP_TEST_INTENT_ENABLED=true` y `CITHELA_MP_TEST_AMOUNT_MINOR`: **no se han configurado para activar este flujo**. Prueba SQL posterior al despliegue: servicio `legacy` rechazado mediante RPC llamado bajo rol `service_role`; roles `anon`/`authenticated` sin permiso de ejecución. Estado posterior: 2 tenants, 15 turnos, 2 `legacy`, 0 intentos, 1 evento webhook simulado. El nuevo endpoint no se ha invocado desde una sesión real; hasta entonces no se considera una prueba HTTP terminada.
 
 Tests automatizados Node verifican consentimiento, origen, JWT, email y respuesta sin fuga de credenciales.
 
