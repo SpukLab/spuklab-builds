@@ -1,5 +1,5 @@
 # CITHELA · Administración comercial y conservación de pruebas
-Fecha: 2026-11-04. Estado: **migraciones desplegadas, Edge Function desplegada pero consola inhabilitada por defecto; sin cobros ni purgas**.
+Fecha: 2026-11-04. Estado actualizado: **Edge Function activa y acceso web administrativo verificado en iPhone el 04/11/2026; sin cobros ni purgas**.
 
 ## Objetivo
 
@@ -10,13 +10,13 @@ Administrar sin escribir código: selección de precios mensuales, profesionales
 Interfaz interna (misma identidad de Supabase Auth que la agenda):
 `https://spuklab.github.io/spuklab-builds/cithela/comercial-admin.html`.
 
-Es deliberadamente una URL no enlazada desde la agenda normal, pero **la seguridad no depende de ocultar la URL**: la Edge Function `cithela-commercial-admin` requiere JWT verificado, email confirmado, coincidencia exacta con `CITHELA_COMMERCIAL_ADMIN_USER_ID`, y `CITHELA_COMMERCIAL_CONSOLE_ENABLED=true`. Está desactivada hasta que se configure explícitamente. El navegador usa exclusivamente la clave `sb_publishable_...` ya pública en CITHELA; nunca usa service_role, MP Access Token o firmas HMAC.
+Es deliberadamente una URL no enlazada desde la agenda normal, pero **la seguridad no depende de ocultar la URL**: la Edge Function `cithela-commercial-admin` requiere JWT verificado, email confirmado, coincidencia exacta con `CITHELA_COMMERCIAL_ADMIN_USER_ID`, y `CITHELA_COMMERCIAL_CONSOLE_ENABLED=true`. Falla cerrada si no se configura explícitamente. El acceso fue habilitado por el responsable y comprobado en el navegador el 04/11/2026. El navegador usa exclusivamente la clave `sb_publishable_...` ya pública en CITHELA; nunca usa service_role, MP Access Token o firmas HMAC.
 
 Configuración posterior y supervisada: Supabase → Edge Functions → Secrets
 - `CITHELA_COMMERCIAL_ADMIN_USER_ID` = UUID del usuario profesional de **SpukLab** autorizado para gestión comercial (Supabase → Authentication → Users).
 - `CITHELA_COMMERCIAL_CONSOLE_ENABLED` = `true`.
 
-No completar estos secretos ni habilitar la consola sin confirmar que el UUID pertenece al administrador de SpukLab. No enviar nunca ningún token privado.
+El usuario configuró estos secretos y validó el acceso con su sesión profesional el 04/11/2026. No enviar nunca ningún token privado; el portal público no debe almacenar ni presentar estos valores.
 
 ## Tarifas
 
@@ -58,13 +58,27 @@ En producción Supabase se ejecutaron pruebas **dentro de BEGIN/ROLLBACK** para 
 **Despliegue efectuado 04/11/2026:**
 - Migración `cithela_commercial_controls_price_free_retention_20261104`: `success=true`.
 - Migración `cithela_commercial_admin_command_20261104`: `success=true`.
-- Edge Function `cithela-commercial-admin`: versión 1, `ACTIVE`, `verify_jwt=true`. **No se ha habilitado la consola con los secretos de administrador.**
+- Edge Function `cithela-commercial-admin`: versión 3, `ACTIVE`, `verify_jwt=true` según verificación directa del 04/11/2026. La sesión del administrador fue comprobada desde la interfaz.
 - Consultas posteriores: 2 establecimientos, 15 reservas, 2 `legacy` con `can_book=true`, 0 intentos de cobro, 0 cortesías, 0 candidatos de limpieza, 2 tarifas borrador, 0 seleccionadas, 0 publicadas, `automatic_purge=false`.
-- Ejecución de `read` con rol `service_role` dentro de transacción reversible: `ok=true`, 2 opciones, 2 establecimientos, 0 candidatos, purga automática desactivada. La sesión web del administrador todavía no fue probada.
+- Ejecución de `read` con rol `service_role` dentro de transacción reversible: `ok=true`, 2 opciones, 2 establecimientos, 0 candidatos, purga automática desactivada. La sesión web del administrador fue comprobada posteriormente desde iPhone.
 - `anon`/`authenticated` no pueden invocar la RPC de administración directamente.
 
-El código de consola/Edge está sujeto a Node CI (controles de origen, JWT, permisos, validación de parámetros y ausencia de operaciones destructivas). Tras despliegue, se probará el acceso administrativo usando la cuenta designada, sin datos de pacientes.
+El código de consola/Edge está sujeto a Node CI (controles de origen, JWT, permisos, validación de parámetros y ausencia de operaciones destructivas). Acceso administrativo verificado por el responsable desde iPhone, sin publicar datos de pacientes.
 
 ## Continuidad comercial
 
 Mantener apagados checkout y alta automática hasta aprobación de oferta, prueba autónoma de contratación y conciliación de Mercado Pago. La selección de precios no implica aprobación del valor de venta.
+
+## Validación posterior del 04/11/2026 — entorno real
+
+- Acceso de la cuenta administradora: **verificado por el responsable en iPhone**; la consola presentó tarifas, cortesías y conservación.
+- Consulta directa de solo lectura al comando administrativo: `ok=true`, código `snapshot`, 2 tarifas borrador, 2 establecimientos, 0 candidatos a revisión, 0 cortesías, 0 auditorías de escritura, 0 tarifas seleccionadas, 0 tarifas publicadas, `automatic_purge=false`.
+- Permisos de la función RPC `cithela_commercial_admin_command`: `anon=false`, `authenticated=false`; solo invocable desde el contexto servidor autorizado. El acceso en navegador requiere identidad Auth confirmada y coincidencia con UUID permitido.
+- Hub público actual (`/hub/`) no tiene autenticación y **no es apropiado para exponer controles**. Conservar la gestión en `/cithela/comercial-admin.html` hasta disponer de una consola SpukLab protegida que conserve los controles server-side.
+- PR de seguridad UX `cithela/admin-console-ux-20261104`: deshabilita Otorgar/Revocar cuando el establecimiento elegido no corresponde; impide gestionar el piloto legacy desde esos botones; exige confirmación también al crear tarifas y cambiar plazos de revisión. Pendiente de fusionar y comprobar en Safari tras pasar CI.
+
+### Verificaciones pendientes antes de cualquier contratación
+
+1. Probar escrituras con una cuenta comercial de prueba elegible y un procedimiento reversible: seleccionar tarifa borrador, otorgar/revocar cortesía, guardar plazos, comprobar registros de auditoría y confirmar que se conservan turnos; **no usar los pilotos reales para la prueba**. No habilitar precio público, Mercado Pago de producción ni checkout.
+2. Controlar el flujo autoservicio de registro y recuperación, las notificaciones y las credenciales en dispositivos reales.
+3. Aprobar oferta, soporte, privacidad y conservación de datos antes de habilitar contratación y purga. `automatic_purge` debe permanecer en `false`.
