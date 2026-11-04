@@ -65,6 +65,10 @@ BEGIN
            AND g.starts_at<=statement_timestamp()
            AND (g.expires_at IS NULL OR g.expires_at>statement_timestamp())
       ),
+      'has_unrevoked_grant',EXISTS (
+         SELECT 1 FROM cithela_private.cithela_complimentary_grants g
+         WHERE g.tenant_id=t.id AND g.revoked_at IS NULL
+      ),
       'complimentary_until',(
          SELECT g.expires_at FROM cithela_private.cithela_complimentary_grants g
          WHERE g.tenant_id=t.id AND g.revoked_at IS NULL
