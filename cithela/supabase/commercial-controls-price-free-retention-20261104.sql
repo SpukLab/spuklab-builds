@@ -36,7 +36,8 @@ VALUES ('Referencia interna ARS 15.000',1500000),
 -- A grant overrides expired trial booking only while explicitly valid and
 -- only for non-suspended, non-legacy entitlements.
 CREATE TABLE cithela_private.cithela_complimentary_grants (
-  tenant_id uuid PRIMARY KEY REFERENCES public.cithela_tenants(id)
+  grant_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES public.cithela_tenants(id)
     ON DELETE RESTRICT,
   owner_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   granted_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -48,6 +49,9 @@ CREATE TABLE cithela_private.cithela_complimentary_grants (
   CHECK (expires_at IS NULL OR expires_at>starts_at),
   CHECK (revoked_at IS NULL OR revoked_at>=starts_at)
 );
+CREATE UNIQUE INDEX cithela_one_unrevoked_complimentary_grant
+ ON cithela_private.cithela_complimentary_grants(tenant_id)
+ WHERE revoked_at IS NULL;
 ALTER TABLE cithela_private.cithela_complimentary_grants ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON cithela_private.cithela_complimentary_grants
  FROM PUBLIC,anon,authenticated;
