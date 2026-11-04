@@ -1,5 +1,5 @@
 # CITHELA · Administración comercial y conservación de pruebas
-Fecha: 2026-11-04. Estado inicial: **panel y controles preparados; no se autorizan cobros ni purgas**.
+Fecha: 2026-11-04. Estado: **migraciones desplegadas, Edge Function desplegada pero consola inhabilitada por defecto; sin cobros ni purgas**.
 
 ## Objetivo
 
@@ -54,6 +54,14 @@ Antes de habilitar una purga debe implementarse: aviso previo al responsable de 
 ## Validación
 
 En producción Supabase se ejecutaron pruebas **dentro de BEGIN/ROLLBACK** para verificar: rechazo de doble tarifa seleccionada, legacy intacto, trial vencido bloqueado, cortesía activa y su vencimiento, revocación inmediata, re-invitación con auditoría y candidato excluido por retención documental. Sin ningún cambio persistente tras las pruebas.
+
+**Despliegue efectuado 04/11/2026:**
+- Migración `cithela_commercial_controls_price_free_retention_20261104`: `success=true`.
+- Migración `cithela_commercial_admin_command_20261104`: `success=true`.
+- Edge Function `cithela-commercial-admin`: versión 1, `ACTIVE`, `verify_jwt=true`. **No se ha habilitado la consola con los secretos de administrador.**
+- Consultas posteriores: 2 establecimientos, 15 reservas, 2 `legacy` con `can_book=true`, 0 intentos de cobro, 0 cortesías, 0 candidatos de limpieza, 2 tarifas borrador, 0 seleccionadas, 0 publicadas, `automatic_purge=false`.
+- Ejecución de `read` con rol `service_role` dentro de transacción reversible: `ok=true`, 2 opciones, 2 establecimientos, 0 candidatos, purga automática desactivada. La sesión web del administrador todavía no fue probada.
+- `anon`/`authenticated` no pueden invocar la RPC de administración directamente.
 
 El código de consola/Edge está sujeto a Node CI (controles de origen, JWT, permisos, validación de parámetros y ausencia de operaciones destructivas). Tras despliegue, se probará el acceso administrativo usando la cuenta designada, sin datos de pacientes.
 
