@@ -148,6 +148,49 @@ BEGIN
 END
 $snapshot$;
 
+-- Preserve the existing professional authorization boundary. The new
+-- complimentary_until field is returned ONLY to that tenant's owner/admin.
+CREATE OR REPLACE FUNCTION public.cithela_commercial_status(p_tenant_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path TO ''
+AS $status$
+DECLARE
+  actor uuid:=auth.uid();
+  ent jsonb;
+  exp_at timestamptz;
+  left_days integer;
+BEGIN
+  IF actor IS NULL THEN
+    RETURN jsonb_build_object('ok',false,'code','unauthenticated');
+  END IF;
+  IF p_tenant_id IS NULL OR NOT EXISTS(
+    SELECT 1 FROM public.cithela_tenant_memberships m
+    WHERE m.user_id=actor AND m.tenant_id=p_tenant_id
+      AND m.role IN ('owner','admin')
+  ) THEN
+    RETURN jsonb_build_object('ok',false,'code','forbidden');
+  END IF;
+  ent:=cithela_private.commercial_entitlement_snapshot(
+    p_tenant_id,statement_timestamp());
+  exp_at:=(ent->>'trial_ends_at')::timestamptz;
+  IF ent->>'status'='trialing' AND exp_at IS NOT NULL THEN
+    left_days:=GREATEST(0,CEIL(EXTRACT(EPOCH FROM
+      (exp_at-statement_timestamp()))/86400))::integer;
+  END IF;
+  RETURN jsonb_build_object(
+    'ok',true,
+    'status',ent->>'status',
+    'can_book',coalesce((ent->>'can_book')::boolean,false),
+    'trial_ends_at',ent->>'trial_ends_at',
+    'current_period_end',ent->>'current_period_end',
+    'complimentary_until',ent->>'complimentary_until',
+    'days_remaining',left_days,
+    'server_checked_at',statement_timestamp()
+  );
+END
+$status$;
+
 -- Purge is a LEGAL/DATA-RETENTION decision, not a side effect of the trial end.
 -- A retention hold prevents even being surfaced as a deletion candidate.
 CREATE TABLE cithela_private.cithela_retention_holds (
