@@ -130,7 +130,7 @@ function show(snapshot){
  $('select-price').disabled=price.length===0;
  const tenantOptions=(snapshot.tenants||[]).map(t=>({
   value:t.id,
-  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.status)
+  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status)
  }));
  selectOptions('tenant-select',tenantOptions);
  const eligible=(snapshot.tenants||[]).some(t=>!['legacy','active','suspended'].includes(t.status));
@@ -206,7 +206,7 @@ $('grant-free').addEventListener('click',()=>{
 $('revoke-free').addEventListener('click',()=>{
  const tenant=$('tenant-select').value;
  const selected=last?.tenants?.find(t=>t.id===tenant);
- if(!selected?.complimentary){tell('Este establecimiento no tiene una cortesía activa.');return;}
+ if(!selected?.has_unrevoked_grant){tell('Este establecimiento no tiene una cortesía pendiente de revocación.');return;}
  action('revoke_free',{tenant_id:tenant},'¿Revocar la cortesía de '+selected.name+'? Podría detener sus nuevas reservas.');
 });
 $('save-retention').addEventListener('click',()=>{
