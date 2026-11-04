@@ -94,7 +94,7 @@ test('SQL keeps all commercial resources private and only accepts server command
  assert.match(controls,/cithela_commercial_admin_audit/);
  assert.match(controls,/p_action='choose_price'/);
  assert.match(controls,/p_action='grant_free'/);
- assert.match(controls,/p_action='revoke_free'/);
+ assert.match(controls,/p_action IN \('grant_free','revoke_free'\)/);
  assert.match(controls,/p_action='set_retention'/);
  assert.doesNotMatch(schema+'\n'+controls,/DELETE\s+FROM\s+(?:public|cithela_private)\./i);
  assert.doesNotMatch(controls,/UPDATE\s+cithela_private\.cithela_commercial_entitlements/i);
