@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>CITHELA · Administración comercial · SpukLab</title>
+<style>
+:root{color-scheme:light;--bg:#f2f5f1;--paper:#fffefa;--ink:#213b36;--sub:#5b726b;--edge:#cbdcd4;--teal:#236c64;--mint:#e2eee8;--warn:#845545}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+a{color:var(--teal)}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid var(--teal);background:var(--teal);color:white;padding:13px 18px;border-radius:10px;font-weight:680;min-height:46px}button:disabled{opacity:.45;cursor:not-allowed}button.secondary{background:transparent;color:var(--teal)}button.alert{background:transparent;color:var(--warn);border-color:#bfa89a}
+:focus-visible{outline:3px solid #6cbfb0;outline-offset:3px}
+header{background:#122c2e;color:#eff6ee;padding:27px 0}header a{color:#d4eee4;text-decoration:none}.wrap{max-width:1120px;margin:auto;padding:0 22px}
+.brand{letter-spacing:.18em;font-weight:800;font-size:1.13rem}.subhead{color:#a5c9bc;letter-spacing:.12em;font-size:.65rem;margin-top:5px}header nav{margin-top:18px;font-size:.84rem}
+h1{font-size:clamp(2rem,4vw,3.2rem);letter-spacing:-.055em;line-height:1.14;margin:29px 0 13px}h2{font-size:1.38rem;line-height:1.3;letter-spacing:-.03em;margin:0 0 10px}
+p{color:var(--sub)}.intro{max-width:750px}.intro p{font-size:.98rem}.notice{background:#e7f0e8;color:#36594e;border-left:3px solid #5a9e85;padding:15px 17px;border-radius:6px;font-size:.87rem;margin:24px 0 28px}
+.notice strong{color:#24574d}.muted{font-size:.81rem;color:var(--sub)}.disabled{color:var(--warn);font-size:.85rem}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:23px 0 50px}.card{background:var(--paper);border:1px solid var(--edge);border-radius:15px;padding:clamp(22px,3vw,32px);min-width:0}
+.card.wide{grid-column:1/-1}.eyebrow{font-size:.62rem;letter-spacing:.15em;color:#478578;font-weight:820;margin:0 0 14px}.card>p{font-size:.86rem}
+label{font-size:.8rem;font-weight:700;display:block;margin:15px 0 6px;color:#3b6158}
+input,select,textarea{width:100%;min-height:46px;border:1px solid #b8cbc2;background:white;color:#1d3731;border-radius:9px;padding:10px 12px}
+textarea{resize:vertical;min-height:86px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.small{font-size:.77rem}.message{min-height:25px;padding:6px 0;color:#285c53;font-size:.86rem}
+table{width:100%;border-collapse:collapse;font-size:.81rem}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #dfebe4}th{color:#4d6d62;font-size:.75rem}td{overflow-wrap:anywhere}
+.scroll{overflow-x:auto}.hint{color:#785c44;background:#f7eee4;padding:10px 13px;border-radius:8px;font-size:.79rem}
+[hidden]{display:none!important}
+footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
+@media(max-width:760px){.cards{grid-template-columns:1fr}.card.wide{grid-column:auto}h1{margin-top:25px}.wrap{padding:0 16px}button{width:100%}.actions{display:grid;grid-template-columns:1fr}th,td{padding:10px 6px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="brand">CITHELA <span style="color:#89cebb">/ SPUKLAB</span></div>
+  <div class="subhead">ADMINISTRACIÓN COMERCIAL · ACCESO RESTRINGIDO</div>
+  <nav><a href="./">Volver a la agenda CITHELA</a></nav>
+</div></header>
+<main class="wrap">
+ <div class="intro">
+  <h1>Centro comercial</h1>
+  <p>Tarifas, invitaciones sin cargo y control de pruebas vencidas. Estas opciones son exclusivas de SpukLab: no forman parte de los ajustes que utiliza cada profesional.</p>
+ </div>
+ <div class="notice"><strong>Sin cobros automáticos ni borrados.</strong> Seleccionar una tarifa no modifica contratos existentes ni activa Mercado Pago. La limpieza es una vista de revisión: los datos no se eliminan desde este panel.</div>
+ <section class="card" id="gate" aria-live="polite">
+  <h2>Acceso administrativo</h2>
+  <p id="gate-message">Comprobando tu sesión profesional...</p>
+  <p class="muted">Ingresá en CITHELA con la cuenta administradora autorizada. Si la consola está deshabilitada, no se exponen datos comerciales.</p>
+  <div class="actions"><a href="./">Ir a iniciar sesión en CITHELA</a><button class="secondary" id="retry" type="button">Volver a comprobar</button></div>
+ </section>
+ <div id="console" hidden>
+ <div class="actions"><button class="secondary" type="button" id="reload">Actualizar información</button></div>
+ <p class="message" id="message" role="status" aria-live="polite"></p>
+ <div class="cards">
+  <section class="card" aria-labelledby="price-title">
+   <p class="eyebrow">01 / VALORES COMERCIALES</p>
+   <h2 id="price-title">Selector de tarifas</h2>
+   <p>Elegí una referencia vigente para futuras contrataciones. Los importes existentes son borradores, no precios publicados.</p>
+   <label for="price-select">Tarifa que queremos seleccionar</label>
+   <select id="price-select"></select>
+   <div class="actions"><button type="button" id="select-price">Guardar selección</button></div>
+   <p class="hint">La selección es interna. No cambia cuotas actuales, no publica una oferta y no actualiza el precio del token de pruebas.</p>
+   <form id="new-price">
+    <label for="new-label">Nombre de referencia</label>
+    <input id="new-label" type="text" maxlength="70" placeholder="Ej. CITHELA mensual" required>
+    <label for="new-amount">Importe en pesos argentinos por mes</label>
+    <input id="new-amount" type="number" min="1" max="1000000000" step="1" placeholder="15000" required>
+    <div class="actions"><button class="secondary" type="submit">Agregar precio borrador</button></div>
+   </form>
+  </section>
+  <section class="card" aria-labelledby="grants-title">
+   <p class="eyebrow">02 / CORTESÍAS E INVITACIONES</p>
+   <h2 id="grants-title">Clientes sin cargo</h2>
+   <p>Habilitá gratuitamente a un profesional que ya tenga una cuenta comercial autorizada. Los pilotos existentes conservan su acceso sin necesidad de cortesía.</p>
+   <label for="tenant-select">Establecimiento</label>
+   <select id="tenant-select"></select>
+   <label for="free-duration">Duración de la cortesía</label>
+   <select id="free-duration">
+    <option value="30">30 días</option><option value="90">90 días</option>
+    <option value="365">1 año</option><option value="unlimited">Sin vencimiento</option>
+   </select>
+   <label for="free-reason">Motivo de la invitación</label>
+   <textarea id="free-reason" maxlength="240" placeholder="Ej. Cliente invitado para demostración" required></textarea>
+   <div class="actions">
+    <button type="button" id="grant-free">Otorgar cortesía</button>
+    <button class="alert" type="button" id="revoke-free">Revocar cortesía</button>
+   </div>
+   <p class="hint">La revocación tiene efecto sobre las nuevas reservas. Los turnos y datos existentes no se borran.</p>
+  </section>
+  <section class="card wide" aria-labelledby="retention-title">
+   <p class="eyebrow">03 / CONSERVACIÓN Y LIMPIEZA</p>
+   <h2 id="retention-title">Pruebas vencidas</h2>
+   <p>Definí cuándo revisar una cuenta que nunca contrató. Las cuentas pagas, pilotos y cortesías vigentes quedan excluidas; también las que tienen turnos futuros o una conservación pendiente.</p>
+   <div class="cards" style="margin:0">
+    <div><label for="retention-notice">Días posteriores al vencimiento para revisar</label><input id="retention-notice" type="number" min="7" max="365" step="1"></div>
+    <div><label for="retention-review">Días posteriores al vencimiento para evaluar purga</label><input id="retention-review" type="number" min="30" max="730" step="1"></div>
+   </div>
+   <div class="actions"><button type="button" id="save-retention">Guardar plazos de revisión</button></div>
+   <p class="hint">Purgas automáticas: desactivadas. Antes de borrar se necesitarán aviso al cliente, posibilidad de exportación y aprobación expresa según la política definitiva.</p>
+   <h2 style="margin-top:24px">Agendas candidatas a revisión</h2>
+   <div class="scroll"><table><thead><tr><th>Establecimiento</th><th>Días vencidos</th><th>Estado</th><th>Turnos históricos</th></tr></thead><tbody id="retention-list"></tbody></table></div>
+   <p class="muted" id="retention-empty">No hay agendas vencidas pendientes de revisión.</p>
+  </section>
+ </div></div>
+</main>
+<footer class="wrap">CITHELA · SpukLab · Control interno sin acceso público ni operaciones de cobro.</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script>
+'use strict';
+const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
+const PUBLISHABLE_KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
+const $=id=>document.getElementById(id);
+let supa=null,last=null,busy=false;
+const money=value=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value)/100);
+const tell=msg=>{$('message').textContent=msg};
+const gate=msg=>{$('gate-message').textContent=msg;$('console').hidden=true;$('gate').hidden=false};
+function selectOptions(id,items){
+ const el=$(id);
+ el.replaceChildren(...items.map(item=>{
+  const option=document.createElement('option');
+  option.value=item.value;option.textContent=item.label;
+  return option;
+ }));
+}
+function show(snapshot){
+ last=snapshot;
+ const selected=(snapshot.prices||[]).filter(p=>p.selected);
+ const price=(snapshot.prices||[]).map(p=>({
+  value:p.id,label:money(p.amount_minor)+' / mes · '+p.label+(p.selected?' (seleccionada)':'')
+ }));
+ selectOptions('price-select',price);
+ if(selected.length)$('price-select').value=selected[0].id;
+ $('select-price').disabled=price.length===0;
+ const tenantOptions=(snapshot.tenants||[]).map(t=>({
+  value:t.id,
+  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.status)
+ }));
+ selectOptions('tenant-select',tenantOptions);
+ const eligible=(snapshot.tenants||[]).some(t=>!['legacy','active','suspended'].includes(t.status));
+ $('grant-free').disabled=!eligible;
+ $('revoke-free').disabled=tenantOptions.length===0;
+ $('retention-notice').value=snapshot.retention?.review_after_days??30;
+ $('retention-review').value=snapshot.retention?.purge_review_after_days??90;
+ const names=new Map((snapshot.tenants||[]).map(t=>[t.id,t.name]));
+ const items=(snapshot.candidates||[]).map(c=>{
+  const tr=document.createElement('tr');
+  [names.get(c.tenant_id)||'Cuenta',
+   String(c.days_expired),c.stage==='manual_purge_review'?'Revisión manual':'Avisar y ofrecer exportación',
+   String(c.historical_appointments)].forEach(t=>{
+   const td=document.createElement('td');td.textContent=t;tr.append(td);
+  });
+  return tr;
+ });
+ $('retention-list').replaceChildren(...items);
+ $('retention-empty').hidden=items.length!==0;
+}
+async function call(action,payload={}){
+ if(!supa)throw Error('Sin sesión de CITHELA');
+ const {data,error}=await supa.functions.invoke('cithela-commercial-admin',
+  {body:{action,payload}});
+ if(error)throw Error('Acceso no disponible o acción rechazada por el servidor');
+ if(data?.ok!==true)throw Error('No se aplicó el cambio: '+(data?.code||'sin respuesta'));
+ return data;
+}
+async function reload(){
+ if(busy)return;
+ busy=true;try{
+  const res=await call('read',{});
+  show(res);
+  $('gate').hidden=true;$('console').hidden=false;
+  tell('Información actualizada. No hay cambios de cobro ni borrados.');
+ }catch(e){gate(e.message)}finally{busy=false}
+}
+async function action(name,payload,askConfirm){
+ if(busy)return;
+ if(askConfirm&&!window.confirm(askConfirm))return;
+ busy=true;tell('Verificando cambios...');
+ try{
+  const res=await call(name,payload);
+  busy=false;await reload();
+  tell('Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
+ }catch(e){tell(e.message)}finally{busy=false}
+}
+$('retry').addEventListener('click',reload);
+$('reload').addEventListener('click',reload);
+$('select-price').addEventListener('click',()=>{
+ const id=$('price-select').value;if(!id)return;
+ action('choose_price',{price_id:id},'¿Seleccionar este precio para futuras contrataciones? No afecta cobros existentes.');
+});
+$('new-price').addEventListener('submit',event=>{
+ event.preventDefault();
+ const amount=Number($('new-amount').value);
+ if(!Number.isSafeInteger(amount)||amount<1||amount>1000000000){tell('Indicá un importe válido en pesos.');return;}
+ const label=$('new-label').value.trim();
+ action('create_price',{label,amount_minor:amount*100});
+});
+$('grant-free').addEventListener('click',()=>{
+ const tenant=$('tenant-select').value;
+ const days=$('free-duration').value;
+ const reason=$('free-reason').value.trim();
+ const selected=last?.tenants?.find(t=>t.id===tenant);
+ if(!tenant||!selected||['legacy','active','suspended'].includes(selected.status)){
+  tell('Seleccioná una cuenta comercial elegible.');return;
+ }
+ const expiry=days==='unlimited'?null:new Date(Date.now()+Number(days)*86400000).toISOString();
+ action('grant_free',{tenant_id:tenant,reason,expires_at:expiry},
+  '¿Otorgar acceso sin cargo a '+selected.name+'? Esta acción habilita nuevas reservas.');
+});
+$('revoke-free').addEventListener('click',()=>{
+ const tenant=$('tenant-select').value;
+ const selected=last?.tenants?.find(t=>t.id===tenant);
+ if(!selected?.complimentary){tell('Este establecimiento no tiene una cortesía activa.');return;}
+ action('revoke_free',{tenant_id:tenant},'¿Revocar la cortesía de '+selected.name+'? Podría detener sus nuevas reservas.');
+});
+$('save-retention').addEventListener('click',()=>{
+ action('set_retention',{review_days:Number($('retention-notice').value),
+  purge_review_days:Number($('retention-review').value)});
+});
+(async()=>{
+ try{
+  if(!window.supabase?.createClient){gate('No se pudo cargar el inicio de sesión seguro.');return;}
+  supa=window.supabase.createClient(SUPABASE_URL,PUBLISHABLE_KEY,
+   {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  const {data:{session}}=await supa.auth.getSession();
+  if(!session){gate('Ingresá en CITHELA con tu cuenta profesional administradora y volvé a esta página.');return;}
+  await reload();
+ }catch{gate('No se pudo comprobar la cuenta administradora.');}
+})();
+</script>
+</body>
+</html>
