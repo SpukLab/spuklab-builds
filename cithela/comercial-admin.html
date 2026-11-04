@@ -71,6 +71,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    <p>Habilitá gratuitamente a un profesional que ya tenga una cuenta comercial autorizada. Los pilotos existentes conservan su acceso sin necesidad de cortesía.</p>
    <label for="tenant-select">Establecimiento</label>
    <select id="tenant-select"></select>
+   <p class="muted">El piloto protegido no requiere cortesía y no se modifica desde esta sección.</p>
    <label for="free-duration">Duración de la cortesía</label>
    <select id="free-duration">
     <option value="30">30 días</option><option value="90">90 días</option>
@@ -119,6 +120,13 @@ function selectOptions(id,items){
   return option;
  }));
 }
+function syncGrantButtons(){
+ const tenant=last?.tenants?.find(t=>t.id===$('tenant-select').value);
+ const eligible=!!tenant && ['trialing','payment_pending','past_due','canceled'].includes(tenant.status)
+   && !tenant.has_unrevoked_grant;
+ $('grant-free').disabled=!eligible;
+ $('revoke-free').disabled=!tenant?.has_unrevoked_grant;
+}
 function show(snapshot){
  last=snapshot;
  const selected=(snapshot.prices||[]).filter(p=>p.selected);
@@ -133,9 +141,7 @@ function show(snapshot){
   label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status)
  }));
  selectOptions('tenant-select',tenantOptions);
- const eligible=(snapshot.tenants||[]).some(t=>!['legacy','active','suspended'].includes(t.status));
- $('grant-free').disabled=!eligible;
- $('revoke-free').disabled=tenantOptions.length===0;
+ syncGrantButtons();
  $('retention-notice').value=snapshot.retention?.review_after_days??30;
  $('retention-review').value=snapshot.retention?.purge_review_after_days??90;
  const names=new Map((snapshot.tenants||[]).map(t=>[t.id,t.name]));
@@ -179,6 +185,7 @@ async function action(name,payload,askConfirm){
  }catch(e){tell(e.message)}finally{busy=false}
 }
 $('retry').addEventListener('click',reload);
+$('tenant-select').addEventListener('change',syncGrantButtons);
 $('reload').addEventListener('click',reload);
 $('select-price').addEventListener('click',()=>{
  const id=$('price-select').value;if(!id)return;
@@ -189,7 +196,8 @@ $('new-price').addEventListener('submit',event=>{
  const amount=Number($('new-amount').value);
  if(!Number.isSafeInteger(amount)||amount<1||amount>1000000000){tell('Indicá un importe válido en pesos.');return;}
  const label=$('new-label').value.trim();
- action('create_price',{label,amount_minor:amount*100});
+ action('create_price',{label,amount_minor:amount*100},
+  '¿Agregar la tarifa borrador «'+label+'» por '+money(amount*100)+' al mes? No se publica ni habilita cobros.');
 });
 $('grant-free').addEventListener('click',()=>{
  const tenant=$('tenant-select').value;
@@ -211,7 +219,8 @@ $('revoke-free').addEventListener('click',()=>{
 });
 $('save-retention').addEventListener('click',()=>{
  action('set_retention',{review_days:Number($('retention-notice').value),
-  purge_review_days:Number($('retention-review').value)});
+  purge_review_days:Number($('retention-review').value)},
+  '¿Guardar estos plazos de revisión? No se ejecutarán purgas automáticas.');
 });
 (async()=>{
  try{
