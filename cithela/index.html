@@ -3868,6 +3868,12 @@ function renderProfessionalMode(){
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
 }
+function formatCithelaComplimentaryExpiry(value){
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat('es-AR',{
+    day:'numeric',month:'long',year:'numeric'
+  }).format(date);
+}
 function renderCithelaCommercialPanel(s){
   const panel=$('cithela-commercial-panel');
   if(!panel)return;
@@ -3902,11 +3908,10 @@ function renderCithelaCommercialPanel(s){
   }
   const [title,description]=descriptions[c.status];
   if(c.status==='complimentary'&&c.complimentary_until){
-    const date=new Date(c.complimentary_until);
-    if(!Number.isNaN(date.getTime())){
+    const day=formatCithelaComplimentaryExpiry(c.complimentary_until);
+    if(day){
       statusEl.textContent=title;
-      detailEl.textContent=description+' Vigente hasta el '+
-        new Intl.DateTimeFormat('es-AR',{day:'numeric',month:'long',year:'numeric'}).format(date)+'.';
+      detailEl.textContent=description+' Vigente hasta el '+day+'.';
       return;
     }
   }
