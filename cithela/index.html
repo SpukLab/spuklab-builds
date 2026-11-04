@@ -3868,6 +3868,12 @@ function renderProfessionalMode(){
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
 }
+function formatCithelaComplimentaryExpiry(value){
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat('es-AR',{
+    day:'numeric',month:'long',year:'numeric'
+  }).format(date);
+}
 function renderCithelaCommercialPanel(s){
   const panel=$('cithela-commercial-panel');
   if(!panel)return;
@@ -3881,6 +3887,7 @@ function renderCithelaCommercialPanel(s){
   const c=s.commercialStatus;
   const descriptions={
     legacy:['Servicio habilitado','Tu agenda funciona con normalidad. No necesitás realizar ninguna acción.'],
+    complimentary:['Acceso de cortesía','Tu agenda está habilitada sin cargo por autorización de SpukLab. Esta modalidad no genera pagos ni una suscripción.'],
     trialing:['Prueba gratuita en curso','Podés utilizar la agenda durante el período de prueba, sin cobro automático.'],
     trial_expired:['Prueba gratuita finalizada','No se pueden crear ni reprogramar turnos. Podés consultar la agenda y cancelar reservas existentes.'],
     active:['Suscripción activa','La agenda está habilitada mientras esté vigente tu suscripción.'],
@@ -3900,6 +3907,14 @@ function renderCithelaCommercialPanel(s){
     return;
   }
   const [title,description]=descriptions[c.status];
+  if(c.status==='complimentary'&&c.complimentary_until){
+    const day=formatCithelaComplimentaryExpiry(c.complimentary_until);
+    if(day){
+      statusEl.textContent=title;
+      detailEl.textContent=description+' Vigente hasta el '+day+'.';
+      return;
+    }
+  }
   if(c.status==='trialing'&&Number.isInteger(c.days_remaining)){
     const days=c.days_remaining;
     statusEl.textContent=title+' · '+(days===0?'Menos de un día restante':days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s'));
