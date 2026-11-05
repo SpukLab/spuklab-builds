@@ -4142,14 +4142,18 @@ function renderAgenda(){
         ${depositLabel(appointment)?`<div class="ops-note" style="margin-top:7px;">${escHtml(depositLabel(appointment))}</div>`:''}
         <div class="aitem-foot">
           <span class="tag ${sm.cls}">${sm.label}</span>
-          <div class="aitem-actions">
+          <div class="aitem-actions agenda-card-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">WhatsApp</button>`:''}
+            ${(Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable())||canClose||(active&&professionalCloudWritable())
+              ?`<details class="agenda-card-more">
+                <summary>Más acciones</summary><div class="agenda-card-secondary">
             ${Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable()
               ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
+                </div></details>`:''}
           </div>
         </div>
       </div>`;
@@ -4165,13 +4169,17 @@ function renderAgenda(){
       ${t.waOpenedAt&&!t.recordatorioAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
         <span class="tag ${sm.cls}">${sm.label}</span>
-        <div class="aitem-actions">
+        <div class="aitem-actions agenda-card-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
-          ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
           ${isOpenAppointment(t)&&waNLocal?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+          ${isOpenAppointment(t)||t.estado==='pendiente'
+            ?`<details class="agenda-card-more">
+              <summary>Más acciones</summary><div class="agenda-card-secondary">
+          ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
           ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb cancel" type="button" onclick="cancelTurno('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
+              </div></details>`:''}
         </div>
       </div>
     </div>`;
