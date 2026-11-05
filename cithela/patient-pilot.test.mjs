@@ -44,7 +44,7 @@ test('supervised WhatsApp-first invitation requests OTP only for the bound invit
 test('email invitation still offers email link, prefilled with intended recipient',()=>{
  const r=simulateLogin({email:'pilot@example.org',invited:true});
  assert.equal(r['patient-primary-access'].disabled,false);
- assert.equal(r['patient-primary-access'].textContent,'Continuar');
+ assert.equal(r['patient-primary-access'].textContent,'Continuar por correo');
  assert.equal(r['l-patient-email'].value,'pilot@example.org');
 });
 test('professional can prepare a phone-first invite and retains alternative email invitation',()=>{
