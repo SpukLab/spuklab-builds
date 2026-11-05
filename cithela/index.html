@@ -910,12 +910,12 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </details>
     <h2 class="settings-group-title">Establecimiento</h2>
 <details class="cithela-config-group" id="cfg-section-business">
-      <summary>Preferencias locales (solo este dispositivo)<span aria-hidden="true">⌄</span></summary>
+      <summary>Configuración del modo local (sin sincronización)<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <p class="contact-note" style="margin:0 0 14px;">Estos ajustes se guardan en este navegador. No modifican el nombre público ni los datos de CITHELA Cloud.</p>
+      <p class="contact-note" style="margin:0 0 14px;">Estos campos pertenecen a la agenda local de prueba de este navegador. No configuran el establecimiento ni se sincronizan con CITHELA Cloud.</p>
        <label class="lbl">Nombre de la app / marca</label>
       <input class="inp" id="cfg-brand" placeholder="CITHELA">
-      <p class="hint" style="margin-top:-8px;">Podés cambiarlo más adelante sin modificar el módulo de turnos.</p>
+      <p class="hint" style="margin-top:-8px;">Solo cambia la identificación del modo local, no la marca pública de CITHELA ni la de tu establecimiento.</p>
       <label class="lbl">Nombre del profesional</label>
       <input class="inp" id="cfg-nombre" placeholder="Nombre del profesional o equipo">
       <label class="lbl">Nombre del negocio / espacio</label>
@@ -936,8 +936,16 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
     </details>
 <details class="cithela-config-group" id="cfg-section-branding">
-      <summary>Identidad visual<span aria-hidden="true">⌄</span></summary>
+      <summary>Nombre, logo y colores del establecimiento<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" id="cloud-brand-form" style="margin-bottom:14px;display:none;">
+      <p class="contact-note">Esta identidad se guarda en CITHELA Cloud y se muestra a tus pacientes. La portada de acceso conserva la marca CITHELA.</p>
+      <label class="lbl" for="cloud-tenant-name">Nombre público del establecimiento</label>
+      <input class="inp" id="cloud-tenant-name" type="text" maxlength="160" autocomplete="organization"
+        placeholder="Ej.: Defro Cool Tattoo" aria-describedby="cloud-tenant-name-help">
+      <p class="contact-note" id="cloud-tenant-name-help">Este es el nombre que verá el paciente en su tarjeta de reservas y que aparece en la agenda profesional. No cambia nombres de pacientes ni turnos.</p>
+      <button class="mb teal" id="cloud-tenant-name-save" type="button" onclick="saveCloudTenantName()">Guardar nombre público</button>
+      <p class="contact-note" id="cloud-tenant-name-status" role="status" aria-live="polite"></p>
+      <div class="divider" style="margin:20px 0;"></div>
       <p class="contact-note">Elegí una paleta completa para fondos, tarjetas, botones y detalles. Cada establecimiento conserva la suya. El logo será público; no subas documentos personales.</p>
       <label class="lbl" style="margin-top:14px;">Paleta de color</label>
       <div class="brand-palette" id="cloud-brand-palette" role="group" aria-label="Paleta del establecimiento"></div>
@@ -2189,6 +2197,17 @@ const CithelaCloud=(()=>{
     const {error}=await c.storage.from('cithela-branding').remove([path]);
     if(error)throw error;
   }
+  async function tenantNameUpdate({tenantId,expectedName,name}){
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_tenant_name_update',{
+      p_tenant_id:tenantId,p_expected_name:expectedName,p_name:name
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo actualizar el nombre público.');
+    await refresh();
+    return data;
+  }
+
   async function tenantBrandingUpdate({tenantId,expectedUpdatedAt,theme,logoPath}){
     const c=await getClient();
     const {data,error}=await c.rpc('cithela_tenant_branding_update',{
@@ -2369,7 +2388,7 @@ const CithelaCloud=(()=>{
       return {ok:false,code:'connection_unavailable'};
     }
   }
-  return Object.freeze({checkMercadoPagoTestConnection,init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({checkMercadoPagoTestConnection,init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -3855,6 +3874,12 @@ function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
   renderLocalDemoKeySection();
+  const localPreferences=$('cfg-section-business');
+  if(localPreferences){
+    // The legacy settings are browser-only; never present them as cloud business identity.
+    localPreferences.style.display=active?'none':'';
+    if(active)localPreferences.open=false;
+  }
   applyCithelaTheme(tenant?.brand_theme||'sage');
   const businessName=$('professional-business-name');
   const displayName=active
@@ -5420,6 +5445,55 @@ async function prepareCloudBrandImage(file){
     URL.revokeObjectURL(source);
   }
 }
+let cloudTenantNameSaving=false;
+function renderCloudTenantName(s){
+  const input=$('cloud-tenant-name'),save=$('cloud-tenant-name-save');
+  if(!input||!save)return;
+  const tenant=s?.tenant,tenantId=tenant?.id||'',current=String(tenant?.display_name||'').trim();
+  const canEdit=!!(tenant&&['owner','admin'].includes(s?.membership?.role||''));
+  if(input.dataset.tenantId!==tenantId||
+      (!cloudTenantNameSaving&&document.activeElement!==input&&input.dataset.current!==current)){
+    input.value=current;
+    input.dataset.current=current;
+    input.dataset.tenantId=tenantId;
+  }
+  input.disabled=!canEdit||cloudTenantNameSaving;
+  save.disabled=!canEdit||cloudTenantNameSaving;
+}
+async function saveCloudTenantName(){
+  if(cloudTenantNameSaving||!professionalCloudReady())return;
+  const s=CithelaCloud.state(),tenant=s.tenant,input=$('cloud-tenant-name');
+  const feedback=$('cloud-tenant-name-status');
+  if(!tenant||!input||!['owner','admin'].includes(s.membership?.role||'')||
+      input.dataset.tenantId!==tenant.id)return;
+  const expected=String(input.dataset.current||'');
+  const name=input.value.trim().replace(/\s+/g,' ');
+  if(!name||name.length>160||/[\x00-\x1f\x7f]/.test(name)){
+    feedback.textContent='Ingresá un nombre entre 1 y 160 caracteres, sin saltos de línea.';
+    return;
+  }
+  if(name===expected){feedback.textContent='El nombre público ya está actualizado.';return;}
+  if(!confirm('¿Cambiar el nombre público a «'+name+'»? Se verá en CITHELA para los pacientes de este establecimiento.'))return;
+  cloudTenantNameSaving=true;
+  renderCloudTenantName(s);
+  feedback.textContent='Guardando el nombre público…';
+  try{
+    await CithelaCloud.tenantNameUpdate({tenantId:tenant.id,expectedName:expected,name});
+    feedback.textContent='Nombre actualizado. También lo verá el paciente al actualizar sus turnos.';
+    toast('Nombre público actualizado en CITHELA Cloud.');
+  }catch(err){
+    if(err?.message==='stale_write'){
+      await CithelaCloud.refresh();
+      feedback.textContent='El nombre cambió en otro dispositivo. Revisá el dato actualizado.';
+    }else{
+      feedback.textContent='No se guardó el nombre: '+(err?.message||'Error inesperado');
+    }
+  }finally{
+    cloudTenantNameSaving=false;
+    renderCloudTenantName(CithelaCloud.state());
+  }
+}
+
 function renderCloudBrandConfig(s){
   const box=$('cloud-brand-form');if(!box)return;
   const tenant=s?.tenant,tenantId=tenant?.id||null;
@@ -5431,6 +5505,7 @@ function renderCloudBrandConfig(s){
   }
   const editable=!!(tenant&&['owner','admin'].includes(s?.membership?.role||''));
   box.style.display=editable?'block':'none';
+  renderCloudTenantName(s);
   if(!editable||cloudBrandBusy)return;
   if(!cloudBrandDirty){
     cloudBrandTheme=tenant.brand_theme==='plum'?'pink':tenant.brand_theme||'sage';
