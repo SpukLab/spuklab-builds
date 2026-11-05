@@ -196,6 +196,21 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .aitem-motivo{font-size:.77rem;color:var(--ink3);}
 .aitem-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:var(--line);flex-wrap:wrap;gap:6px;}
 .aitem-actions{display:flex;gap:6px;flex-wrap:wrap;}
+/* Pilot UX: common appointment actions visible, occasional actions expandable. */
+.agenda-card-actions{width:100%;gap:8px;align-items:center;}
+.agenda-card-actions>.mb{min-height:44px;white-space:normal;}
+.agenda-card-more{flex:1 0 100%;min-width:0;max-width:620px;}
+.agenda-card-more>summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:10px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--white);color:var(--ink2);cursor:pointer;font-size:.81rem;font-weight:650;list-style:none;}
+.agenda-card-more>summary::-webkit-details-marker{display:none;}
+.agenda-card-more>summary::after{content:'⌄';color:var(--teal2);font-size:1rem;}
+.agenda-card-more[open]>summary::after{transform:rotate(180deg);}
+.agenda-card-more>summary:focus-visible{outline:3px solid var(--teal2);outline-offset:2px;}
+.agenda-card-secondary{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 2px;}
+.agenda-card-secondary .mb{min-height:44px;white-space:normal;}
+@media(max-width:600px){
+ .agenda-card-actions>.mb{flex:1 1 calc(50% - 8px);min-width:0;padding:10px 8px;}
+ .agenda-card-secondary .mb{flex:1 1 calc(50% - 8px);min-width:0;padding:10px 8px;}
+}
 
 /* Compact operator queue, with readable action hierarchy on mobile. */
 .ops-queue-summary{font-size:.79rem;font-weight:650;line-height:1.45;color:var(--ink2);margin:0 0 5px;}
@@ -461,6 +476,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 .patient-workspace .tenant-card-fallback{display:flex;justify-content:center;align-items:center;background:var(--teal-light);color:var(--teal2);font-size:1.35rem;font-weight:700;border:1px solid var(--teal-mid);}
 .patient-workspace .tenant-card-title{min-width:0;flex:1;overflow-wrap:anywhere;}
 .patient-workspace .tenant-business-title{font-size:1.08rem;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.25;color:var(--ink);margin:0 0 5px;}
+.patient-workspace .tenant-card-eyebrow{font-size:.65rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin:0 0 5px;}
+.patient-workspace .tenant-card-person{font-size:.8rem;color:var(--ink2);margin:0;line-height:1.45;}
 @media(max-width:600px){
   #screen-medico nav{padding:9px 14px;gap:8px;}
   #screen-medico nav .pill{display:none;}
@@ -719,16 +736,6 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
           <div id="cloud-wa-list" aria-live="polite" style="margin-top:12px;"></div>
         </div>
       </details>
-      <details class="cithela-config-group" style="margin-top:18px;">
-        <summary>Diagnóstico de conexión Meta <span aria-hidden="true">⌄</span></summary>
-        <div class="form-card">
-          <p class="contact-note" style="margin-bottom:10px;">Comprobá las credenciales sin enviar ningún mensaje.</p>
-          <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
-          <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
-          <button class="btn-main soft" style="margin-top:12px" type="button" onclick="cloudCheckMetaOtpTemplate()">Comprobar plantilla OTP (sin enviar)</button>
-          <p id="cloud-wa-otp-template-status" role="status" class="contact-note" style="margin-top:8px;"></p>
-        </div>
-      </details>
     </div>
 
   <div id="p-medico-reportes" class="pane">
@@ -781,16 +788,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
   <div id="p-medico-config" class="pane">
     <p class="settings-intro">Configurá horarios, ausencias y servicios. Los reportes y las herramientas de mantenimiento están al final.</p>
-    <section id="cithela-commercial-panel" class="cithela-commercial-panel" hidden aria-labelledby="cithela-commercial-title">
-      <p class="cithela-commercial-panel__eyebrow">CUENTA · CITHELA</p>
-      <h2 id="cithela-commercial-title">Estado del servicio</h2>
-      <p id="cithela-commercial-status" class="cithela-commercial-panel__status" role="status">Consultando el estado de tu cuenta…</p>
-      <p id="cithela-commercial-detail" class="cithela-commercial-panel__detail">La información de vigencia se consulta al servidor.</p>
-      <div id="cithela-mp-test-tools" hidden>
-        <button id="cithela-mp-test-button" type="button" class="btn-main soft" onclick="checkCithelaMpTestConnection()">Comprobar Mercado Pago de prueba</button>
-        <p id="cithela-mp-test-result" class="contact-note" role="status" aria-live="polite">Solo se comprobará el acceso de lectura. No se crearán pagos.</p>
-      </div>
-    </section>
+
     <h2 class="settings-group-title">Agenda y atención</h2>
 <details class="cithela-config-group" id="cfg-section-hours">
       <summary>Horarios de atención<span aria-hidden="true">⌄</span></summary>
@@ -912,7 +910,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </details>
     <h2 class="settings-group-title">Establecimiento</h2>
 <details class="cithela-config-group" id="cfg-section-business">
-      <summary>Preferencias de este dispositivo<span aria-hidden="true">⌄</span></summary>
+      <summary>Preferencias locales (solo este dispositivo)<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <p class="contact-note" style="margin:0 0 14px;">Estos ajustes se guardan en este navegador. No modifican el nombre público ni los datos de CITHELA Cloud.</p>
        <label class="lbl">Nombre de la app / marca</label>
@@ -972,6 +970,16 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
     </details>
     <h2 class="settings-group-title">Cuenta y herramientas</h2>
+    <section id="cithela-commercial-panel" class="cithela-commercial-panel" hidden aria-labelledby="cithela-commercial-title">
+      <p class="cithela-commercial-panel__eyebrow">CUENTA · CITHELA</p>
+      <h2 id="cithela-commercial-title">Estado del servicio</h2>
+      <p id="cithela-commercial-status" class="cithela-commercial-panel__status" role="status">Consultando el estado de tu cuenta…</p>
+      <p id="cithela-commercial-detail" class="cithela-commercial-panel__detail">La información de vigencia se consulta al servidor.</p>
+      <div id="cithela-mp-test-tools" hidden>
+        <button id="cithela-mp-test-button" type="button" class="btn-main soft" onclick="checkCithelaMpTestConnection()">Comprobar Mercado Pago de prueba</button>
+        <p id="cithela-mp-test-result" class="contact-note" role="status" aria-live="polite">Solo se comprobará el acceso de lectura. No se crearán pagos.</p>
+      </div>
+    </section>
 <details class="cithela-config-group" id="cfg-section-cloud">
       <summary>Cuenta y conexión<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
@@ -1024,6 +1032,18 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <summary>Infraestructura<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="infra-status"></div>
+      <p class="contact-note">Herramientas técnicas para soporte. No son necesarias para responder mensajes ni gestionar turnos.</p>
+      <details class="cithela-config-group" style="margin-top:18px;">
+        <summary>Diagnóstico de conexión Meta (avanzado) <span aria-hidden="true">⌄</span></summary>
+        <div class="form-card">
+          <p class="contact-note" style="margin-bottom:10px;">Comprobá las credenciales sin enviar ningún mensaje.</p>
+          <button class="btn-main soft" type="button" onclick="cloudCheckMetaCredentials()">Verificar conexión Meta (sin enviar)</button>
+          <p id="cloud-wa-connection-status" role="status" class="contact-note" style="margin-top:8px;"></p>
+          <button class="btn-main soft" style="margin-top:12px" type="button" onclick="cloudCheckMetaOtpTemplate()">Comprobar plantilla OTP (sin enviar)</button>
+          <p id="cloud-wa-otp-template-status" role="status" class="contact-note" style="margin-top:8px;"></p>
+        </div>
+      </details>
+
     </div>
 
     </details>
@@ -1100,9 +1120,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
     <details id="patient-enroll-panel" class="patient-shared-panel" hidden style="margin:12px 0;">
-      <summary>Vincular mi WhatsApp a esta cuenta</summary>
+      <summary>Vincular WhatsApp (opcional)</summary>
       <div style="padding:12px 0 4px;">
-        <p class="contact-note">Primero ingresaste por correo. Ahora podés verificar tu teléfono sin crear otra cuenta y sin cambiar tus turnos. Esto no modifica el número de contacto que guarda el establecimiento.</p>
+        <p class="contact-note">Verificá tu WhatsApp para acceder a esta misma cuenta sin crear otra ni perder turnos. No cambia el contacto guardado por el establecimiento.</p>
         <label class="lbl" for="patient-enroll-phone">Número de WhatsApp</label>
         <input class="inp" type="tel" id="patient-enroll-phone" placeholder="+5492211234567" autocomplete="tel" aria-describedby="patient-enroll-hint">
         <p class="contact-note" id="patient-enroll-hint">En Argentina, agregá <strong>+54 9</strong> + código de área + número, sin 0 ni 15.</p>
@@ -2603,20 +2623,20 @@ function renderPatientLoginSession(){
         ?'Invitación detectada. Tocá Continuar para acceder a tus turnos.'
         :(session.signedIn
           ?'Tu acceso ya está activo en este dispositivo.'
-          :'Ingresá tu correo para recuperar tu acceso.'));
+           :'Ingresá el correo que usaste para reservar o recibir la invitación.'));
   if(hint)hint.textContent=session.signedIn&&patientNoLinkedProfile&&!hasInvite
-    ?'Si ya tenés una ficha vinculada, tocá Cambiar de cuenta e ingresá con el correo que usaste como paciente. Si todavía no te vincularon, pedí al establecimiento una invitación personal a tu correo; pueden enviártela por WhatsApp. No se envió ningún mensaje nuevo.'
+    ?'Esta sesión no tiene turnos asociados. Usá Cambiar de cuenta si reservaste con otro correo, o pedí una invitación al establecimiento. No se envió ningún mensaje nuevo.'
     :unsupportedPhoneInvite
     ?'Solicitá al establecimiento una nueva invitación para tu correo. Puede enviarte el enlace por WhatsApp, pero la verificación se realiza por email. Esta invitación de teléfono no sirve para ingresar hasta que habilitemos OTP.'
     :targetPhone
       ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
       :(hasInvite
         ?'Verificá tu correo desde el enlace recibido. Si se abre en otra app, volvé a esta invitación desde el mismo navegador.'
-        :'Si ya ingresaste desde Mail, volvé a esa misma ventana: otro navegador puede tener una sesión distinta. Si es tu primera vez, pedí al establecimiento una invitación personal y verificá tu correo.');
+        :'¿Primera vez? Pedí una invitación al establecimiento. Si abriste un enlace desde Mail, continuá en esa misma ventana para conservar la sesión.');
   if(primary){
     primary.textContent=unsupportedPhoneInvite?'Solicitá una invitación por correo':
       session.signedIn?(patientNoLinkedProfile?'Comprobar mis turnos nuevamente':'Ver mis turnos'):
-        (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
+        (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar por correo');
     primary.disabled=Boolean(unsupportedPhoneInvite&&!session.signedIn);
   }
   if(role!=='paciente'||!session.signedIn){
@@ -3403,8 +3423,9 @@ function renderPatientPortalCards(){
           alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`
           :`<span class="tenant-card-fallback" aria-hidden="true">${escHtml(String(profile.tenant_name||'C').trim().charAt(0).toUpperCase()||'C')}</span>`}
         <div class="tenant-card-title">
+          <p class="tenant-card-eyebrow">Establecimiento donde reservás</p>
           <p class="sh tenant-business-title">${escHtml(profile.tenant_name||'Establecimiento')}</p>
-          <p class="contact-note">${escHtml(profile.name)}</p>
+          <p class="tenant-card-person">Tu ficha: ${escHtml(profile.name)}</p>
         </div>
       </div>
       <button class="btn-main patient-booking-toggle" type="button"
@@ -4121,14 +4142,18 @@ function renderAgenda(){
         ${depositLabel(appointment)?`<div class="ops-note" style="margin-top:7px;">${escHtml(depositLabel(appointment))}</div>`:''}
         <div class="aitem-foot">
           <span class="tag ${sm.cls}">${sm.label}</span>
-          <div class="aitem-actions">
+          <div class="aitem-actions agenda-card-actions">
             ${t.estado==='pendiente'&&professionalCloudWritable()?`<button class="mb confirm" onclick="cloudConfirmAppointment('${t.id}')">✓ Confirmar</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
             ${active&&waN?`<button class="mb wa" onclick="cloudOpenWhatsApp('${t.id}')">WhatsApp</button>`:''}
+            ${(Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable())||canClose||(active&&professionalCloudWritable())
+              ?`<details class="agenda-card-more">
+                <summary>Más acciones</summary><div class="agenda-card-secondary">
             ${Number(appointment?.deposit_amount_minor)>0&&professionalCloudWritable()
               ?`<button class="mb teal" type="button" onclick="cloudOpenDeposit('${t.id}')">Gestionar seña</button>`:''}
             ${canClose?`<button class="mb confirm" onclick="cloudMarkOutcome('${t.id}','attend')">Atendido</button><button class="mb ghost" onclick="cloudMarkOutcome('${t.id}','no_show')">No asistió</button>`:''}
             ${active&&professionalCloudWritable()?`<button class="mb cancel" type="button" onclick="cloudCancelAppointment('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
+                </div></details>`:''}
           </div>
         </div>
       </div>`;
@@ -4144,13 +4169,17 @@ function renderAgenda(){
       ${t.waOpenedAt&&!t.recordatorioAt?`<div class="contact-note">WhatsApp abierto ${new Date(t.waOpenedAt).toLocaleString()} · ${t.waOpenedCount||1} vez${(t.waOpenedCount||1)!==1?'es':''}. Esto no confirma envío ni lectura.</div>`:''}
       <div class="aitem-foot">
         <span class="tag ${sm.cls}">${sm.label}</span>
-        <div class="aitem-actions">
+        <div class="aitem-actions agenda-card-actions">
           ${t.estado==='pendiente'?`<button class="mb confirm" onclick="setEstado('${t.id}','confirmado')">✓ Confirmar</button>`:''}
-          ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb teal" onclick="openReprogram('${t.id}')">↻ Reprogramar</button>`:''}
           ${isOpenAppointment(t)&&waNLocal?`<button class="mb wa" onclick="openWhatsApp('${t.id}')">📲 Recordar</button>`:''}
+          ${isOpenAppointment(t)||t.estado==='pendiente'
+            ?`<details class="agenda-card-more">
+              <summary>Más acciones</summary><div class="agenda-card-secondary">
+          ${isOpenAppointment(t)&&t.fecha<=today()?`<button class="mb confirm" onclick="closeAppointment('${t.id}','atendido')">Atendido</button><button class="mb ghost" onclick="closeAppointment('${t.id}','ausente')">No asistió</button>`:''}
           ${t.estado==='pendiente'&&!t.recordatorioAt?`<button class="mb teal" onclick="markReminderSent('${t.id}')">✓ Recordado</button>`:''}
           ${isOpenAppointment(t)?`<button class="mb cancel" type="button" onclick="cancelTurno('${t.id}')" aria-label="Cancelar turno de ${escHtml(pac.nombre)}">Cancelar</button>`:''}
+              </div></details>`:''}
         </div>
       </div>
     </div>`;

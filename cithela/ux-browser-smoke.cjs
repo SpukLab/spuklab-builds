@@ -121,6 +121,70 @@ const { pathToFileURL } = require('node:url');
         assert.deepEqual(prepared.magic,[255,216,255],'compressed image must be valid JPEG');
         console.log('PASS iPhone-size photo conversion '+JSON.stringify(prepared));
       }
+      // Simulated cloud appointment, never connected to Supabase: verify the real
+      // dynamic card and disclosure, not just that its source exists.
+      const appointment=await page.evaluate(()=>{
+        selDate=today();
+        renderOpsQueue=()=>{};
+        renderAgendaHistory=()=>{};
+        professionalCloudReady=()=>true;
+        professionalCloudWritable=()=>true;
+        cloudAppointmentViews=()=>[{
+          id:'qa-turno',pacienteId:'qa-persona',fecha:selDate,hora:'09:00',
+          estado:'pendiente',servicioNombre:'Servicio de prueba',
+          duracionMin:45,resourceName:'Profesional de prueba',motivo:''
+        }];
+        cloudPersonById=()=>({nombre:'Persona de prueba',tel:'+5492210000000'});
+        cloudAppointmentRaw=()=>({
+          starts_at:new Date(Date.now()-3600000).toISOString(),
+          deposit_amount_minor:200000,deposit_status:'requested'
+        });
+        renderAgenda();
+        const card=document.querySelector('#agenda-list .agenda-card-actions');
+        return {primary:card?.querySelectorAll(':scope > button').length||0,
+          secondary:card?.querySelectorAll('.agenda-card-secondary button').length||0,
+          disclosure:card?.querySelector('details.agenda-card-more')?.open,
+          text:card?.textContent||''};
+      });
+      assert.equal(appointment.primary,3,'three primary actions at '+width);
+      assert.equal(appointment.secondary,4,'deposit, attendance, absence, cancellation at '+width);
+      assert.equal(appointment.disclosure,false,'secondary actions closed initially at '+width);
+      assert.match(appointment.text,/Confirmar[\s\S]*Reprogramar[\s\S]*WhatsApp/);
+      await page.locator('#agenda-list .agenda-card-more summary').click();
+      const expanded=await page.evaluate(()=>{
+        const menu=document.querySelector('#agenda-list .agenda-card-more');
+        const buttons=[...menu.querySelectorAll('.agenda-card-secondary button')];
+        return {open:menu?.open,visible:buttons.every(b=>b.getClientRects().length>0),
+          buttons:buttons.map(b=>b.textContent.trim()),
+          documentWidth:document.documentElement.scrollWidth};
+      });
+      assert.ok(expanded.open&&expanded.visible,'More actions do not expand at '+width);
+      for(const label of ['Gestionar seña','Atendido','No asistió','Cancelar'])
+        assert.ok(expanded.buttons.includes(label),'Missing '+label+' at '+width);
+      assert.ok(expanded.documentWidth<=width+2,'Agenda buttons overflow at '+width);
+      console.log('PASS cloud appointment actions '+width+'px');
+
+      // Patient identity is generated from two distinct, synthetic fields.
+      const patient=await page.evaluate(()=>{
+        document.getElementById('screen-medico').classList.remove('active');
+        document.getElementById('screen-patient-cloud').classList.add('active');
+        me={role:'paciente',cloud:true};
+        patientBookingState=null;patientRescheduleState=null;
+        patientPortalData={profiles:[{
+          tenant_id:'qa-tenant',person_id:'qa-persona',tenant_name:'Estudio Piloto',
+          name:'Persona de prueba',appointments:[],brand_theme:'sage'
+        }]};
+        renderPatientPortalCards();
+        return {tenant:document.querySelector('.tenant-business-title')?.textContent,
+          identity:document.querySelector('.tenant-card-person')?.textContent,
+          header:document.querySelector('.tenant-card-eyebrow')?.textContent,
+          documentWidth:document.documentElement.scrollWidth};
+      });
+      assert.equal(patient.tenant,'Estudio Piloto');
+      assert.equal(patient.identity,'Tu ficha: Persona de prueba');
+      assert.equal(patient.header,'Establecimiento donde reservás');
+      assert.ok(patient.documentWidth<=width+2,'Patient card overflow at '+width);
+      console.log('PASS patient tenant identity '+width+'px');
       // Visual snapshot for human review in Actions artifacts, without patient details.
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
