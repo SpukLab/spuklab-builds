@@ -1120,9 +1120,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
     <details id="patient-enroll-panel" class="patient-shared-panel" hidden style="margin:12px 0;">
-      <summary>Vincular mi WhatsApp a esta cuenta</summary>
+      <summary>Vincular WhatsApp (opcional)</summary>
       <div style="padding:12px 0 4px;">
-        <p class="contact-note">Primero ingresaste por correo. Ahora podés verificar tu teléfono sin crear otra cuenta y sin cambiar tus turnos. Esto no modifica el número de contacto que guarda el establecimiento.</p>
+        <p class="contact-note">Verificá tu WhatsApp para acceder a esta misma cuenta sin crear otra ni perder turnos. No cambia el contacto guardado por el establecimiento.</p>
         <label class="lbl" for="patient-enroll-phone">Número de WhatsApp</label>
         <input class="inp" type="tel" id="patient-enroll-phone" placeholder="+5492211234567" autocomplete="tel" aria-describedby="patient-enroll-hint">
         <p class="contact-note" id="patient-enroll-hint">En Argentina, agregá <strong>+54 9</strong> + código de área + número, sin 0 ni 15.</p>
@@ -2623,20 +2623,20 @@ function renderPatientLoginSession(){
         ?'Invitación detectada. Tocá Continuar para acceder a tus turnos.'
         :(session.signedIn
           ?'Tu acceso ya está activo en este dispositivo.'
-          :'Ingresá tu correo para recuperar tu acceso.'));
+           :'Ingresá el correo que usaste para reservar o recibir la invitación.'));
   if(hint)hint.textContent=session.signedIn&&patientNoLinkedProfile&&!hasInvite
-    ?'Si ya tenés una ficha vinculada, tocá Cambiar de cuenta e ingresá con el correo que usaste como paciente. Si todavía no te vincularon, pedí al establecimiento una invitación personal a tu correo; pueden enviártela por WhatsApp. No se envió ningún mensaje nuevo.'
+    ?'Esta sesión no tiene turnos asociados. Usá Cambiar de cuenta si reservaste con otro correo, o pedí una invitación al establecimiento. No se enviaron mensajes.'
     :unsupportedPhoneInvite
     ?'Solicitá al establecimiento una nueva invitación para tu correo. Puede enviarte el enlace por WhatsApp, pero la verificación se realiza por email. Esta invitación de teléfono no sirve para ingresar hasta que habilitemos OTP.'
     :targetPhone
       ?'El código llegará por WhatsApp al mismo número al que enviaron esta invitación.'
       :(hasInvite
         ?'Verificá tu correo desde el enlace recibido. Si se abre en otra app, volvé a esta invitación desde el mismo navegador.'
-        :'Si ya ingresaste desde Mail, volvé a esa misma ventana: otro navegador puede tener una sesión distinta. Si es tu primera vez, pedí al establecimiento una invitación personal y verificá tu correo.');
+        :'¿Primera vez? Pedí una invitación al establecimiento. Si abriste un enlace desde Mail, continuá en esa misma ventana para conservar la sesión.');
   if(primary){
     primary.textContent=unsupportedPhoneInvite?'Solicitá una invitación por correo':
       session.signedIn?(patientNoLinkedProfile?'Comprobar mis turnos nuevamente':'Ver mis turnos'):
-        (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar');
+        (targetPhone?(patientWhatsappOtpSent?'Reenviar código':'Enviar código por WhatsApp'):'Continuar por correo');
     primary.disabled=Boolean(unsupportedPhoneInvite&&!session.signedIn);
   }
   if(role!=='paciente'||!session.signedIn){
@@ -3423,8 +3423,9 @@ function renderPatientPortalCards(){
           alt="Logo de ${escHtml(profile.tenant_name)}" loading="lazy">`
           :`<span class="tenant-card-fallback" aria-hidden="true">${escHtml(String(profile.tenant_name||'C').trim().charAt(0).toUpperCase()||'C')}</span>`}
         <div class="tenant-card-title">
+          <p class="tenant-card-eyebrow">Establecimiento donde reservás</p>
           <p class="sh tenant-business-title">${escHtml(profile.tenant_name||'Establecimiento')}</p>
-          <p class="contact-note">${escHtml(profile.name)}</p>
+          <p class="tenant-card-person">Tu ficha: ${escHtml(profile.name)}</p>
         </div>
       </div>
       <button class="btn-main patient-booking-toggle" type="button"
