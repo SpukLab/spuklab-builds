@@ -47,7 +47,7 @@ test('service status follows day-to-day settings instead of displacing agenda co
  const settings=portion('id="p-medico-config"','<div class="byline">');
  assert.ok(settings.indexOf('id="cfg-section-hours"')<settings.indexOf('id="cithela-commercial-panel"'));
  assert.ok(settings.indexOf('id="cithela-commercial-panel"')<settings.indexOf('id="cfg-section-cloud"'));
- assert.match(settings,/Preferencias locales \(solo este dispositivo\)/);
+ assert.match(settings,/Configuración del modo local \(sin sincronización\)/);
 });
 
 test('patient access and workspace identify purpose and account without changing authorization',()=>{
