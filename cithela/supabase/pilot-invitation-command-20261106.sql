@@ -40,9 +40,6 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('cithela-invite:'||e,0));
   SELECT * INTO i FROM cithela_private.cithela_pilot_invites
     WHERE email=e FOR UPDATE;
-  IF FOUND AND i.redeemed_at IS NOT NULL AND i.revoked_at IS NULL THEN
-   RETURN jsonb_build_object('ok',false,'code','already_redeemed');
-  END IF;
   IF FOUND AND i.revoked_at IS NULL AND i.expires_at>now() THEN
    RETURN jsonb_build_object('ok',true,'code','already_invited','expires_at',i.expires_at);
   END IF;
@@ -62,8 +59,17 @@ BEGIN
   IF NOT FOUND OR i.revoked_at IS NOT NULL THEN
    RETURN jsonb_build_object('ok',false,'code','invite_not_active');
   END IF;
-  IF i.redeemed_at IS NOT NULL THEN
-   RETURN jsonb_build_object('ok',false,'code','already_redeemed');
+  IF EXISTS(SELECT 1 FROM public.cithela_tenant_memberships m
+    JOIN auth.users u ON u.id=m.user_id WHERE lower(u.email)=e) THEN
+   RETURN jsonb_build_object('ok',false,'code','workspace_exists');
+  END IF;
+  -- Invalidate a previously redeemed but unconsumed grant, too.
+  IF i.redeemed_by IS NOT NULL THEN
+   UPDATE cithela_private.cithela_onboarding_grants g
+    SET expires_at=greatest(g.approved_at + interval '1 microsecond',
+                            statement_timestamp())
+    WHERE g.user_id=i.redeemed_by AND g.reason='pilot_invite'
+     AND g.consumed_at IS NULL;
   END IF;
   UPDATE cithela_private.cithela_pilot_invites SET revoked_at=statement_timestamp()
     WHERE email=e;
@@ -90,7 +96,10 @@ BEGIN
     (user_id,terms_version,reason,approved_at,expires_at)
   VALUES(p_actor,'pilot-supervised-20261106','pilot_invite',
     statement_timestamp(),i.expires_at)
-  ON CONFLICT(user_id) DO NOTHING;
+  ON CONFLICT(user_id) DO UPDATE
+   SET approved_at=excluded.approved_at,expires_at=excluded.expires_at
+   WHERE cithela_onboarding_grants.reason='pilot_invite'
+      AND cithela_onboarding_grants.consumed_at IS NULL;
   SELECT EXISTS(SELECT 1 FROM cithela_private.cithela_onboarding_grants g
     WHERE g.user_id=p_actor AND g.consumed_at IS NULL AND g.expires_at>now())
   INTO allowed;
