@@ -46,7 +46,7 @@ test('a verified non-admin can redeem only their own server-bound invite',async(
 });
 
 test('the public endpoint rejects spoofed identities, optional invitee email and unknown actions',async()=>{
- const {opts,calls}=settings(guest);
+ const {opts,calls}=settings(admin);
  for(const [action,payload] of [
   ['redeem',{email:'other@example.com'}],
   ['redeem',{user_id:admin}],
@@ -99,6 +99,4 @@ test('professional workflow is isolated from public commercial checkout',()=>{
  assert.match(edge,/CITHELA_COMMERCIAL_ADMIN_USER_ID/);
  assert.match(edge,/auth\.getUser\(jwt\)/);
  assert.doesNotMatch(panel+signup,/SUPABASE_SERVICE_ROLE_KEY|CITHELA_MP_TEST_ACCESS_TOKEN/);
- assert.doesNotMatch(sqlString(),/foo-never-exists/);
- function sqlString(){return panel+signup}
 });
