@@ -10,9 +10,9 @@ export async function handlePilotInvitations(req,ctx){
  if(req.method!=='POST')return result('method_not_allowed',405);
  if(req.headers.get('origin')!==origin)return result('origin_denied',403);
  if(!ctx.enabled || !UUID.test(ctx.adminId||''))return result('not_enabled',503);
- const match=/^Bearer\\s+([^\\s]+)$/i.exec(req.headers.get('authorization')||'');
+ const match=/^Bearer\s+([^\s]+)$/i.exec(req.headers.get('authorization')||'');
  if(!match)return result('unauthenticated',401);
- const user=await ctx.resolveUser(match[1]);
+ let user;try{user=await ctx.resolveUser(match[1])}catch{return result('auth_unavailable',503)}
  if(!user||!UUID.test(user.id))return result('unauthenticated',401);
  if(!user.emailConfirmed)return result('email_unverified',403);
  let body;try{const raw=await req.text();if(raw.length>1024)return result('too_large',413);body=JSON.parse(raw)}
@@ -31,7 +31,7 @@ export async function handlePilotInvitations(req,ctx){
     return result('invalid_email');
  }else if(keys.length!==0)return result('unexpected_fields');
  const email=typeof body.payload.email==='string'?body.payload.email.trim().toLowerCase():null;
- if(email&&(email.length>254||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)))
+ if(email&&(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))
    return result('invalid_email');
  try{
   const out=await ctx.execute(user.id,action,email);
