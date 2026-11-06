@@ -97,6 +97,15 @@ test('professional workflow is isolated from public commercial checkout',()=>{
  assert.match(signup,/alta-profesional\.html/);
  assert.match(signup,/pilotTenant=1/);
  assert.match(edge,/CITHELA_COMMERCIAL_ADMIN_USER_ID/);
+ assert.match(edge,/CITHELA_PILOT_INVITES_ENABLED/);
  assert.match(edge,/auth\.getUser\(jwt\)/);
  assert.doesNotMatch(panel+signup,/SUPABASE_SERVICE_ROLE_KEY|CITHELA_MP_TEST_ACCESS_TOKEN/);
+});
+test('mobile page scripts have valid JavaScript syntax',()=>{
+ for(const file of ['invitar-profesionales.html','alta-profesional.html']){
+  const html=readFileSync(new URL('./'+file,import.meta.url),'utf8');
+  const source=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(source,'inline script exists');
+  assert.doesNotThrow(()=>new Function(source));
+ }
 });
