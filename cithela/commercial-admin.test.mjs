@@ -125,3 +125,17 @@ test('admin frontend is an optional restricted tool and does not expose credenti
  assert.match(edge,/verify JWT|auth\.getUser\(jwt\)/);
  assert.doesNotMatch(edge,/api\.mercadopago\.com|service_role\s*:/i);
 });
+
+test('admin console disables actions for protected pilots and confirms every write',()=>{
+ const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ assert.match(html,/function syncGrantButtons\(\)/);
+ assert.match(html,/\['trialing','payment_pending','past_due','canceled'\]\.includes\(tenant\.status\)/);
+ assert.match(html,/\$\('tenant-select'\)\.addEventListener\('change',syncGrantButtons\)/);
+ assert.match(html,/\$\('grant-free'\)\.disabled=!eligible/);
+ assert.match(html,/\$\('revoke-free'\)\.disabled=!tenant\?\.has_unrevoked_grant/);
+ assert.match(html,/¿Agregar la tarifa borrador/);
+ assert.match(html,/¿Guardar estos plazos de revisión\?/);
+ assert.match(html,/¿Seleccionar este precio/);
+ assert.match(html,/¿Otorgar acceso sin cargo/);
+ assert.match(html,/¿Revocar la cortesía/);
+});
