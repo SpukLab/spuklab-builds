@@ -38,3 +38,12 @@
 ## Manual para administración (cuando esté aprobada)
 
 En CITHELA iniciá sesión como administrador de SpukLab → `comercial-admin.html` → **Invitar profesional al piloto** → correo → **Autorizar invitación** → **Compartir por WhatsApp**. La persona debe usar ese mismo correo, confirmarlo y seguir las instrucciones de alta. Si necesita más tiempo, se revisa acceso mediante la cortesía ya existente tras crear su agenda; no se altera fecha de prueba desde un parámetro de URL.
+
+
+## Actualización de la revisión — 07/11/2026
+
+- SMTP de Gmail para el proyecto CITHELA: prueba real de solicitud y recepción de recuperación, enlace y actualización de contraseña **PASS** en Safari, según ensayo del propietario. Unos mensajes llegaron a Spam; la entregabilidad sigue siendo un riesgo del piloto. No equivale todavía a confirmar un nuevo correo profesional mediante la URL de alta.
+- La base actual contiene 2 establecimientos legacy, 0 permisos de onboarding, 0 cortesías, 0 intents de suscripción y 0 precios publicados. No se alteran mediante esta PR.
+- Para permitir pruebas reales sin abrir invitaciones externas se admite **despliegue técnico por etapas**: fusionar únicamente después de CI, aplicar tabla/RPC versionadas y desplegar Edge con `verify_jwt=true` mientras `CITHELA_PILOT_INVITES_ENABLED` esté ausente o en `false`. En ese estado, todas las operaciones devuelven `not_enabled`; no son posibles invitaciones ni redenciones. No marcar este estado como «listo para invitar».
+- Antes de habilitar, configurar manualmente en Supabase Auth la URL exacta `https://spuklab.github.io/spuklab-builds/cithela/alta-profesional.html` en **Redirect URLs**, comprobar la plantilla de confirmación y ejecutar prueba en Safari con una cuenta nueva e invitación controlada. El flag se activa sólo para esa validación supervisada, **no** para comercialización pública.
+- Los cobros siguen separados: la infraestructura de Mercado Pago instalada actualmente es de prueba; no hay suscripción comercial activa, producto publicado ni conciliación de producción. No mezclar una cortesía con un pago verificado.
