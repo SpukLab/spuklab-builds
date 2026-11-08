@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {handlePilotInvitations} from './commercial/pilot-invitations-handler.mjs';
 
 const admin='11111111-1111-4111-8111-111111111111';
@@ -108,4 +109,65 @@ test('mobile page scripts have valid JavaScript syntax',()=>{
   assert.ok(source,'inline script exists');
   assert.doesNotThrow(()=>new Function(source));
  }
+});
+
+
+function browserInvitationPanel(result={ok:true,invites:[]}){
+ const page=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
+ const script=page.split('<script>')[1]?.split('</script>')[0];
+ assert.ok(script,'inline panel script');
+ const nodes=new Map();
+ const element=id=>{
+  if(!nodes.has(id)){
+   nodes.set(id,{id,hidden:false,textContent:'',value:'',
+    addEventListener(){},replaceChildren(...items){this.items=items;}});
+  }
+  return nodes.get(id);
+ };
+ const context=vm.createContext({
+  URL,console,document:{getElementById:element,createElement:tag=>({
+   tagName:tag,textContent:'',style:{},
+   append(){},addEventListener(){},
+   set className(v){this._className=v;}
+  })},
+  window:{},navigator:{},confirm:()=>false
+ });
+ // This library method runs in the same browser global environment as the page.
+ // Regressions that shadow the standard URL constructor must fail the test.
+ vm.runInContext([
+  'window.supabase={',
+  ' createClient: address=>{',
+  '  new URL(address);',
+  '  return {',
+  '   auth:{getSession:async()=>({data:{session:{user:{id:"test-admin"}}},error:null})},',
+  '   functions:{invoke:async()=>({data:globalThis.__mockResult,error:null})}',
+  '  };',
+  ' }',
+  '};'
+ ].join(' '),context);
+ context.__mockResult=result;
+ const marker='start();';
+ const at=script.lastIndexOf(marker);
+ assert.ok(at>=0,'initial startup invocation exists');
+ const startScript=script.slice(0,at)+'globalThis.__startup=start();'+script.slice(at+marker.length);
+ vm.runInContext(startScript,context);
+ return {context,nodes,element};
+}
+
+test('Safari invite page does not shadow global URL and initializes authenticated session',async()=>{
+ const html=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
+ assert.ok(!html.includes('const URL='),'native URL constructor cannot be shadowed');
+ const page=browserInvitationPanel();
+ await page.context.__startup;
+ assert.equal(page.element('gate').hidden,true);
+ assert.equal(page.element('content').hidden,false);
+ assert.equal(page.element('items').items.length,0);
+});
+
+test('invitation backend gate is explained without suggesting password recovery',async()=>{
+ const page=browserInvitationPanel({ok:false,code:'not_enabled'});
+ await page.context.__startup;
+ assert.equal(page.element('gate').hidden,false);
+ assert.match(page.element('gate-msg').textContent,/aún no está habilitado/);
+ assert.doesNotMatch(page.element('gate-msg').textContent,/contraseña/);
 });
