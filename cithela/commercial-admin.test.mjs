@@ -169,3 +169,17 @@ test('courtesy panel only enables actions for selected tenant and explains prote
  assert.equal(apply('paid').grant,true);
  assert.equal(apply('paid').revoke,true);
 });
+
+test('commercial panel explains grace period timing and does not confuse draft prices with per-client billing',()=>{
+ const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ const invites=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
+ assert.match(html,/Motivo de la cortesía/);
+ assert.match(html,/La cortesía comienza al pulsar Otorgar/);
+ assert.match(html,/no después de la prueba de 7 días/);
+ assert.match(html,/Los precios especiales para un cliente requieren un acuerdo individual/);
+ assert.match(html,/Esta tarifa es general, no específica por establecimiento/);
+ assert.match(invites,/Una vez aceptada, el profesional obtiene una prueba inicial de 7 días/);
+ assert.match(invites,/Después de que cree su establecimiento/);
+ assert.match(invites,/Centro comercial/);
+ assert.doesNotMatch(invites,/CITHELA_MP_TEST_ACCESS_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
+});
