@@ -69,8 +69,10 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    <p class="eyebrow">02 / CORTESÍAS E INVITACIONES</p>
    <h2 id="grants-title">Clientes sin cargo</h2>
    <p>Habilitá gratuitamente a un profesional que ya tenga una cuenta comercial autorizada. Los pilotos existentes conservan su acceso sin necesidad de cortesía.</p>
+   <p class="muted">Esta sección <strong>no envía invitaciones</strong> ni crea cuentas nuevas. Para invitar a alguien al piloto, usá <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
    <label for="tenant-select">Establecimiento</label>
    <select id="tenant-select"></select>
+   <p id="courtesy-state" class="muted" role="status" aria-live="polite">Consultando estado del establecimiento…</p>
    <label for="free-duration">Duración de la cortesía</label>
    <select id="free-duration">
     <option value="30">30 días</option><option value="90">90 días</option>
@@ -82,6 +84,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
     <button type="button" id="grant-free">Otorgar cortesía</button>
     <button class="alert" type="button" id="revoke-free">Revocar cortesía</button>
    </div>
+   <p class="message" id="courtesy-message" role="status" aria-live="polite"></p>
    <p class="hint">La revocación tiene efecto sobre las nuevas reservas. Los turnos y datos existentes no se borran.</p>
   </section>
   <section class="card wide" aria-labelledby="retention-title">
@@ -118,6 +121,33 @@ const $=id=>document.getElementById(id);
 let supa=null,last=null,busy=false;
 const money=value=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value)/100);
 const tell=msg=>{$('message').textContent=msg};
+const courtesyTell=msg=>{tell(msg);$('courtesy-message').textContent=msg;};
+function updateCourtesyState(){
+ const selected=last?.tenants?.find(t=>t.id===$('tenant-select').value);
+ const state=$('courtesy-state');
+ const grant=$('grant-free'),revoke=$('revoke-free');
+ if(!selected){
+  state.textContent='No hay establecimientos disponibles.';
+  grant.disabled=true;revoke.disabled=true;return;
+ }
+ const disallowed=['legacy','active','suspended'].includes(selected.status);
+ const hasGrant=selected.has_unrevoked_grant===true;
+ grant.disabled=disallowed||hasGrant;
+ revoke.disabled=!hasGrant;
+ if(selected.status==='legacy'){
+  state.textContent='Piloto protegido: ya tiene acceso. No necesita cortesía y no se modifica desde estos controles.';
+ }else if(selected.status==='active'){
+  state.textContent='Suscripción activa: no corresponde otorgar una cortesía desde este panel.';
+ }else if(selected.status==='suspended'){
+  state.textContent='Servicio suspendido: revisá su situación antes de intentar cambios de acceso.';
+ }else if(hasGrant){
+  state.textContent='Ya existe una cortesía registrada para este establecimiento. Podés revocarla si corresponde.';
+ }else if(selected.status==='trialing'){
+  state.textContent='Prueba gratuita activa: la cortesía solo es necesaria si querés extender el acceso sin cargo.';
+ }else{
+  state.textContent='Este establecimiento puede recibir una cortesía. Se solicitará confirmación antes de habilitarla.';
+ }
+}
 const gate=msg=>{$('gate-message').textContent=msg;$('console').hidden=true;$('gate').hidden=false};
 function selectOptions(id,items){
  const el=$(id);
@@ -140,10 +170,10 @@ function show(snapshot){
   value:t.id,
   label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status)
  }));
+ const previousTenant=$('tenant-select').value;
  selectOptions('tenant-select',tenantOptions);
- const eligible=(snapshot.tenants||[]).some(t=>!['legacy','active','suspended'].includes(t.status));
- $('grant-free').disabled=!eligible;
- $('revoke-free').disabled=tenantOptions.length===0;
+ if(tenantOptions.some(t=>t.value===previousTenant))$('tenant-select').value=previousTenant;
+ updateCourtesyState();
  $('retention-notice').value=snapshot.retention?.review_after_days??30;
  $('retention-review').value=snapshot.retention?.purge_review_after_days??90;
  const names=new Map((snapshot.tenants||[]).map(t=>[t.id,t.name]));
@@ -179,13 +209,16 @@ async function reload(){
 async function action(name,payload,askConfirm){
  if(busy)return;
  if(askConfirm&&!window.confirm(askConfirm))return;
- busy=true;tell('Verificando cambios...');
+ busy=true;
+ const isCourtesy=name==='grant_free'||name==='revoke_free';
+ (isCourtesy?courtesyTell:tell)('Procesando solicitud… No repitas la operación.');
  try{
   const res=await call(name,payload);
   busy=false;await reload();
-  tell('Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
- }catch(e){tell(e.message)}finally{busy=false}
+  (isCourtesy?courtesyTell:tell)('Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
+ }catch(e){(isCourtesy?courtesyTell:tell)(e.message)}finally{busy=false}
 }
+$('tenant-select').addEventListener('change',()=>{updateCourtesyState();$('courtesy-message').textContent='';});
 $('retry').addEventListener('click',reload);
 $('reload').addEventListener('click',reload);
 $('select-price').addEventListener('click',()=>{
@@ -205,8 +238,10 @@ $('grant-free').addEventListener('click',()=>{
  const reason=$('free-reason').value.trim();
  const selected=last?.tenants?.find(t=>t.id===tenant);
  if(!tenant||!selected||['legacy','active','suspended'].includes(selected.status)){
-  tell('Seleccioná una cuenta comercial elegible.');return;
+  courtesyTell('Este establecimiento no admite una cortesía. Elegí una cuenta comercial elegible.');return;
  }
+ if(selected.has_unrevoked_grant){courtesyTell('Ya existe una cortesía registrada para este establecimiento.');return;}
+ if(!reason){courtesyTell('Indicá el motivo antes de otorgar la cortesía.');return;}
  const expiry=days==='unlimited'?null:new Date(Date.now()+Number(days)*86400000).toISOString();
  action('grant_free',{tenant_id:tenant,reason,expires_at:expiry},
   '¿Otorgar acceso sin cargo a '+selected.name+'? Esta acción habilita nuevas reservas.');
@@ -214,7 +249,7 @@ $('grant-free').addEventListener('click',()=>{
 $('revoke-free').addEventListener('click',()=>{
  const tenant=$('tenant-select').value;
  const selected=last?.tenants?.find(t=>t.id===tenant);
- if(!selected?.has_unrevoked_grant){tell('Este establecimiento no tiene una cortesía pendiente de revocación.');return;}
+ if(!selected?.has_unrevoked_grant){courtesyTell('Este establecimiento no tiene una cortesía que se pueda revocar.');return;}
  action('revoke_free',{tenant_id:tenant},'¿Revocar la cortesía de '+selected.name+'? Podría detener sus nuevas reservas.');
 });
 $('save-retention').addEventListener('click',()=>{
