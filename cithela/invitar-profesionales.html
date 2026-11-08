@@ -64,7 +64,7 @@ td,th{text-align:left;border-bottom:1px solid var(--edge);padding:10px 6px;overf
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script>
 'use strict';
-const URL='https://mcqknmqhtmihegmifuka.supabase.co';
+const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const LINK='https://spuklab.github.io/spuklab-builds/cithela/alta-profesional.html';
 const $=id=>document.getElementById(id);
@@ -75,8 +75,18 @@ function notice(msg){$('msg').textContent=msg}
 async function invoke(action,payload={}){
  if(!client)throw Error('Sin sesión');
  const {data,error}=await client.functions.invoke('cithela-pilot-invitations',{body:{action,payload}});
- if(error)throw Error('Servicio de invitaciones no habilitado o no disponible.');
- if(!data?.ok)throw Error('Operación rechazada: '+(data?.code||'sin detalle'));
+ if(error)throw Error('No se pudo contactar el servicio de invitaciones. Revisá la conexión o consultá su disponibilidad.');
+ if(!data?.ok){
+  const messages={
+   not_enabled:'El módulo de invitaciones aún no está habilitado para la administración.',
+   not_admin:'Esta sesión no tiene autorización comercial para emitir invitaciones.',
+   email_unverified:'Es necesario verificar el correo de la cuenta administradora.',
+   unauthenticated:'Tu sesión venció. Ingresá nuevamente a CITHELA.',
+   auth_unavailable:'No se pudo consultar la autenticación. Volvé a intentar.',
+   origin_denied:'La página de invitaciones se abrió desde una dirección no autorizada.'
+  };
+  throw Error(messages[data?.code]||'Operación rechazada: '+(data?.code||'sin detalle'));
+ }
  return data;
 }
 async function refresh(){
@@ -132,12 +142,28 @@ $('refresh').addEventListener('click',refresh);
 $('retry').addEventListener('click',start);
 async function start(){
  try{
-  if(!window.supabase?.createClient){gate('No se cargó Supabase.');return}
-  client=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-  const {data:{session}}=await client.auth.getSession();
-  if(!session){gate('Ingresá con tu cuenta administradora en CITHELA y volvé a esta página.');return}
+  if(!window.supabase?.createClient){
+   gate('No se cargó la biblioteca de acceso seguro. Volvé a cargar la página.');
+   return;
+  }
+  client=window.supabase.createClient(SUPABASE_URL,KEY,{
+   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+  });
+  const {data,error}=await client.auth.getSession();
+  if(error){
+   gate('No se pudo recuperar la sesión de CITHELA. Revisá el acceso profesional e intentá nuevamente.');
+   return;
+  }
+  if(!data?.session){
+   gate('No hay sesión de CITHELA en este navegador. Ingresá como profesional y regresá a Invitaciones.');
+   return;
+  }
   await refresh();
- }catch{gate('No se pudo validar la cuenta administradora.')}
+ }catch(err){
+  // Keep details such as tokens, credentials and internal URLs off the public UI.
+  console.error('CITHELA invitation initialization failed:',err?.name||'Error');
+  gate('El panel no pudo iniciar. Comprobá que Safari permita almacenamiento del sitio y recargá. Si persiste, reportá este mensaje.');
+ }
 }
 start();
 </script></body></html>
