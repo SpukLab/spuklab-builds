@@ -52,11 +52,11 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <section class="card" aria-labelledby="price-title">
    <p class="eyebrow">01 / VALORES COMERCIALES</p>
    <h2 id="price-title">Selector de tarifas</h2>
-   <p>Elegí una referencia vigente para futuras contrataciones. Los importes existentes son borradores, no precios publicados.</p>
+   <p>Elegí una tarifa general de referencia para futuras contrataciones. Los importes existentes son borradores: todavía no se publican ni cobran. Los precios especiales para un cliente requieren un acuerdo individual que aún no está habilitado.</p>
    <label for="price-select">Tarifa que queremos seleccionar</label>
    <select id="price-select"></select>
    <div class="actions"><button type="button" id="select-price">Guardar selección</button></div>
-   <p class="hint">La selección es interna. No cambia cuotas actuales, no publica una oferta y no actualiza el precio del token de pruebas.</p>
+   <p class="hint">Esta tarifa es general, no específica por establecimiento. No modifica las cuotas de los clientes, no publica ofertas ni cambia el precio de prueba de Mercado Pago.</p>
    <form id="new-price">
     <label for="new-label">Nombre de referencia</label>
     <input id="new-label" type="text" maxlength="70" placeholder="Ej. CITHELA mensual" required>
@@ -78,8 +78,9 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
     <option value="30">30 días</option><option value="90">90 días</option>
     <option value="365">1 año</option><option value="unlimited">Sin vencimiento</option>
    </select>
-   <label for="free-reason">Motivo de la invitación</label>
-   <textarea id="free-reason" maxlength="240" placeholder="Ej. Cliente invitado para demostración" required></textarea>
+   <p class="hint" id="courtesy-timing">La cortesía comienza al pulsar Otorgar. Los días se cuentan desde ese momento, no después de la prueba de 7 días. Si querés 30 días adicionales a la prueba, otorgala al terminar la prueba.</p>
+   <label for="free-reason">Motivo de la cortesía</label>
+   <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required></textarea>
    <div class="actions">
     <button type="button" id="grant-free">Otorgar cortesía</button>
     <button class="alert" type="button" id="revoke-free">Revocar cortesía</button>
@@ -143,7 +144,7 @@ function updateCourtesyState(){
  }else if(hasGrant){
   state.textContent='Ya existe una cortesía registrada para este establecimiento. Podés revocarla si corresponde.';
  }else if(selected.status==='trialing'){
-  state.textContent='Prueba gratuita activa: la cortesía solo es necesaria si querés extender el acceso sin cargo.';
+  state.textContent='Prueba gratuita activa. Podés dar una cortesía ahora, pero los 30 días comienzan al otorgarla y se superponen con la prueba; no se suman automáticamente.';
  }else{
   state.textContent='Este establecimiento puede recibir una cortesía. Se solicitará confirmación antes de habilitarla.';
  }
@@ -174,6 +175,11 @@ function show(snapshot){
  selectOptions('tenant-select',tenantOptions);
  if(tenantOptions.some(t=>t.value===previousTenant))$('tenant-select').value=previousTenant;
  updateCourtesyState();
+ const courtesy=$('courtesy-message');
+ const currentTenant=snapshot.tenants?.find(t=>t.id===$('tenant-select').value);
+ if(currentTenant?.complimentary && currentTenant.complimentary_until){
+  courtesy.textContent='Cortesía activa hasta '+new Date(currentTenant.complimentary_until).toLocaleDateString('es-AR')+'.';
+ }
  $('retention-notice').value=snapshot.retention?.review_after_days??30;
  $('retention-review').value=snapshot.retention?.purge_review_after_days??90;
  const names=new Map((snapshot.tenants||[]).map(t=>[t.id,t.name]));
