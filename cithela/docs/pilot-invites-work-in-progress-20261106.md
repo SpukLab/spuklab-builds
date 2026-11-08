@@ -1,3 +1,5 @@
+> **Estado actualizado al 08/11/2026:** las PR #127 y #128 están integradas, la primera invitación fue canjeada y Alma y Pampa completó el alta con trial de 7 días. Para los resultados verificables actuales y el ensayo de pacientes/cobros, consultar [pilot-live-acceptance-20261108.md](./pilot-live-acceptance-20261108.md). Lo siguiente conserva el histórico de planificación del 06–07/11.
+
 # CITHELA · Alta supervisada de profesionales — 06/11/2026
 
 **Estado: PR #127 en borrador. No fusionado ni desplegado. No enviar invitaciones externas todavía.**
