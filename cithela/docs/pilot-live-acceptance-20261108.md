@@ -29,7 +29,7 @@ Las políticas para `cithela_people`, `cithela_appointments`, `cithela_services`
 
 **Pendiente:** probar A/B con tokens reales y Safari, OTP WhatsApp y todas las rutas de RPC de reserva, no solo permisos de lectura.
 
-## 3. Próximo ensayo funcional: paciente nuevo de Alma y Pampa
+## 3. Primer ensayo funcional: paciente de Alma y Pampa — PASS parcial (08/11)
 
 Sin datos sensibles ni pagos:
 1. Abrir sesión del **profesional** Alma y Pampa → **Pacientes → Agregar persona**. Crear una ficha de prueba con nombre ficticio y un teléfono/correo de prueba que se pueda verificar.
@@ -39,7 +39,11 @@ Sin datos sensibles ni pagos:
 5. En una sesión de los otros establecimientos, verificar que no aparezcan la nueva persona ni sus reservas. Repetir acceso desde Safari iPhone/iPad.
 6. Registrar resultado `PASS/FAIL` y hora de la prueba. No incluir nombres, teléfonos, códigos OTP ni capturas con datos personales en GitHub.
 
-**Criterio de aceptación:** paciente vinculado únicamente a Alma y Pampa; alta y gestión de reserva coinciden en ambos perfiles; agenda de otros tenants sin cambios; sin errores de navegación/OTP.
+**Resultado real informado por el titular (08/11):** se agregó una persona en Alma y Pampa, reservó un turno desde paciente y se actualizó en agenda profesional. Lectura adicional posterior en Supabase: **1 paciente, 1 turno confirmado** para ese tenant; los tres establecimientos siguen independientes y las pruebas RLS A/B/C arrojan cero registros cruzados. No registrar nombre, email ni teléfono del paciente en GitHub.
+
+**Estado:** PASS para alta paciente, reserva y confirmación/sincronización. AÚN PENDIENTE probar cancelación/reprogramación de ese paciente, OTP y RPC de escritura desde dos sesiones y el manejo de turnos al vencer el trial. Esos pasos no deben darse por aprobados solo por el conteo SQL.
+
+**Criterio de aceptación restante:** cancelación o reprogramación autorizada reflejada en ambas vistas y ninguna operación visible en otros tenants. No generar otro turno si el usuario ya validó el principal.
 
 ## 4. Mercado Pago: qué existe y qué falta
 
@@ -67,3 +71,18 @@ Mercado Pago documenta planes recurrentes sin programación: https://www.mercado
 | Web comercial | PR #21 en borrador | Revisar Safari/capturas auténticas antes de publicar en producción |
 
 **Regla:** mantener invitación supervisada; no abrir registro público ni cobrar automáticamente hasta pasar el circuito de pago y cancelación. Ninguna prueba de esta auditoría modificó reservas, datos personales, entitlements, precios o secretos.
+
+## 6. Ensayo de Mercado Pago de bajo riesgo — plan aprobado 08/11
+
+Estado 08/11 read-only: `cithela_private.cithela_mp_subscription_intents`=0, `cithela_private.cithela_mp_webhook_inbox`=1 (simulada), 0 tarifas publicadas, 0 entitlements de pago `active`. Permanecen separadas las invitaciones, la prueba y las cuentas legacy.
+
+**Vía preferente para verificar credenciales:** entrada profesional `https://spuklab.github.io/spuklab-builds/cithela/?mpTest=1` → **Ajustes / Configuración → Estado del servicio → Comprobar Mercado Pago de prueba**. La función `cithela-mp-test-connection` valida acceso owner/admin y realiza GET autenticado a la API MP usando un secreto almacenado en servidor; devuelve un código reducido, **no crea suscripción ni realiza cargos**. Registrar `PASS/FAIL` según el resultado visible, sin solicitar credenciales al usuario por chat.
+
+**Vía alternativa de exploración sin código:** Mercado Pago web → Planes de suscripción → Crear nuevo plan. En cuenta comercial real, **crear/compartir enlaces puede habilitar cobros auténticos**: limitarse a examinar formulario, precios, opciones y cancelar sin completar publicación, envío o checkout hasta autorizar condiciones. Mercado Pago permite planes mensuales y prueba gratis configurable. Dado que CITHELA ya tiene 7 días gratis internos, **no duplicar una segunda prueba gratis en Mercado Pago**, y no establecer débito automático sin consentimiento expreso. Consultar tarifas y facturación fiscal antes de venta.
+
+**Separación imprescindible:** un plan sin programación de Mercado Pago no enlaza automáticamente `tenant_id`, periodos abonados y entitlements de CITHELA. La integración API de suscripciones es la meta para autoservicio, pero el receptor actual solo archiva webhooks firmados de **prueba** y jamás habilita un plan por sí solo. No usar pantallazo/redirección como prueba de pago. La PR #104 permanece en borrador.
+
+Fuentes públicas comprobadas:
+- https://www.mercadopago.com.ar/developers/es/docs/subscription-plans/create-subscription-plan
+- https://www.mercadopago.com.ar/developers/es/docs/subscriptions/overview
+- https://www.mercadopago.com.ar/developers/es/docs/subscriptions/integration-test/payment-approval
