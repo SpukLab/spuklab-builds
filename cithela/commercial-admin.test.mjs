@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {handleCithelaCommercialAdmin} from './commercial/commercial-admin-handler.mjs';
 
 const admin='11111111-1111-4111-8111-111111111111';
@@ -124,4 +125,47 @@ test('admin frontend is an optional restricted tool and does not expose credenti
  assert.match(edge,/CITHELA_COMMERCIAL_CONSOLE_ENABLED/);
  assert.match(edge,/verify JWT|auth\.getUser\(jwt\)/);
  assert.doesNotMatch(edge,/api\.mercadopago\.com|service_role\s*:/i);
+});
+
+test('courtesy panel only enables actions for selected tenant and explains protected pilots',()=>{
+ const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ assert.match(html,/Esta sección <strong>no envía invitaciones<\/strong>/);
+ assert.match(html,/id="courtesy-state"/);
+ assert.match(html,/id="courtesy-message"/);
+ assert.match(html,/\$\('tenant-select'\)\.addEventListener\('change'/);
+ assert.match(html,/selectOptions\('tenant-select',tenantOptions\);[\s\S]{0,200}updateCourtesyState\(\)/);
+ const start=html.indexOf('function updateCourtesyState(){');
+ const stop=html.indexOf("const gate=",start);
+ assert.ok(start>0&&stop>start,'must expose tenant-specific courtesy state');
+ const code=html.slice(start,stop);
+ const elements={
+  'tenant-select':{value:'legacy'},
+  'courtesy-state':{textContent:''},
+  'grant-free':{disabled:false},
+  'revoke-free':{disabled:false}
+ };
+ const context={
+  $:id=>elements[id],
+  last:{tenants:[
+   {id:'legacy',status:'legacy',has_unrevoked_grant:false},
+   {id:'trial',status:'trialing',has_unrevoked_grant:false},
+   {id:'courtesy',status:'trialing',has_unrevoked_grant:true},
+   {id:'paid',status:'active',has_unrevoked_grant:false}
+  ]}
+ };
+ runInNewContext(code,context);
+ const apply=id=>{
+  elements['tenant-select'].value=id;
+  runInNewContext('updateCourtesyState()',context);
+  return {grant:elements['grant-free'].disabled,revoke:elements['revoke-free'].disabled,
+   message:elements['courtesy-state'].textContent};
+ };
+ assert.deepEqual(apply('legacy'),{grant:true,revoke:true,
+  message:'Piloto protegido: ya tiene acceso. No necesita cortesía y no se modifica desde estos controles.'});
+ assert.equal(apply('trial').grant,false);
+ assert.equal(apply('trial').revoke,true);
+ assert.equal(apply('courtesy').grant,true);
+ assert.equal(apply('courtesy').revoke,false);
+ assert.equal(apply('paid').grant,true);
+ assert.equal(apply('paid').revoke,true);
 });
