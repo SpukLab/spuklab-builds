@@ -1,9 +1,11 @@
-// CITHELA: authenticated, owner-only, READ-ONLY Mercado Pago credential probe.
+// CITHELA: platform-admin-only, READ-ONLY Mercado Pago credential probe.
+// No professional/tenant credentials can request infrastructure diagnostics.
 // No checkout, subscriptions, payment writes, webhook subscription, or token output.
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
 import {checkMercadoPagoTestConnection} from "./connection.mjs";
 
 const ORIGIN="https://spuklab.github.io";
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CORS={"Access-Control-Allow-Origin":ORIGIN,"Access-Control-Allow-Methods":"POST, OPTIONS",
   "Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info","Vary":"Origin"};
 function respond(code:string,status=200) {
@@ -27,18 +29,17 @@ Deno.serve(async (req:Request)=>{
   if(!bearer)return respond("unauthenticated",401);
   const url=Deno.env.get("SUPABASE_URL");
   const key=serverKey();
-  if(!url||!key)return respond("server_unavailable",503);
+  const adminId=Deno.env.get("CITHELA_COMMERCIAL_ADMIN_USER_ID")?.trim()||"";
+  const enabled=Deno.env.get("CITHELA_COMMERCIAL_CONSOLE_ENABLED")==="true";
+  if(!url||!key||!enabled||!UUID.test(adminId))return respond("server_unavailable",503);
   try{
     const admin=createClient(url,key,{auth:{
       persistSession:false,autoRefreshToken:false,detectSessionInUrl:false
     }});
     const {data:{user},error}=await admin.auth.getUser(bearer);
     if(error||!user?.id)return respond("unauthenticated",401);
-    const {data:membership,error:membershipError}=await admin
-      .from("cithela_tenant_memberships").select("tenant_id")
-      .eq("user_id",user.id).in("role",["owner","admin"]).limit(1);
-    if(membershipError)return respond("server_unavailable",503);
-    if(!membership?.length)return respond("forbidden",403);
+    if(!user.email_confirmed_at||user.id.toLowerCase()!==adminId.toLowerCase())
+      return respond("forbidden",403);
     const testToken=Deno.env.get("CITHELA_MP_TEST_ACCESS_TOKEN")?.trim();
     const result=await checkMercadoPagoTestConnection(testToken);
     return respond(result.code,result.ok?200:result.code==="test_token_missing_or_invalid_format"?503:502);

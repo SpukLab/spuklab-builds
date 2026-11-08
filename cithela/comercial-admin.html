@@ -98,6 +98,14 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    <div class="scroll"><table><thead><tr><th>Establecimiento</th><th>Días vencidos</th><th>Estado</th><th>Turnos históricos</th></tr></thead><tbody id="retention-list"></tbody></table></div>
    <p class="muted" id="retention-empty">No hay agendas vencidas pendientes de revisión.</p>
   </section>
+  <section class="card wide" aria-labelledby="mp-diagnostics-title">
+   <p class="eyebrow">04 / INTEGRACIONES · CONTROL INTERNO</p>
+   <h2 id="mp-diagnostics-title">Mercado Pago · Diagnóstico</h2>
+   <p>Solo para la administración de SpukLab. Comprueba la conectividad de lectura con las credenciales de prueba; no crea pagos, suscripciones ni habilita establecimientos.</p>
+   <div class="actions"><button class="secondary" type="button" id="mp-test-check">Comprobar conexión de prueba</button></div>
+   <p class="message" id="mp-test-status" role="status" aria-live="polite">Todavía no se ejecutó ninguna comprobación en esta sesión.</p>
+   <p class="muted">Los profesionales solo ven el estado de su servicio. Las contrataciones y renovaciones se habilitarán cuando el proceso de cobro y conciliación esté validado.</p>
+  </section>
  </div></div>
 </main>
 <footer class="wrap">CITHELA · SpukLab · Control interno sin acceso público ni operaciones de cobro.</footer>
@@ -212,6 +220,34 @@ $('revoke-free').addEventListener('click',()=>{
 $('save-retention').addEventListener('click',()=>{
  action('set_retention',{review_days:Number($('retention-notice').value),
   purge_review_days:Number($('retention-review').value)});
+});
+$('mp-test-check').addEventListener('click',async()=>{
+ if(busy||!supa||$('console').hidden)return;
+ const button=$('mp-test-check'),status=$('mp-test-status');
+ button.disabled=true;status.textContent='Verificando conexión de solo lectura…';
+ try{
+  const {data,error}=await supa.functions.invoke('cithela-mp-test-connection',
+   {body:{mode:'read-only'}});
+  const descriptions={
+   test_api_connected:'Conexión verificada. Mercado Pago aceptó la credencial de prueba. No se creó ningún pago.',
+   test_token_missing_or_invalid_format:'No se encontró una credencial de prueba válida en Supabase.',
+   credential_rejected:'Mercado Pago rechazó la credencial de prueba.',
+   subscription_permission_denied:'La credencial no tiene permiso para consultar suscripciones.',
+   provider_rate_limited:'Mercado Pago limitó temporalmente las consultas.',
+   provider_unavailable:'El proveedor no respondió correctamente.',
+   unexpected_provider_response:'El proveedor respondió con un formato inesperado.',
+   server_unavailable:'El servicio de diagnóstico no está disponible.',
+   forbidden:'La cuenta actual no tiene permisos para diagnósticos internos.',
+   unauthenticated:'La sesión expiró. Ingresá nuevamente en CITHELA.'
+  };
+  status.textContent=error
+   ?'No se pudo completar la comprobación. Revisá la sesión o la disponibilidad del servicio.'
+   :(descriptions[data?.code]||'Respuesta no reconocida del servicio de diagnóstico.');
+ }catch{
+  status.textContent='No se pudo contactar el servicio de diagnóstico.';
+ }finally{
+  button.disabled=false;
+ }
 });
 (async()=>{
  try{
