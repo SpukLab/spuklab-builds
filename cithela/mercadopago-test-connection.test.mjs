@@ -38,15 +38,35 @@ test('connection and timeout errors hide details and secrets',async()=>{
   assert.deepEqual(r,{ok:false,code:'provider_unavailable'});
   assert.doesNotMatch(JSON.stringify(r),/TOKEN|APP_USR/);
 });
-test('Edge function requires auth user and owner/admin membership before reading secret',()=>{
-  const edge=readFileSync(new URL('./edge/cithela-mp-test-connection/index.ts',import.meta.url),'utf8');
-  const matchAuth=edge.indexOf('admin.auth.getUser(bearer)');
-  const matchMembership=edge.indexOf('.in("role",["owner","admin"])');
-  const matchEnv=edge.indexOf('Deno.env.get("CITHELA_MP_TEST_ACCESS_TOKEN")');
-  assert.ok(matchAuth>0&&matchMembership>matchAuth&&matchEnv>matchMembership);
-  assert.match(edge,/if\(!membership\?\.length\)return respond\("forbidden",403\)/);
-  assert.match(edge,/req\.method!=="POST"/);
-  assert.match(edge,/invalid_origin/);
-  assert.doesNotMatch(edge,/\.update\(|\.insert\(|\.delete\(|preapproval\/create/i);
-  assert.doesNotMatch(edge,/console\.(?:log|warn|error)|JSON\.stringify\(.*testToken|return.*testToken/);
+test('Edge function allows only verified global SpukLab admin before reading the credential',()=>{
+ const edge=readFileSync(new URL('./edge/cithela-mp-test-connection/index.ts',import.meta.url),'utf8');
+ const matchConfig=edge.indexOf('CITHELA_COMMERCIAL_CONSOLE_ENABLED');
+ const matchAdminId=edge.indexOf('CITHELA_COMMERCIAL_ADMIN_USER_ID');
+ const matchAuth=edge.indexOf('admin.auth.getUser(bearer)');
+ const matchAdmin=edge.indexOf('user.id.toLowerCase()!==adminId.toLowerCase()');
+ const matchToken=edge.indexOf('Deno.env.get("CITHELA_MP_TEST_ACCESS_TOKEN")');
+ assert.ok(matchConfig>0&&matchAdminId>0&&matchAdminId<matchAuth&&
+  matchAuth<matchAdmin&&matchAdmin<matchToken,'authorization must precede credential read');
+ assert.match(edge,/if\(!url\|\|!key\|\|!enabled\|\|!UUID.test\(adminId\)\)/);
+ assert.match(edge,/!user.email_confirmed_at/);
+ assert.match(edge,/return respond\("forbidden",403\)/);
+ assert.doesNotMatch(edge,/cithela_tenant_memberships|\.in\("role",\["owner","admin"\]\)/);
+ assert.match(edge,/req.method!=="POST"/);
+ assert.match(edge,/invalid_origin/);
+ assert.doesNotMatch(edge,/\.update\(|\.insert\(|\.delete\(|preapproval\/create/i);
+ assert.doesNotMatch(edge,/console\.(?:log|warn|error)|JSON\.stringify\(.*testToken|return.*testToken/);
+});
+
+test('MP diagnostics live only in platform commercial center, not tenant Settings',()=>{
+ const tenant=readFileSync(new URL('./index.html',import.meta.url),'utf8');
+ const center=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ assert.doesNotMatch(tenant,/mpTest|cithela-mp-test-tools|checkCithelaMpTestConnection/);
+ assert.doesNotMatch(tenant,/Comprobar Mercado Pago de prueba/);
+ assert.match(tenant,/id="cithela-commercial-panel"/);
+ assert.match(tenant,/id="cithela-commercial-status"/);
+ assert.match(center,/id="mp-test-check"/);
+ assert.match(center,/id="mp-test-status"/);
+ assert.match(center,/functions.invoke\('cithela-mp-test-connection'/);
+ assert.match(center,/id="console" hidden/);
+ assert.doesNotMatch(center,/CITHELA_MP_TEST_ACCESS_TOKEN|APP_USR-/);
 });
