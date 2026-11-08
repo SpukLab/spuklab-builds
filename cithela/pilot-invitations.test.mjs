@@ -111,9 +111,10 @@ test('mobile page scripts have valid JavaScript syntax',()=>{
  }
 });
 
+
 function browserInvitationPanel(result={ok:true,invites:[]}){
  const page=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
- const script=page.match(/<script>([\\s\\S]*?)<\\/script>/)?.[1];
+ const script=page.split('<script>')[1]?.split('</script>')[0];
  assert.ok(script,'inline panel script');
  const nodes=new Map();
  const element=id=>{
@@ -131,28 +132,31 @@ function browserInvitationPanel(result={ok:true,invites:[]}){
   })},
   window:{},navigator:{},confirm:()=>false
  });
- // Create a library function before the page's global bindings are evaluated.
- // If the page shadows the standard URL constructor, this throws like real SDK calls.
- vm.runInContext(`
-  window.supabase={
-   createClient: address=>{
-    new URL(address);
-    return {
-     auth:{getSession:async()=>({data:{session:{user:{id:'test-admin'}}},error:null})},
-     functions:{invoke:async()=>({data:globalThis.__mockResult,error:null})}
-    };
-   }
-  };`,context);
+ // This library method runs in the same browser global environment as the page.
+ // Regressions that shadow the standard URL constructor must fail the test.
+ vm.runInContext([
+  'window.supabase={',
+  ' createClient: address=>{',
+  '  new URL(address);',
+  '  return {',
+  '   auth:{getSession:async()=>({data:{session:{user:{id:"test-admin"}}},error:null})},',
+  '   functions:{invoke:async()=>({data:globalThis.__mockResult,error:null})}',
+  '  };',
+  ' }',
+  '};'
+ ].join(' '),context);
  context.__mockResult=result;
- const startScript=script.replace(/\\bstart\\(\\);\\s*$/,'globalThis.__startup=start();');
- assert.notEqual(startScript,script,'replace initial auto-start for deterministic test');
+ const marker='start();';
+ const at=script.lastIndexOf(marker);
+ assert.ok(at>=0,'initial startup invocation exists');
+ const startScript=script.slice(0,at)+'globalThis.__startup=start();'+script.slice(at+marker.length);
  vm.runInContext(startScript,context);
  return {context,nodes,element};
 }
 
 test('Safari invite page does not shadow global URL and initializes authenticated session',async()=>{
  const html=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
- assert.doesNotMatch(html,/\\b(?:const|let|var)\\s+URL\\s*=/);
+ assert.ok(!html.includes('const URL='),'native URL constructor cannot be shadowed');
  const page=browserInvitationPanel();
  await page.context.__startup;
  assert.equal(page.element('gate').hidden,true);
