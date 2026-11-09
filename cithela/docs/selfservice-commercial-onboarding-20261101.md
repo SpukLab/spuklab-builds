@@ -67,3 +67,12 @@ Entitlement: `organization_id, tenant_id, product='cithela', plan_id, subscripti
 7. Baja/reembolso/arrepentimiento según condiciones aplicables, sin contactar al creador para ejecutar acciones rutinarias.
 
 **Estado actual (02/11/2026, tras activación):** alta profesional protegida en Supabase mediante permiso privado y correo confirmado; creación de un trial único de 7 días con fecha del servidor, solo tras permiso. Control de nuevas reservas/reprogramaciones activo en RPC profesional, paciente, WhatsApp y trigger central, con cancelación y confirmación existentes permitidas. Los 2 establecimientos anteriores conservan el estado `legacy` y siguen operativos; no se emitieron permisos ni comenzaron trials. **Todavía NO hay alta autoservicio comercial, checkout, cobro, facturación ni baja automática.** No modificar `pilotTenant` ni abrir registro público hasta pasar los bloqueantes restantes. Ver `commercial-readiness-evidence-20261102.md` y `trial-booking-enforcement-20261102.md`.
+
+
+## Decisión de producto del 09/11/2026 — menos intervención profesional
+
+La experiencia objetivo cambia de alta profesional autorizada correo por correo a **enlace público universal compartible por WhatsApp**, con identidad verificada, mitigación de abuso, prueba única y backend como única autoridad. Las invitaciones nominativas siguen como mecanismo de piloto/cortesías, no como requisito permanente para conocer y probar el servicio.
+
+La reserva objetivo cambia de **paciente ya invitado → turno pendiente → confirmación humana** a **enlace público del establecimiento → identidad verificada/vinculación autónoma → reserva confirmada automáticamente cuando no requiere seña**. El profesional conserva revisión/reprogramación como excepción; los servicios con seña deben tener estado y vencimiento explícitos sin atribuir pagos no recibidos. Mantener modo manual para tenants ya existentes hasta validación.
+
+**Especificación y bloqueantes:** [selfservice-whatsapp-public-booking-20261109.md](selfservice-whatsapp-public-booking-20261109.md). Es un diseño: **no activa alta pública ni autoconfirma turnos**. Su implementación requiere cambios coordinados en SQL/RPC, pantallas, protección antiabuso y pruebas multitenant.
