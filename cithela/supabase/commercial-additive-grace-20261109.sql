@@ -287,36 +287,12 @@ BEGIN
   END IF;
 
 
+
   -- Monotonic access extension: never move a trial, paid period or grant
   -- backwards. Extension is not billing and does not alter the provider.
   IF p_action='extend_free' THEN
     IF coalesce(p_payload->>'tenant_id','') !~
-      '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}
-    IF coalesce(p_payload->>'review_days','') !~ '^[0-9]{1,3}$'
-       OR coalesce(p_payload->>'purge_review_days','') !~ '^[0-9]{1,3}$'
-    THEN RETURN jsonb_build_object('ok',false,'code','invalid_retention'); END IF;
-    after_review:=(p_payload->>'review_days')::int;
-    after_purge:=(p_payload->>'purge_review_days')::int;
-    IF after_review<7 OR after_review>365 OR after_purge<30
-       OR after_purge>730 OR after_purge<=after_review
-    THEN RETURN jsonb_build_object('ok',false,'code','invalid_retention'); END IF;
-    UPDATE cithela_private.cithela_retention_settings
-      SET review_after_days=after_review,
-          purge_review_after_days=after_purge,
-          updated_at=statement_timestamp()
-      WHERE id=1;
-    INSERT INTO cithela_private.cithela_commercial_admin_audit
-      (actor_user_id,action,detail)
-    VALUES(p_actor,'set_retention',jsonb_build_object(
-      'review_days',after_review,'purge_review_days',after_purge));
-    RETURN jsonb_build_object('ok',true,'code','retention_updated');
-  END IF;
-  RETURN jsonb_build_object('ok',false,'code','unknown_action');
-EXCEPTION WHEN unique_violation THEN
-  RETURN jsonb_build_object('ok',false,'code','conflict');
-END
-$admin$;
-
+      '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
     THEN RETURN jsonb_build_object('ok',false,'code','invalid_tenant'); END IF;
     tid:=(p_payload->>'tenant_id')::uuid;
     grant_reason:=btrim(coalesce(p_payload->>'reason',''));
@@ -327,32 +303,7 @@ $admin$;
     END IF;
     IF jsonb_typeof(p_payload->'days')='null' THEN
       extra_days:=NULL;
-    ELSIF coalesce(p_payload->>'days','') ~ '^[1-9][0-9]{0,2}
-    IF coalesce(p_payload->>'review_days','') !~ '^[0-9]{1,3}$'
-       OR coalesce(p_payload->>'purge_review_days','') !~ '^[0-9]{1,3}$'
-    THEN RETURN jsonb_build_object('ok',false,'code','invalid_retention'); END IF;
-    after_review:=(p_payload->>'review_days')::int;
-    after_purge:=(p_payload->>'purge_review_days')::int;
-    IF after_review<7 OR after_review>365 OR after_purge<30
-       OR after_purge>730 OR after_purge<=after_review
-    THEN RETURN jsonb_build_object('ok',false,'code','invalid_retention'); END IF;
-    UPDATE cithela_private.cithela_retention_settings
-      SET review_after_days=after_review,
-          purge_review_after_days=after_purge,
-          updated_at=statement_timestamp()
-      WHERE id=1;
-    INSERT INTO cithela_private.cithela_commercial_admin_audit
-      (actor_user_id,action,detail)
-    VALUES(p_actor,'set_retention',jsonb_build_object(
-      'review_days',after_review,'purge_review_days',after_purge));
-    RETURN jsonb_build_object('ok',true,'code','retention_updated');
-  END IF;
-  RETURN jsonb_build_object('ok',false,'code','unknown_action');
-EXCEPTION WHEN unique_violation THEN
-  RETURN jsonb_build_object('ok',false,'code','conflict');
-END
-$admin$;
- THEN
+    ELSIF coalesce(p_payload->>'days','') ~ '^[1-9][0-9]{0,2}$' THEN
       extra_days:=(p_payload->>'days')::integer;
       IF extra_days>730 THEN
         RETURN jsonb_build_object('ok',false,'code','invalid_days');
