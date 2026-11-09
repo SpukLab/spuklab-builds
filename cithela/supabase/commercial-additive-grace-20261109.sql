@@ -158,6 +158,11 @@ BEGIN
          SELECT 1 FROM cithela_private.cithela_complimentary_grants g
          WHERE g.tenant_id=t.id AND g.revoked_at IS NULL
       ),
+      'grant_unlimited',EXISTS (
+         SELECT 1 FROM cithela_private.cithela_complimentary_grants g
+         WHERE g.tenant_id=t.id AND g.revoked_at IS NULL
+           AND g.expires_at IS NULL
+      ),
       'complimentary_until',(
          SELECT g.expires_at FROM cithela_private.cithela_complimentary_grants g
          WHERE g.tenant_id=t.id AND g.revoked_at IS NULL
