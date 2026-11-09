@@ -67,13 +67,13 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   </section>
   <section class="card" aria-labelledby="grants-title">
    <p class="eyebrow">02 / CORTESÍAS E INVITACIONES</p>
-   <h2 id="grants-title">Clientes sin cargo</h2>
-   <p>Habilitá gratuitamente a un profesional que ya tenga una cuenta comercial autorizada. Los pilotos existentes conservan su acceso sin necesidad de cortesía.</p>
+   <h2 id="grants-title">Cortesías y días de gracia</h2>
+   <p>Sumá días gratuitos a un establecimiento autorizado, incluso si sigue en su prueba o suscripción. El tiempo adicional se agrega después de la fecha de vencimiento más lejana; nunca reduce los días existentes ni modifica el cobro de SpukLab. Los pilotos protegidos ya tienen acceso.</p>
    <p class="muted">Esta sección <strong>no envía invitaciones</strong> ni crea cuentas nuevas. Para invitar a alguien al piloto, usá <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
    <label for="tenant-select">Establecimiento</label>
    <select id="tenant-select"></select>
    <p id="courtesy-state" class="muted" role="status" aria-live="polite">Consultando estado del establecimiento…</p>
-   <label for="free-duration">Duración de la cortesía</label>
+   <label for="free-duration">Días gratuitos adicionales</label>
    <select id="free-duration">
     <option value="7">7 días</option><option value="15">15 días</option>
     <option value="30" selected>30 días</option><option value="60">60 días</option>
@@ -84,12 +84,12 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
     <label for="free-custom-days">Duración personalizada (1 a 730 días)</label>
     <input id="free-custom-days" type="number" min="1" max="730" step="1" inputmode="numeric" disabled placeholder="Ej. 45">
    </div>
-   <p class="hint" id="courtesy-timing">La cortesía comienza al pulsar Otorgar. Los días se cuentan desde ese momento, no después de la prueba de 7 días. Si querés 30 días adicionales a la prueba, otorgala al terminar la prueba. Esta cortesía solo habilita el uso de CITHELA; nunca genera pagos ni modifica las señas de los pacientes.</p>
+   <p class="hint" id="courtesy-timing">Los días se suman desde el último vencimiento entre la prueba, la suscripción y la cortesía previa (o desde hoy, si todo venció). Podés ampliar el acceso en cualquier momento: jamás se acorta. No genera pagos ni modifica las señas de pacientes.</p>
    <label for="free-reason">Motivo de la cortesía</label>
    <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required></textarea>
    <div class="actions">
-    <button type="button" id="grant-free">Otorgar cortesía</button>
-    <button class="alert" type="button" id="revoke-free">Revocar cortesía</button>
+    <button type="button" id="grant-free">Agregar días de acceso</button>
+    <button class="alert" type="button" id="revoke-free">Revocar cortesía (excepcional)</button>
    </div>
    <p class="message" id="courtesy-message" role="status" aria-live="polite"></p>
    <p class="hint">La revocación tiene efecto sobre las nuevas reservas. Los turnos y datos existentes no se borran.</p>
@@ -137,22 +137,24 @@ function updateCourtesyState(){
   state.textContent='No hay establecimientos disponibles.';
   grant.disabled=true;revoke.disabled=true;return;
  }
- const disallowed=['legacy','active','suspended'].includes(selected.status);
+ const disallowed=['legacy','suspended'].includes(selected.status);
  const hasGrant=selected.has_unrevoked_grant===true;
- grant.disabled=disallowed||hasGrant;
+ grant.disabled=disallowed||selected.grant_unlimited===true;
  revoke.disabled=!hasGrant;
  if(selected.status==='legacy'){
-  state.textContent='Piloto protegido: ya tiene acceso. No necesita cortesía y no se modifica desde estos controles.';
- }else if(selected.status==='active'){
-  state.textContent='Suscripción activa: no corresponde otorgar una cortesía desde este panel.';
+  state.textContent='Piloto protegido: ya tiene acceso. No se modifica desde estos controles.';
  }else if(selected.status==='suspended'){
-  state.textContent='Servicio suspendido: revisá su situación antes de intentar cambios de acceso.';
+  state.textContent='Servicio suspendido: revisá su situación antes de ampliar el acceso.';
+ }else if(selected.grant_unlimited){
+  state.textContent='Este establecimiento ya tiene cortesía sin vencimiento. No hay días adicionales que sumar.';
+ }else if(selected.status==='active'){
+  state.textContent='Suscripción activa. Los días de gracia se sumarán luego del período contratado, sin modificar la facturación.';
  }else if(hasGrant){
-  state.textContent='Ya existe una cortesía registrada para este establecimiento. Podés revocarla si corresponde.';
+  state.textContent='Cortesía existente: podés agregar más días sin acortar el plazo anterior.';
  }else if(selected.status==='trialing'){
-  state.textContent='Prueba gratuita activa. Podés dar una cortesía ahora, pero los 30 días comienzan al otorgarla y se superponen con la prueba; no se suman automáticamente.';
+  state.textContent='Prueba gratuita activa. Los días de gracia se sumarán después de finalizar la prueba.';
  }else{
-  state.textContent='Este establecimiento puede recibir una cortesía. Se solicitará confirmación antes de habilitarla.';
+  state.textContent='Podés habilitar o ampliar el acceso gratuito. Se solicitará confirmación.';
  }
 }
 const gate=msg=>{$('gate-message').textContent=msg;$('console').hidden=true;$('gate').hidden=false};
@@ -183,8 +185,8 @@ function show(snapshot){
  updateCourtesyState();
  const courtesy=$('courtesy-message');
  const currentTenant=snapshot.tenants?.find(t=>t.id===$('tenant-select').value);
- if(currentTenant?.complimentary && currentTenant.complimentary_until){
-  courtesy.textContent='Cortesía activa hasta '+new Date(currentTenant.complimentary_until).toLocaleDateString('es-AR')+'.';
+ if(currentTenant?.complimentary_until){
+  courtesy.textContent='Días gratuitos otorgados hasta '+new Date(currentTenant.complimentary_until).toLocaleDateString('es-AR')+'.';
  }
  $('retention-notice').value=snapshot.retention?.review_after_days??30;
  $('retention-review').value=snapshot.retention?.purge_review_after_days??90;
@@ -265,16 +267,15 @@ $('grant-free').addEventListener('click',()=>{
  const days=selectedCourtesyDurationDays();
  const reason=$('free-reason').value.trim();
  const selected=last?.tenants?.find(t=>t.id===tenant);
- if(!tenant||!selected||['legacy','active','suspended'].includes(selected.status)){
-  courtesyTell('Este establecimiento no admite una cortesía. Elegí una cuenta comercial elegible.');return;
+ if(!tenant||!selected||['legacy','suspended'].includes(selected.status)){
+  courtesyTell('Este establecimiento no admite una ampliación. Elegí una cuenta comercial elegible.');return;
  }
- if(selected.has_unrevoked_grant){courtesyTell('Ya existe una cortesía registrada para este establecimiento.');return;}
+ if(selected.grant_unlimited){courtesyTell('Esta cuenta ya tiene acceso gratuito sin vencimiento.');return;}
  if(!reason||reason.length<5){courtesyTell('Indicá un motivo de al menos 5 caracteres.');return;}
  if(Number.isNaN(days)){courtesyTell('Elegí una duración válida de 1 a 730 días.');return;}
- const expiry=days===null?null:new Date(Date.now()+days*86400000).toISOString();
- const term=expiry?days+' días (hasta '+new Date(expiry).toLocaleDateString('es-AR')+')':'sin vencimiento';
- action('grant_free',{tenant_id:tenant,reason,expires_at:expiry},
-  '¿Otorgar acceso sin cargo a '+selected.name+' por '+term+'? Se habilitan nuevas reservas; no se crea ningún cobro.');
+ const term=days===null?'acceso sin vencimiento':days+' días adicionales';
+ action('extend_free',{tenant_id:tenant,reason,days},
+  '¿Agregar '+term+' a '+selected.name+'? Se suman desde el último vencimiento vigente, nunca se descuentan días ni se modifica el cobro.');
 });
 $('revoke-free').addEventListener('click',()=>{
  const tenant=$('tenant-select').value;
