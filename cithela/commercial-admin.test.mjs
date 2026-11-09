@@ -183,3 +183,39 @@ test('commercial panel explains grace period timing and does not confuse draft p
  assert.match(invites,/Centro comercial/);
  assert.doesNotMatch(invites,/CITHELA_MP_TEST_ACCESS_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
 });
+
+test('courtesy duration accepts precise custom days without accidental unlimited grants',()=>{
+ const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ assert.match(html,/id="free-custom-days"[^>]*min="1" max="730"/);
+ assert.match(html,/id="free-custom-wrap" hidden/);
+ assert.match(html,/Mercado Pago se reserva para las suscripciones de SpukLab/);
+ assert.match(html,/no se crea ningún cobro/);
+ const start=html.indexOf('function updateCourtesyDuration(){');
+ const stop=html.indexOf("$('grant-free').addEventListener('click',()=>{",start);
+ assert.ok(start>0&&stop>start,'custom duration validation must be separate from requests');
+ const elements={
+  'free-duration':{value:'30',addEventListener(){}},
+  'free-custom-wrap':{hidden:true},
+  'free-custom-days':{value:'',disabled:true}
+ };
+ const ctx={$:id=>elements[id]};
+ runInNewContext(html.slice(start,stop),ctx);
+ assert.equal(runInNewContext('selectedCourtesyDurationDays()',ctx),30);
+ elements['free-duration'].value='custom';
+ runInNewContext('updateCourtesyDuration()',ctx);
+ assert.equal(elements['free-custom-wrap'].hidden,false);
+ assert.equal(elements['free-custom-days'].disabled,false);
+ for(const bad of ['', '0','731','-5','12.5','abc','Infinity']){
+  elements['free-custom-days'].value=bad;
+  assert.ok(Number.isNaN(runInNewContext('selectedCourtesyDurationDays()',ctx)),bad);
+ }
+ for(const valid of ['1','15','45','730']){
+  elements['free-custom-days'].value=valid;
+  assert.equal(runInNewContext('selectedCourtesyDurationDays()',ctx),Number(valid));
+ }
+ elements['free-duration'].value='unlimited';
+ runInNewContext('updateCourtesyDuration()',ctx);
+ assert.equal(runInNewContext('selectedCourtesyDurationDays()',ctx),null);
+ assert.equal(elements['free-custom-wrap'].hidden,true);
+ assert.equal(elements['free-custom-days'].disabled,true);
+});
