@@ -150,7 +150,8 @@ test('courtesy panel only enables actions for selected tenant and explains prote
    {id:'legacy',status:'legacy',has_unrevoked_grant:false},
    {id:'trial',status:'trialing',has_unrevoked_grant:false},
    {id:'courtesy',status:'trialing',has_unrevoked_grant:true},
-   {id:'paid',status:'active',has_unrevoked_grant:false}
+   {id:'paid',status:'active',has_unrevoked_grant:false},
+   {id:'unlimited',status:'trialing',has_unrevoked_grant:true,grant_unlimited:true}
   ]}
  };
  runInNewContext(code,context);
@@ -161,21 +162,23 @@ test('courtesy panel only enables actions for selected tenant and explains prote
    message:elements['courtesy-state'].textContent};
  };
  assert.deepEqual(apply('legacy'),{grant:true,revoke:true,
-  message:'Piloto protegido: ya tiene acceso. No necesita cortesía y no se modifica desde estos controles.'});
+  message:'Piloto protegido: ya tiene acceso. No se modifica desde estos controles.'});
  assert.equal(apply('trial').grant,false);
  assert.equal(apply('trial').revoke,true);
- assert.equal(apply('courtesy').grant,true);
+ assert.equal(apply('courtesy').grant,false);
  assert.equal(apply('courtesy').revoke,false);
- assert.equal(apply('paid').grant,true);
+ assert.equal(apply('paid').grant,false);
  assert.equal(apply('paid').revoke,true);
+ assert.equal(apply('unlimited').grant,true);
+ assert.equal(apply('unlimited').revoke,false);
 });
 
 test('commercial panel explains grace period timing and does not confuse draft prices with per-client billing',()=>{
  const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
  const invites=readFileSync(new URL('./invitar-profesionales.html',import.meta.url),'utf8');
  assert.match(html,/Motivo de la cortesía/);
- assert.match(html,/La cortesía comienza al pulsar Otorgar/);
- assert.match(html,/no después de la prueba de 7 días/);
+ assert.match(html,/Los días se suman desde el último vencimiento/);
+ assert.match(html,/Podés ampliar el acceso en cualquier momento/);
  assert.match(html,/Los precios especiales para un cliente requieren un acuerdo individual/);
  assert.match(html,/Esta tarifa es general, no específica por establecimiento/);
  assert.match(invites,/Una vez aceptada, el profesional obtiene una prueba inicial de 7 días/);
@@ -189,7 +192,7 @@ test('courtesy duration accepts precise custom days without accidental unlimited
  assert.match(html,/id="free-custom-days"[^>]*min="1" max="730"/);
  assert.match(html,/id="free-custom-wrap" hidden/);
  assert.match(html,/Mercado Pago se reserva para las suscripciones de SpukLab/);
- assert.match(html,/no se crea ningún cobro/);
+ assert.match(html,/nunca se descuentan días ni se modifica el cobro/);
  const start=html.indexOf('function updateCourtesyDuration(){');
  const stop=html.indexOf("$('grant-free').addEventListener('click',()=>{",start);
  assert.ok(start>0&&stop>start,'custom duration validation must be separate from requests');
@@ -218,4 +221,38 @@ test('courtesy duration accepts precise custom days without accidental unlimited
  assert.equal(runInNewContext('selectedCourtesyDurationDays()',ctx),null);
  assert.equal(elements['free-custom-wrap'].hidden,true);
  assert.equal(elements['free-custom-days'].disabled,true);
+});
+
+test('grace extension command never processes subscriptions or lowers access time',async()=>{
+ const {settings,commands}=options();
+ const valid={tenant_id:other,reason:'Piloto ampliado',days:30};
+ const res=await parse(await handleCithelaCommercialAdmin(req('extend_free',valid),settings));
+ assert.equal(res.status,200);
+ assert.deepEqual(commands,[{actor:admin,action:'extend_free',payload:valid}]);
+ for(const bad of [
+  {...valid,provider:'mercadopago'},
+  {...valid,amount_minor:0},
+  {...valid,force:true}
+ ]){
+  const {settings:opts,commands:sent}=options();
+  const badRes=await parse(await handleCithelaCommercialAdmin(req('extend_free',bad),opts));
+  assert.equal(badRes.status,400);
+  assert.equal(sent.length,0);
+ }
+ const migration=readFileSync(new URL('./supabase/commercial-additive-grace-20261109.sql',import.meta.url),'utf8');
+ assert.match(migration,/p_action='extend_free'/);
+ assert.match(migration,/FOR UPDATE OF e/);
+ assert.match(migration,/baseline_until:=GREATEST\(statement_timestamp\(\)/);
+ assert.match(migration,/coalesce\(trial_until,statement_timestamp\(\)\)/);
+ assert.match(migration,/coalesce\(paid_until,statement_timestamp\(\)\)/);
+ assert.match(migration,/coalesce\(previous_until,statement_timestamp\(\)\)/);
+ assert.match(migration,/AND NEW.expires_at<OLD.expires_at/);
+ assert.match(migration,/OLD.expires_at IS NULL AND NEW.expires_at IS NOT NULL/);
+ assert.match(migration,/e.status IN \('trialing','payment_pending','past_due','canceled','active'\)/);
+ assert.match(migration,/\('trialing','payment_pending','past_due','canceled','active'\) THEN/);
+ assert.match(migration,/already_unlimited/);
+ assert.match(migration,/access_extended/);
+ assert.match(migration,/cithela_commercial_admin_audit/);
+ assert.doesNotMatch(migration,/UPDATE\s+cithela_private\.cithela_commercial_entitlements/i);
+ assert.doesNotMatch(migration,/(?:UPDATE|INSERT INTO)\s+cithela_private\.cithela_mp/i);
 });
