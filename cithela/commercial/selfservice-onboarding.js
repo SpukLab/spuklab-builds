@@ -8,13 +8,15 @@
  if(!client){$('availability').textContent='No se pudo cargar el acceso seguro. Volvé a cargar la página.';return}
  window.CithelaAuthCaptcha.wrap(client);
  let available=null,session=null,resumeCode=null,busy=false;
+ const testMode=new URLSearchParams(window.location.search).get('prueba')==='1';
+ let testRegistration=false;
  const descriptions={capacity_reached:'Por ahora se completó el cupo de pruebas. Podés ingresar si ya tenés cuenta.',admissions_closed:'Las altas automáticas están cerradas por el momento.',captcha_rejected:'La comprobación de seguridad venció o no pudo verificarse. Intentá nuevamente.',captcha_unavailable:'No se pudo verificar la seguridad. Intentá nuevamente.',email_unverified:'Confirmá tu correo antes de continuar.',trial_already_used:'Esta cuenta ya utilizó una prueba. Ingresá a tu agenda para consultar la continuidad.',existing_invitation:'Ya tenés una invitación. Abrí el enlace recibido para continuar.',terms_required:'Las condiciones se actualizaron. Volvé a comprobar la disponibilidad y revisalas.',admission_unavailable:'No se pudo autorizar la prueba. Intentá más adelante.',server_unavailable:'El servicio no respondió. Intentá nuevamente.'};
  function message(text){$('status').textContent=text}
  function render(){
   const verified=!!session?.user?.email_confirmed_at;
   $('connected').hidden=!verified;$('register').hidden=verified;
   $('identity').textContent=verified?'Correo verificado: '+session.user.email:'';
-  $('create').disabled=busy||!available;
+  $('create').disabled=busy||(!available&&!testRegistration);
   $('login').disabled=busy;
   $('activate').disabled=busy||!available||!!resumeCode;
   $('activate').hidden=!!resumeCode;$('continue').hidden=!resumeCode;
@@ -44,10 +46,18 @@
    if(res.ok&&data.ok&&data.code==='available'&&typeof data.terms_version==='string'&&typeof data.sitekey==='string'&&data.sitekey){available=data;$('availability').textContent='Hay cupo disponible. Se comprobará nuevamente al activar la prueba.'}
    else $('availability').textContent=descriptions[data.code]||'Las altas automáticas no están disponibles. Podés consultar por WhatsApp.';
   }catch{$('availability').textContent='No pudimos comprobar disponibilidad. Podés reintentar o consultar por WhatsApp.'}
+  if(!available&&session?.user?.email_confirmed_at){
+   try{const data=await invoke('test_status');if(data.code==='available'){available=data;$('availability').textContent='Prueba controlada autorizada para tu correo. Las altas públicas siguen cerradas.'}}catch{}
+  }
+  if(testMode&&!session){
+   const cfg=await window.CithelaAuthCaptcha.config();
+   testRegistration=cfg.required===true&&!!cfg.sitekey;
+   if(testRegistration)$('availability').textContent='Registro de prueba: usá solamente el correo autorizado en Administración. Crear una cuenta no concede acceso a una agenda.';
+  }
   await resume();render();
  }
  $('register').addEventListener('submit',async event=>{
-  event.preventDefault();if(busy||!available)return;
+  event.preventDefault();if(busy||(!available&&!testRegistration))return;
   const email=$('email').value.trim().toLowerCase(),password=$('password').value;
   if(password.length<8||password!==$('confirm').value)return message('Las contraseñas deben coincidir y tener al menos 8 caracteres.');
   busy=true;render();message('Preparando el correo de confirmación…');
@@ -64,7 +74,7 @@
   if(busy)return;busy=true;render();message('Ingresando…');
   try{
    const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
-   if(error)throw error;session=data.session;await resume();
+   if(error)throw error;session=data.session;await check();
    message(resumeCode?'Tu acceso está disponible. Podés continuar con tu agenda.':session?.user?.email_confirmed_at?'Revisá las condiciones para comenzar la prueba.':'Confirmá tu correo antes de continuar.');
   }catch{message('No se pudo ingresar. Comprobá correo, contraseña y verificación.')}
   finally{busy=false;$('password').value='';render()}
