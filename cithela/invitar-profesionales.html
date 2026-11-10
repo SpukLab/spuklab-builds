@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="es-AR"><head>
-<link rel="icon" type="image/svg+xml" href="./brand/admin-favicon.svg?v=20261110">
-<link rel="apple-touch-icon" sizes="180x180" href="./brand/admin-touch-180.png?v=20261110">
-<link rel="mask-icon" href="./brand/admin-mask.svg" color="#328BC8">
+<link rel="icon" type="image/svg+xml" href="./brand/admin-favicon.svg?v=20261110-final">
+<link rel="apple-touch-icon" sizes="180x180" href="./brand/admin-touch-180.png?v=20261110-final">
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
@@ -29,8 +29,10 @@ td,th{text-align:left;border-bottom:1px solid var(--edge);padding:10px 6px;overf
 :focus-visible{outline:3px solid #5fb2a0;outline-offset:3px}
 [hidden]{display:none!important}
 @media(max-width:600px){.actions{flex-direction:column}.actions button{width:100%}.panel{padding:17px}th:nth-child(2),td:nth-child(2){display:none}}
-</style></head><body>
-<header><div><strong><img src="./brand/admin-favicon.svg" width="28" height="28" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:8px;border-radius:6px">CITHELA / SPUKLAB</strong><div><a href="./comercial-admin.html">Volver a administración comercial</a></div></div></header>
+</style><link rel="icon" type="image/png" sizes="32x32" href="./brand/admin-favicon-32.png?v=20261110-final">
+<link rel="manifest" href="./brand/admin.webmanifest?v=20261110-final">
+</head><body>
+<header><div><strong><img src="./brand/admin-icon-512.png?v=20261110-final" width="28" height="28" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:8px;border-radius:6px">CITHELA / SPUKLAB</strong><div><a href="./comercial-admin.html">Volver a administración comercial</a></div></div></header>
 <main>
 <h1>Invitar profesionales</h1>
 <p>Invitaciones individuales para el piloto de CITHELA. No generan cobros, ni crean un establecimiento hasta que el invitado confirme su correo y complete el alta.</p>
@@ -88,6 +90,7 @@ td,th{text-align:left;border-bottom:1px solid var(--edge);padding:10px 6px;overf
 </section></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="./commercial/admin-auth.js?v=20261110-final"></script>
 <script>
 'use strict';
 const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
@@ -172,19 +175,10 @@ async function start(){
    gate('No se cargó la biblioteca de acceso seguro. Volvé a cargar la página.');
    return;
   }
-  client=window.supabase.createClient(SUPABASE_URL,KEY,{
-   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
-  });
+  client=window.CithelaAdminAuth.createClient(SUPABASE_URL,KEY);
   window.cithelaInvitationClient=client;
-  const {data,error}=await client.auth.getSession();
-  if(error){
-   gate('No se pudo recuperar la sesión de CITHELA. Revisá el acceso profesional e intentá nuevamente.');
-   return;
-  }
-  if(!data?.session){
-   gate('No hay sesión de CITHELA en este navegador. Ingresá como profesional y regresá a Invitaciones.');
-   return;
-  }
+  await window.CithelaAdminAuth.requireSession(client,gate);
+  window.CithelaAdminAuth.addLogout(client);
   await refresh();
  }catch(err){
   // Keep details such as tokens, credentials and internal URLs off the public UI.

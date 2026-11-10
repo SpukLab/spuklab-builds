@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="es-AR">
 <head>
-<link rel="icon" type="image/svg+xml" href="./brand/admin-favicon.svg?v=20261110">
-<link rel="apple-touch-icon" sizes="180x180" href="./brand/admin-touch-180.png?v=20261110">
-<link rel="mask-icon" href="./brand/admin-mask.svg" color="#328BC8">
+<link rel="icon" type="image/svg+xml" href="./brand/admin-favicon.svg?v=20261110-final">
+<link rel="apple-touch-icon" sizes="180x180" href="./brand/admin-touch-180.png?v=20261110-final">
+
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -30,10 +30,12 @@ table{width:100%;border-collapse:collapse;font-size:.81rem}th,td{text-align:left
 footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
 @media(max-width:760px){.cards{grid-template-columns:1fr}.card.wide{grid-column:auto}h1{margin-top:25px}.wrap{padding:0 16px}button{width:100%}.actions{display:grid;grid-template-columns:1fr}th,td{padding:10px 6px}}
 </style>
+<link rel="icon" type="image/png" sizes="32x32" href="./brand/admin-favicon-32.png?v=20261110-final">
+<link rel="manifest" href="./brand/admin.webmanifest?v=20261110-final">
 </head>
 <body>
 <header><div class="wrap">
-  <div class="brand"><img src="./brand/admin-favicon.svg" width="32" height="32" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:9px;border-radius:7px">CITHELA <span style="color:#a8dfff">/ SPUKLAB</span></div>
+  <div class="brand"><img src="./brand/admin-icon-512.png?v=20261110-final" width="32" height="32" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:9px;border-radius:7px">CITHELA <span style="color:#a8dfff">/ SPUKLAB</span></div>
   <div class="subhead">ADMINISTRACIÓN COMERCIAL · ACCESO RESTRINGIDO</div>
   <nav><a href="./">Volver a la agenda CITHELA</a></nav>
 </div></header>
@@ -45,9 +47,9 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
  <div class="notice"><strong>Sin cobros automáticos ni borrados.</strong> Seleccionar una tarifa no modifica contratos existentes ni activa Mercado Pago. La limpieza es una vista de revisión: los datos no se eliminan desde este panel.</div>
  <section class="card" id="gate" aria-live="polite">
   <h2>Acceso administrativo</h2>
-  <p id="gate-message">Comprobando tu sesión profesional...</p>
-  <p class="muted">Ingresá en CITHELA con la cuenta administradora autorizada. Si la consola está deshabilitada, no se exponen datos comerciales.</p>
-  <div class="actions"><a href="./">Ir a iniciar sesión en CITHELA</a><button class="secondary" id="retry" type="button">Volver a comprobar</button></div>
+  <p id="gate-message">Comprobando tu sesión administrativa...</p>
+  <p class="muted">Ingresá aquí con la cuenta administradora autorizada. Si la consola está deshabilitada, no se exponen datos comerciales.</p>
+  <div class="actions"><a href="./">Abrir agenda profesional</a><button class="secondary" id="retry" type="button">Volver a comprobar</button></div>
  </section>
  <div id="console" hidden>
  <div class="actions"><button class="secondary" type="button" id="reload">Actualizar información</button><a href="./invitar-profesionales.html">Invitar profesional al piloto</a></div>
@@ -124,6 +126,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
 </main>
 <footer class="wrap">CITHELA · SpukLab · Control interno sin acceso público ni operaciones de cobro.</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="./commercial/admin-auth.js?v=20261110-final"></script>
 <script>
 'use strict';
 const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
@@ -322,10 +325,9 @@ $('mp-test-check').addEventListener('click',async()=>{
 (async()=>{
  try{
   if(!window.supabase?.createClient){gate('No se pudo cargar el inicio de sesión seguro.');return;}
-  supa=window.supabase.createClient(SUPABASE_URL,PUBLISHABLE_KEY,
-   {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-  const {data:{session}}=await supa.auth.getSession();
-  if(!session){gate('Ingresá en CITHELA con tu cuenta profesional administradora y volvé a esta página.');return;}
+  supa=window.CithelaAdminAuth.createClient(SUPABASE_URL,PUBLISHABLE_KEY);
+  await window.CithelaAdminAuth.requireSession(supa,gate);
+  window.CithelaAdminAuth.addLogout(supa);
   await reload();
  }catch{gate('No se pudo comprobar la cuenta administradora.');}
 })();
