@@ -94,7 +94,7 @@
  $('continue').addEventListener('click',()=>{if(resumeCode)window.location.assign(BASE+(resumeCode==='grant_ready'?'?pilotTenant=1':''))});
  $('switch').addEventListener('click',async()=>{
   const {error}=await client.auth.signOut({scope:'local'});if(error)return message('No se pudo cerrar la sesión. Intentá nuevamente.');
-  session=null;resumeCode=null;$('password').value='';$('confirm').value='';render();message('Sesión cerrada. Ingresá con tu cuenta.');
+  session=null;resumeCode=null;$('password').value='';$('confirm').value='';await check();message('Sesión cerrada. Ingresá con tu cuenta.');
  });
  $('retry').addEventListener('click',()=>{if(!busy)check()});
  client.auth.onAuthStateChange((_event,newSession)=>{session=newSession;render();setTimeout(resume,0)});
