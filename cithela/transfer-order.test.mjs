@@ -75,7 +75,8 @@ test('never accepts paid status from untrusted DB response',async()=>{
 });
 test('SQL is staged, private, and cannot activate a subscription',()=>{
  const sql=readFileSync(new URL('supabase/cithela_transfer_orders_staged_20261110.sql',import.meta.url),'utf8');
- assert.match(sql,/CHECK \(is_published=false\)/);
+ assert.match(sql,/AND p\.is_published=true/);
+ assert.match(sql,/offer_not_published/);
  assert.match(sql,/CHECK \(status<>'credited'\)/);
  assert.match(sql,/REVOKE ALL ON FUNCTION public\.cithela_prepare_transfer_order/);
  assert.match(sql,/TO service_role/);
