@@ -125,7 +125,7 @@ function browserInvitationPanel(result={ok:true,invites:[]}){
   return nodes.get(id);
  };
  const context=vm.createContext({
-  URL,console,document:{getElementById:element,createElement:tag=>({
+  URL,console,document:{querySelector:()=>null,getElementById:element,createElement:tag=>({
    tagName:tag,textContent:'',style:{},
    append(){},addEventListener(){},
    set className(v){this._className=v;}
@@ -145,6 +145,7 @@ function browserInvitationPanel(result={ok:true,invites:[]}){
   ' }',
   '};'
  ].join(' '),context);
+ vm.runInContext(readFileSync(new URL('./commercial/admin-auth.js',import.meta.url),'utf8'),context);
  context.__mockResult=result;
  const marker='start();';
  const at=script.lastIndexOf(marker);
