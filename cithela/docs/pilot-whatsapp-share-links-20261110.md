@@ -27,3 +27,13 @@ Fecha: 2026-11-10. Alcance: **piloto de hasta 5 profesionales por enlace, 7 día
 
 ## Despliegue
 Orden: 1. fusionar código validado; 2. aplicar migración nueva; 3. desplegar Edge con `verify_jwt=true`; 4. comprobar revocación/lectura y que el panel viejo siga operativo; 5. que el administrador emita un enlace nuevo de 2 cupos y complete prueba en iPhone/iPad. No habilitar contratación ni pagos desde este desarrollo.
+
+## Estado de despliegue verificado (10/11/2026)
+- PR #140 fusionada en `main`: commit `49f36bbb26c45d3b87b67cd55410c8387607db7e`.
+- GitHub Actions `pages build and deployment`, `CITHELA WhatsApp share-link pilot` y `CITHELA commercial admin safety`: **success**.
+- SQL aplicada como migración `cithela_pilot_whatsapp_share_links_20261110`; dos tablas privadas presentes, `anon`/`authenticated` sin permiso de ejecutar el RPC.
+- Edge `cithela-pilot-share-links` **ACTIVE**, versión 1, con `verify_jwt=true`.
+- Prueba transaccional con rollback sobre DB: `issue`, `redeem`, segundo `redeem` idempotente, `list`, `revoke` y expiración de permiso no consumido, todo correcto.
+- Al cerrar la verificación: **0 enlaces emitidos reales**, **0 canjes reales** y 3 establecimientos existentes sin cambios.
+- Falta **QA del recorrido real desde dos cuentas de correo y dos móviles**. El hecho de que la función esté activa no constituye una confirmación extremo a extremo de correos/WhatsApp.
+- **No se activaron pagos, precios públicos, señas ni auto-confirmación de turnos**. El registro general ilimitado sigue pendiente de Turnstile y controles del documento de alta pública.
