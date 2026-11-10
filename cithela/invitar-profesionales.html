@@ -36,8 +36,30 @@ td,th{text-align:left;border-bottom:1px solid var(--edge);padding:10px 6px;overf
 <button class="secondary" id="retry" type="button">Reintentar</button>
 </section>
 <div id="content" hidden>
+<section class="panel" id="pilot-share-panel">
+<h2>Enlace WhatsApp (sin correo previo)</h2>
+<p>Generá un enlace para invitar a varios profesionales. Cada uno verifica su propio correo y obtiene una prueba única de 7 días, sin tarjeta. El enlace caduca a los 7 días o cuando se agotan los cupos. Podés revocarlo antes.</p>
+<label for="share-quota">Cupos disponibles</label>
+<select id="share-quota" style="width:100%;padding:12px;min-height:46px;border:1px solid #a9c5b7;border-radius:9px">
+<option value="2" selected>2 profesionales</option><option value="3">3 profesionales</option><option value="5">5 profesionales</option>
+</select>
+<div class="actions"><button type="button" id="create-share">Generar enlace para WhatsApp</button></div>
+<p id="share-status" role="status" aria-live="polite"></p>
+<div id="share-result" hidden>
+<label for="share-url">Enlace creado (guardalo ahora; no se puede recuperar)</label>
+<input id="share-url" type="text" readonly>
+<div class="actions">
+<button type="button" id="copy-share">Copiar enlace</button>
+<button type="button" class="secondary" id="send-share">Compartir por WhatsApp</button>
+</div></div>
+<h2>Enlaces anteriores</h2>
+<p>Se muestra la cantidad de altas realizadas. Las agendas ya creadas nunca se borran al revocar.</p>
+<div class="scroll"><table><thead><tr><th>Fecha</th><th>Cupos</th><th>Estado y acción</th></tr></thead>
+<tbody id="share-items"></tbody></table></div>
+<button type="button" class="secondary" id="refresh-share">Actualizar enlaces</button>
+</section>
 <section class="panel">
-<h2>Nueva invitación</h2>
+<h2>Invitación individual por correo (alternativa)</h2>
 <form id="invite-form">
 <label for="email">Correo del profesional</label>
 <input id="email" type="email" autocomplete="off" inputmode="email" maxlength="254" required placeholder="profesional@correo.com">
@@ -149,6 +171,7 @@ async function start(){
   client=window.supabase.createClient(SUPABASE_URL,KEY,{
    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
   });
+  window.cithelaInvitationClient=client;
   const {data,error}=await client.auth.getSession();
   if(error){
    gate('No se pudo recuperar la sesión de CITHELA. Revisá el acceso profesional e intentá nuevamente.');
@@ -166,4 +189,6 @@ async function start(){
  }
 }
 start();
-</script></body></html>
+</script>
+<script src="./commercial/pilot-share-admin.js"></script>
+</body></html>
