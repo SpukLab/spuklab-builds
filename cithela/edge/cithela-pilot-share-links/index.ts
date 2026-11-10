@@ -19,8 +19,10 @@ Deno.serve(async(req:Request)=>{
  const url=Deno.env.get('SUPABASE_URL')||'';
  const key=serverKey();
  const adminId=Deno.env.get('CITHELA_COMMERCIAL_ADMIN_USER_ID')||'';
- const enabled= Deno.env.get('CITHELA_PILOT_SHARE_LINKS_ENABLED')==='true'
-   && Deno.env.get('CITHELA_COMMERCIAL_CONSOLE_ENABLED')==='true' && !!url && !!key;
+ const enabled= Deno.env.get('CITHELA_PILOT_INVITES_ENABLED')==='true'
+   && Deno.env.get('CITHELA_COMMERCIAL_CONSOLE_ENABLED')==='true'
+   && Deno.env.get('CITHELA_PILOT_SHARE_LINKS_ENABLED')!=='false'
+   && !!url && !!key;
  const client=enabled?createClient(url,key!,{auth:{
    persistSession:false,autoRefreshToken:false,detectSessionInUrl:false
  }}):null;
