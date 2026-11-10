@@ -12,13 +12,14 @@ Deno.serve(async(req:Request)=>{
  const sitekey=Deno.env.get('CITHELA_TURNSTILE_SITEKEY')||'';
  const authCaptchaRequired=Deno.env.get('CITHELA_AUTH_CAPTCHA_ENABLED')==='true';
  const ready=!!url&&!!key&&!!adminId;
- const enabled=ready&&Deno.env.get('CITHELA_SELFSERVICE_ENABLED')==='true'&&authCaptchaRequired&&!!captchaSecret&&!!sitekey;
+ const testReady=ready&&authCaptchaRequired&&!!captchaSecret&&!!sitekey;
+ const enabled=testReady&&Deno.env.get('CITHELA_SELFSERVICE_ENABLED')==='true';
  const client=ready?createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}):null;
  return handleSelfservice(req,{
-  ready,enabled,adminId,sitekey,authCaptchaRequired,
+  ready,enabled,adminId,sitekey,authCaptchaRequired,testReady,
   async resolveUser(jwt:string){const {data:{user},error}=await client!.auth.getUser(jwt);return error||!user?null:{id:user.id,emailConfirmed:!!user.email_confirmed_at}},
   async verifyCaptcha(token:string){
-   if(!enabled)return false;
+   if(!testReady)return false;
    const res=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',body:new URLSearchParams({secret:captchaSecret,response:token}),signal:AbortSignal.timeout(8000)});
    if(!res.ok)return false;
    const data=await res.json();

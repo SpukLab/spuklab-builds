@@ -17,15 +17,16 @@ export async function handleSelfservice(req,ctx){
  try{body=await readBody(req)}catch(e){return reply(e.message==='request_too_large'?413:400,e.message==='request_too_large'?'request_too_large':'invalid_json')}
  if(!body||Array.isArray(body)||Object.keys(body).sort().join(',')!=='action,payload'||!body.payload||typeof body.payload!=='object'||Array.isArray(body.payload))return reply(400,'invalid_request');
  const {action,payload}=body;
- if(!['auth_config','status','admit','resume','read','configure'].includes(action))return reply(400,'invalid_action');
+ if(!['auth_config','status','admit','resume','read','configure','authorize_test','test_status'].includes(action))return reply(400,'invalid_action');
  if(action==='auth_config'){
   if(Object.keys(payload).length)return reply(400,'unexpected_fields');
   const sitekey=typeof ctx?.sitekey==='string'?ctx.sitekey:'';
   return reply(200,'auth_config',{required:ctx?.authCaptchaRequired===true,sitekey:sitekey||null});
  }
  if(!ctx?.ready||!UUID.test(ctx.adminId||'')||typeof ctx.execute!=='function')return reply(503,'admissions_closed');
- const administrative=['read','configure'].includes(action);
- if(['status','admit'].includes(action)&&ctx.enabled!==true)return reply(503,'admissions_closed');
+ const administrative=['read','configure','authorize_test'].includes(action);
+ if(action==='status'&&ctx.enabled!==true)return reply(503,'admissions_closed');
+ if(['admit','test_status'].includes(action)&&ctx.enabled!==true&&ctx.testReady!==true)return reply(503,'admissions_closed');
  let user;
  if(action!=='status'){
   const jwt=/^Bearer\s+([^\s]+)$/i.exec(req.headers.get('authorization')||'')?.[1];
@@ -36,8 +37,11 @@ export async function handleSelfservice(req,ctx){
   if(administrative&&user.id.toLowerCase()!==ctx.adminId.toLowerCase())return reply(403,'forbidden');
  }
  let command=payload;
- if(['status','read','resume'].includes(action)){
+ if(['status','read','resume','test_status'].includes(action)){
   if(Object.keys(payload).length)return reply(400,'unexpected_fields');
+ }else if(action==='authorize_test'){
+  if(Object.keys(payload).join(',')!=='email'||typeof payload.email!=='string'||payload.email.trim().length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email.trim()))return reply(400,'invalid_email');
+  command={email:payload.email.trim().toLowerCase()};
  }else if(action==='admit'){
   if(Object.keys(payload).sort().join(',')!=='captchaToken,terms_version'||typeof payload.terms_version!=='string'||!payload.terms_version.trim()||payload.terms_version.length>120||typeof payload.captchaToken!=='string'||payload.captchaToken.length<1||payload.captchaToken.length>2048)return reply(400,'invalid_request');
   try{if(await ctx.verifyCaptcha(payload.captchaToken)!==true)return reply(403,'captcha_rejected')}catch{return reply(503,'captcha_unavailable')}
@@ -48,8 +52,9 @@ export async function handleSelfservice(req,ctx){
  try{
   const out=await ctx.execute(user?.id||null,action,command);
   if(!out||typeof out.ok!=='boolean')return reply(503,'server_unavailable');
-  if(!out.ok){const allowed=['admissions_closed','capacity_reached','terms_required','email_unverified','trial_already_used','existing_invitation','no_pending_admission'];const code=allowed.includes(out.code)?out.code:'admission_unavailable';return reply(code==='capacity_reached'?429:403,code)}
-  if(action==='status')return out.code==='available'&&typeof out.terms_version==='string'?reply(200,'available',{terms_version:out.terms_version,sitekey:ctx.sitekey}):reply(503,'server_unavailable');
+  if(!out.ok){const allowed=['admissions_closed','capacity_reached','terms_required','email_unverified','trial_already_used','existing_invitation','no_pending_admission','invalid_email','workspace_exists'];const code=allowed.includes(out.code)?out.code:'admission_unavailable';return reply(code==='capacity_reached'?429:403,code)}
+  if(action==='authorize_test')return out.code==='test_authorized'&&!Number.isNaN(Date.parse(out.expires_at||''))?reply(200,'test_authorized',{expires_at:out.expires_at}):reply(503,'server_unavailable');
+  if(['status','test_status'].includes(action))return out.code==='available'&&typeof out.terms_version==='string'?reply(200,'available',{terms_version:out.terms_version,sitekey:ctx.sitekey}):reply(503,'server_unavailable');
   if(administrative)return out.code==='settings'&&out.settings&&typeof out.settings==='object'?reply(200,'settings',{settings:out.settings,...(out.runtime?{runtime:out.runtime}:{})}):reply(503,'server_unavailable');
   if(!['grant_ready','workspace_exists'].includes(out.code))return reply(503,'server_unavailable');
   return reply(200,out.code);
