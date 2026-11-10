@@ -1,4 +1,4 @@
--- Candidate only. Do not apply or enable before E2E, captcha and SMTP validation.
+-- Closed-by-default selfservice admission. Public enablement requires E2E, captcha and SMTP validation.
 -- Reuses the existing invitation issue/redeem command and bootstrap gate.
 BEGIN;
 CREATE TABLE cithela_private.cithela_selfservice_settings (
@@ -16,8 +16,10 @@ CREATE TABLE cithela_private.cithela_selfservice_admissions (
  email text NOT NULL UNIQUE,
  terms_version text NOT NULL,
  accepted_at timestamptz NOT NULL DEFAULT statement_timestamp(),
- expires_at timestamptz NOT NULL
+ expires_at timestamptz NOT NULL,
+ CHECK(expires_at>accepted_at)
 );
+CREATE INDEX cithela_selfservice_admissions_accepted ON cithela_private.cithela_selfservice_admissions(accepted_at);
 ALTER TABLE cithela_private.cithela_selfservice_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cithela_private.cithela_selfservice_admissions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON cithela_private.cithela_selfservice_settings,cithela_private.cithela_selfservice_admissions FROM PUBLIC,anon,authenticated;
@@ -37,7 +39,9 @@ BEGIN
   RETURN jsonb_build_object('ok',false,'code','invalid_request');
  END IF;
  -- Same lock for admission and configuration; quota decisions and grants are atomic.
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('cithela-selfservice',0));
+ IF p_action IN ('admit','configure') THEN
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('cithela-selfservice',0));
+ END IF;
  SELECT * INTO STRICT cfg FROM cithela_private.cithela_selfservice_settings WHERE singleton;
  IF p_action IN ('read','configure') THEN
   IF p_actor IS NULL OR p_actor IS DISTINCT FROM p_admin OR NOT EXISTS(
@@ -60,6 +64,19 @@ BEGIN
     updated_at=statement_timestamp() WHERE singleton RETURNING * INTO cfg;
   END IF;
   RETURN jsonb_build_object('ok',true,'code','settings','settings',to_jsonb(cfg)-'singleton');
+ END IF;
+ IF p_action='resume' THEN
+  IF p_payload<>'{}'::jsonb THEN RETURN jsonb_build_object('ok',false,'code','invalid_request'); END IF;
+  IF NOT EXISTS(SELECT 1 FROM auth.users WHERE id=p_actor AND email_confirmed_at IS NOT NULL) THEN
+   RETURN jsonb_build_object('ok',false,'code','email_unverified'); END IF;
+  IF EXISTS(SELECT 1 FROM public.cithela_tenant_memberships WHERE user_id=p_actor) THEN
+   RETURN jsonb_build_object('ok',true,'code','workspace_exists'); END IF;
+  IF EXISTS(SELECT 1 FROM cithela_private.cithela_selfservice_admissions a
+    JOIN cithela_private.cithela_onboarding_grants g USING(user_id)
+    WHERE a.user_id=p_actor AND g.consumed_at IS NULL AND g.expires_at>statement_timestamp()
+     AND a.expires_at>statement_timestamp()) THEN
+   RETURN jsonb_build_object('ok',true,'code','grant_ready'); END IF;
+  RETURN jsonb_build_object('ok',false,'code','no_pending_admission');
  END IF;
  IF p_action NOT IN ('status','admit') OR (p_action='status' AND p_payload<>'{}'::jsonb) THEN
   RETURN jsonb_build_object('ok',false,'code','invalid_action');

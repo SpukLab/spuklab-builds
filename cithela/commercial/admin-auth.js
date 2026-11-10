@@ -7,6 +7,7 @@
   if(!client)client=global.supabase.createClient(url,key,{auth:{
    storageKey:STORAGE_KEY,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false
   }});
+  global.CithelaAuthCaptcha?.wrap(client);
   return client;
  }
  async function requireSession(supa,gate){

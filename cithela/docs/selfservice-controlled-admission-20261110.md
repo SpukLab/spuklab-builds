@@ -1,26 +1,35 @@
-# Alta autoservicio controlada · candidata, NO activada · 10/11/2026
+# Alta autoservicio controlada · base instalada, apertura desactivada · 10/11/2026
 
-## Implementación revisable
-El servidor reutiliza `cithela_pilot_invitation_command` (issue/redeem) y el `bootstrap_tenant` existente. No se reconstruye Auth ni el sistema de invitaciones. Nueva autorización con correo Auth confirmado, consentimiento versionado, captcha verificado por servidor y reserva atómica de cupo. Una admisión por UID y correo; reintentos no amplían vigencia. Se preservan invitaciones manuales. La autorización dura 24 h por defecto (configurable 1–48); el trial existente sigue siendo 7 días desde creación efectiva del establecimiento.
+## Estado verificable
+Migración `20261110212443_selfservice_controlled_admission` aplicada y Edge `cithela-selfservice` v1 desplegada. Nuevas altas cerradas (`enabled=false`), 0 admisiones. Valores iniciales: 5 autorizaciones/24 h, 20 pruebas activas o autorizaciones pendientes, autorización de 24 h. El alta comercial sigue por WhatsApp hasta completar las verificaciones.
 
-Límites iniciales propuestos, no aplicados: 5 nuevas autorizaciones por 24 h y 20 pruebas activas/autorizaciones pendientes. Administración puede configurar 1–20 diarias, 1–100 activas y 1–48 h de vencimiento sin código. El techo de 20 diarias respeta el límite del emisor del sistema existente. Un lock transaccional serializa revisión de límites y emisión/canje. Los grants pendientes también consumen capacidad. Reducir un cupo no suspende establecimientos existentes.
+La RPC reutiliza issue/redeem de invitaciones y el bootstrap existente. Correo confirmado en Auth, aceptación versionada, captcha servidor y ledger único UID/correo. Las reservas y agendas existentes no se migran ni reescriben. Huella agregada de establecimientos y reservas antes/después idéntica: 4 establecimientos, 4 membresías, 17 reservas, 2 grants históricos. Authenticated/anon no pueden ejecutar la nueva RPC ni leer sus tablas.
 
-`alta-autoservicio.html` oculta el registro hasta que el servidor anuncie disponibilidad; exige correo verificado y captcha al activar. No está enlazada desde la web comercial. La consola candidata muestra ajustes solamente si el endpoint privado está disponible. Los límites son del servidor; la UI no concede permisos.
+## Cambios de esta iteración
+- Protección previa a registro/login/OTP/recuperación en app, altas y administración, preparada para Turnstile nativo de Supabase Auth. Cada envío utiliza un token nuevo; el de la autorización posterior es independiente.
+- Configuración pública mínima auth_config, sin secretos, roles o datos comerciales. Los accesos actuales siguen funcionando mientras la protección global está desactivada.
+- Retomar autorización o agenda existente incluso si se completó el cupo o se pausaron nuevas altas. No se extiende vigencia ni se concede otra prueba.
+- Límite de cuerpo HTTP antes de leerlo por completo y errores de cuota/captcha diferenciados.
+- Cupos editables desde Administración con diagnóstico de configuración faltante.
+- Página informativa de condiciones de prueba, todavía sin alta pública habilitada.
 
-## Evidencia
-- 8 pruebas HTTP adversariales: gate cerrado, identidad no verificada, captcha rechazado/caído, inyección de UID/tenant/precio/duración, permisos de administrador, límites y minimización de respuesta.
-- SQL real en CITHELA dentro de BEGIN/ROLLBACK: creación candidata, cuatro identidades ficticias `invalid.example`, cierre por defecto, administrador vs otro usuario, correo no verificado, términos antiguos, issue/redeem existente, idempotencia, cuota diaria y ausencia de grant para el rechazo; permisos authenticated denegados. PASS. Todo revertido: no quedan usuarios, tablas o autorizaciones de ese ensayo.
-- No acredita concurrencia con conexiones independientes, envío de correo real, captcha productivo, restauración ni Safari.
+## Pruebas
+- 215/215 pruebas Node de la app; incluyen 20 pruebas de Auth/captcha, HTTP y recorrido de alta.
+- PostgreSQL 17.11 aislado, con dos conexiones reales y funciones existentes de invitación/bootstrap/guard comercial: 10/10 pruebas. Último cupo simultáneo y techo diario concurrente, doble solicitud del mismo usuario, pausa y reanudación, rollback sin agenda parcial, bootstrap concurrente único, trial exacto de 7 días, vencimiento, conservación/cancelación de reserva anterior y denegación de privilegios.
+- La prueba aislada utiliza tablas mínimas para dependencias existentes; no acredita RLS de producción ni recepción de correo o captcha real. Nunca usa credenciales productivas. Dependencia fijada y lockfile en test-db; CI ejecuta la prueba.
 
-## Retención explícita propuesta (sin borrado activado)
-Al vencer la prueba se bloquean nuevas reservas mediante el evaluador existente; agendas, historial y reservas existentes se conservan. Revisar a los 30 días de vencimiento y considerar limpieza recién desde los 90 días, con aviso previo de al menos 15 días y posibilidad de exportación. Excluir cuentas pagas, pilotos protegidos, cortesías vigentes, reservas futuras, reclamos y conservación requerida. Todo borrado requiere revisión individual y verificación específica; este desarrollo no contiene DELETE ni job de purga. La política debe aceptarse/publicarse antes del alta abierta. Conservación del ledger de prueba/consentimiento y minimización del correo necesitan revisión antes de cualquier eliminación de identidad para no permitir reactivar trials ni conservar datos sin plazo.
+## Configuración pendiente (no pegar secretos en chats o repositorio)
+1. Cloudflare → Turnstile → Add widget. Nombre CITHELA, hostname spuklab.github.io, modo Managed. Crear un widget propio; no usar claves de prueba en producción.
+2. Supabase CITHELA → Edge Functions → Secrets. Guardar CITHELA_TURNSTILE_SITEKEY y CITHELA_TURNSTILE_SECRET. El Sitekey es público; Secret key solo en Supabase.
+3. Tras publicar todos los clientes preparados: Supabase → Authentication → Bot and Abuse Protection → CAPTCHA protection: Turnstile, misma Secret key. Establecer CITHELA_AUTH_CAPTCHA_ENABLED=true solo coordinado con esa configuración. Comprobar login profesional/admin, email/WhatsApp OTP y recuperación. No activar esta protección antes de publicar los clientes.
+4. Authentication → URL Configuration: permitir exactamente https://spuklab.github.io/spuklab-builds/cithela/alta-autoservicio.html. Comprobar SMTP ya configurado, cuota de correo y confirmación real sin autoconfirmación.
+5. Realizar alta y retorno del correo, creación de espacio, servicios/horarios/logo y pruebas A/B con dos identidades. Verificar caducidad y nuevas reservas bloqueadas conservando las anteriores; Safari iPhone/iPad/escritorio.
+6. Definir la política final de minimización/plazo del registro de aceptación y datos identificatorios. La propuesta de revisión a 30 días, evaluación desde 90 y aviso mínimo 15 días no activa borrados. Mantener exclusiones de pilotos/cortesías/cuentas pagas/reservas futuras y exportación previa.
+7. Solo con todo verificado, CITHELA_SELFSERVICE_ENABLED=true, habilitar cupos en consola y cambiar CTA web a Comenzar prueba. Sin cobros ni purgas automáticas.
 
-## Puertas antes de activar
-1. Configurar y verificar Turnstile real para spuklab.github.io; secretos solo en servidor. Verificar antispam del registro de Supabase Auth (captcha y límites de email) además del captcha de admisión. No habilitar registro público con el segundo captcha como única protección de SMTP.
-2. Validar SQL fuera de producción con dos conexiones concurrentes, expiración, rollback y el bootstrap completo. Generar migración con CLI, revisar advisors y aplicar coordinadamente; el archivo sql-review es propuesta, no migración ya instalada.
-3. Desplegar endpoint cerrado y configurar `CITHELA_SELFSERVICE_ENABLED=false`. Estado público requiere gateway verify_jwt=false; read/configure/admit validan JWT explícitamente con auth.getUser y read/configure verifican UID administrativo. Verificar la ruta y origin, no inferir permisos del JWT enviado por el navegador.
-4. Probar entrega y retorno del correo a alta-autoservicio.html (allowlist Auth), crear un establecimiento ficticio, servicios/horarios/logo, validar acceso A/B entre dos usuarios reales, vencimiento y nuevas reservas bloqueadas sin afectar las existentes.
-5. Validar sesiones administrativas y profesionales simultáneas en Safari iPhone/iPad/escritorio. Ningún cierre global de sesión debe revocar el otro acceso.
-6. Publicar condiciones/retención y aprobar todo el recorrido. Solo entonces habilitar servidor y cupos, y cambiar CTA comercial a Comenzar prueba. No pagos automáticos ni eliminación.
+Faltan claves Turnstile y recepción de correo de prueba para acreditar E2E. La apertura permanece pendiente; instalar la base cerrada no habilita el registro público.
 
-Bloqueante actual: no hay captcha productivo ni verificación E2E de esta ruta. La web publicada mantiene solicitud por WhatsApp. No presentar el servicio como autoservicio ya operativo.
+## Seguridad existente a revisar antes de apertura
+Advisor conserva avisos previos: protección de contraseñas filtradas desactivada y RPC cithela_commercial_status SECURITY DEFINER para authenticated. Esta última comprueba auth.uid y membresía owner/admin antes de devolver estado propio; no se amplían sus permisos en este cambio. Las tablas privadas con RLS sin políticas mantienen denegación a clientes.
+- https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+- https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
