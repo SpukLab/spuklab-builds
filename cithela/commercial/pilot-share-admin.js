@@ -91,7 +91,7 @@ $('copy-share').addEventListener('click',async()=>{
 $('send-share').addEventListener('click',()=>{
  if(!shareUrl)return;
  const message='Te invito a probar CITHELA, una agenda de turnos para profesionales.\n\n'+
-  'Abrí el enlace, registrate con tu correo y confirmalo. Configurá tu agenda y probala 7 días gratis, sin tarjeta ni cobro automático.\n\n'+
+  'Abrí el enlace, registrate con tu correo y confirmalo. Configurá tu agenda y probala 15 días gratis, sin tarjeta ni cobro automático.\n\n'+
   shareUrl+'\n\nEste enlace vence en 7 días y tiene cupos limitados.';
  window.location.href='https://wa.me/?text='+encodeURIComponent(message);
 });

@@ -23,36 +23,37 @@ test('PostgreSQL 17: concurrent capacity, retries, bootstrap rollback, expiry an
   await c1.query(source('supabase/pilot-invitation-table-20261106.sql'));
   await c1.query(source('supabase/pilot-invitation-command-20261106.sql'));
   await c1.query(source('sql-review/selfservice-admission-20261110.sql'));
+  await c1.query(source('supabase/commercial-trial-15-days-20261111.sql'));
   const cmd=async(c,id,action,payload={})=>(await c.query('SELECT public.cithela_selfservice_command($1,$2,$3,$4) out',[id,a,action,payload])).rows[0].out;
   assert.equal((await cmd(c1,null,'status')).code,'admissions_closed');
   await cmd(c1,a,'configure',{enabled:true,daily_limit:20,active_limit:1,invitation_hours:24});
-  const result=await Promise.all([cmd(c1,u,'admit',{terms_version:'selfservice-trial-20261110'}),cmd(c2,v,'admit',{terms_version:'selfservice-trial-20261110'})]);
+  const result=await Promise.all([cmd(c1,u,'admit',{terms_version:'selfservice-trial-20261111'}),cmd(c2,v,'admit',{terms_version:'selfservice-trial-20261111'})]);
   assert.deepEqual(result.map(r=>r.code).sort(),['capacity_reached','grant_ready']);const winner=result[0].ok?u:v,loser=winner===u?v:u;
   await t.test('last slot is reserved once across separate connections',async()=>{assert.equal((await c1.query('SELECT count(*)::int n FROM cithela_private.cithela_selfservice_admissions')).rows[0].n,1);assert.equal((await c1.query('SELECT count(*)::int n FROM cithela_private.cithela_onboarding_grants')).rows[0].n,1)});
-  await t.test('same-user simultaneous retry never extends or duplicates the invitation',async()=>{const before=(await c1.query('SELECT expires_at FROM cithela_private.cithela_onboarding_grants WHERE user_id=$1',[winner])).rows[0].expires_at;const results=await Promise.all([cmd(c1,winner,'admit',{terms_version:'selfservice-trial-20261110'}),cmd(c2,winner,'admit',{terms_version:'selfservice-trial-20261110'})]);assert.ok(results.every(r=>r.code==='grant_ready'));assert.equal(String((await c1.query('SELECT expires_at FROM cithela_private.cithela_onboarding_grants WHERE user_id=$1',[winner])).rows[0].expires_at),String(before))});
-  await t.test('paused admissions do not prevent resuming an existing authorization',async()=>{await cmd(c1,a,'configure',{enabled:false,daily_limit:20,active_limit:1,invitation_hours:24});assert.equal((await cmd(c1,winner,'resume')).code,'grant_ready');assert.equal((await cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261110'})).code,'admissions_closed')});
+  await t.test('same-user simultaneous retry never extends or duplicates the invitation',async()=>{const before=(await c1.query('SELECT expires_at FROM cithela_private.cithela_onboarding_grants WHERE user_id=$1',[winner])).rows[0].expires_at;const results=await Promise.all([cmd(c1,winner,'admit',{terms_version:'selfservice-trial-20261111'}),cmd(c2,winner,'admit',{terms_version:'selfservice-trial-20261111'})]);assert.ok(results.every(r=>r.code==='grant_ready'));assert.equal(String((await c1.query('SELECT expires_at FROM cithela_private.cithela_onboarding_grants WHERE user_id=$1',[winner])).rows[0].expires_at),String(before))});
+  await t.test('paused admissions do not prevent resuming an existing authorization',async()=>{await cmd(c1,a,'configure',{enabled:false,daily_limit:20,active_limit:1,invitation_hours:24});assert.equal((await cmd(c1,winner,'resume')).code,'grant_ready');assert.equal((await cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261111'})).code,'admissions_closed')});
   await t.test('rollback restores the grant without leaving a partial establishment',async()=>{await c1.query('BEGIN');await c1.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[winner]);assert.equal((await c1.query("SELECT cithela_private.bootstrap_tenant('Disposable rollback') out")).rows[0].out.code,'workspace_created');await c1.query('ROLLBACK');assert.equal((await c1.query('SELECT count(*)::int n FROM public.cithela_tenants')).rows[0].n,0);assert.equal((await cmd(c1,winner,'resume')).code,'grant_ready')});
   let tenant;
-  await t.test('concurrent bootstrap creates one agenda and one exact seven-day entitlement',async()=>{
+  await t.test('concurrent bootstrap creates one agenda and one exact fifteen-day entitlement',async()=>{
    await c1.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[winner]);await c2.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[winner]);
    const results=await Promise.all([c1.query("SELECT cithela_private.bootstrap_tenant('Workspace A') out"),c2.query("SELECT cithela_private.bootstrap_tenant('Workspace A') out")]);assert.deepEqual(results.map(r=>r.rows[0].out.code).sort(),['workspace_created','workspace_exists']);tenant=results[0].rows[0].out.tenant.id;
-   const ent=(await c1.query("SELECT count(*)::int n,bool_and(trial_ends_at=trial_started_at+interval '7 days') duration FROM cithela_private.cithela_commercial_entitlements")).rows[0];assert.equal(ent.n,1);assert.equal(ent.duration,true);assert.equal((await cmd(c1,winner,'resume')).code,'workspace_exists');
+   const ent=(await c1.query("SELECT count(*)::int n,bool_and(trial_ends_at=trial_started_at+interval '15 days') duration FROM cithela_private.cithela_commercial_entitlements")).rows[0];assert.equal(ent.n,1);assert.equal(ent.duration,true);assert.equal((await cmd(c1,winner,'resume')).code,'workspace_exists');
   });
   await t.test('expired trials reject new reservations but retain and allow canceling old ones',async()=>{
    await c1.query("INSERT INTO public.cithela_appointments(tenant_id,status) VALUES($1,'confirmed')",[tenant]);
-   await c1.query("UPDATE cithela_private.cithela_commercial_entitlements SET trial_started_at=trial_started_at-interval '8 days',trial_ends_at=trial_ends_at-interval '8 days'");
+   await c1.query("UPDATE cithela_private.cithela_commercial_entitlements SET trial_started_at=trial_started_at-interval '16 days',trial_ends_at=trial_ends_at-interval '16 days'");
    await assert.rejects(c1.query("INSERT INTO public.cithela_appointments(tenant_id,status) VALUES($1,'confirmed')",[tenant]),/cithela_subscription_required/);
    await c1.query("UPDATE public.cithela_appointments SET status='cancelled' WHERE tenant_id=$1",[tenant]);assert.equal((await c1.query('SELECT count(*)::int n FROM public.cithela_appointments')).rows[0].n,1);
   });
   await t.test('expired authorizations cannot bootstrap or resume a second trial',async()=>{
-   await cmd(c1,a,'configure',{enabled:true,daily_limit:20,active_limit:1,invitation_hours:1});assert.equal((await cmd(c1,w,'admit',{terms_version:'selfservice-trial-20261110'})).code,'grant_ready');
+   await cmd(c1,a,'configure',{enabled:true,daily_limit:20,active_limit:1,invitation_hours:1});assert.equal((await cmd(c1,w,'admit',{terms_version:'selfservice-trial-20261111'})).code,'grant_ready');
    await c1.query("UPDATE cithela_private.cithela_onboarding_grants SET approved_at=approved_at-interval '2 days',expires_at=expires_at-interval '2 days' WHERE user_id=$1",[w]);await c1.query("UPDATE cithela_private.cithela_selfservice_admissions SET accepted_at=accepted_at-interval '2 days',expires_at=expires_at-interval '2 days' WHERE user_id=$1",[w]);
-   assert.equal((await cmd(c1,w,'resume')).code,'no_pending_admission');await c1.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[w]);assert.equal((await c1.query("SELECT cithela_private.bootstrap_tenant('Expired') out")).rows[0].out.code,'onboarding_not_authorized');assert.equal((await cmd(c1,w,'admit',{terms_version:'selfservice-trial-20261110'})).code,'trial_already_used');
+   assert.equal((await cmd(c1,w,'resume')).code,'no_pending_admission');await c1.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[w]);assert.equal((await c1.query("SELECT cithela_private.bootstrap_tenant('Expired') out")).rows[0].out.code,'onboarding_not_authorized');assert.equal((await cmd(c1,w,'admit',{terms_version:'selfservice-trial-20261111'})).code,'trial_already_used');
   });
   await t.test('daily admission ceiling is atomic across two connections',async()=>{
    const extra='55555555-5555-4555-8555-555555555555';await c1.query('INSERT INTO auth.users VALUES($1,$2,now())',[extra,'four@invalid.example']);
    await cmd(c1,a,'configure',{enabled:true,daily_limit:2,active_limit:100,invitation_hours:24});
-   const results=await Promise.all([cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261110'}),cmd(c2,extra,'admit',{terms_version:'selfservice-trial-20261110'})]);assert.deepEqual(results.map(r=>r.code).sort(),['capacity_reached','grant_ready']);
+   const results=await Promise.all([cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261111'}),cmd(c2,extra,'admit',{terms_version:'selfservice-trial-20261111'})]);assert.deepEqual(results.map(r=>r.code).sort(),['capacity_reached','grant_ready']);
    assert.equal((await c1.query("SELECT count(*)::int n FROM cithela_private.cithela_selfservice_admissions WHERE accepted_at>now()-interval '24 hours'")).rows[0].n,2);
   });
   await t.test('restricted tester can complete onboarding while public registration remains closed',async()=>{
@@ -66,13 +67,13 @@ test('PostgreSQL 17: concurrent capacity, retries, bootstrap rollback, expiry an
    assert.equal((await cmd(c1,null,'status')).code,'admissions_closed');
    assert.equal((await cmd(c1,qa,'test_status')).code,'available');
    assert.equal((await cmd(c1,loser,'test_status')).code,'admissions_closed');
-   assert.equal((await cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261110'})).code,'admissions_closed');
-   const results=await Promise.all([cmd(c1,qa,'admit',{terms_version:'selfservice-trial-20261110'}),cmd(c2,qa,'admit',{terms_version:'selfservice-trial-20261110'})]);assert.ok(results.every(r=>r.code==='grant_ready'));
+   assert.equal((await cmd(c1,loser,'admit',{terms_version:'selfservice-trial-20261111'})).code,'admissions_closed');
+   const results=await Promise.all([cmd(c1,qa,'admit',{terms_version:'selfservice-trial-20261111'}),cmd(c2,qa,'admit',{terms_version:'selfservice-trial-20261111'})]);assert.ok(results.every(r=>r.code==='grant_ready'));
    assert.equal((await c1.query("SELECT enabled FROM cithela_private.cithela_selfservice_settings")).rows[0].enabled,false);
    await c1.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[qa]);assert.equal((await c1.query("SELECT cithela_private.bootstrap_tenant('Restricted QA') out")).rows[0].out.code,'workspace_created');
    assert.equal((await cmd(c1,qa,'resume')).code,'workspace_exists');
    await c1.query("UPDATE cithela_private.cithela_pilot_invites SET issued_at=issued_at-interval '3 days',expires_at=expires_at-interval '3 days' WHERE email=$1",['qa-two@invalid.example']);
-   assert.equal((await cmd(c1,qa2,'test_status')).code,'admissions_closed');assert.equal((await cmd(c1,qa2,'admit',{terms_version:'selfservice-trial-20261110'})).code,'admissions_closed');
+   assert.equal((await cmd(c1,qa2,'test_status')).code,'admissions_closed');assert.equal((await cmd(c1,qa2,'admit',{terms_version:'selfservice-trial-20261111'})).code,'admissions_closed');
   });
   await t.test('public roles cannot invoke the privileged command or read the admission ledger',async()=>{for(const role of ['anon','authenticated']){const r=await c1.query("SELECT has_function_privilege($1,'public.cithela_selfservice_command(uuid,uuid,text,jsonb)','execute') fn,has_table_privilege($1,'cithela_private.cithela_selfservice_admissions','select') tbl",[role]);assert.equal(r.rows[0].fn,false);assert.equal(r.rows[0].tbl,false)}});
  }finally{clearInterval(keepalive);if(c1)await c1.end();if(c2)await c2.end();if(db.process?.exitCode!==null)db.process=undefined;await db.stop().catch(()=>{});rmSync(dir,{recursive:true,force:true})}

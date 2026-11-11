@@ -181,7 +181,7 @@ test('commercial panel explains grace period timing and does not confuse draft p
  assert.match(html,/Podés ampliar el acceso en cualquier momento/);
  assert.match(html,/Los precios especiales para un cliente requieren un acuerdo individual/);
  assert.match(html,/Esta tarifa es general, no específica por establecimiento/);
- assert.match(invites,/Una vez aceptada, el profesional obtiene una prueba inicial de 7 días/);
+ assert.match(invites,/Una vez aceptada, el profesional obtiene una prueba inicial de 15 días/);
  assert.match(invites,/Después de que cree su establecimiento/);
  assert.match(invites,/Centro comercial/);
  assert.doesNotMatch(invites,/CITHELA_MP_TEST_ACCESS_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
