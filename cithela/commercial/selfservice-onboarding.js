@@ -70,6 +70,15 @@
   }catch(e){message(e.code==='over_email_send_rate_limit'?'Se alcanzó el límite de correos. Esperá antes de volver a intentar.':e.message||'No se pudo crear la cuenta.')}
   finally{busy=false;render()}
  });
+ $('verify-email-code').addEventListener('click',async()=>{
+  if(busy)return;
+  const email=$('email').value.trim().toLowerCase(),token=$('email-code').value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!/^\d{6}$/.test(token))return message('Ingresá tu correo y los seis números del código.');
+  busy=true;render();message('Verificando correo…');
+  try{const {data,error}=await client.auth.verifyOtp({email,token,type:'email'});if(error)throw error;session=data?.session||null;if(!session?.user?.email_confirmed_at)throw Error('No se pudo confirmar el correo.');await check();message('Correo verificado. Podés continuar con la prueba.')}
+  catch{message('El código no es válido o venció. Revisá el último correo recibido.')}
+  finally{busy=false;$('email-code').value='';render()}
+ });
  $('login').addEventListener('click',async()=>{
   if(busy)return;busy=true;render();message('Ingresando…');
   try{
