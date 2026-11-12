@@ -45,7 +45,7 @@ test('new professional sees existing cloud configuration steps, without false co
   assert.equal(app.refs['cithela-first-steps'].hidden,false);
   assert.match(app.refs['first-step-hours-state'].textContent,/Definí/);
   assert.match(app.refs['first-step-services-state'].textContent,/Revisá/);
-  assert.match(app.refs['first-step-people-state'].textContent,/Creá/);
+  assert.match(app.refs['first-step-people-state'].textContent,/Cargá nombre y WhatsApp/);
   app.renderCithelaFirstSteps({
     tenant:{id:'a'},membership:{role:'owner'},appointmentCount:0,
     workingHoursCount:6,serviceCount:1,peopleCount:1
