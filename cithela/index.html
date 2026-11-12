@@ -4387,18 +4387,27 @@ async function cloudMarkOutcome(id,outcome){
 }
 
 let cloudWhatsAppDraft=null;
+let cloudLastRescheduled=null;
+function cloudRescheduledInThisSession(id){
+  const item=cloudLastRescheduled;
+  const appointment=id?cloudAppointmentRaw(id):null;
+  return !!(item&&appointment&&professionalCloudReady()&&
+    String(item.id)===String(id)&&
+    String(item.tenantId)===String(CithelaCloud.state().tenant?.id)&&
+    Number(item.rowVersion)===Number(appointment.row_version));
+}
 function cloudWhatsAppKinds(status,id){
   const a=id?cloudAppointmentRaw(id):null;
   const extra=a?.deposit_status==='requested'&&Number(a?.deposit_amount_minor)>0
     ?[['deposit','Solicitar seña']]:[];
+  const rescheduled=cloudRescheduledInThisSession(id)
+    ?[['rescheduled','Turno reprogramado']]:[];
   if(status==='pendiente')return [
-    ['booking','Nueva reserva pendiente'],...extra,
-    ['rescheduled','Turno reprogramado'],
+    ['booking','Nueva reserva pendiente'],...rescheduled,...extra,
     ['reminder','Recordatorio']
   ];
   if(status==='confirmado')return [
-    ['confirmed','Turno confirmado'],...extra,
-    ['rescheduled','Turno reprogramado'],
+    ['confirmed','Turno confirmado'],...rescheduled,...extra,
     ['reminder','Recordatorio']
   ];
   if(status==='cancelado')return [['cancelled','Turno cancelado']];
@@ -4456,8 +4465,9 @@ function cloudOpenWhatsApp(id,preset){
   if(!t||!raw||!pac||!validPhone(n)){toast('Paciente sin teléfono de WhatsApp válido');return;}
   const kinds=cloudWhatsAppKinds(t.estado,t.id);
   if(!kinds.length){toast('No hay avisos disponibles para este estado');return;}
-  // A pending appointment can be new or rescheduled: require an explicit choice.
-  const kind=kinds.some(([k])=>k===preset)?preset:(t.estado==='pendiente'?'':kinds[0][0]);
+  // Select the notice grounded in the current status. Do not require patients
+  // or operators to guess whether a new booking has been rescheduled.
+  const kind=kinds.some(([k])=>k===preset)?preset:kinds[0][0];
   cloudWhatsAppDraft={
     id:t.id,tenantId:CithelaCloud.state().tenant.id,
     rowVersion:Number(raw.row_version),startsAt:raw.starts_at,
@@ -4653,8 +4663,11 @@ async function confirmReprogram(){
       wkOff=Math.round((newDate-startOfWeek)/604800000);
       selDate=fecha;
       await CithelaCloud.refresh();
+      const currentRaw=cloudAppointmentRaw(t.id);
+      cloudLastRescheduled=currentRaw&&CithelaCloud.state().tenant?.id===s.tenant.id
+        ?{tenantId:s.tenant.id,id:t.id,rowVersion:Number(currentRaw.row_version)}:null;
       renderCal('med');renderStats();renderAgenda();
-      toast('Turno reprogramado en la nube ✓');
+      toast('Turno reprogramado. Prepará el aviso por WhatsApp desde la agenda.');
     }catch(err){
       if(err?.message==='stale_write'){
         await CithelaCloud.refresh();closeM('m-reprogram');
