@@ -734,7 +734,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       </div>
       <label class="lbl">Motivo (opcional)</label>
       <input class="inp" id="nt-motivo" placeholder="Motivo del turno">
-      <button class="btn-main" id="nt-submit" type="button" style="margin-top:4px;" onclick="crearTurnoMed()">Confirmar turno</button>
+      <button class="btn-main" id="nt-submit" type="button" style="margin-top:4px;" onclick="crearTurnoMed()">Guardar turno</button>
     </div>
   </div>
 
@@ -5178,8 +5178,9 @@ function ntRenderPersonOptions(preferredId){
   const people=professionalCloudReady()
     ?(CithelaCloud.state().people||[]).map(p=>({id:p.id,nombre:p.display_name||'',tel:p.phone_e164||''}))
     :DB.p();
+  const qDigits=normalizePhone(q);
   const matches=people.filter(p=>!q||String(p.nombre||'').toLocaleLowerCase().includes(q)||
-    normalizePhone(p.tel||'').includes(normalizePhone(q)));
+    (qDigits.length>=2&&normalizePhone(p.tel||'').includes(qDigits)));
   select.innerHTML='<option value="">— Elegí una persona —</option>'+
     matches.map(p=>'<option value="'+escHtml(String(p.id))+'">'+escHtml(p.nombre||'—')+'</option>').join('');
   if(matches.some(p=>String(p.id)===old))select.value=old;
