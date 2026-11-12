@@ -3541,7 +3541,10 @@ async function resumeCloudSession(){
     const restored=initial.signedIn&&initial.membership&&initial.tenant
       ?initial:await CithelaCloud.refresh();
     if(restored.signedIn&&restored.membership&&restored.tenant){
-      await loginWithCloudSession();
+      // We already obtained the authoritative tenant and membership; avoid
+      // another refresh that can race with INITIAL_SESSION in iOS Safari.
+      me={role:'medico',nombre:(restored.email||'Profesional').split('@')[0],cloud:true};
+      goMed();
       return;
     }
     scr('login');
