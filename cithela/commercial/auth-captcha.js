@@ -8,18 +8,30 @@
  const ENDPOINT='https://mcqknmqhtmihegmifuka.supabase.co/functions/v1/cithela-selfservice';
  const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
  const wrapped=new WeakSet();let cached=null,cacheAt=0,loading=null,pending=null;
- async function config(){
-  if(cached&&Date.now()-cacheAt<60000)return cached;
+ async function config(force=false){
+  if(!force&&cached&&Date.now()-cacheAt<60000)return cached;
   try{
    const res=await root.fetch(ENDPOINT,{method:'POST',headers:{apikey:KEY,'content-type':'application/json'},body:JSON.stringify({action:'auth_config',payload:{}}),signal:AbortSignal.timeout(6000)});
    const data=await res.json();
    if(!res.ok||data?.ok!==true||typeof data.required!=='boolean')throw Error('config_unavailable');
-   cached={required:data.required,sitekey:typeof data.sitekey==='string'?data.sitekey:null};cacheAt=Date.now();return cached;
+   // A configured public sitekey is enough to prepare a CAPTCHA, even if a
+   // separate feature flag has not been synchronized with Supabase Auth.
+   const sitekey=typeof data.sitekey==='string'&&data.sitekey.trim()?data.sitekey.trim():null;
+   cached={required:data.required===true||!!sitekey,sitekey};cacheAt=Date.now();return cached;
   }catch{
-   // Auth remains authoritative: when its CAPTCHA is enabled it rejects any missing token.
-   // This preserves established login while the optional selfservice endpoint is unconfigured.
+   // Keep current sessions working. Auth remains authoritative; a missing
+   // token is handled below and never confused with invalid credentials.
    return cached||{required:false,sitekey:null};
   }
+ }
+ function missingCaptcha(error){
+  return !!error&&(String(error.code||'').toLowerCase()==='captcha_failed'&&
+   /no captcha_token found|captcha.?token/i.test(String(error.message||''))||
+   /captcha protection.*no captcha_token found/i.test(String(error.message||'')));
+ }
+ function captchaError(message){
+  return {data:null,error:{name:'CithelaCaptchaError',code:'captcha_required',
+   message:message||'La verificación de seguridad no está disponible. Contactá al administrador de CITHELA; no es un problema de tu contraseña.'}};
  }
  function load(){
   if(root.turnstile)return Promise.resolve();
@@ -66,13 +78,23 @@
    const original=client.auth[method].bind(client.auth);
    client.auth[method]=async(...args)=>{
     const cfg=await getConfig();
-    if(!cfg.required)return original(...args);
-    try{
-     const value=await getToken(cfg.sitekey,'cithela-auth');
-     if(typeof value!=='string'||!value)throw Error('Comprobación de seguridad incompleta.');
-     if(method==='resetPasswordForEmail')return original(args[0],{...args[1],captchaToken:value});
-     const first=args[0]||{};return original({...first,options:{...first.options,captchaToken:value}},...args.slice(1));
-    }catch(e){return {data:null,error:{name:'CithelaCaptchaError',code:'captcha_required',message:e.message||'Repetí la comprobación de seguridad.'}}}
+    const runWithCaptcha=async sitekey=>{
+     if(!sitekey)return captchaError();
+     try{
+      const value=await getToken(sitekey,'cithela-auth');
+      if(typeof value!=='string'||!value)throw Error('Comprobación de seguridad incompleta.');
+      if(method==='resetPasswordForEmail')return original(args[0],{...args[1],captchaToken:value});
+      const first=args[0]||{};
+      return original({...first,options:{...first.options,captchaToken:value}},...args.slice(1));
+     }catch(e){return captchaError(e.message||'Repetí la comprobación de seguridad.')}
+    };
+    if(cfg.required)return runWithCaptcha(cfg.sitekey);
+    const result=await original(...args);
+    if(!missingCaptcha(result?.error))return result;
+    // The application and Auth settings can differ. Retry exactly once with a
+    // fresh token; never retry invalid credentials or other Auth failures.
+    const fresh=await getConfig(true);
+    return runWithCaptcha(fresh.sitekey);
    };
   }
   return client;
