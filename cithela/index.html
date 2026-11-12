@@ -658,6 +658,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <div class="cal" id="cal-med"></div>
     <div class="agenda-primary-action"><button class="btn-main" type="button"
       onclick="tab('medico','nuevo',document.getElementById('medico-tab-nuevo'))">+ Nuevo turno</button></div>
+    <div id="nt-created-summary" hidden role="status" aria-live="polite"></div>
     <div id="ops-queue-wrap" style="display:none;">
       <p class="sh" id="ops-queue-title">Próximos asuntos a gestionar</p>
       <p id="ops-queue-summary" class="ops-queue-summary" role="status" aria-live="polite"></p>
@@ -697,7 +698,22 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <p class="sh">Crear turno</p>
     <div class="form-card">
       <label class="lbl js-person-singular">Paciente</label>
-      <select class="inp" id="nt-pac"></select>
+      <input class="inp" id="nt-person-filter" type="search" autocomplete="off"
+        placeholder="Buscar por nombre o WhatsApp" aria-label="Buscar persona para el turno"
+        oninput="ntRenderPersonOptions()">
+      <select class="inp" id="nt-pac" aria-label="Seleccionar persona"></select>
+      <details class="cithela-config-group person-create" id="nt-person-create-details" style="margin:10px 0 18px;">
+        <summary>+ Es una persona nueva <span aria-hidden="true">⌄</span></summary>
+        <div class="form-card" style="margin:0 10px 12px;">
+          <label class="lbl" for="nt-person-name">Nombre y apellido</label>
+          <input class="inp" id="nt-person-name" maxlength="160" autocomplete="name" placeholder="Nombre y apellido">
+          <label class="lbl" for="nt-person-phone">WhatsApp</label>
+          <input class="inp" id="nt-person-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="221 123 4567">
+          <p class="contact-note">En Argentina: 10 dígitos con código de área, o +549… En la agenda compartida el WhatsApp es obligatorio.</p>
+          <button class="btn-main" id="nt-person-create-submit" type="button" onclick="ntCreatePersonAndSelect()">Guardar persona y continuar</button>
+          <p id="nt-person-create-status" class="contact-note" role="status" aria-live="polite"></p>
+        </div>
+      </details>
       <label class="lbl">Servicio</label>
       <select class="inp" id="nt-service" onchange="fillNTHoras()"></select>
       <label class="lbl">Profesional / recurso</label>
@@ -4100,6 +4116,7 @@ function renderOpsQueue(){
 
 function renderAgenda(){
   renderOpsQueue();
+  renderNtCreatedSummary();
   const key=selDate||today();
   const cloudMode=professionalCloudReady();
   const pacs=cloudMode?null:DB.p();
@@ -4423,7 +4440,7 @@ function cloudWhatsAppContent(t,pac,kind){
   else
     body='Te recordamos tu turno del '+when+
       '. Estado actual: '+(t.estado==='confirmado'?'confirmado':'pendiente de confirmación')+'.';
-  return hello+body+'\n\nSi ya tenés acceso, podés consultar y gestionar tus turnos en '+CITHELA_PUBLIC_URL;
+  return hello+body+'\n\nSi necesitás cambiar o cancelar el turno, respondé por este WhatsApp. No necesitás crear una cuenta para recibir este aviso.';
 }
 function closeCloudWhatsAppDraft(){
   cloudWhatsAppDraft=null;
@@ -4673,10 +4690,10 @@ function renderPacs(){
       const wa=normalizePhone(p.phone_e164||'');
       return`<div class="prow cloud-person-row">
         <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
-        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''} · nube</div></div>
+        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
         <div class="cloud-person-actions">
+          <button class="mb teal" type="button" onclick="ntStartForPerson('${p.id}')">+ Turno</button>
           <button class="mb ghost" type="button" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
-          ${wa?`<button class="mb wa" type="button" onclick="openPatientWhatsApp('${p.id}')">Mensaje</button>`:''}
         </div>
       </div>`;
     }).join('');
@@ -4690,7 +4707,8 @@ function renderPacs(){
     return`<div class="prow">
       <div class="ava">${ini(p.nombre)}</div>
       <div class="prow-info"><div class="pname">${p.nombre}</div><div class="pmeta">${escHtml(p.tel||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
-      <button class="mb ghost" onclick="verFicha(${p.id})">Ver</button>
+      <button class="mb teal" type="button" onclick="ntStartForPerson(${p.id})">+ Turno</button>
+      <button class="mb ghost" type="button" onclick="verFicha(${p.id})">Ver</button>
     </div>`;
   }).join('');
 }
@@ -4923,6 +4941,7 @@ async function cloudVerFicha(id){
           <div style="font-size:.68rem;color:var(--ink3);margin-top:4px;">${contact}</div>
         </div>
       </div>
+      <button class="mb teal" type="button" style="margin-bottom:12px;" onclick="closeM('m-ficha');ntStartForPerson('${p.id}')">+ Crear turno</button>
       ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Enviar mensaje libre</button>`:''}
       <hr class="divider">
       <p class="sh" style="margin:0 0 7px;">Información compartida por la persona</p>
@@ -5141,12 +5160,133 @@ function fillResourceSelect(id){
   el.innerHTML=resources().map(r=>`<option value="${r.id}">${escHtml(r.nombre)}</option>`).join('');
   if(current&&resourceById(current))el.value=current;
 }
+
+let ntPersonCreateBusy=false;
+let ntRecentCreated=null;
+function ntPhoneForBooking(input){
+  const raw=String(input||'').trim(),digits=raw.replace(/\D/g,'');
+  if(/^\+[1-9][0-9]{7,14}$/.test(raw))return '+'+digits;
+  if(/^549[0-9]{10}$/.test(digits))return '+'+digits;
+  if(/^54[0-9]{10}$/.test(digits))return '+549'+digits.slice(2);
+  if(/^[0-9]{10}$/.test(digits))return '+549'+digits;
+  return '';
+}
+function ntRenderPersonOptions(preferredId){
+  const select=$('nt-pac');if(!select)return;
+  const old=String(preferredId||select.value||'');
+  const q=String($('nt-person-filter')?.value||'').trim().toLocaleLowerCase();
+  const people=professionalCloudReady()
+    ?(CithelaCloud.state().people||[]).map(p=>({id:p.id,nombre:p.display_name||'',tel:p.phone_e164||''}))
+    :DB.p();
+  const matches=people.filter(p=>!q||String(p.nombre||'').toLocaleLowerCase().includes(q)||
+    normalizePhone(p.tel||'').includes(normalizePhone(q)));
+  select.innerHTML='<option value="">— Elegí una persona —</option>'+
+    matches.map(p=>'<option value="'+escHtml(String(p.id))+'">'+escHtml(p.nombre||'—')+'</option>').join('');
+  if(matches.some(p=>String(p.id)===old))select.value=old;
+}
+function ntStartForPerson(id){
+  const button=$('medico-tab-nuevo');if(!button)return;
+  tab('medico','nuevo',button);
+  $('nt-person-filter').value='';
+  ntRenderPersonOptions(id);
+  $('nt-pac').value=String(id);
+  $('nt-person-create-details').open=false;
+}
+function ntFinishNewPerson(id,wasCreated){
+  $('nt-person-filter').value='';
+  ntRenderPersonOptions(id);
+  $('nt-pac').value=String(id);
+  $('nt-person-name').value='';
+  $('nt-person-phone').value='';
+  $('nt-person-create-status').textContent='';
+  $('nt-person-create-details').open=false;
+  toast(wasCreated?'Persona guardada. Elegí el servicio y el horario.':'La persona ya estaba registrada. La seleccionamos.');
+}
+async function ntCreatePersonAndSelect(){
+  if(ntPersonCreateBusy)return;
+  const name=String($('nt-person-name').value||'').trim();
+  const raw=String($('nt-person-phone').value||'').trim();
+  const phone=raw?ntPhoneForBooking(raw):'';
+  const cloud=professionalCloudReady();
+  const status=$('nt-person-create-status'),button=$('nt-person-create-submit');
+  if(!name||name.length>160){status.textContent='Ingresá nombre y apellido.';return;}
+  if(cloud&&!professionalCloudWritable()){status.textContent='Tu usuario no puede crear personas.';return;}
+  if((cloud||raw)&&!phone){
+    status.textContent='Revisá el WhatsApp: 10 dígitos argentinos con área o número internacional con +.';
+    return;
+  }
+  const people=cloud?CithelaCloud.state().people||[]:DB.p();
+  const existing=phone&&people.find(p=>normalizePhone(cloud?p.phone_e164:p.tel)===normalizePhone(phone));
+  if(existing){
+    const savedName=String(cloud?existing.display_name:existing.nombre);
+    if(savedName.toLocaleLowerCase()!==name.toLocaleLowerCase()){
+      status.textContent='Este WhatsApp ya pertenece a '+savedName+'. Revisá el número o seleccioná esa persona en la lista.';
+      return;
+    }
+    ntFinishNewPerson(existing.id,false);return;
+  }
+  ntPersonCreateBusy=true;button.disabled=true;status.textContent='Guardando persona…';
+  try{
+    if(cloud){
+      const tenantId=CithelaCloud.state().tenant.id;
+      const result=await CithelaCloud.resolvePerson({
+        tenantId,requestId:cloudRequestId('person'),phone,name,createIfMissing:true
+      });
+      if(!result?.ok)throw Error(result?.code||'No se pudo registrar la persona.');
+      await CithelaCloud.refresh();
+      if(!professionalCloudReady()||CithelaCloud.state().tenant?.id!==tenantId)
+        throw Error('Cambió la sesión. Volvé a abrir el turno.');
+      const saved=(CithelaCloud.state().people||[]).find(p=>normalizePhone(p.phone_e164)===normalizePhone(phone));
+      if(!saved)throw Error('Se registró la solicitud, pero no se pudo localizar la ficha. Actualizá y buscala por WhatsApp.');
+      if(String(saved.display_name||'').toLocaleLowerCase()!==name.toLocaleLowerCase()){
+        status.textContent='El WhatsApp corresponde a '+saved.display_name+'. Seleccionalo desde la lista o verificá el número.';
+        return;
+      }
+      ntFinishNewPerson(saved.id,result.code==='person_created');
+    }else{
+      const people=DB.p();
+      const person={id:newPersonId(people),nombre:name,tel:phone,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};
+      people.push(person);DB.sp(people);
+      recordEvent('person_created',{personId:person.id});
+      ntFinishNewPerson(person.id,true);
+      renderPacs();
+    }
+  }catch(err){status.textContent=err?.message||'No se pudo crear la persona. Probá nuevamente.';}
+  finally{ntPersonCreateBusy=false;button.disabled=false;}
+}
+function renderNtCreatedSummary(){
+  const box=$('nt-created-summary');if(!box)return;
+  const saved=ntRecentCreated;
+  const s=CithelaCloud.state();
+  const raw=saved&&professionalCloudReady()&&s.tenant?.id===saved.tenantId
+    ?cloudAppointmentRaw(saved.appointmentId):null;
+  if(!raw){box.hidden=true;box.innerHTML='';return;}
+  const t=cloudAppointmentViews().find(a=>String(a.id)===String(raw.id));
+  const p=t?cloudPersonById(t.pacienteId):null;
+  if(!t||!p){box.hidden=true;return;}
+  const kind=t.estado==='confirmado'?'confirmed':'booking';
+  box.hidden=false;
+  box.innerHTML='<div class="form-card" style="margin:10px 0 16px;">'+
+    '<p style="font-weight:650;margin:0 0 5px;">Turno registrado · '+escHtml(p.nombre)+'</p>'+
+    '<p class="contact-note" style="margin:0 0 10px;">'+escHtml(whatsappAppointmentDateTime(t))+
+    ' · '+(t.estado==='confirmado'?'Confirmado':'Pendiente de confirmación')+
+    '. WhatsApp todavía no enviado.</p>'+
+    '<button class="btn-main soft" type="button" onclick="cloudOpenWhatsApp('+
+    "'"+escHtml(String(t.id))+"','"+kind+"'"+')">Preparar WhatsApp</button>'+
+    '<button class="mb ghost" type="button" style="margin-top:8px;" onclick="ntDismissCreatedSummary()">Cerrar aviso</button>'+
+    '</div>';
+}
+function ntDismissCreatedSummary(){
+  ntRecentCreated=null;
+  renderNtCreatedSummary();
+}
+
 function fillNT(){
   if(professionalCloudReady()){
     const s=CithelaCloud.state();
     const pac=$('nt-pac'),svc=$('nt-service'),res=$('nt-resource');
     const oldPac=pac.value,oldSvc=svc.value,oldRes=res.value;
-    pac.innerHTML='<option value="">— Seleccionar —</option>'+(s.people||[]).map(p=>`<option value="${p.id}">${escHtml(p.display_name)}</option>`).join('');
+    ntRenderPersonOptions(oldPac);
     svc.innerHTML=(s.services||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)} · ${x.duration_min} min</option>`).join('');
     res.innerHTML=(s.resources||[]).map(x=>`<option value="${x.id}">${escHtml(x.name)}</option>`).join('');
     if(oldPac&&(s.people||[]).some(x=>x.id===oldPac))pac.value=oldPac;
@@ -5157,7 +5297,7 @@ function fillNT(){
     fillNTHoras();
     return;
   }
-  $('nt-pac').innerHTML='<option value="">— Seleccionar —</option>'+DB.p().map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  ntRenderPersonOptions($('nt-pac').value);
   fillServiceSelect('nt-service');fillResourceSelect('nt-resource');
   $('nt-fecha').min=today();
   if(!$('nt-fecha').value||$('nt-fecha').value<today())$('nt-fecha').value=today();
@@ -5291,13 +5431,18 @@ async function crearTurnoMed(){
       });
       if(!created?.ok)throw new Error(created?.code||'No se pudo crear el turno');
       await CithelaCloud.refresh();
+      const saved=(CithelaCloud.state().appointments||[]).find(a=>
+        String(a.person_id)===String(personId)&&String(a.service_id)===String(serviceId)&&
+        String(a.resource_id)===String(resourceId)&&
+        new Date(a.starts_at).getTime()===new Date(startsAt).getTime());
+      ntRecentCreated=saved?{tenantId:s.tenant.id,appointmentId:saved.id}:null;
       $('nt-motivo').value='';selDate=fecha;
       document.querySelectorAll('#screen-medico .tab').forEach(e=>e.classList.remove('on'));
       document.querySelectorAll('[id^="p-medico-"]').forEach(e=>e.classList.remove('on'));
       $('p-medico-agenda').classList.add('on');
       document.querySelector('#screen-medico .tab').classList.add('on');
       renderCal('med');renderStats();renderAgenda();
-      toast('Turno creado en la nube ✓');
+      toast('Turno registrado. WhatsApp todavía no enviado.');
     }catch(err){
       const msg=err?.message==='slot_unavailable'?'Ese horario acaba de ocuparse':err?.message==='outside_working_hours'?'El horario quedó fuera de la jornada configurada':err?.message;
       toast(msg||'No se pudo crear el turno',4200);fillNTHoras();
@@ -6594,7 +6739,7 @@ if(cloud){
   el.innerHTML='<p class="contact-note">Recursos disponibles en esta agenda. Durante el piloto se muestran en modo consulta; no se agregan recursos nuevos desde esta pantalla.</p>'+
     list.map(r=>`<div class="block-row"><div class="block-main">
       <div class="block-title">${escHtml(r.name)}</div>
-      <div class="block-meta">Agenda independiente · nube</div>
+      <div class="block-meta">Agenda independiente</div>
     </div></div>`).join('');
   return;
 }
