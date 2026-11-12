@@ -55,6 +55,18 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
  <div id="console" hidden>
  <div class="actions"><button class="secondary" type="button" id="reload">Actualizar información</button><a href="./invitar-profesionales.html">Invitar profesional al piloto</a></div>
  <p class="message" id="message" role="status" aria-live="polite"></p>
+ <section class="card" id="cuentas" aria-labelledby="accounts-title">
+  <h2 id="accounts-title">Cuentas y agendas</h2>
+  <p id="account-count" class="muted"></p>
+  <div class="scroll">
+   <table aria-labelledby="accounts-title">
+    <thead><tr><th scope="col">Establecimiento</th><th scope="col">Estado</th><th scope="col">Fin de prueba</th></tr></thead>
+    <tbody id="account-list"></tbody>
+   </table>
+  </div>
+  <p id="account-empty" hidden>No hay agendas registradas.</p>
+  <p class="muted">Para consultar invitaciones pendientes o canjeadas, abrí <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
+ </section>
  <div class="cards">
   <section class="card" aria-labelledby="price-title">
    <p class="eyebrow">01 / VALORES COMERCIALES</p>
@@ -197,8 +209,33 @@ function selectOptions(id,items){
   return option;
  }));
 }
+function showAccounts(tenants){
+ const labels={
+  legacy:'Piloto protegido',trialing:'En prueba',payment_pending:'Pago pendiente',
+  active:'Activo',past_due:'Pago vencido',canceled:'Cancelado',suspended:'Suspendido'
+ };
+ const dateFormat=new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeZone:'America/Argentina/Buenos_Aires'});
+ const now=Date.now();
+ const rows=tenants.map(tenant=>{
+  const trialEnd=tenant.trial_ends_at ? Date.parse(tenant.trial_ends_at) : NaN;
+  let status=labels[tenant.status] || 'Estado sin informar';
+  if(tenant.status==='trialing' && trialEnd<=now)status='Prueba vencida';
+  if(tenant.complimentary && tenant.status!=='suspended')status='Cortesía vigente';
+  const row=document.createElement('tr');
+  for(const value of [tenant.name,status,Number.isFinite(trialEnd)?dateFormat.format(trialEnd):'—']){
+   const cell=document.createElement('td');
+   cell.textContent=value;
+   row.append(cell);
+  }
+  return row;
+ });
+ $('account-list').replaceChildren(...rows);
+ $('account-empty').hidden=rows.length>0;
+ $('account-count').textContent=rows.length===1?'1 agenda registrada':rows.length+' agendas registradas';
+}
 function show(snapshot){
  last=snapshot;
+ showAccounts(snapshot.tenants||[]);
  const selected=(snapshot.prices||[]).filter(p=>p.selected);
  const price=(snapshot.prices||[]).map(p=>({
   value:p.id,label:money(p.amount_minor)+' / mes · '+p.label+(p.selected?' (seleccionada)':'')
