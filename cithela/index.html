@@ -641,13 +641,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <section id="cithela-first-steps" class="cithela-first-steps" hidden aria-labelledby="cithela-first-steps-title">
       <p class="cithela-first-steps__eyebrow">PRIMEROS PASOS · AGENDA CLOUD</p>
       <h2 id="cithela-first-steps-title">Prepará tu espacio</h2>
-      <p class="cithela-first-steps__intro">Configurá lo esencial usando las funciones que ya tiene CITHELA.</p>
+      <p class="cithela-first-steps__intro">Configurá horarios, servicios y contactos. Podés cargar personas aunque todavía no tengan turnos.</p>
       <div class="cithela-first-steps__items">
         <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('hours')"><span class="cithela-first-steps__number">01</span><span class="cithela-first-steps__text"><strong>Días y horarios</strong><small id="first-step-hours-state">Definí cuándo atendés</small></span><span aria-hidden="true">↗</span></button>
         <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('services')"><span class="cithela-first-steps__number">02</span><span class="cithela-first-steps__text"><strong>Servicios y duración</strong><small id="first-step-services-state">Revisá los servicios</small></span><span aria-hidden="true">↗</span></button>
-        <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('people')"><span class="cithela-first-steps__number">03</span><span class="cithela-first-steps__text"><strong>Primer paciente</strong><small id="first-step-people-state">Prepará su ficha y el acceso</small></span><span aria-hidden="true">↗</span></button>
+        <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('people')"><span class="cithela-first-steps__number">03</span><span class="cithela-first-steps__text"><strong>Primera persona</strong><small id="first-step-people-state">Solo nombre y WhatsApp</small></span><span aria-hidden="true">↗</span></button>
       </div>
-      <p class="cithela-first-steps__note">Se oculta al registrar tu primer turno. Los ajustes quedan disponibles en sus pestañas.</p>
+      <p class="cithela-first-steps__note">No hace falta enviar invitaciones para registrar personas y otorgar turnos. Esta guía se oculta después del primer turno.</p>
     </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
@@ -685,11 +685,12 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <label class="lbl" for="new-person-name">Nombre completo</label>
         <input class="inp" id="new-person-name" autocomplete="name" placeholder="Nombre y apellido">
         <label class="lbl" for="new-person-phone">WhatsApp (opcional)</label>
-        <input class="inp" id="new-person-phone" type="tel" autocomplete="tel" aria-describedby="new-person-phone-hint" placeholder="+5492211234567">
-        <p id="new-person-phone-hint" class="contact-note" style="margin:7px 0 12px;">En Argentina: <strong>+54 9</strong> + código de área + número, sin 0 ni 15. Ejemplo: <strong>+5492211234567</strong>.</p>
-        <button class="btn-main" type="button" onclick="crearPersona()">Guardar persona</button>
+        <input class="inp" id="new-person-phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="new-person-phone-hint" placeholder="221 1234567">
+        <p id="new-person-phone-hint" class="contact-note" style="margin:7px 0 12px;">En Argentina: área + número, sin 0 ni 15. Ejemplos: <strong>221 1234567</strong> o <strong>+5492211234567</strong>.</p>
+        <button class="btn-main" id="person-create-save" type="button" onclick="crearPersona()">Guardar persona</button>
       </div>
     </details>
+    <div id="person-created-next" class="form-card" hidden role="status" aria-live="polite" style="margin:12px 0;"></div>
     <div id="pacs-wrap" style="background:var(--white);border-radius:var(--r);padding:4px 16px;border:var(--line);"></div>
   </div>
 
@@ -3908,7 +3909,7 @@ function renderProfessionalMode(){
   const phoneField=$('new-person-phone');
   if(phoneField){
     phoneField.required=active;
-    phoneField.placeholder='+5492211234567';
+    phoneField.placeholder='221 1234567';
   }
   const note='Modo local: los turnos y pacientes de este dispositivo NO se sincronizan con CITHELA Cloud. Conectá la cuenta cloud antes de operar.';
   for(const id of ['mode-agenda','mode-pacientes','mode-nuevo']){
@@ -3981,7 +3982,7 @@ function renderCithelaFirstSteps(s){
   if(services)services.textContent=Number(s.serviceCount||0)>0
     ?'Revisá duración y nombre del servicio':'Agregá tu primer servicio';
   if(people)people.textContent=Number(s.peopleCount||0)>0
-    ?'Ficha creada · podés agregar otra':'Creá la ficha para compartir el acceso';
+    ?'Ficha creada · podés agregar otra':'Cargá nombre y WhatsApp, sin invitación';
 }
 function openCithelaFirstSteps(section){
   const destinations={hours:'cfg-section-hours',services:'cfg-section-services',people:'person-create-details'};
@@ -4681,6 +4682,9 @@ async function confirmReprogram(){
 
 // ── PACIENTES ──
 function renderPacs(){
+  const savedBox=$('person-created-next');
+  const currentTenant=professionalCloudReady()?CithelaCloud.state().tenant?.id:'local';
+  if(savedBox&&!savedBox.hidden&&personCreatedTenant!==currentTenant)savedBox.hidden=true;
   const q=($('s-pac')?.value||'').toLowerCase();
   if(professionalCloudReady()){
     const ps=(CithelaCloud.state().people||[]).filter(p=>!q||(p.display_name||'').toLowerCase().includes(q)||(p.phone_e164||'').includes(q)||(p.contact_email||'').toLowerCase().includes(q));
@@ -4987,35 +4991,81 @@ async function cloudVerFicha(id){
   }
 }
 
+let personCreateBusy=false;
+let personCreatedTenant=null;
+function personCreatedNext(person,existing=false){
+  const box=$('person-created-next');if(!box||!person)return;
+  const id=String(person.id||'');
+  if(!/^(?:\d+|[a-f0-9-]{36})$/i.test(id))return;
+  personCreatedTenant=professionalCloudReady()?CithelaCloud.state().tenant?.id:'local';
+  const name=escHtml(String(person.nombre||person.display_name||'Persona'));
+  box.hidden=false;
+  box.innerHTML='<p style="font-weight:600;margin:0 0 7px;">'+
+    (existing?'Persona ya registrada':'Persona guardada')+' · '+name+'</p>'+
+    '<p class="contact-note" style="margin:0 0 12px;">Podés darle un turno ahora o seguir cargando personas.</p>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:9px;">'+
+    '<button type="button" class="mb teal" onclick="ntStartForPerson(\''+id+'\')">+ Dar turno</button>'+
+    '<button type="button" class="mb ghost" onclick="personCreateAnother()">+ Agregar otra persona</button>'+
+    '</div>';
+}
+function personCreateAnother(){
+  const box=$('person-created-next');if(box)box.hidden=true;
+  const details=$('person-create-details');if(details)details.open=true;
+  $('new-person-name')?.focus();
+}
 async function crearPersona(){
-  const nombre=$('new-person-name').value.trim();
-  const tel=$('new-person-phone').value.trim();
-  if(!nombre){toast('Ingresá el nombre');return;}
-  if(professionalCloudReady()){
-    if(!/^\+[1-9][0-9]{7,14}$/.test(tel)){toast('Usá +54 9 + área + número (sin 0 ni 15). Ejemplo: +5492211234567.');return;}
-    try{
-      const s=CithelaCloud.state();
-      const r=await CithelaCloud.resolvePerson({
-        tenantId:s.tenant.id,requestId:cloudRequestId('person'),
-        phone:tel,name:nombre,createIfMissing:true
+  if(personCreateBusy)return;
+  const name=String($('new-person-name')?.value||'').trim();
+  const input=String($('new-person-phone')?.value||'').trim();
+  const phone=input?ntPhoneForBooking(input):'';
+  const cloud=professionalCloudReady();
+  if(!name||name.length>160){toast('Ingresá el nombre y apellido');return;}
+  if(cloud&&!professionalCloudWritable()){toast('Tu usuario no puede registrar personas');return;}
+  if((cloud||input)&&!phone){
+    toast('Revisá el WhatsApp: código de área y número, sin 0 ni 15.');return;
+  }
+  const people=cloud?CithelaCloud.state().people||[]:DB.p();
+  const found=phone&&people.find(p=>normalizePhone(cloud?p.phone_e164:p.tel)===normalizePhone(phone));
+  if(found){
+    const oldName=String(cloud?found.display_name:found.nombre).trim();
+    if(oldName.toLocaleLowerCase()!==name.toLocaleLowerCase()){
+      toast('Ese WhatsApp ya pertenece a '+oldName+'. Revisá el número o la ficha.',4800);
+      return;
+    }
+    $('new-person-name').value='';$('new-person-phone').value='';
+    $('person-create-details').open=false;
+    personCreatedNext(found,true);toast('Ya estaba registrada. No se duplicó la ficha.');return;
+  }
+  personCreateBusy=true;const button=$('person-create-save');if(button)button.disabled=true;
+  try{
+    if(cloud){
+      const tenantId=CithelaCloud.state().tenant.id;
+      const result=await CithelaCloud.resolvePerson({
+        tenantId,requestId:cloudRequestId('person'),phone,name,createIfMissing:true
       });
-      if(!r?.ok)throw new Error(r?.code||'No se pudo guardar');
+      if(!result?.ok)throw Error(result?.code||'No se pudo registrar');
       await CithelaCloud.refresh();
+      if(!professionalCloudReady()||CithelaCloud.state().tenant?.id!==tenantId)
+        throw Error('Cambió la sesión. Volvé a abrir Pacientes.');
+      const saved=(CithelaCloud.state().people||[]).find(p=>normalizePhone(p.phone_e164)===normalizePhone(phone));
+      if(!saved)throw Error('No se pudo localizar la ficha. Actualizá y buscala por WhatsApp.');
+      if(String(saved.display_name||'').trim().toLocaleLowerCase()!==name.toLocaleLowerCase()){
+        toast('Ese WhatsApp corresponde a '+saved.display_name+'. Revisá la ficha.',5000);
+        return;
+      }
       $('new-person-name').value='';$('new-person-phone').value='';
       $('person-create-details').open=false;
-      toast(r.code==='person_created'?'Persona guardada en la nube ✓':'La persona ya existía en la nube');
-    }catch(err){toast(err?.message||'No se pudo guardar la persona',4200);}
-    return;
-  }
-  if(tel&&!validPhone(tel)){toast('Ingresá un WhatsApp válido');return;}
-  const ps=DB.p();
-  if(tel&&ps.some(p=>normalizePhone(p.tel)===normalizePhone(tel))){toast('Ese WhatsApp ya pertenece a una persona');return;}
-  const p={id:newPersonId(ps),nombre,tel,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};
-  ps.push(p);DB.sp(ps);
-  recordEvent('person_created',{personId:p.id});
-  $('new-person-name').value='';$('new-person-phone').value='';
-  $('person-create-details').open=false;
-  renderPacs();fillNT();toast('Persona guardada ✓');
+      renderPacs();personCreatedNext(saved,result.code!=='person_created');
+      toast(result.code==='person_created'?'Persona guardada ✓':'Persona ya registrada ✓');
+    }else{
+      const ps=DB.p(),saved={id:newPersonId(ps),nombre:name,tel:phone,obs:'',alergias:'',archivos:[],creado:new Date().toISOString()};
+      ps.push(saved);DB.sp(ps);recordEvent('person_created',{personId:saved.id});
+      $('new-person-name').value='';$('new-person-phone').value='';
+      $('person-create-details').open=false;
+      renderPacs();personCreatedNext(saved);toast('Persona guardada ✓');
+    }
+  }catch(err){toast(err?.message||'No se pudo guardar la persona',4800);}
+  finally{personCreateBusy=false;if(button)button.disabled=false;}
 }
 
 // ── FICHA CON ARCHIVOS Y OBSERVACIONES ──
