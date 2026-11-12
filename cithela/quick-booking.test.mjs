@@ -94,3 +94,34 @@ test('post-save notice is explicit: WhatsApp still requires supervised operator 
   assert.match(draft,/No necesitás crear una cuenta para recibir este aviso/);
   assert.doesNotMatch(draft,/Si ya tenés acceso, podés consultar/);
 });
+
+
+test('WhatsApp notice types are tied to the real appointment status',()=>{
+  const code=section('let cloudWhatsAppDraft=null;','function whatsappAppointmentDateTime(');
+  let version=1,tenant='tenant-A';
+  const actions=new Function('cloudAppointmentRaw','professionalCloudReady','CithelaCloud',
+    code+'\nreturn {kinds:cloudWhatsAppKinds,record:x=>cloudLastRescheduled=x};')(
+      ()=>({row_version:version,deposit_status:null,deposit_amount_minor:0}),
+      ()=>true,{state:()=>({tenant:{id:tenant}})}
+    );
+  const names=status=>actions.kinds(status,'appt-1').map(([key])=>key);
+  assert.deepEqual(names('pendiente'),['booking','reminder']);
+  assert.deepEqual(names('confirmado'),['confirmed','reminder']);
+  assert.deepEqual(names('cancelado'),['cancelled']);
+  actions.record({id:'appt-1',tenantId:'tenant-A',rowVersion:1});
+  assert.ok(names('pendiente').includes('rescheduled'));
+  version=2;
+  assert.ok(!names('pendiente').includes('rescheduled'),'stale version removes reschedule notice');
+  version=1;tenant='tenant-B';
+  assert.ok(!names('pendiente').includes('rescheduled'),'other tenant cannot reuse reschedule');
+});
+
+test('WhatsApp defaults to the current state and not a manual ambiguous kind',()=>{
+  const open=section('function cloudOpenWhatsApp(id,preset){','function refreshCloudWhatsAppDraft(){');
+  assert.match(open,/const kind=kinds\.some\(\(\[k\]\)=>k===preset\)\?preset:kinds\[0\]\[0\]/);
+  assert.doesNotMatch(open,/t\.estado==='pendiente'\?'':/);
+  const reprogram=section('async function confirmReprogram(){','// ── PACIENTES');
+  assert.match(reprogram,/command:'appointment\.reschedule'/);
+  assert.match(reprogram,/cloudLastRescheduled=currentRaw/);
+  assert.match(reprogram,/await CithelaCloud\.refresh\(\)/);
+});
