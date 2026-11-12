@@ -21,7 +21,7 @@ export async function handleSelfservice(req,ctx){
  if(action==='auth_config'){
   if(Object.keys(payload).length)return reply(400,'unexpected_fields');
   const sitekey=typeof ctx?.sitekey==='string'?ctx.sitekey:'';
-  return reply(200,'auth_config',{required:ctx?.authCaptchaRequired===true,sitekey:sitekey||null});
+  return reply(200,'auth_config',{required:ctx?.authCaptchaRequired===true||!!sitekey,sitekey:sitekey||null});
  }
  if(!ctx?.ready||!UUID.test(ctx.adminId||'')||typeof ctx.execute!=='function')return reply(503,'admissions_closed');
  const administrative=['read','configure','authorize_test'].includes(action);
