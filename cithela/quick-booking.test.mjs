@@ -65,26 +65,7 @@ test('empty workspace opens new-person form without a separate navigation',()=>{
   const select={value:'',innerHTML:''},filter={value:''},hint={textContent:''},details={open:false};
   const elements={'nt-pac':select,'nt-person-filter':filter,'nt-person-hint':hint,
     'nt-person-create-details':details};
-  const render=new Function('
-  const people=section('function renderPacs(){','async function cloudIssuePhoneInvite(');
-  assert.match(people,/onclick="ntStartForPerson/);
-  assert.match(people,/Ver ficha/);
-  const ficha=section('async function cloudVerFicha(id){','async function crearPersona(){');
-  assert.match(ficha,/closeM\('m-ficha'\);ntStartForPerson/);
-});
-
-test('post-save notice is explicit: WhatsApp still requires supervised operator action',()=>{
-  const notice=section('function renderNtCreatedSummary(){','function ntDismissCreatedSummary(){');
-  assert.match(notice,/WhatsApp todavía no enviado/);
-  assert.match(notice,/Preparar WhatsApp/);
-  assert.match(notice,/cloudOpenWhatsApp/);
-  const draft=section('function cloudWhatsAppContent(t,pac,kind){','function closeCloudWhatsAppDraft(){');
-  assert.match(draft,/pendiente de confirmación/);
-  assert.match(draft,/Tu turno está confirmado/);
-  assert.match(draft,/No necesitás crear una cuenta para recibir este aviso/);
-  assert.doesNotMatch(draft,/Si ya tenés acceso, podés consultar/);
-});
-,'professionalCloudReady','CithelaCloud','DB','normalizePhone','escHtml',
+  const render=new Function('$','professionalCloudReady','CithelaCloud','DB','normalizePhone','escHtml',
     code+'\nreturn ntRenderPersonOptions;')(
       id=>elements[id],()=>true,{state:()=>({people:[]})},{p:()=>[]},
       v=>String(v||'').replace(/\D/g,''),v=>String(v));
