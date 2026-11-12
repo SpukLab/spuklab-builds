@@ -702,6 +702,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         placeholder="Buscar por nombre o WhatsApp" aria-label="Buscar persona para el turno"
         oninput="ntRenderPersonOptions()">
       <select class="inp" id="nt-pac" aria-label="Seleccionar persona"></select>
+      <p class="contact-note" id="nt-person-hint" role="status" aria-live="polite"></p>
       <details class="cithela-config-group person-create" id="nt-person-create-details" style="margin:10px 0 18px;">
         <summary>+ Es una persona nueva <span aria-hidden="true">⌄</span></summary>
         <div class="form-card" style="margin:0 10px 12px;">
@@ -709,7 +710,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
           <input class="inp" id="nt-person-name" maxlength="160" autocomplete="name" placeholder="Nombre y apellido">
           <label class="lbl" for="nt-person-phone">WhatsApp</label>
           <input class="inp" id="nt-person-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="221 123 4567">
-          <p class="contact-note">En Argentina: 10 dígitos con código de área, o +549… En la agenda compartida el WhatsApp es obligatorio.</p>
+          <p class="contact-note">En Argentina: código de área + número, sin 0 ni 15 (por ejemplo, 221 1234567). También podés escribir +549… No hace falta invitar al paciente para guardar el turno.</p>
           <button class="btn-main" id="nt-person-create-submit" type="button" onclick="ntCreatePersonAndSelect()">Guardar persona y continuar</button>
           <p id="nt-person-create-status" class="contact-note" role="status" aria-live="polite"></p>
         </div>
@@ -4684,7 +4685,7 @@ function renderPacs(){
     const ps=(CithelaCloud.state().people||[]).filter(p=>!q||(p.display_name||'').toLowerCase().includes(q)||(p.phone_e164||'').includes(q)||(p.contact_email||'').toLowerCase().includes(q));
     const turns=cloudAppointmentViews();
     const el=$('pacs-wrap');
-    if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()} en la nube.</p>`;return;}
+    if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Todavía no hay personas registradas. Podés agregarlas aquí o desde + Turno al recibir una solicitud.</p>`;return;}
     el.innerHTML=ps.map(p=>{
       const n=turns.filter(t=>String(t.pacienteId)===String(p.id)).length;
       const wa=normalizePhone(p.phone_e164||'');
@@ -4701,7 +4702,7 @@ function renderPacs(){
   }
   const ps=DB.p().filter(p=>!q||p.nombre.toLowerCase().includes(q)||(p.tel||'').includes(q)||(p.contact_email||'').toLowerCase().includes(q));
   const el=$('pacs-wrap');
-  if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Sin ${personTerms().plural.toLowerCase()}.</p>`;return;}
+  if(!ps.length){el.innerHTML=`<p style="padding:14px 0;font-size:.82rem;color:var(--ink3);">Todavía no hay personas registradas. Podés agregarlas aquí o desde + Turno al recibir una solicitud.</p>`;return;}
   el.innerHTML=ps.map(p=>{
     const n=DB.t().filter(t=>t.pacienteId===p.id).length;
     return`<div class="prow">
@@ -5168,7 +5169,7 @@ function ntPhoneForBooking(input){
   if(/^\+[1-9][0-9]{7,14}$/.test(raw))return '+'+digits;
   if(/^549[0-9]{10}$/.test(digits))return '+'+digits;
   if(/^54[0-9]{10}$/.test(digits))return '+549'+digits.slice(2);
-  if(/^[0-9]{10}$/.test(digits))return '+549'+digits;
+  if(/^[1-9][0-9]{9}$/.test(digits))return '+549'+digits;
   return '';
 }
 function ntRenderPersonOptions(preferredId){
@@ -5184,6 +5185,14 @@ function ntRenderPersonOptions(preferredId){
   select.innerHTML='<option value="">— Elegí una persona —</option>'+
     matches.map(p=>'<option value="'+escHtml(String(p.id))+'">'+escHtml(p.nombre||'—')+'</option>').join('');
   if(matches.some(p=>String(p.id)===old))select.value=old;
+  const hint=$('nt-person-hint');
+  if(hint)hint.textContent=!people.length
+    ?'Primera persona: cargá su nombre y WhatsApp abajo para empezar.'
+    :!matches.length
+      ?'No hay coincidencias. Abrí «Es una persona nueva» para agregarla.'
+      :'Elegí una persona registrada o agregá una nueva.';
+  const details=$('nt-person-create-details');
+  if(details&&!people.length)details.open=true;
 }
 function ntStartForPerson(id){
   const button=$('medico-tab-nuevo');if(!button)return;
