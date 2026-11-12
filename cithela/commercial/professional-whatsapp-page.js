@@ -7,7 +7,9 @@
   const {data,error}=await client.auth.getSession();if(error)throw error;
   if(data.session){
    const user=await access.account();
-   if(user.phone&&user.phone_confirmed_at){$('session-note').textContent='Tu cuenta ya tiene un WhatsApp verificado. Podés volver a tu agenda.';return}
+   $('access-title').textContent='Vinculá tu WhatsApp';
+   $('access-description').textContent='Asociá tu número a esta misma cuenta profesional. Tu agenda y permisos no cambiarán.';
+   if(user.phone&&user.phone_confirmed_at){$('session-note').textContent='Ya tenés un WhatsApp verificado. Podés volver a tu agenda sin repetir el proceso.';return}
    mode='link';$('link-note').hidden=false;$('session-note').textContent='Vinculá WhatsApp a tu cuenta profesional actual.';
   }else $('session-note').textContent='Ingresá con el WhatsApp previamente vinculado a tu cuenta.';
   $('send').disabled=false;
@@ -19,7 +21,7 @@
   });
   $('code-form').addEventListener('submit',async event=>{
    event.preventDefault();if(busy)return;busy=true;$('verify').disabled=true;message('Comprobando código…');
-   try{await access.verify($('code').value);$('code-form').hidden=true;$('phone-form').hidden=true;message(mode==='link'?'WhatsApp vinculado a tu cuenta. Conservaste la misma agenda.':'Acceso verificado. Podés abrir tu agenda.');$('agenda').textContent='Abrir mi agenda'}
+   try{await access.verify($('code').value);$('code-form').hidden=true;$('phone-form').hidden=true;message(mode==='link'?'WhatsApp vinculado a tu cuenta. Conservaste la misma agenda.':'Acceso verificado. Podés abrir tu agenda.');$('agenda').textContent='Abrir mi agenda profesional'}
    catch(e){message(e.message||'No se pudo verificar el código.')}
    finally{busy=false;$('verify').disabled=false;$('code').value=''}
   });
