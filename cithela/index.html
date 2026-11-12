@@ -3504,6 +3504,7 @@ async function patientRefreshPortal(){
   }
 }
 
+const CITHELA_RETURN_PROFESSIONAL=new URLSearchParams(location.search).get('returnTo')==='professional';
 async function resumeCloudSession(){
   const s=CithelaCloud.state();
   if(s.passwordRecovery){
@@ -3528,6 +3529,26 @@ async function resumeCloudSession(){
         return;
       }
       await patientEnter();
+    }
+    return;
+  }
+  if(CITHELA_RETURN_PROFESSIONAL){
+    // The WhatsApp linkage page navigates away from the agenda. Restore the
+    // professional view only after authoritative membership and tenant checks.
+    // A temporary Auth/DB race must never route this account to the patient portal.
+    setRole('medico');
+    const initial=await CithelaCloud.refresh();
+    const restored=initial.signedIn&&initial.membership&&initial.tenant
+      ?initial:await CithelaCloud.refresh();
+    if(restored.signedIn&&restored.membership&&restored.tenant){
+      await loginWithCloudSession();
+      return;
+    }
+    scr('login');
+    if(restored.signedIn){
+      toast('La sesión está iniciada, pero no pudimos recuperar tu agenda profesional. Reintentá ingresar o recargá la página.',5800);
+    }else{
+      toast('No se pudo recuperar la sesión. Ingresá con tu correo y contraseña.',5800);
     }
     return;
   }
