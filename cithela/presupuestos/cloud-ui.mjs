@@ -103,6 +103,8 @@ function render(){
   $("patient").disabled=state.busy||!!state.current; // Cambiar paciente exige comenzar nuevo.
   $("save-quote").disabled=!editable||!currentPerson()||!state.lines.length;
   $("save-quote").textContent=state.busy?"Guardando…":state.current?"Actualizar borrador":"Guardar presupuesto";
+  $("duplicate-quote").hidden=!state.current;
+  $("duplicate-quote").disabled=!state.current||state.busy;
   $("print-quote").disabled=!storedReady()||state.busy;
   $("prepare-share").disabled=!storedReady()||state.busy;
   $("mark-sent").disabled=!storedReady()||state.current.status!=="borrador"||state.busy;
@@ -142,6 +144,21 @@ function loadQuote(id){
   $("discount").value=String(Number(quote.discount_minor)/100);
   $("validity").value=String(quote.validity_days);
   message("");render();
+}
+function duplicateQuote(){
+  if(!state.current||state.busy||!confirmDiscard())return;
+  const previous=state.current;
+  state.lines=previous.items.map(item=>makeLine({
+    name:item.name,quantity:Number(item.quantity),unitMinor:Number(item.unit_minor)
+  }));
+  state.current=null;state.dirty=false;state.pendingRequest=null;
+  state.selectedPersonId=previous.person_id;
+  $("patient").value=previous.person_id;
+  $("discount").value=String(Number(previous.discount_minor)/100);
+  $("validity").value=String(previous.validity_days);
+  $("line-name").value="";$("line-price").value="";$("catalog-select").value="";
+  render();
+  message("Copia lista como borrador nuevo. El presupuesto original no cambió.");
 }
 async function runBusy(task){
   if(state.busy)return;
@@ -264,6 +281,7 @@ function mountEvents(){
   $("discount").addEventListener("input",markDirty);
   $("validity").addEventListener("change",markDirty);
   $("save-quote").addEventListener("click",save);
+  $("duplicate-quote").addEventListener("click",duplicateQuote);
   $("print-quote").addEventListener("click",printQuote);
   $("prepare-share").addEventListener("click",shareQuote);
   $("mark-sent").addEventListener("click",()=>changeStatus("enviado"));
@@ -334,6 +352,10 @@ async function initialize(){
       $("print-lines").textContent="";
       $("print-prof").textContent="";
       $("print-meta").textContent="";
+      $("print-sub").textContent="";
+      $("print-disc").textContent="";
+      $("print-total").textContent="";
+      $("tenant-name").textContent="";
       $("workspace").hidden=true;
       bootstrapMessage(switched
         ?"Cambió la cuenta profesional. Volvé a ingresar para cargar el establecimiento correcto."
