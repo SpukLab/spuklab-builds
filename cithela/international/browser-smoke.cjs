@@ -44,6 +44,26 @@ const server=http.createServer((req,res)=>{
       await page.locator("#screen-login [data-cithela-language='en-US']").click();
       assert.equal(await page.locator("#rb-med").innerText(),"Professional");
       assert.ok((await page.evaluate(()=>localStorage.getItem("cithela_ui_locale_v1")))==="en-US");
+      // Appointment cards are rendered asynchronously after patient refreshes.
+      await page.evaluate(()=>{
+        document.getElementById("patient-cloud-list").innerHTML=
+          '<section class="patient-workspace">'+
+          '<button class="patient-booking-toggle">Reservar nuevo turno</button>'+
+          '<div class="patient-appointment-actions"><button>Confirmar turno</button>'+
+          '<button>Reprogramar</button></div>'+
+          '<p class="sh">Próximos (2)</p><p class="sh">Historial (1)</p>'+
+          '<p class="tenant-business-title">Sample Practice</p>'+
+          '</section>';
+      });
+      await page.waitForFunction(()=>
+        document.querySelector(".patient-booking-toggle")?.textContent==="Book an appointment");
+      assert.equal(await page.locator(".patient-appointment-actions button").first().textContent(),"Confirm appointment");
+      assert.equal(await page.locator(".patient-workspace .sh").first().textContent(),"Upcoming (2)");
+      assert.equal(await page.locator(".patient-workspace .tenant-business-title").textContent(),"Sample Practice");
+      await page.locator("#screen-login [data-cithela-language='es-AR']").click();
+      assert.equal(await page.locator(".patient-booking-toggle").textContent(),"Reservar nuevo turno");
+      assert.equal(await page.locator(".patient-workspace .sh").first().textContent(),"Próximos (2)");
+      await page.locator("#screen-login [data-cithela-language='en-US']").click();
       const d=await page.evaluate(()=>window.CithelaSMS.openForPerson({
         phone:"+1 (415) 555-0132",clinic:"Sample Practice",
         accessUrl:"https://spuklab.github.io/spuklab-builds/cithela/",purpose:"access"
