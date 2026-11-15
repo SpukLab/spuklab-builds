@@ -5,7 +5,7 @@
 ## Lo que se implementó
 
 - Selector **ES / EN** en acceso, Ajustes profesional y portal del paciente. Preferencia local e idioma detectado desde `?lang=en` / idioma navegador.
-- Etiquetas principales de sesión, agenda, pacientes, turnos y navegación del paciente en inglés. Esto **no es una traducción completa** de los formularios, errores y contenido dinámico. No anunciar producto final en inglés hasta una auditoría integral.
+- Etiquetas principales de sesión, agenda, pacientes, turnos y navegación del paciente en inglés, más los botones principales generados dinámicamente dentro del portal del paciente (reservar, confirmar, reprogramar, cancelar), algunos campos de reserva y estados. La traducción se aplica solo a etiquetas conocidas para no reescribir nombres ni datos del paciente. Esto **no es una traducción completa** de formularios, diálogos, errores y contenido dinámico. No anunciar producto final en inglés hasta una auditoría integral.
 - Botón **Preparar SMS de acceso a turnos** en la ficha profesional, visible únicamente con `?smsPreview=1` y sesión profesional válida.
 - Tras generar una **invitación vinculada al correo del paciente**, aparece **Preparar SMS con enlace de correo**. El paciente sigue confirmando su cuenta a través del flujo de correo existente; el SMS solo lleva el enlace.
 - Diálogo de SMS con destinatario visible, consentimiento afirmado manualmente, texto revisable, copiar y abrir aplicación de mensajes con URL `sms:+E164?body=...` (RFC 5724). **El profesional debe realizar el envío desde su teléfono**.
@@ -63,3 +63,23 @@ node cithela/international/browser-smoke.cjs # requiere Playwright y Chromium
 ```
 
 La ruta de prueba de la rama es `cithela/index.html?lang=en&smsPreview=1`. No significa que haya sido publicada.
+
+## Decisión técnica sobre OTP de EE. UU.
+
+En producción existe el hook `cithela-whatsapp-otp` de Supabase Auth. Es un **Send SMS Hook** en nombre, pero su transporte real usa **Meta WhatsApp**, no la red SMS. Es global para autenticación por teléfono y no incluye necesariamente un `tenant_id` confiable en el payload. **No convertirlo a SMS por país de manera unilateral:** una persona con prefijo +1 puede usar WhatsApp y una misma identidad puede estar relacionada con varios establecimientos.
+
+Por ahora, EE. UU. usa:
+1. **Cuenta por correo existente** y acceso web seguro compartido manualmente por SMS; o
+2. **Invitación vinculada al correo** compartida por SMS, con verificación final por correo.
+
+Para disponer de OTP por SMS sin correo y respuestas SMS bidireccionales, diseñar previamente: identidad y establecimiento del emisor, opt-in documentado, proveedor y número verificado, canal solicitado de manera explícita, verificación de callback/autenticidad, exclusiones STOP, límites por empresa, revocación y auditoría. Nunca basar la seguridad solo en el prefijo +1 ni en un parámetro de URL controlado por el paciente.
+
+### Riesgo comercial adicional
+
+El módulo **Presupuestos** de la PR #155 almacena importes en **ARS**, no USD. Antes de ofrecer ambos a un consultorio estadounidense, agregar moneda por establecimiento (USD) y formatos correctos; también validar zonas horarias de cada profesional. No reutilizar importes argentinos en documentos para pacientes estadounidenses.
+
+### Proveedores (no contratados)
+
+- **Telnyx:** opción de benchmark por precio inicial y tarifas por uso; el número estadounidense, campaña, carrier y vetting suman gastos.
+- **Twilio:** alternativa con documentación y SMS API madura; para tráfico con PHI en clínicas, Twilio especifica edición Security/Enterprise y BAA; no asumir elegibilidad HIPAA ni precio común sin cotizar.
+- La API SMS no se contrata hasta tener titular del negocio estadounidense, localidad/número deseado, tipo de entidad legal, consentimiento para campañas, volumen y presupuesto aprobado.
