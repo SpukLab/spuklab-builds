@@ -180,7 +180,14 @@ async function main(){
         page.once("dialog",dialog=>dialog.accept());
         await page.locator("#new-quote").click();
         assert.equal(await page.locator("#lines .item").count(),0);
-        console.log("PASS history outage preserved saved quote and unsaved draft guard");
+        await page.locator("#quote-list [data-quote='c1000000-0000-4000-8000-000000000001']").click();
+        assert.equal(await page.locator("#quote-status").innerText(),"Enviado");
+        await page.locator("#duplicate-quote").click();
+        assert.equal(await page.locator("#reference").inputValue(),"");
+        assert.equal(await page.locator("#quote-status").innerText(),"Borrador nuevo");
+        assert.equal(await page.locator("#lines .item").count(),1);
+        assert.equal(await page.evaluate(()=>window.__quoteQASavedCount()),2);
+        console.log("PASS history outage, unsaved draft guard and duplicate without overwriting sent quote");
       }
       const viewport=await page.evaluate(()=>({
         viewport:window.innerWidth,scrollWidth:document.documentElement.scrollWidth
