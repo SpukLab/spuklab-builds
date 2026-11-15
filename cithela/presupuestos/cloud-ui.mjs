@@ -256,14 +256,14 @@ function mountEvents(){
 }
 async function initialize(){
   try{
-    const {api,tenant,role}=await connectQuoteCloud(window.supabase);
+    const {api,tenant,role,client}=await connectQuoteCloud(window.supabase);
     state.api=api;state.tenant=tenant;state.role=role;
     // Clear patient-related data if the professional session ends in any tab.
     client.auth.onAuthStateChange((event)=>{
       if(event!=="SIGNED_OUT")return;
       state.people=[];state.services=[];state.catalog=[];state.quotes=[];
       state.lines=[];state.current=null;state.api=null;state.tenant=null;
-      $("share-dialog").close();
+      if($("share-dialog").open)$("share-dialog").close();
       $("print-lines").textContent="";
       $("print-prof").textContent="";
       $("print-meta").textContent="";
