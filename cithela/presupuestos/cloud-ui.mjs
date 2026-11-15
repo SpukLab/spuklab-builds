@@ -258,6 +258,18 @@ async function initialize(){
   try{
     const {api,tenant,role}=await connectQuoteCloud(window.supabase);
     state.api=api;state.tenant=tenant;state.role=role;
+    // Clear patient-related data if the professional session ends in any tab.
+    client.auth.onAuthStateChange((event)=>{
+      if(event!=="SIGNED_OUT")return;
+      state.people=[];state.services=[];state.catalog=[];state.quotes=[];
+      state.lines=[];state.current=null;state.api=null;state.tenant=null;
+      $("share-dialog").close();
+      $("print-lines").textContent="";
+      $("print-prof").textContent="";
+      $("print-meta").textContent="";
+      $("workspace").hidden=true;
+      bootstrapMessage("La sesión se cerró. Volvé a ingresar desde CITHELA.",true);
+    });
     const [people,catalog,services]=await Promise.all([api.people(),api.catalog(),api.services()]);
     state.people=people;state.catalog=catalog;state.services=services;
     populatePeople();renderCatalog();mountEvents();
