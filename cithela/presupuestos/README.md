@@ -9,7 +9,7 @@ PR de trabajo: https://github.com/SpukLab/spuklab-builds/pull/155
 - `index.html`: prototipo visual con pacientes **ficticios**, sin ninguna conexión a la base.
 - `cloud.html`: interfaz profesional que reutiliza la sesión Supabase existente de CITHELA en **el mismo origen web**. Solo se podrá probar completamente cuando el backend de Presupuestos esté habilitado. No ofrece login independiente ni permite saltar el rol profesional.
 
-La navegación principal conserva sus **cinco pestañas**. Solo en modo QA `?quotesPreview=1`, la ficha del paciente profesional cloud ofrece **Preparar presupuesto**. El enlace abre `presupuestos/cloud.html#person=<UUID>`; el módulo comprueba que ese paciente pertenece al establecimiento autenticado. Esta opción no aparece a usuarios normales y no reemplaza el control de acceso del backend.
+La navegación principal conserva sus **cinco pestañas**. Solo en modo QA `?quotesPreview=1`, la ficha del paciente profesional cloud ofrece **Preparar presupuesto**. El enlace abre `presupuestos/cloud.html#tenant=<UUID>&person=<UUID>` y usa la membresía del establecimiento activo; el módulo comprueba que ese paciente pertenece al establecimiento autenticado. Esta opción no aparece a usuarios normales y no reemplaza el control de acceso del backend.
 
 ## Flujo desarrollado
 
@@ -49,7 +49,7 @@ Los conceptos no contienen datos clínicos estructurados, pero pueden describir 
 - Verificación posterior de que las tablas y el RPC de Presupuestos **no existen** en producción: el rollback retiró todo.
 - Matriz transaccional (17 aserciones) de habilitación por establecimiento, roles owner/admin/operator/viewer, aislamiento cruzado, idempotencia, caducidad de versión, transición de estado e inmutabilidad post-envío.
 - Node CI para `core.test.mjs`, `cloud.test.mjs`, `integration.test.mjs`, comprobación de módulos y regresiones de CITHELA.
-- Navegación automatizada en Chromium a 320/390/768/1280 px con datos 100 % simulados, capturas sin información real. Pruebas de fallo del historial tras guardado, descarte de borrador, duplicación sin modificar el original y limpieza al cambiar de cuenta. Esto **no sustituye** a Safari en iPhone/iPad.
+- Navegación automatizada en Chromium y WebKit a 320/390/768/1280 px con datos 100 % simulados, capturas sin información real. Pruebas de fallo del historial tras guardado, descarte de borrador, duplicación sin modificar el original y limpieza al cambiar de cuenta. Esto **no sustituye** a Safari en iPhone/iPad.
 
 ## Cómo ejecutar prototipo local
 
@@ -75,3 +75,9 @@ Consultar [PILOTO.md](./PILOTO.md): verificación de respaldo, pruebas con JWT r
 6. Definir alcance comercial, precio, privacidad y mecanismo administrativo de activación/desactivación por establecimiento con datos del piloto.
 
 No activar autorespuesta, WhatsApp automático, historia clínica, odontograma, pagos ni facturación con este módulo.
+
+## Observaciones UX de QA
+
+- En móvil el editor administrativo del catálogo está plegado de manera predeterminada, evitando desplazar el resumen y la acción Guardar hasta el final de un formulario secundario.
+- Los presupuestos enviados o resueltos muestran su estado como solo lectura, sin el texto ambiguo «Actualizar borrador».
+- En el cambio de sesión, el módulo invalida respuestas de solicitudes pendientes para que una operación de la cuenta anterior no repueble la pantalla.
