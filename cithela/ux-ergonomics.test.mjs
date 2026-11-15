@@ -180,7 +180,7 @@ test('professional cloud status avoids developer-only SDK and AUTH labels',()=>{
 });
 
 
-test('second-tenant onboarding is hidden behind an explicit pilot mode and distinct Auth membership',()=>{
+test('professional onboarding remains accessible after invitation redirects, without URL flags',()=>{
   assert.match(html,/const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams\(location.search\)\.get\('pilotTenant'\)==='1'/);
   const login=slice('id="professional-login-fields"','id="professional-password-recovery"');
   assert.match(login,/id="professional-workspace-setup" hidden/);
@@ -200,7 +200,8 @@ test('second-tenant onboarding is hidden behind an explicit pilot mode and disti
       enabled,{state:()=>state},id=>el[id]);
     return {result:fn(),el};
   }
-  assert.equal(attempt(false,{signedIn:true,email:'a@example.test',tenant:null,membership:null}).result,false);
+  // The private bootstrap grant, not a browser query parameter, decides authorization.
+  assert.equal(attempt(false,{signedIn:true,email:'a@example.test',tenant:null,membership:null}).result,true);
   assert.equal(attempt(true,{signedIn:false,email:'a@example.test',tenant:null,membership:null}).result,false);
   assert.equal(attempt(true,{signedIn:true,email:'a@example.test',tenant:{id:'tenantA'},membership:{role:'owner'}}).result,false);
   const eligible=attempt(true,{signedIn:true,email:'b@example.test',tenant:null,membership:null});
