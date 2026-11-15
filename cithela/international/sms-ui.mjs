@@ -78,6 +78,15 @@ function requireConsent(){
   }
   return true;
 }
+function clearSensitivePreview(){
+  data=null;
+  $("cithela-sms-consent").checked=false;
+  $("cithela-sms-body").value="";
+  $("cithela-sms-recipient").textContent="";
+  $("cithela-sms-error").textContent="";
+}
+el.addEventListener("close",clearSensitivePreview);
+window.addEventListener("pagehide",clearSensitivePreview);
 $("cithela-sms-close").addEventListener("click",()=>el.close());
 $("cithela-sms-consent").addEventListener("change",()=>$("cithela-sms-error").textContent="");
 $("cithela-sms-send").addEventListener("click",()=>{
