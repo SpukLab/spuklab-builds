@@ -47,6 +47,17 @@ create index if not exists cithela_quotes_person_idx
 create index if not exists cithela_quotes_recent_idx
   on public.cithela_quotes(tenant_id,created_at desc);
 
+-- La oferta permanece desactivada por defecto, incluso si se aplica el esquema.
+-- Habilitación administrativa explícita, fuera de la app profesional.
+create table if not exists cithela_private.cithela_quote_enablements (
+  tenant_id uuid primary key references public.cithela_tenants(id) on delete cascade,
+  enabled boolean not null default false,
+  enabled_at timestamptz,
+  updated_at timestamptz not null default now(),
+  check ((enabled and enabled_at is not null) or (not enabled))
+);
+revoke all on cithela_private.cithela_quote_enablements from public,anon,authenticated;
+
 -- Defensa en profundidad: se accede solo mediante RPC con permisos revisados.
 alter table public.cithela_quote_catalog enable row level security;
 alter table public.cithela_quotes enable row level security;
@@ -86,6 +97,13 @@ begin
   perform 1 from public.cithela_tenants t
    where t.id=p_tenant_id and t.status='active';
   if not found then return jsonb_build_object('ok',false,'code','tenant_inactive'); end if;
+  -- Fail closed: ninguna solicitud funciona sin habilitación administrativa.
+  if not exists (
+    select 1 from cithela_private.cithela_quote_enablements e
+      where e.tenant_id=p_tenant_id and e.enabled=true
+  ) then
+    return jsonb_build_object('ok',false,'code','feature_disabled');
+  end if;
 
   if p_command='catalog.list' then
     select coalesce(jsonb_agg(to_jsonb(q) order by q.name),'[]'::jsonb)
