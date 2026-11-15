@@ -1,0 +1,26 @@
+name: CITHELA presupuestos — checks de prototipo
+on:
+  push:
+    paths:
+      - 'cithela/presupuestos/**'
+      - '.github/workflows/cithela-presupuestos.yml'
+  pull_request:
+    paths:
+      - 'cithela/presupuestos/**'
+      - '.github/workflows/cithela-presupuestos.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test cithela/presupuestos/core.test.mjs
+      - name: Validar importaciones y sintaxis
+        run: |
+          node --check cithela/presupuestos/core.mjs
+          node --check cithela/presupuestos/core.test.mjs
+          node -e "const fs=require('fs');const s=fs.readFileSync('cithela/presupuestos/index.html','utf8');if(!s.includes('import {pesosToMinor')||!s.includes('Datos de ejemplo')&&!s.includes('datos ficticios'))process.exit(1);"
