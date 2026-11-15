@@ -122,22 +122,40 @@ begin
       return jsonb_build_object('ok',false,'code','forbidden');
     end if;
     if (select count(*) from jsonb_object_keys(p_payload) as f(k)
-      where k not in ('id','service_id','name','unit_minor'))>0 then
+      where k not in ('id','service_id','name','unit_minor','expected_updated_at'))>0 then
       return jsonb_build_object('ok',false,'code','invalid_payload');
     end if;
     begin
       v_id := nullif(p_payload->>'id','')::uuid;
-    exception when invalid_text_representation then
+      v_expected := nullif(p_payload->>'expected_updated_at','')::timestamptz;
+    exception when invalid_text_representation or invalid_datetime_format
+       or datetime_field_overflow then
       return jsonb_build_object('ok',false,'code','invalid_payload');
     end;
+    if v_id is not null and (v_expected is null or not isfinite(v_expected)) then
+      return jsonb_build_object('ok',false,'code','missing_version');
+    end if;
+    if v_id is null and p_payload ? 'expected_updated_at' then
+      return jsonb_build_object('ok',false,'code','invalid_payload');
+    end if;
     if p_command='catalog.archive' then
-      if v_id is null then return jsonb_build_object('ok',false,'code','invalid_payload'); end if;
-      update public.cithela_quote_catalog set active=false,updated_at=clock_timestamp()
-        where tenant_id=p_tenant_id and id=v_id returning * into v_catalog;
-      if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
+      if v_id is null or (select count(*) from jsonb_object_keys(p_payload) as f(k)
+        where k not in ('id','expected_updated_at'))>0 then
+        return jsonb_build_object('ok',false,'code','invalid_payload');
+      end if;
+      update public.cithela_quote_catalog
+        set active=false,updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
+        where tenant_id=p_tenant_id and id=v_id and updated_at=v_expected
+        returning * into v_catalog;
+      if not found then
+        if exists(select 1 from public.cithela_quote_catalog where tenant_id=p_tenant_id and id=v_id)
+          then return jsonb_build_object('ok',false,'code','stale_write');
+          else return jsonb_build_object('ok',false,'code','not_found');end if;
+      end if;
       insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
       values(p_tenant_id,v_actor,'quote_catalog_archived','quote_catalog',v_catalog.id,'{}'::jsonb);
-      return jsonb_build_object('ok',true,'code','archived','id',v_catalog.id);
+      return jsonb_build_object('ok',true,'code','archived','id',v_catalog.id,
+        'updated_at',v_catalog.updated_at);
     end if;
     v_name:=btrim(coalesce(p_payload->>'name',''));
     if length(v_name) not between 1 and 160 or
@@ -165,16 +183,23 @@ begin
     else
       update public.cithela_quote_catalog
         set name=v_name,service_id=v_person,unit_minor=v_price,
-            active=true,updated_at=clock_timestamp()
-       where tenant_id=p_tenant_id and id=v_id returning * into v_catalog;
-      if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
+            active=true,
+            updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
+       where tenant_id=p_tenant_id and id=v_id and updated_at=v_expected
+       returning * into v_catalog;
+      if not found then
+        if exists(select 1 from public.cithela_quote_catalog where tenant_id=p_tenant_id and id=v_id)
+          then return jsonb_build_object('ok',false,'code','stale_write');
+          else return jsonb_build_object('ok',false,'code','not_found');end if;
+      end if;
     end if;
     insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
       values(p_tenant_id,v_actor,'quote_catalog_saved','quote_catalog',v_catalog.id,
         jsonb_build_object('unit_minor',v_catalog.unit_minor));
     return jsonb_build_object('ok',true,'catalog_item',
       jsonb_build_object('id',v_catalog.id,'name',v_catalog.name,
-        'unit_minor',v_catalog.unit_minor,'active',v_catalog.active));
+        'unit_minor',v_catalog.unit_minor,'active',v_catalog.active,
+        'updated_at',v_catalog.updated_at));
   end if;
 
   if p_command='quote.save' then
