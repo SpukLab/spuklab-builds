@@ -219,7 +219,9 @@ function mountEvents(){
   $("archive-cat").addEventListener("click",()=>{
     if(!state.editingCatalogId||!window.confirm("¿Archivar este precio? Los presupuestos anteriores no cambian."))return;
     runBusy(async()=>{
-      await state.api.catalogArchive(state.editingCatalogId);
+      const existing=state.catalog.find(item=>item.id===state.editingCatalogId);
+      if(!existing)throw new Error("Actualizá el catálogo antes de archivar.");
+      await state.api.catalogArchive({id:existing.id,expectedUpdatedAt:existing.updated_at});
       state.editingCatalogId=null;
       state.catalog=await state.api.catalog();
       renderCatalog();
@@ -231,7 +233,10 @@ function mountEvents(){
     if(!["owner","admin"].includes(state.role))throw new Error("No tenés permiso para editar precios.");
     const name=$("cat-name").value.trim();
     const unitMinor=pesosToMinor($("cat-price").value);
-    await state.api.catalogSave({id:state.editingCatalogId,name,unitMinor,serviceId:$("service-id").value});
+    const existing=state.catalog.find(item=>item.id===state.editingCatalogId);
+    await state.api.catalogSave({id:state.editingCatalogId,
+      expectedUpdatedAt:existing?.updated_at,
+      name,unitMinor,serviceId:$("service-id").value});
     state.editingCatalogId=null;
     state.catalog=await state.api.catalog();
     renderCatalog();
