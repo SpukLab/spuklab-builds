@@ -72,7 +72,10 @@ export function createQuoteCloudApi(client,tenantId) {
       rpc("catalog.archive",{id,expected_updated_at:expectedUpdatedAt})
   });
 }
-export async function connectQuoteCloud(supabaseLib) {
+export async function connectQuoteCloud(supabaseLib,preferredTenantId=null) {
+  if(preferredTenantId!==null&&!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(preferredTenantId))){
+    throw new Error("Identificador de establecimiento inválido.");
+  }
   if(!supabaseLib?.createClient)throw new Error("No se pudo cargar la conexión a CITHELA.");
   const client=supabaseLib.createClient(CITHELA_QUOTE_DB.url,CITHELA_QUOTE_DB.publishable,{
     auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
@@ -80,9 +83,12 @@ export async function connectQuoteCloud(supabaseLib) {
   const {data:sessionResult,error:sessionError}=await client.auth.getSession();
   if(sessionError)throw sessionError;
   if(!sessionResult?.session)throw new Error("Primero ingresá como profesional en CITHELA.");
-  const {data:memberships,error:membershipError}=await client
-    .from("cithela_tenant_memberships")
-    .select("tenant_id,role,created_at")
+  // Use the tenant selected in CITHELA's active professional workspace.
+  // Membership is independently checked by the database and quote RPC.
+  let membershipQuery=client.from("cithela_tenant_memberships")
+    .select("tenant_id,role,created_at");
+  if(preferredTenantId)membershipQuery=membershipQuery.eq("tenant_id",preferredTenantId);
+  const {data:memberships,error:membershipError}=await membershipQuery
     .order("created_at",{ascending:true}).limit(1);
   if(membershipError)throw membershipError;
   const membership=memberships?.[0]||null;
