@@ -56,6 +56,7 @@ create table if not exists cithela_private.cithela_quote_enablements (
   updated_at timestamptz not null default now(),
   check ((enabled and enabled_at is not null) or (not enabled))
 );
+alter table cithela_private.cithela_quote_enablements enable row level security;
 revoke all on cithela_private.cithela_quote_enablements from public,anon,authenticated;
 
 -- Defensa en profundidad: se accede solo mediante RPC con permisos revisados.
