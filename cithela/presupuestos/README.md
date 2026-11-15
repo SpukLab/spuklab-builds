@@ -1,6 +1,6 @@
 # CITHELA · Presupuestos v0.2 — rama de prueba
 
-**Estado 15/11/2026: implementación v0.3 de desarrollo, NO habilitada para clientes, SIN cambios persistentes en Supabase ni la agenda actual.**
+**Estado 15/11/2026: implementación v0.4 de desarrollo, NO habilitada para clientes, SIN cambios persistentes en Supabase ni la agenda actual.**
 
 PR de trabajo: https://github.com/SpukLab/spuklab-builds/pull/155
 
@@ -19,7 +19,9 @@ La navegación principal conserva sus **cinco pestañas**. Solo en modo QA `?quo
 4. Guardar **borrador** con totales validados en backend; volver al historial y reabrir borrador.
 5. Copiar texto de WhatsApp y generar archivo PDF mediante diálogo nativo **solo a partir del presupuesto guardado**.
 6. Registrar manualmente **enviado → aceptado/rechazado**, con versión de escritura y bloqueo de edición después de enviar.
-7. Conservar snapshots de importes: cambiar el catálogo no modifica presupuestos anteriores.
+7. **Duplicar como nuevo** a partir de un presupuesto guardado, preservando la versión enviada/aceptada y sus importes originales.
+8. **Recuperación de fallas:** si el backend confirmó guardado o cambio de estado, una falla posterior al cargar el historial mantiene el comprobante disponible y evita duplicar la solicitud. Advertencia antes de descartar un borrador sin guardar.
+9. Conservar snapshots de importes: cambiar el catálogo no modifica presupuestos anteriores.
 
 Envío por WhatsApp: **supervisado**; no se envía mensaje ni se confirma el estado automáticamente. No contiene facturación fiscal ni cobros.
 
@@ -34,7 +36,7 @@ Tablas nuevas:
 
 `public.cithela_quote_command` delega en función privada con autenticación y roles. Ningún usuario `anon` ni `authenticated` tiene permisos directos sobre tablas de presupuestos; RLS activo y sin políticas de lectura pública. Todas las operaciones tienen comprobación de establecimiento, membresía y actividad. Lectura/escritura: owner, admin, operator; edición del catálogo: owner/admin. Viewer y pacientes quedan fuera. **Sin habilitación de establecimiento, todos los comandos devuelven `feature_disabled`**, incluso aunque el esquema esté instalado.
 
-Edición y archivo de tarifas usan `expected_updated_at`; dos operadores o dispositivos no pueden sobrescribir silenciosamente un precio actualizado. El cierre de sesión en otra pestaña borra la información de presupuesto de la vista.
+Edición y archivo de tarifas usan `expected_updated_at`; dos operadores o dispositivos no pueden sobrescribir silenciosamente un precio actualizado. El cierre de sesión o cambio de cuenta en otra pestaña borra los presupuestos, datos del paciente, texto de WhatsApp y totales de impresión de la vista.
 
 Los conceptos no contienen datos clínicos estructurados, pero pueden describir tratamientos. Por eso **se consideran información sensible** para el diseño de privacidad y conservación.
 
@@ -47,7 +49,7 @@ Los conceptos no contienen datos clínicos estructurados, pero pueden describir 
 - Verificación posterior de que las tablas y el RPC de Presupuestos **no existen** en producción: el rollback retiró todo.
 - Matriz transaccional (17 aserciones) de habilitación por establecimiento, roles owner/admin/operator/viewer, aislamiento cruzado, idempotencia, caducidad de versión, transición de estado e inmutabilidad post-envío.
 - Node CI para `core.test.mjs`, `cloud.test.mjs`, `integration.test.mjs`, comprobación de módulos y regresiones de CITHELA.
-- Navegación automatizada en Chromium a 320/390/768/1280 px con datos 100 % simulados, capturas sin información real. Esto **no sustituye** a Safari en iPhone/iPad.
+- Navegación automatizada en Chromium a 320/390/768/1280 px con datos 100 % simulados, capturas sin información real. Pruebas de fallo del historial tras guardado, descarte de borrador, duplicación sin modificar el original y limpieza al cambiar de cuenta. Esto **no sustituye** a Safari en iPhone/iPad.
 
 ## Cómo ejecutar prototipo local
 
@@ -58,6 +60,10 @@ node --test cithela/presupuestos/core.test.mjs cithela/presupuestos/cloud.test.m
 ```
 
 `cloud.html` local no comparte la sesión de CITHELA publicada (origen distinto). Su QA real requiere la aplicación y el módulo en el mismo origen y la migración habilitada con controles.
+
+## Checklist de activación
+
+Consultar [PILOTO.md](./PILOTO.md): verificación de respaldo, pruebas con JWT real, aislamiento por establecimiento, QA móvil y reversión rápida de la habilitación, sin tocar las reservas.
 
 ## Bloqueos antes de ofrecer a profesionales
 
