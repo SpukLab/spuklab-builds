@@ -6,7 +6,7 @@ const escape=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const state={
   api:null,tenant:null,role:null,
   people:[],services:[],catalog:[],quotes:[],
-  lines:[],current:null,dirty:false,pendingRequest:null,busy:false
+  lines:[],current:null,dirty:false,pendingRequest:null,busy:false,editingCatalogId:null
 };
 function message(msg,error=false){
   $("feedback").textContent=msg;
@@ -22,8 +22,12 @@ function storedReady(){return !!state.current&&!state.dirty;}
 function isDraft(){return !state.current||state.current.status==="borrador";}
 function isEditable(){return !state.busy&&isDraft();}
 function buildSnapshot(){return calculateQuote(state.lines,pesosToMinor($("discount").value));}
-function markDirty(){if(state.current)state.dirty=true;render();}
+function markDirty(){state.pendingRequest=null;if(state.current)state.dirty=true;render();}
 function renderCatalog(){
+  $("catalog-edit").innerHTML='<option value="">+ Nuevo precio</option>'+
+    state.catalog.map(i=>'<option value="'+escape(i.id)+'">'+escape(i.name)+(i.active?'':' (archivado)')+'</option>').join("");
+  $("catalog-edit").value=state.editingCatalogId||"";
+  $("archive-cat").disabled=!state.editingCatalogId;
   $("catalog-select").innerHTML='<option value="">Concepto personalizado</option>'+
     state.catalog.filter(i=>i.active).map(i=>
       '<option value="'+escape(i.id)+'">'+escape(i.name)+' · '+escape(moneyARS(Number(i.unit_minor)))+'</option>').join("");
@@ -204,11 +208,31 @@ function mountEvents(){
   $("mark-sent").addEventListener("click",()=>changeStatus("enviado"));
   $("mark-accepted").addEventListener("click",()=>changeStatus("aceptado"));
   $("mark-rejected").addEventListener("click",()=>changeStatus("rechazado"));
+  $("catalog-edit").addEventListener("change",()=>{
+    state.editingCatalogId=$("catalog-edit").value||null;
+    const item=state.catalog.find(i=>i.id===state.editingCatalogId);
+    $("cat-name").value=item?.name||"";
+    $("cat-price").value=item?String(Number(item.unit_minor)/100):"";
+    $("service-id").value=item?.service_id||"";
+    $("archive-cat").disabled=!item;
+  });
+  $("archive-cat").addEventListener("click",()=>{
+    if(!state.editingCatalogId||!window.confirm("¿Archivar este precio? Los presupuestos anteriores no cambian."))return;
+    runBusy(async()=>{
+      await state.api.catalogArchive(state.editingCatalogId);
+      state.editingCatalogId=null;
+      state.catalog=await state.api.catalog();
+      renderCatalog();
+      $("cat-name").value="";$("cat-price").value="";$("service-id").value="";
+      message("Precio archivado. Los presupuestos guardados conservan sus importes.");
+    });
+  });
   $("save-cat").addEventListener("click",()=>runBusy(async()=>{
     if(!["owner","admin"].includes(state.role))throw new Error("No tenés permiso para editar precios.");
     const name=$("cat-name").value.trim();
     const unitMinor=pesosToMinor($("cat-price").value);
-    await state.api.catalogSave({name,unitMinor,serviceId:$("service-id").value});
+    await state.api.catalogSave({id:state.editingCatalogId,name,unitMinor,serviceId:$("service-id").value});
+    state.editingCatalogId=null;
     state.catalog=await state.api.catalog();
     renderCatalog();
     $("cat-name").value="";$("cat-price").value="";$("service-id").value="";
