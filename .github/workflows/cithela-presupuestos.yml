@@ -3,10 +3,14 @@ on:
   push:
     paths:
       - 'cithela/presupuestos/**'
+      - 'cithela/index.html'
+      - 'cithela/supabase/cithela_quotes_v1.sql'
       - '.github/workflows/cithela-presupuestos.yml'
   pull_request:
     paths:
       - 'cithela/presupuestos/**'
+      - 'cithela/index.html'
+      - 'cithela/supabase/cithela_quotes_v1.sql'
       - '.github/workflows/cithela-presupuestos.yml'
 permissions:
   contents: read
@@ -18,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test cithela/presupuestos/core.test.mjs cithela/presupuestos/cloud.test.mjs
+      - run: node --test cithela/presupuestos/core.test.mjs cithela/presupuestos/cloud.test.mjs cithela/presupuestos/integration.test.mjs
       - name: Validar importaciones y sintaxis
         run: |
           node --check cithela/presupuestos/core.mjs
@@ -26,4 +30,5 @@ jobs:
           node --check cithela/presupuestos/cloud.mjs
           node --check cithela/presupuestos/cloud-ui.mjs
           node --check cithela/presupuestos/cloud.test.mjs
+          node --check cithela/presupuestos/integration.test.mjs
           node -e "const fs=require('fs');const s=fs.readFileSync('cithela/presupuestos/index.html','utf8');if(!s.includes('import {pesosToMinor')||!s.includes('Datos de ejemplo')&&!s.includes('datos ficticios'))process.exit(1);"
