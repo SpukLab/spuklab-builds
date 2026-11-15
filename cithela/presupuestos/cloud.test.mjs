@@ -50,3 +50,17 @@ test("invalid tenant config is refused",()=>{
   const {client}=mock();
   assert.throws(()=>createQuoteCloudApi(client,"not-uuid"));
 });
+
+test("catalog edit and archive include expected revision for multi-device safety",async()=>{
+  const {client,calls}=mock(),api=createQuoteCloudApi(client,TENANT);
+  await api.catalogSave({id:"catalog-id",name:"Consulta",unitMinor:105000,
+    expectedUpdatedAt:"2026-11-15T20:00:00Z"});
+  assert.deepEqual(calls[0].payload.p_payload,{
+    id:"catalog-id",expected_updated_at:"2026-11-15T20:00:00Z",
+    name:"Consulta",unit_minor:105000
+  });
+  await api.catalogArchive({id:"catalog-id",expectedUpdatedAt:"2026-11-15T20:00:01Z"});
+  assert.deepEqual(calls[1].payload.p_payload,{
+    id:"catalog-id",expected_updated_at:"2026-11-15T20:00:01Z"
+  });
+});
