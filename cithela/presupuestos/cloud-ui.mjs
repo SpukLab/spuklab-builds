@@ -335,7 +335,9 @@ function mountEvents(){
 }
 async function initialize(){
   try{
-    const {api,tenant,role,client,userId}=await connectQuoteCloud(window.supabase);
+    const targetParams=new URLSearchParams(window.location.hash.replace(/^#/,""));
+    const preferredTenant=targetParams.get("tenant");
+    const {api,tenant,role,client,userId}=await connectQuoteCloud(window.supabase,preferredTenant);
     state.api=api;state.tenant=tenant;state.role=role;
     // Clear patient-related data if the professional session ends in any tab.
     client.auth.onAuthStateChange((event,session)=>{
@@ -370,7 +372,7 @@ async function initialize(){
     $("bootstrap-message").hidden=true;
     newQuote();
     // Prefill from the patient's card; accept only a person in this tenant.
-    const target=new URLSearchParams(window.location.hash.replace(/^#/, "")).get("person");
+    const target=targetParams.get("person");
     if(target && state.people.some(p=>p.id===target)){
       $("patient").value=target;
       state.selectedPersonId=target;
