@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createQuoteCloudApi,validateCloudRole,quoteError} from "./cloud.mjs";
+import {createQuoteCloudApi,validateCloudRole,quoteError,connectQuoteCloud} from "./cloud.mjs";
 
 const TENANT="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function mock(){
@@ -63,4 +63,34 @@ test("catalog edit and archive include expected revision for multi-device safety
   assert.deepEqual(calls[1].payload.p_payload,{
     id:"catalog-id",expected_updated_at:"2026-11-15T20:00:01Z"
   });
+});
+
+test("tenant selection is restricted to the requested professional membership",async()=>{
+  const tenantB="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const memberships=[
+    {tenant_id:TENANT,role:"owner",created_at:"2026-01-01"},
+    {tenant_id:tenantB,role:"operator",created_at:"2026-02-01"}
+  ];
+  const data={cithela_tenant_memberships:memberships,
+    cithela_tenants:[{id:TENANT,display_name:"Establecimiento A",status:"active"},
+                     {id:tenantB,display_name:"Establecimiento B",status:"active"}]};
+  const makeQuery=(table)=>({
+    rows:data[table]||[],
+    select(){return this;},
+    eq(column,value){this.rows=this.rows.filter(row=>row[column]===value);return this;},
+    order(){return this;},
+    limit(n){return Promise.resolve({data:this.rows.slice(0,n),error:null});},
+    single(){return Promise.resolve({data:this.rows[0]||null,error:null})}
+  });
+  const fakeClient={
+    auth:{getSession:async()=>({data:{session:{user:{id:"demo-owner"}}},error:null})},
+    from:makeQuery,rpc:async()=>({data:{ok:true,quotes:[]},error:null})
+  };
+  const lib={createClient:()=>fakeClient};
+  const result=await connectQuoteCloud(lib,tenantB);
+  assert.equal(result.tenant.id,tenantB);
+  assert.equal(result.role,"operator");
+  assert.equal(result.api.tenantId,tenantB);
+  await assert.rejects(connectQuoteCloud(lib,"cccccccc-cccc-4ccc-8ccc-cccccccccccc"),/establecimiento profesional/);
+  await assert.rejects(connectQuoteCloud(lib,"../other-tenant"),/inválido/);
 });
