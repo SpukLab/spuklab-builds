@@ -68,8 +68,10 @@ function patientUiTranslate(target){
       else if(el.classList.contains("sh")){
         const m=current.match(/^(Próximos|Historial|Upcoming|History) \((\d+)\)$/);
         if(m){
-          const word=target==="en-US"?(m[1]==="Próximos"?"Upcoming":"History"):
-            (m[1]==="Upcoming"?"Próximos":"Historial");
+          const labels=target==="en-US"
+            ?{"Próximos":"Upcoming","Historial":"History",Upcoming:"Upcoming",History:"History"}
+            :{"Próximos":"Próximos","Historial":"Historial",Upcoming:"Próximos",History:"Historial"};
+          const word=labels[m[1]];
           const label=word+" ("+m[2]+")";
           if(current!==label)el.textContent=label;
         }
