@@ -29,6 +29,8 @@ async function installMock(page){
                     {id:"b2000000-0000-4000-8000-000000000002",tenant_id:tenant,display_name:"Paciente Ficticio B"}];
     const catalog=[{id:"cat-demo-1",service_id:null,name:"Limpieza de ejemplo",unit_minor:3500000,currency:"ARS",active:true,updated_at:"2026-11-15T12:00:00Z"}];
     const saved=[];
+    window.__quoteQAFailNextList=false;
+    window.__quoteQASavedCount=()=>saved.length;
     let versions=0;
     const now=()=>new Date(Date.UTC(2026,10,15,12,0,versions++)).toISOString();
     class Query{
@@ -58,16 +60,25 @@ async function installMock(page){
         if(name!=="cithela_quote_command"||p_tenant_id!==tenant)return {data:{ok:false,code:"forbidden"},error:null};
         switch(p_command){
           case "catalog.list":return {data:{ok:true,catalog},error:null};
-          case "quote.list":return {data:{ok:true,quotes:saved
-            .filter(x=>!p_payload.person_id||x.person_id===p_payload.person_id)
-            .slice().reverse()},error:null};
+          case "quote.list":
+            if(window.__quoteQAFailNextList){
+              window.__quoteQAFailNextList=false;
+              return {data:null,error:{message:"Simulated loss of quote history connection"}};
+            }
+            return {data:{ok:true,quotes:saved
+              .filter(x=>!p_payload.person_id||x.person_id===p_payload.person_id)
+              .slice().reverse()},error:null};
           case "quote.save":{
             const subtotal=p_payload.items.reduce((sum,x)=>sum+x.unit_minor*x.quantity,0);
             const total=subtotal-p_payload.discount_minor;
             let quote=p_payload.id?saved.find(x=>x.id===p_payload.id):null;
             if(!quote){
-              quote={id:"c1000000-0000-4000-8000-000000000001",
-                reference:"P-DEMO-0001",created_at:now(),status:"borrador"};
+              const sequence=saved.length+1;
+              quote={
+                id:"c1000000-0000-4000-8000-"+String(sequence).padStart(12,"0"),
+                reference:"P-DEMO-"+String(sequence).padStart(4,"0"),
+                created_at:now(),status:"borrador"
+              };
               saved.push(quote);
             }
             Object.assign(quote,{person_id:p_payload.person_id,items:p_payload.items.map(x=>({...x,total_minor:x.unit_minor*x.quantity})),
@@ -142,6 +153,32 @@ async function main(){
       await page.locator("#mark-sent").click();
       await page.waitForFunction(()=>document.getElementById("quote-status").textContent==="Enviado");
       assert.equal(await page.locator("#add-line").isDisabled(),true);
+      if(width===390){
+        // The RPC succeeds but the following list refresh fails: never create
+        // a second quote when the professional repeats the action.
+        await page.locator("#new-quote").click();
+        await page.locator("#catalog-select").selectOption("cat-demo-1");
+        await page.locator("#add-line").click();
+        await page.evaluate(()=>{window.__quoteQAFailNextList=true;});
+        await page.locator("#save-quote").click();
+        await page.waitForFunction(()=>
+          document.getElementById("reference").value==="P-DEMO-0002");
+        assert.equal(await page.locator("#print-quote").isEnabled(),true);
+        assert.equal(await page.evaluate(()=>window.__quoteQASavedCount()),2);
+        assert.match(await page.locator("#feedback").innerText(),/guardado/);
+        assert.match(await page.locator("#feedback").innerText(),/historial/);
+        // Navigating away from an unsaved draft requires confirmation.
+        await page.locator("#new-quote").click();
+        await page.locator("#catalog-select").selectOption("cat-demo-1");
+        await page.locator("#add-line").click();
+        page.once("dialog",dialog=>dialog.dismiss());
+        await page.locator("#new-quote").click();
+        assert.equal(await page.locator("#lines .item").count(),1);
+        page.once("dialog",dialog=>dialog.accept());
+        await page.locator("#new-quote").click();
+        assert.equal(await page.locator("#lines .item").count(),0);
+        console.log("PASS history outage preserved saved quote and unsaved draft guard");
+      }
       const viewport=await page.evaluate(()=>({
         viewport:window.innerWidth,scrollWidth:document.documentElement.scrollWidth
       }));
