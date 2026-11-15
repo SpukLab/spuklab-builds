@@ -65,7 +65,7 @@ declare
   v_subtotal bigint:=0; v_line_total bigint; v_validity integer:=7;
   v_existing public.cithela_quotes%rowtype;
   v_catalog public.cithela_quote_catalog%rowtype;
-  v_expected timestamptz; v_status text; v_result jsonb;
+  v_expected timestamptz; v_status text; v_previous_status text; v_result jsonb;
   v_request text := btrim(coalesce(p_request_id,''));
 begin
   if v_actor is null then return jsonb_build_object('ok',false,'code','unauthenticated'); end if;
@@ -135,6 +135,8 @@ begin
       update public.cithela_quote_catalog set active=false,updated_at=clock_timestamp()
         where tenant_id=p_tenant_id and id=v_id returning * into v_catalog;
       if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
+      insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
+      values(p_tenant_id,v_actor,'quote_catalog_archived','quote_catalog',v_catalog.id,'{}'::jsonb);
       return jsonb_build_object('ok',true,'code','archived','id',v_catalog.id);
     end if;
     v_name:=btrim(coalesce(p_payload->>'name',''));
@@ -167,6 +169,9 @@ begin
        where tenant_id=p_tenant_id and id=v_id returning * into v_catalog;
       if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
     end if;
+    insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
+      values(p_tenant_id,v_actor,'quote_catalog_saved','quote_catalog',v_catalog.id,
+        jsonb_build_object('unit_minor',v_catalog.unit_minor));
     return jsonb_build_object('ok',true,'catalog_item',
       jsonb_build_object('id',v_catalog.id,'name',v_catalog.name,
         'unit_minor',v_catalog.unit_minor,'active',v_catalog.active));
@@ -265,6 +270,10 @@ begin
           validity_days=v_validity,updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
        where tenant_id=p_tenant_id and id=v_id returning * into v_existing;
     end if;
+    insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
+      values(p_tenant_id,v_actor,'quote_saved','quote',v_existing.id,
+        jsonb_build_object('person_id',v_existing.person_id,
+          'status',v_existing.status,'total_minor',v_existing.total_minor));
     return jsonb_build_object('ok',true,'code','saved','id',v_existing.id,
       'reference',v_existing.reference,'status',v_existing.status,
       'updated_at',v_existing.updated_at,
@@ -291,6 +300,7 @@ begin
     if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
     if v_existing.updated_at<>v_expected then
       return jsonb_build_object('ok',false,'code','stale_write'); end if;
+    v_previous_status:=v_existing.status;
     if not (
       (v_existing.status='borrador' and v_status in ('enviado','rechazado')) or
       (v_existing.status='enviado' and v_status in ('aceptado','rechazado'))
@@ -300,6 +310,9 @@ begin
           sent_at=case when v_status='enviado' then now() else sent_at end,
           decided_at=case when v_status in ('aceptado','rechazado') then now() else decided_at end
       where tenant_id=p_tenant_id and id=v_id returning * into v_existing;
+    insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
+      values(p_tenant_id,v_actor,'quote_status_changed','quote',v_existing.id,
+        jsonb_build_object('previous',v_previous_status,'next',v_existing.status));
     return jsonb_build_object('ok',true,'code','status_updated','id',v_existing.id,
       'status',v_existing.status,'updated_at',v_existing.updated_at);
   end if;
