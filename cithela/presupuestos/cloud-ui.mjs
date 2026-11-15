@@ -6,7 +6,8 @@ const escape=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const state={
   api:null,tenant:null,role:null,
   people:[],services:[],catalog:[],quotes:[],
-  lines:[],current:null,dirty:false,pendingRequest:null,busy:false,editingCatalogId:null
+  lines:[],current:null,dirty:false,pendingRequest:null,busy:false,editingCatalogId:null,
+  selectedPersonId:""
 };
 function message(msg,error=false){
   $("feedback").textContent=msg;
@@ -23,6 +24,35 @@ function isDraft(){return !state.current||state.current.status==="borrador";}
 function isEditable(){return !state.busy&&isDraft();}
 function buildSnapshot(){return calculateQuote(state.lines,pesosToMinor($("discount").value));}
 function markDirty(){state.pendingRequest=null;if(state.current)state.dirty=true;render();}
+function unsavedWork(){
+  return state.dirty||(!state.current&&(
+    state.lines.length>0||$("line-name").value.trim()!==""||
+    $("line-price").value.trim()!==""||$("discount").value.trim()!=="0"
+  ));
+}
+function confirmDiscard(){
+  return !unsavedWork()||window.confirm("Hay cambios sin guardar. ¿Querés descartarlos?");
+}
+// The server response confirms persistence; a separate list-refresh failure must
+// never turn a successful save into a duplicate creation on retry.
+function keepSavedQuote(quote){
+  state.current=quote;state.dirty=false;state.pendingRequest=null;
+  state.selectedPersonId=quote.person_id;
+  state.quotes=[quote,...state.quotes.filter(x=>x.id!==quote.id)];
+}
+async function updateSavedHistory(local,successText){
+  try{
+    await refreshQuotes();
+    const found=state.quotes.find(x=>x.id===local.id);
+    if(found)loadQuote(local.id);
+    else state.quotes.unshift(local);
+    message(successText);
+  }catch{
+    // Preserve the server-confirmed record even if the history endpoint is unavailable.
+    state.quotes=[local,...state.quotes.filter(x=>x.id!==local.id)];
+    message(successText+" El historial no se pudo actualizar; probá nuevamente más tarde.",true);
+  }
+}
 function renderCatalog(){
   $("catalog-edit").innerHTML='<option value="">+ Nuevo precio</option>'+
     state.catalog.map(i=>'<option value="'+escape(i.id)+'">'+escape(i.name)+(i.active?'':' (archivado)')+'</option>').join("");
@@ -96,6 +126,7 @@ async function refreshQuotes(){
 function newQuote(clearPatient=false){
   state.current=null;state.lines=[];state.dirty=false;state.pendingRequest=null;
   if(clearPatient)$("patient").value="";
+  state.selectedPersonId=$("patient").value;
   $("discount").value="0";$("validity").value="7";
   $("line-name").value="";$("line-price").value="";$("line-quantity").value="1";$("catalog-select").value="";
   message("");
@@ -103,9 +134,10 @@ function newQuote(clearPatient=false){
 }
 function loadQuote(id){
   const quote=state.quotes.find(q=>q.id===id);
-  if(!quote)return;
+  if(!quote||!confirmDiscard())return;
   state.current=quote;state.pendingRequest=null;state.dirty=false;
   $("patient").value=quote.person_id;
+  state.selectedPersonId=quote.person_id;
   state.lines=quote.items.map(l=>makeLine({name:l.name,quantity:Number(l.quantity),unitMinor:Number(l.unit_minor)}));
   $("discount").value=String(Number(quote.discount_minor)/100);
   $("validity").value=String(quote.validity_days);
@@ -121,16 +153,28 @@ async function save(){
   if(!isDraft()||!currentPerson())return;
   await runBusy(async()=>{
     const quote=buildSnapshot();
+    const personId=currentPerson().id;
+    const prior=state.current;
+    const validityDays=Number($("validity").value);
     const requestId=state.pendingRequest||(state.pendingRequest=crypto.randomUUID());
     const result=await state.api.save({
-      ...(state.current?{id:state.current.id,expectedUpdatedAt:state.current.updated_at}:{}),
-      personId:currentPerson().id,items:quote.lines,discountMinor:quote.discountMinor,
-      validityDays:Number($("validity").value),requestId
+      ...(prior?{id:prior.id,expectedUpdatedAt:prior.updated_at}:{}),
+      personId,items:quote.lines,discountMinor:quote.discountMinor,
+      validityDays,requestId
     });
-    state.pendingRequest=null;state.dirty=false;
-    await refreshQuotes();
-    loadQuote(result.id);
-    message("Presupuesto "+(state.current?.status==="borrador"?"guardado":"actualizado")+" correctamente.");
+    const snapshot={
+      ...prior,id:result.id,reference:result.reference,
+      status:result.status||prior?.status||"borrador",
+      person_id:personId,created_at:prior?.created_at||new Date().toISOString(),
+      updated_at:result.updated_at,currency:"ARS",
+      items:quote.lines.map(l=>({
+        name:l.name,quantity:l.quantity,unit_minor:l.unitMinor,total_minor:l.totalMinor
+      })),
+      subtotal_minor:quote.subtotalMinor,discount_minor:quote.discountMinor,
+      total_minor:result.total_minor,validity_days:validityDays
+    };
+    keepSavedQuote(snapshot);
+    await updateSavedHistory(snapshot,prior?"Borrador actualizado.":"Presupuesto guardado.");
   });
 }
 async function changeStatus(next){
@@ -142,11 +186,17 @@ async function changeStatus(next){
   }[next];
   if(!window.confirm(dialog))return;
   await runBusy(async()=>{
-    const id=state.current.id,expectedUpdatedAt=state.current.updated_at;
-    await state.api.status({id,status:next,expectedUpdatedAt});
-    await refreshQuotes();
-    loadQuote(id);
-    message("Estado actualizado: "+next+".");
+    const before=state.current;
+    const result=await state.api.status({
+      id:before.id,status:next,expectedUpdatedAt:before.updated_at
+    });
+    const confirmed={
+      ...before,status:result.status,updated_at:result.updated_at,
+      sent_at:next==="enviado"?new Date().toISOString():before.sent_at,
+      decided_at:["aceptado","rechazado"].includes(next)?new Date().toISOString():before.decided_at
+    };
+    keepSavedQuote(confirmed);
+    await updateSavedHistory(confirmed,"Estado confirmado: "+next+".");
   });
 }
 function printQuote(){
@@ -183,8 +233,19 @@ function populatePeople(){
     state.people.map(p=>'<option value="'+escape(p.id)+'">'+escape(p.display_name)+'</option>').join("");
 }
 function mountEvents(){
-  $("new-quote").addEventListener("click",()=>newQuote());
-  $("patient").addEventListener("change",()=>{newQuote();runBusy(refreshQuotes);});
+  $("new-quote").addEventListener("click",()=>{
+    if(confirmDiscard())newQuote();
+  });
+  $("patient").addEventListener("change",()=>{
+    const next=$("patient").value;
+    if(!confirmDiscard()){
+      $("patient").value=state.selectedPersonId;
+      return;
+    }
+    newQuote();
+    state.selectedPersonId=next;
+    runBusy(refreshQuotes);
+  });
   $("catalog-select").addEventListener("change",()=>{
     const found=state.catalog.find(x=>x.id===$("catalog-select").value);
     if(found){$("line-name").value=found.name;$("line-price").value=String(Number(found.unit_minor)/100);}
@@ -271,6 +332,7 @@ async function initialize(){
       bootstrapMessage("La sesión se cerró. Volvé a ingresar desde CITHELA.",true);
     });
     const [people,catalog,services]=await Promise.all([api.people(),api.catalog(),api.services()]);
+    if(state.api!==api)return; // An auth change may have invalidated this pending load.
     state.people=people;state.catalog=catalog;state.services=services;
     populatePeople();renderCatalog();mountEvents();
     $("catalog-admin").hidden=!["owner","admin"].includes(role);
@@ -281,6 +343,7 @@ async function initialize(){
     const target=new URLSearchParams(window.location.hash.replace(/^#/, "")).get("person");
     if(target && state.people.some(p=>p.id===target)){
       $("patient").value=target;
+      state.selectedPersonId=target;
       await refreshQuotes();
     }
     if(!people.length)message("Primero cargá un paciente desde la agenda CITHELA.");
