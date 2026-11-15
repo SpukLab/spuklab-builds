@@ -3559,10 +3559,12 @@ async function resumeCloudSession(){
   if(s.membership&&s.tenant){
     await loginWithCloudSession();return;
   }
-  // A patient profile always has precedence over pilot operator onboarding.
-  // Patient accounts do not receive tenant memberships and must retain access.
+  // Linked patients keep their portal. Accounts with no professional workspace
+  // and no patient record must remain in the professional onboarding flow,
+  // even when an email/browser redirect loses the pilot URL parameter.
   const result=await CithelaCloud.patientPortal();
-  if(CITHELA_SECOND_TENANT_PILOT&&s.email&&!result?.profiles?.length){
+  if(!result?.profiles?.length){
+    patientNoLinkedProfile=false;
     setRole('medico');
     showProfessionalWorkspaceSetup();
     return;
@@ -3637,7 +3639,8 @@ async function professionalCreatePilotAccount(){
 }
 function showProfessionalWorkspaceSetup(){
   const state=CithelaCloud.state();
-  if(!CITHELA_SECOND_TENANT_PILOT||!state.signedIn||!state.email||
+  // Presentation only: bootstrap() independently validates the server-side grant.
+  if(!state.signedIn||!state.email||
      state.membership||state.tenant)return false;
   const login=$('professional-login-fields');
   const setup=$('professional-workspace-setup');
@@ -3661,7 +3664,7 @@ async function professionalCancelPilotWorkspace(){
 }
 async function professionalCreatePilotWorkspace(){
   const state=CithelaCloud.state();
-  if(!CITHELA_SECOND_TENANT_PILOT||!state.signedIn||!state.email||
+  if(!state.signedIn||!state.email||
      state.membership||state.tenant)return;
   const name=$('professional-workspace-name').value.trim();
   if(name.length<2||name.length>160){
@@ -3721,9 +3724,13 @@ async function professionalPasswordLogin(){
     if(s.signedIn&&(!s.membership||!s.tenant))s=await CithelaCloud.refresh();
     if(!s.membership||!s.tenant){
       $('l-cloud-password').value='';
-      if(CITHELA_SECOND_TENANT_PILOT&&s.signedIn&&s.email&&showProfessionalWorkspaceSetup()){
-        toast('Creá el establecimiento de prueba para esta cuenta nueva.',4400);
-        return;
+      if(s.signedIn&&s.email){
+        // A linked patient is never offered professional tenant creation.
+        const portal=await CithelaCloud.patientPortal();
+        if(!portal?.profiles?.length&&showProfessionalWorkspaceSetup()){
+          toast('Si recibiste una invitación, completá la creación de tu agenda.',4600);
+          return;
+        }
       }
       await CithelaCloud.signOut();
       toast('Esta cuenta no tiene un espacio CITHELA profesional asignado.',4800);
