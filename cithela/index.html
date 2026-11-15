@@ -1243,6 +1243,8 @@ const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud sessi
 const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 // Pilot-only UI gate; NOT an authorization boundary. RPC validates auth and membership.
 const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams(location.search).get('pilotTenant')==='1';
+// Solo QA. No constituye autorización: el backend exige feature enabled + membresía.
+const CITHELA_QUOTES_PREVIEW_ENABLED=new URLSearchParams(location.search).get('quotesPreview')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -4912,7 +4914,14 @@ async function cloudSavePersonProfile(personId,expectedUpdatedAt){
   }finally{cloudPersonSaveBusy=false;if(button)button.disabled=false;}
 }
 
-async function cloudVerFicha(id){
+async function openCithelaQuoteForPerson(personId){
+  if(!CITHELA_QUOTES_PREVIEW_ENABLED||!professionalCloudWritable())return;
+  if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(personId)))return;
+  const tenant=CithelaCloud.state().tenant?.id;
+  if(!tenant||(CithelaCloud.state().people||[]).every(p=>p.id!==personId))return;
+  window.location.assign('./presupuestos/cloud.html#person='+encodeURIComponent(personId));
+}
+function cloudVerFicha(id){
   if(!professionalCloudReady())return;
   const req=++cloudFichaRequest;
   const body=$('m-ficha-body');
@@ -4972,6 +4981,8 @@ async function cloudVerFicha(id){
         </div>
       </div>
       <button class="mb teal" type="button" style="margin-bottom:12px;" onclick="closeM('m-ficha');ntStartForPerson('${p.id}')">+ Crear turno</button>
+      ${CITHELA_QUOTES_PREVIEW_ENABLED&&professionalCloudWritable()
+        ?`<button class="mb ghost" type="button" style="margin-bottom:12px;" onclick="openCithelaQuoteForPerson('${p.id}')">Preparar presupuesto</button>`:''}
       ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Enviar mensaje libre</button>`:''}
       <hr class="divider">
       <p class="sh" style="margin:0 0 7px;">Información compartida por la persona</p>
