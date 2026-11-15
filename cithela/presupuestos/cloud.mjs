@@ -93,5 +93,5 @@ export async function connectQuoteCloud(supabaseLib) {
   if(tenantError)throw tenantError;
   if(tenant?.status!=="active")throw new Error("Este establecimiento está inactivo.");
   return {api:createQuoteCloudApi(client,membership.tenant_id),
-    tenant,role:membership.role,client};
+    tenant,role:membership.role,client,userId:sessionResult.session.user.id};
 }
