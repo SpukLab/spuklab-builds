@@ -53,7 +53,10 @@ async function installMock(page){
     const api={
       auth:{
         getSession:async()=>({data:{session:{user:{id:"staff-demo"}}},error:null}),
-        onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})
+        onAuthStateChange:callback=>{
+          window.__quoteQAEmitAuth=callback;
+          return {data:{subscription:{unsubscribe(){}}}};
+        }
       },
       from:table=>new Query(table),
       rpc:async(name,{p_tenant_id,p_command,p_payload})=>{
@@ -186,6 +189,13 @@ async function main(){
         "Horizontal overflow at "+width+": "+JSON.stringify(viewport));
       assert.deepEqual(errors,[], "Runtime errors at "+width);
       await page.screenshot({path:path.join(process.cwd(),"cithela-quotes-layout-"+width+".png"),fullPage:true});
+      if(width===1280){
+        await page.evaluate(()=>window.__quoteQAEmitAuth("SIGNED_IN",{user:{id:"another-professional"}}));
+        assert.equal(await page.locator("#workspace").isVisible(),false);
+        assert.match(await page.locator("#bootstrap-message").innerText(),/Cambió la cuenta/);
+        assert.equal(await page.locator("#quote-list").innerText(),"");
+        console.log("PASS account switch clears quote and patient data");
+      }
       console.log("PASS quote create/save/WhatsApp/status & layout "+width+"px");
       await page.close();
     }
