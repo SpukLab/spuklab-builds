@@ -76,6 +76,7 @@ const server=http.createServer((req,res)=>{
       await page.locator("#cithela-sms-copy").click();
       assert.match(await page.locator("#cithela-sms-error").innerText(),/Confirm consent/);
       assert.equal(await page.locator("#cithela-sms-consent").isChecked(),false);
+      await page.screenshot({path:path.join(process.cwd(),"cithela-en-sms-"+width+".png"),fullPage:true});
       await page.locator("#cithela-sms-close").click();
       await page.waitForFunction(()=>document.getElementById("cithela-sms-body").value==="");
       assert.equal(await page.locator("#cithela-sms-recipient").textContent(),"");
