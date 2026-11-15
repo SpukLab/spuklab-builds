@@ -265,6 +265,12 @@ async function initialize(){
     $("workspace").hidden=false;
     $("bootstrap-message").hidden=true;
     newQuote();
+    // Prefill from the patient's card; accept only a person in this tenant.
+    const target=new URLSearchParams(window.location.hash.replace(/^#/, "")).get("person");
+    if(target && state.people.some(p=>p.id===target)){
+      $("patient").value=target;
+      await refreshQuotes();
+    }
     if(!people.length)message("Primero cargá un paciente desde la agenda CITHELA.");
   }catch(e){
     bootstrapMessage(e.message||"No se pudo cargar Presupuestos.",true);
