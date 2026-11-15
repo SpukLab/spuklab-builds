@@ -61,12 +61,14 @@ export function createQuoteCloudApi(client,tenantId) {
       },requestId),
     status:({id,status,expectedUpdatedAt})=>
       rpc("quote.status",{id,status,expected_updated_at:expectedUpdatedAt}),
-    catalogSave:({id,serviceId,name,unitMinor})=>
+    catalogSave:({id,serviceId,name,unitMinor,expectedUpdatedAt})=>
       rpc("catalog.upsert",{
-        ...(id?{id}:{}),...(serviceId?{service_id:serviceId}:{}),
+        ...(id?{id,expected_updated_at:expectedUpdatedAt}:{}),
+        ...(serviceId?{service_id:serviceId}:{}),
         name,unit_minor:unitMinor
       }),
-    catalogArchive:(id)=>rpc("catalog.archive",{id})
+    catalogArchive:({id,expectedUpdatedAt})=>
+      rpc("catalog.archive",{id,expected_updated_at:expectedUpdatedAt})
   });
 }
 export async function connectQuoteCloud(supabaseLib) {
