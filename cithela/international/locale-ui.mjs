@@ -30,6 +30,57 @@ function setLabel(el,next){
   }
   if(!el.children.length&&el.textContent!==next)el.textContent=next;
 }
+// Patient booking controls are created with innerHTML after cloud refreshes.
+// Only translate known UI strings inside the authenticated patient workspace.
+// Never rewrite tenant names, appointment details, service names or patient notes.
+const patientUiPairs=[
+ ["Reservar nuevo turno","Book an appointment"],["Cerrar nueva reserva","Close booking"],
+ ["Confirmar turno","Confirm appointment"],["Reprogramar","Reschedule"],
+ ["Cancelar turno","Cancel appointment"],["Cerrar","Close"],
+ ["Servicio","Service"],["Profesional","Professional"],["Fecha","Date"],
+ ["Nueva fecha","New date"],["Motivo (opcional)","Reason (optional)"],
+ ["Horarios disponibles · mínimo 2 horas de anticipación","Available times · at least 2 hours ahead"],
+ ["Elegí un horario.","Select a time."],["Seleccioná un horario disponible.","Choose an available time."],
+ ["Buscando horarios cloud…","Finding available times…"],
+ ["Cargando servicios y profesionales…","Loading services and professionals…"],
+ ["Consultando horarios disponibles…","Loading available times…"],
+ ["No hay horarios libres para esta fecha.","No available times on this date."],
+ ["Sin turnos próximos.","No upcoming appointments."],
+ ["Todavía no hay turnos anteriores.","No previous appointments."],
+ ["Establecimiento donde reservás","Your healthcare provider"],
+ ["Pendiente","Pending"],["Confirmado","Confirmed"],
+ ["Cancelado","Cancelled"],["Atendido","Completed"],
+ ["No asistió","Missed"],["Reservar nuevo turno","Book an appointment"]
+];
+function patientUiTranslate(target){
+  const scope=document.querySelector("#patient-cloud-list");
+  if(!scope)return;
+  const dictionary=new Map(patientUiPairs.map(([es,en])=>
+    target==="en-US"?[es,en]:[en,es]));
+  scope.querySelectorAll(".patient-workspace button,.patient-workspace label,.patient-workspace p,.patient-workspace summary,.patient-workspace .tag")
+    .forEach(el=>{
+      if(el.closest(".patient-shared-panel")||el.classList.contains("tenant-business-title")||
+         el.classList.contains("tenant-card-person")||el.children.length>0)return;
+      const current=el.textContent.trim();
+      const next=dictionary.get(current);
+      if(next&&next!==current)el.textContent=next;
+      // Counted titles: translate prefix only, preserving the count.
+      else if(el.classList.contains("sh")){
+        const m=current.match(/^(Próximos|Historial|Upcoming|History) \((\d+)\)$/);
+        if(m){
+          const word=target==="en-US"?(m[1]==="Próximos"?"Upcoming":"History"):
+            (m[1]==="Upcoming"?"Próximos":"Historial");
+          const label=word+" ("+m[2]+")";
+          if(current!==label)el.textContent=label;
+        }
+      }
+    });
+  const reason=document.getElementById("patient-book-reason");
+  if(reason){
+    const ph=target==="en-US"?"Briefly describe your request":"Comentá brevemente el motivo";
+    if(reason.placeholder!==ph)reason.placeholder=ph;
+  }
+}
 let locale="es-AR",queued=false;
 export function applyLocale(next=locale){
   locale=normalizeLocale(next);
@@ -38,6 +89,7 @@ export function applyLocale(next=locale){
     const el=document.querySelector(selector);
     if(el)setLabel(el,t(key,locale));
   }
+  patientUiTranslate(locale);
   document.querySelectorAll("[data-cithela-language]").forEach(btn=>{
     const chosen=normalizeLocale(btn.dataset.cithelaLanguage)===locale;
     btn.setAttribute("aria-pressed",String(chosen));
