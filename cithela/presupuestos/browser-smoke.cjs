@@ -4,7 +4,8 @@ const fs=require("node:fs");
 const path=require("node:path");
 const http=require("node:http");
 const assert=require("node:assert/strict");
-const {chromium}=require("playwright");
+const {chromium,webkit}=require("playwright");
+const browserEngine=process.env.CITHELA_BROWSER_ENGINE==="webkit"?"webkit":"chromium";
 
 const base=path.resolve(__dirname,"..");
 const mime={".html":"text/html; charset=utf-8",".mjs":"text/javascript; charset=utf-8",
@@ -113,7 +114,7 @@ async function main(){
   const httpServer=server();
   await new Promise(resolve=>httpServer.listen(0,"127.0.0.1",resolve));
   const origin="http://127.0.0.1:"+httpServer.address().port;
-  const browser=await chromium.launch({headless:true});
+  const browser=await (browserEngine==="webkit"?webkit:chromium).launch({headless:true});
   try{
     for(const width of [320,390,768,1280]){
       const page=await browser.newPage({viewport:{width,height:900}});
@@ -124,7 +125,7 @@ async function main(){
         return route.abort();
       });
       await installMock(page);
-      await page.goto(origin+"/presupuestos/cloud.html#person=b1000000-0000-4000-8000-000000000001",
+      await page.goto(origin+"/presupuestos/cloud.html#tenant=a1000000-0000-4000-8000-000000000001&person=b1000000-0000-4000-8000-000000000001",
         {waitUntil:"domcontentloaded"});
       await page.locator("#workspace:visible").waitFor({timeout:15000});
       await page.waitForFunction(()=>
@@ -195,7 +196,7 @@ async function main(){
       assert.ok(viewport.scrollWidth<=width+2,
         "Horizontal overflow at "+width+": "+JSON.stringify(viewport));
       assert.deepEqual(errors,[], "Runtime errors at "+width);
-      await page.screenshot({path:path.join(process.cwd(),"cithela-quotes-layout-"+width+".png"),fullPage:true});
+      await page.screenshot({path:path.join(process.cwd(),"cithela-quotes-layout-"+browserEngine+"-"+width+".png"),fullPage:true});
       if(width===1280){
         await page.evaluate(()=>window.__quoteQAEmitAuth("SIGNED_IN",{user:{id:"another-professional"}}));
         assert.equal(await page.locator("#workspace").isVisible(),false);
