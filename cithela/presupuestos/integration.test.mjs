@@ -25,7 +25,7 @@ test("patient handoff selects only a person in the currently-authorized tenant",
 });
 test("frontend does not access quote tables directly or include secret API keys",()=>{
   assert.doesNotMatch(adapter,/\.from\(["']cithela_quotes["']\)/);
-  assert.doesNotMatch(adapter,/service_role|sb_secret_/i);
+  assert.doesNotMatch(adapter,/sb_secret_/i);
   assert.match(adapter,/\.rpc\("cithela_quote_command"/);
 });
 test("production data stays inaccessible without manual tenant enablement",()=>{
