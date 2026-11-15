@@ -7,7 +7,7 @@ const state={
   api:null,tenant:null,role:null,
   people:[],services:[],catalog:[],quotes:[],
   lines:[],current:null,dirty:false,pendingRequest:null,busy:false,editingCatalogId:null,
-  selectedPersonId:""
+  selectedPersonId:"",sessionEpoch:0
 };
 function message(msg,error=false){
   $("feedback").textContent=msg;
@@ -102,7 +102,11 @@ function render(){
   }
   $("patient").disabled=state.busy||!!state.current; // Cambiar paciente exige comenzar nuevo.
   $("save-quote").disabled=!editable||!currentPerson()||!state.lines.length;
-  $("save-quote").textContent=state.busy?"Guardando…":state.current?"Actualizar borrador":"Guardar presupuesto";
+  $("save-quote").textContent=state.busy?"Guardando…":
+    !state.current?"Guardar presupuesto":
+    state.current.status==="borrador"?"Actualizar borrador":
+    ({enviado:"Presupuesto enviado",aceptado:"Presupuesto aceptado",
+      rechazado:"Presupuesto rechazado"}[state.current.status]||"Solo lectura");
   $("duplicate-quote").hidden=!state.current;
   $("duplicate-quote").disabled=!state.current||state.busy;
   $("print-quote").disabled=!storedReady()||state.busy;
@@ -121,8 +125,13 @@ function render(){
   renderQuotes();
 }
 async function refreshQuotes(){
-  if(!currentPerson()){state.quotes=[];render();return;}
-  state.quotes=await state.api.quotes(currentPerson().id);
+  const personId=currentPerson()?.id;
+  const api=state.api;
+  const epoch=state.sessionEpoch;
+  if(!personId){state.quotes=[];render();return;}
+  const quotes=await api.quotes(personId);
+  if(state.api!==api||state.sessionEpoch!==epoch||currentPerson()?.id!==personId)return;
+  state.quotes=quotes;
   render();
 }
 function newQuote(clearPatient=false){
@@ -172,13 +181,15 @@ async function save(){
     const quote=buildSnapshot();
     const personId=currentPerson().id;
     const prior=state.current;
+    const api=state.api,epoch=state.sessionEpoch;
     const validityDays=Number($("validity").value);
     const requestId=state.pendingRequest||(state.pendingRequest=crypto.randomUUID());
-    const result=await state.api.save({
+    const result=await api.save({
       ...(prior?{id:prior.id,expectedUpdatedAt:prior.updated_at}:{}),
       personId,items:quote.lines,discountMinor:quote.discountMinor,
       validityDays,requestId
     });
+    if(state.sessionEpoch!==epoch||state.api!==api)return;
     const snapshot={
       ...prior,id:result.id,reference:result.reference,
       status:result.status||prior?.status||"borrador",
@@ -203,10 +214,11 @@ async function changeStatus(next){
   }[next];
   if(!window.confirm(dialog))return;
   await runBusy(async()=>{
-    const before=state.current;
-    const result=await state.api.status({
+    const before=state.current,api=state.api,epoch=state.sessionEpoch;
+    const result=await api.status({
       id:before.id,status:next,expectedUpdatedAt:before.updated_at
     });
+    if(state.sessionEpoch!==epoch||state.api!==api)return;
     const confirmed={
       ...before,status:result.status,updated_at:result.updated_at,
       sent_at:next==="enviado"?new Date().toISOString():before.sent_at,
@@ -250,6 +262,9 @@ function populatePeople(){
     state.people.map(p=>'<option value="'+escape(p.id)+'">'+escape(p.display_name)+'</option>').join("");
 }
 function mountEvents(){
+  document.querySelector("header .return")?.addEventListener("click",event=>{
+    if(!confirmDiscard())event.preventDefault();
+  });
   $("new-quote").addEventListener("click",()=>{
     if(confirmDiscard())newQuote();
   });
@@ -343,6 +358,7 @@ async function initialize(){
     client.auth.onAuthStateChange((event,session)=>{
       const switched=event==="SIGNED_IN"&&!!session?.user?.id&&session.user.id!==userId;
       if(event!=="SIGNED_OUT"&&!switched)return;
+      state.sessionEpoch++;
       state.people=[];state.services=[];state.catalog=[];state.quotes=[];
       state.lines=[];state.current=null;state.pendingRequest=null;state.api=null;
       state.tenant=null;state.selectedPersonId="";
