@@ -126,8 +126,8 @@ async function main(){
       await page.locator("#share-dialog[open]").waitFor();
       assert.match(await page.locator("#share-text").inputValue(),/Paciente Ficticio A/);
       await page.locator("#close-share").click();
-      await page.locator("#mark-sent").click();
       page.once("dialog",dialog=>dialog.accept());
+      await page.locator("#mark-sent").click();
       await page.waitForFunction(()=>document.getElementById("quote-status").textContent==="Enviado");
       assert.equal(await page.locator("#add-line").isDisabled(),true);
       const viewport=await page.evaluate(()=>({
