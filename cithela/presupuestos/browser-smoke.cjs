@@ -141,6 +141,14 @@ async function main(){
           throw error;
         });
       assert.equal(await page.locator("#patient").inputValue(),"b1000000-0000-4000-8000-000000000001");
+      if(width===390){
+        assert.equal(await page.locator("#catalog-admin").evaluate(el=>el.open),false);
+        await page.locator("#catalog-admin summary").click();
+        assert.equal(await page.locator("#catalog-admin").evaluate(el=>el.open),true);
+        assert.equal(await page.locator("#save-cat").isVisible(),true);
+        await page.locator("#catalog-admin summary").click();
+        assert.equal(await page.locator("#catalog-admin").evaluate(el=>el.open),false);
+      }
       await page.locator("#catalog-select").selectOption("cat-demo-1");
       await page.locator("#line-quantity").fill("2");
       await page.locator("#add-line").click();
@@ -157,6 +165,8 @@ async function main(){
       await page.locator("#mark-sent").click();
       await page.waitForFunction(()=>document.getElementById("quote-status").textContent==="Enviado");
       assert.equal(await page.locator("#add-line").isDisabled(),true);
+      assert.equal(await page.locator("#save-quote").isDisabled(),true);
+      assert.equal(await page.locator("#save-quote").innerText(),"Presupuesto enviado");
       if(width===390){
         // The RPC succeeds but the following list refresh fails: never create
         // a second quote when the professional repeats the action.
