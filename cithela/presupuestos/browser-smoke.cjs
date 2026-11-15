@@ -113,6 +113,18 @@ async function main(){
       await page.goto(origin+"/presupuestos/cloud.html#person=b1000000-0000-4000-8000-000000000001",
         {waitUntil:"domcontentloaded"});
       await page.locator("#workspace:visible").waitFor({timeout:15000});
+      await page.waitForFunction(()=>
+        document.getElementById("patient")?.value==="b1000000-0000-4000-8000-000000000001",
+        null,{timeout:7000}).catch(async error=>{
+          console.log("QA patient preselection diagnostics",await page.evaluate(()=>({
+            hash:location.hash,
+            selected:document.getElementById("patient")?.value,
+            options:[...document.querySelectorAll("#patient option")].map(x=>({value:x.value,label:x.textContent})),
+            startup:document.getElementById("bootstrap-message")?.textContent,
+            feedback:document.getElementById("feedback")?.textContent
+          })));
+          throw error;
+        });
       assert.equal(await page.locator("#patient").inputValue(),"b1000000-0000-4000-8000-000000000001");
       await page.locator("#catalog-select").selectOption("cat-demo-1");
       await page.locator("#line-quantity").fill("2");
