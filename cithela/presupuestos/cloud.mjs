@@ -8,6 +8,7 @@ const CODE_LABELS = Object.freeze({
   unauthenticated:"Tu sesión expiró. Volvé a ingresar a CITHELA.",
   forbidden:"Tu usuario no tiene permiso para utilizar Presupuestos.",
   tenant_inactive:"El establecimiento está inactivo.",
+  feature_disabled:"Presupuestos todavía no está habilitado para este establecimiento.",
   invalid_payload:"Revisá los datos del presupuesto.",
   person_not_found:"El paciente no pertenece a este establecimiento.",
   service_not_found:"No se encontró ese servicio.",
