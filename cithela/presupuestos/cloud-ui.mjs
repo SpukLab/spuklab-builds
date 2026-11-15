@@ -80,7 +80,8 @@ function renderQuotes(){
 function render(){
   const editable=isEditable();
   $("tenant-name").textContent=state.tenant?.display_name||"Establecimiento";
-  $("role-name").textContent="Rol: "+state.role;
+  const roleLabels={owner:"Propietario",admin:"Administrador",operator:"Operador"};
+  $("role-name").textContent="Acceso: "+(roleLabels[state.role]||"Profesional");
   $("quote-status").textContent=state.current
     ?state.current.status[0].toUpperCase()+state.current.status.slice(1)
     :"Borrador nuevo";
