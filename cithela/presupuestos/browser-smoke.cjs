@@ -25,8 +25,8 @@ function server(){
 async function installMock(page){
   await page.addInitScript(()=>{
     const tenant="a1000000-0000-4000-8000-000000000001";
-    const patients=[{id:"b1000000-0000-4000-8000-000000000001",display_name:"Paciente Ficticio A"},
-                    {id:"b2000000-0000-4000-8000-000000000002",display_name:"Paciente Ficticio B"}];
+    const patients=[{id:"b1000000-0000-4000-8000-000000000001",tenant_id:tenant,display_name:"Paciente Ficticio A"},
+                    {id:"b2000000-0000-4000-8000-000000000002",tenant_id:tenant,display_name:"Paciente Ficticio B"}];
     const catalog=[{id:"cat-demo-1",service_id:null,name:"Limpieza de ejemplo",unit_minor:3500000,currency:"ARS",active:true,updated_at:"2026-11-15T12:00:00Z"}];
     const saved=[];
     let versions=0;
@@ -42,7 +42,7 @@ async function installMock(page){
         const rows={cithela_tenant_memberships:[{tenant_id:tenant,role:"owner",created_at:"2026-11-15T00:00:00Z"}],
           cithela_tenants:[{id:tenant,display_name:"Consultorio Ficticio",status:"active"}],
           cithela_people:patients,
-          cithela_services:[{id:"service-demo-1",name:"Limpieza de ejemplo",active:true}]
+          cithela_services:[{id:"service-demo-1",tenant_id:tenant,name:"Limpieza de ejemplo",active:true}]
         }[this.table]||[];
         const results=rows.filter(row=>this.conditions.every(([field,value])=>row[field]===value)).slice(0,this.cap);
         return Promise.resolve({data:this.onlyOne?(results[0]||null):results,error:null}).then(resolve,reject);
