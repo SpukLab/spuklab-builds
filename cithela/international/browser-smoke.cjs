@@ -77,6 +77,8 @@ const server=http.createServer((req,res)=>{
       assert.match(await page.locator("#cithela-sms-error").innerText(),/Confirm consent/);
       assert.equal(await page.locator("#cithela-sms-consent").isChecked(),false);
       await page.locator("#cithela-sms-close").click();
+      await page.waitForFunction(()=>document.getElementById("cithela-sms-body").value==="");
+      assert.equal(await page.locator("#cithela-sms-recipient").textContent(),"");
       const dims=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       assert.ok(dims.scroll<=width+2,"horizontal overflow "+width+": "+JSON.stringify(dims));
       console.log("PASS EN/ES switch, consent before SMS, neutral portal link, "+width+"px");
