@@ -37,7 +37,7 @@ test('appointments before weekly metrics; people search before collapsed add for
 test('configuration prioritizes daily use; nested details remain balanced',()=>{
  const cfg=slice('id="p-medico-config"','<div class="byline">');
  const order=[...cfg.matchAll(/id="cfg-section-([^"]+)"/g)].map(m=>m[1]);
- assert.deepEqual(order,['hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
+ assert.deepEqual(order,['hours','availability','services','resources','reminders','business','branding','public-booking','payments','cloud','infrastructure','security']);
  let depth=0;
  for(const token of (cfg.match(/<\/?details\b[^>]*>/g)||[])){
    depth+=token.startsWith('</')?-1:1;
