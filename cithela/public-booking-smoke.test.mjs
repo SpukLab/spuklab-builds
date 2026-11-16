@@ -80,3 +80,13 @@ test('booking sharing distinguishes expired subscription and hides inactive QR a
   assert.match(html,/\$\(key\)\.disabled=!active/);
   assert.match(html,/QR disponible después de activar las reservas/);
 });
+
+test('public booking keeps an accessible, subtle language switch',()=>{
+  const html=read('reservar.html');
+  assert.match(html,/<button id="language" type="button" aria-label="Cambiar idioma a inglés" title="English">EN<\/button>/);
+  assert.match(html,/\.top button\{background:transparent;/);
+  assert.doesNotMatch(html,/\.top button,\.btn\.secondary,\.step/);
+  assert.match(html,/\$\('language'\)\.textContent=lang==='es'\?'EN':'ES';/);
+  assert.match(html,/\$\('language'\)\.setAttribute\('aria-label'/);
+  assert.match(html,/\$\('language'\)\.addEventListener\('click'/);
+});

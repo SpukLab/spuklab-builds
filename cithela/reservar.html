@@ -9,7 +9,9 @@
 :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#203b35;background:#f5f8f5}
 *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}
 .top{background:white;border-bottom:1px solid #dce8e3;padding:14px max(18px,calc((100vw - 690px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}
-.brand{font-weight:750;color:#23665e;letter-spacing:.16em;font-size:15px}.top button{background:#e6f2ee;color:#23665e;border:0;border-radius:9px;padding:9px 12px}
+.brand{font-weight:750;color:#23665e;letter-spacing:.16em;font-size:15px}.top button{background:transparent;color:#667d75;border:0;border-radius:6px;padding:9px 10px;min-width:42px;min-height:38px;font-size:12px;font-weight:650;letter-spacing:.06em}
+.top button:hover{background:#f3f7f5;color:#23665e}
+.top button:focus-visible{outline:2px solid #267e71;outline-offset:2px}
 main{max-width:690px;padding:28px 18px 65px;margin:auto}
 h1{font:400 2rem Georgia,serif;margin:7px 0 10px}
 .business-identity{display:flex;align-items:center;gap:15px;margin-bottom:7px}
@@ -18,7 +20,7 @@ h1{font:400 2rem Georgia,serif;margin:7px 0 10px}
 :root{--tenant-accent:#2f7d73;--tenant-dark:#23665e;--tenant-light:#e6f2ee}
 .business-identity h1{margin:0}
 .btn:not(.secondary):not(.link),.slots button[aria-pressed="true"]{background:var(--tenant-accent)}
-.top button,.btn.secondary,.step{background:var(--tenant-light);color:var(--tenant-dark)}
+.btn.secondary,.step{background:var(--tenant-light);color:var(--tenant-dark)}
 @media(max-width:370px){.business-identity img{width:56px;height:56px}}h2{font-size:1.03rem;margin:0 0 14px}
 .kicker{text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:700;color:#357a70}
 .sub{color:#627b72;line-height:1.5;margin:0 0 25px;font-size:.9rem}
@@ -41,7 +43,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 </style>
 </head>
 <body>
-<header class="top"><span class="brand">CITHELA</span><button id="language" type="button">English</button></header>
+<header class="top"><span class="brand">CITHELA</span><button id="language" type="button" aria-label="Cambiar idioma a inglés" title="English">EN</button></header>
 <main>
 <p class="kicker" id="kicker"></p>
 <div class="business-identity"><img id="business-logo" hidden alt=""><h1 id="business">Cargando…</h1></div><p class="sub" id="intro"></p>
@@ -127,7 +129,9 @@ function applyTenantBrand(x){
 }
 
 const t=key=>L[lang][key]||key;
-function i18n(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(x=>x.textContent=t(x.dataset.i));$('language').textContent=lang==='es'?'English':'Español';$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();updateContact();} }
+function i18n(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(x=>x.textContent=t(x.dataset.i));$('language').textContent=lang==='es'?'EN':'ES';
+$('language').setAttribute('aria-label',lang==='es'?'Cambiar idioma a inglés':'Switch language to Spanish');
+$('language').setAttribute('title',lang==='es'?'English':'Español');$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();updateContact();} }
 function msg(text,error=false){$('message').textContent=text||'';$('message').className='msg'+(error?' error':'');$('message').hidden=!text;}
 async function rpc(name,args){if(!client)throw Error('Supabase unavailable');const {data:result,error}=await client.rpc(name,args);if(error)throw error;if(!result?.ok)throw Error(result?.code||'error');return result}
 function dateHere(){const parts=new Intl.DateTimeFormat('en-US',{timeZone:data.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const m=Object.fromEntries(parts.map(p=>[p.type,p.value]));return m.year+'-'+m.month+'-'+m.day}
