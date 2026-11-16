@@ -1,5 +1,16 @@
 -- CITHELA platform booking management. Server-only RPC. No browser permission.
 -- The commercial Edge Function validates verified platform-admin JWT before this RPC.
+-- Audit privileged configuration changes without altering the existing commercial audit contract.
+create table if not exists cithela_private.cithela_public_booking_admin_audit(
+ audit_id bigint generated always as identity primary key,
+ actor_user_id uuid not null references auth.users(id),
+ tenant_id uuid not null references public.cithela_tenants(id),
+ action text not null check(action in ('booking_save','booking_timezone')),
+ recorded_at timestamptz not null default statement_timestamp(),
+ detail jsonb not null default '{}'::jsonb
+);
+alter table cithela_private.cithela_public_booking_admin_audit enable row level security;
+revoke all on cithela_private.cithela_public_booking_admin_audit from public,anon,authenticated;
 create or replace function public.cithela_commercial_admin_booking_command(
  p_actor uuid,p_action text,p_payload jsonb default '{}'::jsonb
 ) returns jsonb language plpgsql security definer set search_path='' as $$
@@ -34,6 +45,10 @@ begin
     if exists(select 1 from public.cithela_appointments a where a.tenant_id=v_tid)
     then return jsonb_build_object('ok',false,'code','appointment_history_locked');end if;
     update public.cithela_tenants set timezone=v_timezone where id=v_tid;
+    insert into cithela_private.cithela_public_booking_admin_audit
+      (actor_user_id,tenant_id,action,detail)
+    values(p_actor,v_tid,'booking_timezone',
+      jsonb_build_object('old_timezone',v_tz,'new_timezone',v_timezone));
     v_tz:=v_timezone;
   end if;
   return jsonb_build_object('ok',true,'code','timezone_updated','timezone',v_tz);
@@ -67,6 +82,10 @@ begin
    values (v_tid,v_slug,v_enabled,v_locale)
    on conflict(tenant_id) do update set slug=excluded.slug,enabled=excluded.enabled,
     locale=excluded.locale,updated_at=statement_timestamp();
+   insert into cithela_private.cithela_public_booking_admin_audit
+     (actor_user_id,tenant_id,action,detail)
+   values(p_actor,v_tid,'booking_save',
+     jsonb_build_object('slug',v_slug,'enabled',v_enabled,'locale',v_locale));
   exception when unique_violation then
    return jsonb_build_object('ok',false,'code','slug_in_use');
   end;
