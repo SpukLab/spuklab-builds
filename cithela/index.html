@@ -124,6 +124,15 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .cithela-first-steps__text small{font-size:.73rem;line-height:1.45;color:var(--ink2);}
 .cithela-first-steps__note{font-size:.7rem;line-height:1.5;color:var(--ink3);margin:12px 0 0;}
 #cfg-section-hours,#cfg-section-services,#person-create-details{scroll-margin-top:110px;}
+/* Authenticated owner/admin shortcut on professional cloud agenda. */
+.cithela-booking-shortcut[hidden]{display:none!important}
+.cithela-booking-shortcut{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:13px 14px;border:var(--line);border-radius:var(--r-sm);background:var(--white)}
+.cithela-booking-shortcut__copy{min-width:0;flex:1}
+.cithela-booking-shortcut__copy strong{display:block;font-size:.82rem;font-weight:650;color:var(--ink);margin-bottom:3px}
+.cithela-booking-shortcut__copy small{display:block;font-size:.72rem;line-height:1.45;color:var(--ink2)}
+.cithela-booking-shortcut__link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;flex:none;text-decoration:none;padding:9px 11px;background:var(--teal-light);border-radius:8px;color:var(--teal2);font-weight:650;font-size:.76rem}
+.cithela-booking-shortcut__link:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+@media(max-width:350px){.cithela-booking-shortcut{flex-wrap:wrap}.cithela-booking-shortcut__link{width:100%}}
 
 /* NAV */
 nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--sh);}
@@ -648,6 +657,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <button class="cithela-first-steps__item" type="button" onclick="openCithelaFirstSteps('people')"><span class="cithela-first-steps__number">03</span><span class="cithela-first-steps__text"><strong>Primera persona</strong><small id="first-step-people-state">Solo nombre y WhatsApp</small></span><span aria-hidden="true">↗</span></button>
       </div>
       <p class="cithela-first-steps__note">No hace falta enviar invitaciones para registrar personas y otorgar turnos. Esta guía se oculta después del primer turno.</p>
+    </section>
+    <section id="professional-public-booking-shortcut" class="cithela-booking-shortcut" hidden aria-label="Reservas online para tus pacientes">
+      <div class="cithela-booking-shortcut__copy">
+        <strong>Reservas online</strong>
+        <small>Compartí tu enlace o QR con tus pacientes.</small>
+      </div>
+      <a class="cithela-booking-shortcut__link" href="./compartir.html">Ver enlace y QR</a>
     </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
@@ -3955,6 +3971,10 @@ function renderProfessionalMode(){
     const el=$(id);if(!el)continue;
     el.style.display=active?'none':'block';
     if(!active)el.textContent=note;
+  }
+  const bookingShortcut=$('professional-public-booking-shortcut');
+  if(bookingShortcut){
+    bookingShortcut.hidden=!(active&&['owner','admin'].includes(s.membership?.role));
   }
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
