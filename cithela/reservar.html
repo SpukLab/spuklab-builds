@@ -93,6 +93,27 @@ es:{kicker:'Reservas online',loading:'Consultando disponibilidad…',intro:'Sele
 en:{kicker:'Online booking',loading:'Checking availability…',intro:'Select a service and choose an available time.',chooseService:'Choose a service',service:'Service',professional:'Professional',chooseTime:'Choose a date and time',date:'Date',yourDetails:'Your details',emailPrompt:'Verify your email to request this appointment. No password is required.',email:'Email address',sendLink:'Send email sign-in link',emailExplain:'Open the link we email you, or enter the code if your message includes one. You will return to this page.',otp:'Email code',verify:'Verify code',name:'Full name',privacy:'Your information will only be shared with this practice to manage your appointment. Do not enter sensitive medical details.',request:'Request appointment',requestReceived:'Request received',myAppointments:'View my appointments',none:'No available times for this date. Try another day.',choose:'Select a time to continue.',verifyFirst:'Verify your email before requesting an appointment.',verified:'Verified email',emailSent:'Check your email and return to this page.',pending:'Your appointment is pending confirmation from the practice.',error:'The request could not be completed.',retry:'Please retry or contact the practice directly.',unavailable:'This booking link is currently unavailable.',deposit:'Deposit requested by the practice: ',noDeposit:'No deposit required for this service.',localTime:'Practice time zone: ',switchEmail:'Use another email',already:'This email belongs to a profile linked to another account. Contact the practice.',slotTaken:'This time was taken. Please select another.',loginWarning:'If you are already signed in to CITHELA with another email, sign out before continuing.',loadingSlots:'Loading available times…'}};
 let lang=(qs.get('lang')==='en'||qs.get('lang')==='es')?qs.get('lang'):((navigator.language||'').toLowerCase().startsWith('en')?'en':'es');
 let data=null,chosen='',session=null,loading=false,personId=null;
+function tenantBrandLogoUrl(x){
+  const id=String(x.tenant_id||''),path=String(x.logo_object_path||'');
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))return '';
+  if(!new RegExp('^'+id+'/logo-[a-f0-9]{32}[.](png|jpg|jpeg|webp)$').test(path))return '';
+  return URL_SUPA+'/storage/v1/object/public/cithela-branding/'+path.split('/').map(encodeURIComponent).join('/')+
+    '?v='+encodeURIComponent(String(x.branding_updated_at||''));
+}
+function applyTenantBrand(x){
+  const palette={sage:['#2f7d73','#23665e','#e6f2ee'],
+    ocean:['#205f92','#174a75','#e9f3fb'],
+    clay:['#84472f','#683723','#f8eee8'],
+    pink:['#ba2d73','#8f1f56','#fde8f1']};
+  const [accent,dark,light]=palette[x.brand_theme==='plum'?'pink':x.brand_theme]||palette.sage;
+  document.documentElement.style.setProperty('--tenant-accent',accent);
+  document.documentElement.style.setProperty('--tenant-dark',dark);
+  document.documentElement.style.setProperty('--tenant-light',light);
+  const logo=$('business-logo'),url=tenantBrandLogoUrl(x);
+  logo.hidden=!url;
+  if(url){logo.src=url;logo.alt='Logo: '+x.name;logo.onerror=()=>{logo.hidden=true};}
+}
+
 const t=key=>L[lang][key]||key;
 function i18n(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(x=>x.textContent=t(x.dataset.i));$('language').textContent=lang==='es'?'English':'Español';$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();updateContact();} }
 function msg(text,error=false){$('message').textContent=text||'';$('message').className='msg'+(error?' error':'');$('message').hidden=!text;}
