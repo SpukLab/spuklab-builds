@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f6f8f6">
+<link rel="icon" href="./brand/cithela-favicon.svg?v=20261110-final" type="image/svg+xml">
+<title>Reservar · CITHELA</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#203b35;background:#f5f8f5}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}
+.top{background:white;border-bottom:1px solid #dce8e3;padding:14px max(18px,calc((100vw - 690px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:750;color:#23665e;letter-spacing:.16em;font-size:15px}.top button{background:#e6f2ee;color:#23665e;border:0;border-radius:9px;padding:9px 12px}
+main{max-width:690px;padding:28px 18px 65px;margin:auto}
+h1{font:400 2rem Georgia,serif;margin:7px 0 10px}h2{font-size:1.03rem;margin:0 0 14px}
+.kicker{text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:700;color:#357a70}
+.sub{color:#627b72;line-height:1.5;margin:0 0 25px;font-size:.9rem}
+.card{background:white;border:1px solid #dce8e3;border-radius:17px;padding:20px;margin:0 0 14px;box-shadow:0 3px 20px #244c3d08}
+.card[hidden],.hide[hidden],section[hidden],div[hidden],p[hidden]{display:none!important}
+.step{border-radius:100%;display:inline-grid;place-items:center;background:#e6f2ee;color:#23665e;width:26px;height:26px;font-size:13px;font-weight:700;margin-right:8px}
+label{display:block;font-size:12px;font-weight:700;margin:13px 0 6px;color:#41584e}
+input,select{width:100%;background:#f9fbf9;border:1px solid #cbded5;border-radius:10px;padding:13px;color:#203b35;min-height:46px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid #267e71;outline-offset:2px}
+.btn{background:#2f7d73;color:white;border:0;border-radius:10px;min-height:47px;padding:12px 18px;font-weight:700;width:100%;margin-top:14px}
+.btn:disabled{opacity:.45;cursor:default}.btn.secondary{background:#e6f2ee;color:#23665e}.btn.link{background:none;color:#23665e;padding:8px;margin:0}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-top:13px}
+.slots button{border:1px solid #acd4c9;border-radius:10px;background:#f8fcf9;color:#21574d;min-height:46px;font-weight:600}
+.slots button[aria-pressed="true"]{background:#2f7d73;color:white;border-color:#2f7d73}
+.msg{padding:13px;background:#eff5f1;border-radius:10px;color:#47695d;font-size:13px;line-height:1.5;margin:14px 0}
+.msg.error{background:#fff0f1;color:#96354a}.muted{font-size:12px;color:#71827c;line-height:1.5}
+.summary{background:#edf7f2;padding:13px;border-radius:10px;margin:12px 0;line-height:1.65;font-size:.9rem}
+.footer{text-align:center;color:#71827c;font-size:11px;margin-top:28px}
+@media(max-width:370px){main{padding:20px 12px}.card{padding:15px}h1{font-size:1.65rem}}
+</style>
+</head>
+<body>
+<header class="top"><span class="brand">CITHELA</span><button id="language" type="button">English</button></header>
+<main>
+<p class="kicker" id="kicker"></p>
+<h1 id="business">Cargando…</h1><p class="sub" id="intro"></p>
+<div class="msg" id="message" role="status" aria-live="polite"></div>
+<section class="card" id="step-service" hidden><h2><span class="step">1</span><span data-i="chooseService"></span></h2>
+<label for="service" data-i="service"></label><select id="service"></select>
+<label for="resource" data-i="professional"></label><select id="resource"></select>
+<p class="muted" id="deposit"></p>
+</section>
+<section class="card" id="step-date" hidden><h2><span class="step">2</span><span data-i="chooseTime"></span></h2>
+<label for="date" data-i="date"></label><input id="date" type="date">
+<p class="muted" id="timezone"></p><div class="slots" id="slots"></div><p class="muted" id="no-slots"></p>
+</section>
+<section class="card" id="step-contact" hidden><h2><span class="step">3</span><span data-i="yourDetails"></span></h2>
+<div id="selection" class="summary"></div>
+<div id="email-panel">
+<p class="muted" data-i="emailPrompt"></p>
+<label for="email" data-i="email"></label><input type="email" id="email" autocomplete="email" inputmode="email" maxlength="254" required>
+<button class="btn secondary" id="send-email" type="button" data-i="sendLink"></button>
+<p class="muted" data-i="emailExplain"></p>
+<div id="otp-section" hidden>
+<label for="otp" data-i="otp"></label><input id="otp" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="12345678">
+<button class="btn secondary" id="verify-otp" type="button" data-i="verify"></button>
+</div>
+</div>
+<div id="verified-panel" hidden><p class="msg" id="verified-text"></p></div>
+<label for="full-name" data-i="name"></label><input id="full-name" maxlength="100" autocomplete="name" required>
+<p class="muted" data-i="privacy"></p>
+<button class="btn" id="book" type="button" disabled data-i="request"></button>
+</section>
+<section class="card" id="success" hidden><h2 data-i="requestReceived"></h2><p id="success-text"></p>
+<a class="btn secondary" href="./index.html" id="account" style="display:block;text-align:center;text-decoration:none" data-i="myAppointments"></a>
+</section>
+<p class="footer">CITHELA · SpukLab</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" crossorigin="anonymous"></script>
+<script src="./commercial/auth-captcha.js?v=20261112-login-fix"></script>
+<script>
+'use strict';
+const URL_SUPA='https://mcqknmqhtmihegmifuka.supabase.co';
+const KEY_SUPA='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
+const qs=new URLSearchParams(location.search);
+const slug=String(qs.get('c')||'').toLowerCase();
+const client=window.supabase?.createClient(URL_SUPA,KEY_SUPA,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});\nwindow.CithelaAuthCaptcha?.wrap(client);
+const $=id=>document.getElementById(id);
+const L={
+es:{kicker:'Reservas online',loading:'Consultando disponibilidad…',intro:'Seleccioná un servicio y elegí un horario.',chooseService:'Elegí un servicio',service:'Servicio',professional:'Profesional',chooseTime:'Elegí día y horario',date:'Fecha',yourDetails:'Tus datos',emailPrompt:'Para confirmar tu identidad, verificá tu correo. No necesitás crear una contraseña.',email:'Correo electrónico',sendLink:'Enviar acceso a mi correo',emailExplain:'Abrí el enlace que recibas o escribí el código si aparece en el correo. Volverás a esta misma página.',otp:'Código recibido',verify:'Verificar código',name:'Nombre y apellido',privacy:'Tus datos se compartirán únicamente con el establecimiento para gestionar este turno. No ingreses información médica sensible.',request:'Solicitar turno',requestReceived:'Solicitud recibida',myAppointments:'Ver mis turnos',none:'No hay horarios disponibles para esta fecha. Probá otro día.',choose:'Elegí un horario para continuar.',verifyFirst:'Verificá tu correo antes de solicitar el turno.',verified:'Correo verificado',emailSent:'Revisá tu correo y regresá a esta página.',pending:'Tu turno quedó pendiente de confirmación por el establecimiento.',error:'No pudimos completar la operación.',retry:'Reintentá o contactá directamente al establecimiento.',unavailable:'Este enlace no está disponible por el momento.',deposit:'Seña solicitada por el establecimiento: ',noDeposit:'Este servicio no requiere seña.',localTime:'Horario local del establecimiento: ',already:'Este correo corresponde a una ficha vinculada a otra cuenta. Contactá al establecimiento.',slotTaken:'Ese horario se ocupó. Elegí otro.',loginWarning:'Si ya ingresaste en CITHELA con otro correo, cerrá esa sesión antes de continuar.',loadingSlots:'Buscando horarios…'},
+en:{kicker:'Online booking',loading:'Checking availability…',intro:'Select a service and choose an available time.',chooseService:'Choose a service',service:'Service',professional:'Professional',chooseTime:'Choose a date and time',date:'Date',yourDetails:'Your details',emailPrompt:'Verify your email to request this appointment. No password is required.',email:'Email address',sendLink:'Send email sign-in link',emailExplain:'Open the link we email you, or enter the code if your message includes one. You will return to this page.',otp:'Email code',verify:'Verify code',name:'Full name',privacy:'Your information will only be shared with this practice to manage your appointment. Do not enter sensitive medical details.',request:'Request appointment',requestReceived:'Request received',myAppointments:'View my appointments',none:'No available times for this date. Try another day.',choose:'Select a time to continue.',verifyFirst:'Verify your email before requesting an appointment.',verified:'Verified email',emailSent:'Check your email and return to this page.',pending:'Your appointment is pending confirmation from the practice.',error:'The request could not be completed.',retry:'Please retry or contact the practice directly.',unavailable:'This booking link is currently unavailable.',deposit:'Deposit requested by the practice: ',noDeposit:'No deposit required for this service.',localTime:'Practice time zone: ',already:'This email belongs to a profile linked to another account. Contact the practice.',slotTaken:'This time was taken. Please select another.',loginWarning:'If you are already signed in to CITHELA with another email, sign out before continuing.',loadingSlots:'Loading available times…'}};
+let lang=(qs.get('lang')==='en'||qs.get('lang')==='es')?qs.get('lang'):((navigator.language||'').toLowerCase().startsWith('en')?'en':'es');
+let data=null,chosen='',session=null,loading=false,personId=null;
+const t=key=>L[lang][key]||key;
+function i18n(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(x=>x.textContent=t(x.dataset.i));$('language').textContent=lang==='es'?'English':'Español';$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();updateContact();} }
+function msg(text,error=false){$('message').textContent=text||'';$('message').className='msg'+(error?' error':'');$('message').hidden=!text;}
+async function rpc(name,args){if(!client)throw Error('Supabase unavailable');const {data:result,error}=await client.rpc(name,args);if(error)throw error;if(!result?.ok)throw Error(result?.code||'error');return result}
+function dateHere(){const parts=new Intl.DateTimeFormat('en-US',{timeZone:data.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const m=Object.fromEntries(parts.map(p=>[p.type,p.value]));return m.year+'-'+m.month+'-'+m.day}
+function shiftDay(d,n){const a=new Date(d+'T12:00:00Z');a.setUTCDate(a.getUTCDate()+n);return a.toISOString().slice(0,10)}
+function option(select,value,label){const o=document.createElement('option');o.value=value;o.textContent=label;select.appendChild(o)}
+function loadCatalog(x){data=x;$('business').textContent=x.name;document.title=x.name+' · CITHELA';if(qs.get('lang')!=='en'&&qs.get('lang')!=='es'&&!navigator.language.toLowerCase().startsWith('en'))lang=x.locale||'es';$('service').replaceChildren();$('resource').replaceChildren();x.services.forEach(v=>option($('service'),v.id,v.name+' · '+v.duration_min+' min'));x.resources.forEach(v=>option($('resource'),v.id,v.name));$('date').min=dateHere();$('date').max=shiftDay(dateHere(),90);$('date').value=shiftDay(dateHere(),1);$('step-service').hidden=false;$('step-date').hidden=false;msg('');i18n();loadSlots()}
+function renderDeposit(){if(!data)return;const s=data.services.find(x=>x.id===$('service').value);$('deposit').textContent=!s?'':Number(s.deposit_amount_minor)>0?t('deposit')+new Intl.NumberFormat(lang==='en'?'en-US':'es-AR',{style:'currency',currency:s.deposit_currency||'ARS'}).format(s.deposit_amount_minor/100):t('noDeposit')}
+async function loadSlots(){chosen='';$('step-contact').hidden=true;$('slots').replaceChildren();$('no-slots').textContent=t('loadingSlots');if(!data)return;const service=$('service').value,resource=$('resource').value,day=$('date').value;if(!service||!resource||!day)return;const key=service+'|'+resource+'|'+day;loadSlots.key=key;try{const r=await rpc('cithela_public_booking_slots',{p_slug:slug,p_service_id:service,p_resource_id:resource,p_date:day});if(loadSlots.key!==key)return;$('slots').replaceChildren();(r.slots||[]).forEach(h=>{const b=document.createElement('button');b.type='button';b.textContent=h;b.setAttribute('aria-pressed','false');b.addEventListener('click',()=>selectSlot(h,b));$('slots').appendChild(b)});$('no-slots').textContent=(r.slots||[]).length?'':t('none');}catch(e){$('no-slots').textContent=t('error');msg(t('retry'),true)}}
+function selectSlot(h,button){chosen=h;for(const b of $('slots').children)b.setAttribute('aria-pressed',String(b===button));$('step-contact').hidden=false;updateContact();$('step-contact').scrollIntoView({behavior:'smooth',block:'nearest'})}
+function updateContact(){if(!data||!chosen)return;const s=data.services.find(x=>x.id===$('service').value),r=data.resources.find(x=>x.id===$('resource').value);$('selection').textContent=[s?.name,r?.name,$('date').value,chosen,data.timezone].filter(Boolean).join(' · ');$('book').disabled=loading||!session||!$('full-name').value.trim()||!chosen;$('verified-panel').hidden=!session;$('email-panel').hidden=!!session;if(session)$('verified-text').textContent=t('verified')+': '+(session.user?.email||'')}
+function wallIso(day,hm,tz){const [y,m,d]=day.split('-').map(Number),[h,min]=hm.split(':').map(Number);const desired=Date.UTC(y,m-1,d,h,min);let ts=desired;for(let i=0;i<4;i++){const parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(ts));const q=Object.fromEntries(parts.map(p=>[p.type,p.value]));ts-=Date.UTC(+q.year,+q.month-1,+q.day,+q.hour,+q.minute)-desired}return new Date(ts).toISOString()}
+function showError(e){const code=String(e?.message||'');msg(code==='contact_in_use'||code==='contact_ambiguous'?t('already'):code==='slot_unavailable'?t('slotTaken'):t('error')+' '+t('retry'),true)}
+async function signIn(){const email=$('email').value.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){msg(t('email'),true);return}loading=true;$('send-email').disabled=true;try{const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname+'?c='+encodeURIComponent(slug)+'&lang='+lang,shouldCreateUser:true}});if(error)throw error;msg(t('emailSent'));$('otp-section').hidden=false;}catch(e){showError(e)}finally{loading=false;$('send-email').disabled=false}}
+async function verify(){const email=$('email').value.trim().toLowerCase(),token=$('otp').value.trim();if(!email||!token)return;loading=true;$('verify-otp').disabled=true;try{const {error}=await client.auth.verifyOtp({email,token,type:'email'});if(error)throw error;await authRefresh();msg('')}catch(e){showError(e)}finally{loading=false;$('verify-otp').disabled=false}}
+async function authRefresh(){const {data:r,error}=await client.auth.getUser();session=(!error&&r?.user?.email_confirmed_at)?{user:r.user}:null;updateContact()}
+async function book(){if(loading||!chosen||!session||!data)return;const name=$('full-name').value.trim();if(!name||name.length>100){msg(t('name'),true);return}loading=true;updateContact();msg('');try{const attach=await rpc('cithela_public_booking_attach',{p_slug:slug,p_display_name:name});personId=attach.person_id;const key=['cithela',slug,attach.person_id,$('service').value,$('resource').value,$('date').value,chosen].join('|');let reqId;try{const saved=JSON.parse(sessionStorage.getItem('cithela-public-attempt')||'null');reqId=saved?.key===key?saved.id:null;}catch{}if(!reqId){reqId='public-'+crypto.randomUUID();try{sessionStorage.setItem('cithela-public-attempt',JSON.stringify({key,id:reqId}))}catch{}}
+const payload={person_id:personId,service_id:$('service').value,resource_id:$('resource').value,starts_at:wallIso($('date').value,chosen,data.timezone),reason:''};
+const result=await rpc('cithela_patient_booking_create',{p_tenant_id:data.tenant_id,p_request_id:reqId,p_payload:payload});$('step-service').hidden=true;$('step-date').hidden=true;$('step-contact').hidden=true;$('success').hidden=false;$('success-text').textContent=t('pending');msg('');}catch(e){showError(e);if(String(e?.message)==='slot_unavailable')loadSlots()}finally{loading=false;updateContact()}}
+$('language').addEventListener('click',()=>{lang=lang==='es'?'en':'es';i18n()});
+for(const key of ['service','resource','date'])$(key).addEventListener('change',()=>{renderDeposit();loadSlots()});
+$('full-name').addEventListener('input',updateContact);$('send-email').addEventListener('click',signIn);$('verify-otp').addEventListener('click',verify);$('book').addEventListener('click',book);
+(async()=>{i18n();msg(t('loading'));if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){msg(t('unavailable'),true);return}try{const x=await rpc('cithela_public_booking_catalog',{p_slug:slug});loadCatalog(x);await authRefresh();client.auth.onAuthStateChange(()=>setTimeout(authRefresh,0));}catch(e){msg(t('unavailable'),true)}})();
+</script>
+</body></html>
