@@ -83,3 +83,20 @@ El módulo **Presupuestos** de la PR #155 almacena importes en **ARS**, no USD. 
 - **Telnyx:** opción de benchmark por precio inicial y tarifas por uso; el número estadounidense, campaña, carrier y vetting suman gastos.
 - **Twilio:** alternativa con documentación y SMS API madura; para tráfico con PHI en clínicas, Twilio especifica edición Security/Enterprise y BAA; no asumir elegibilidad HIPAA ni precio común sin cotizar.
 - La API SMS no se contrata hasta tener titular del negocio estadounidense, localidad/número deseado, tipo de entidad legal, consentimiento para campañas, volumen y presupuesto aprobado.
+
+## Límite real para profesionales sanitarios de EE. UU. (revisión 15/11/2026)
+
+El proyecto CITHELA pertenece actualmente a una organización **Supabase Free** (verificado por la API de cuenta). Su infraestructura **no está habilitada para el complemento HIPAA** ni incluye respaldos automáticos del plan Free. Para tratar **PHI** en una prestación de servicios HIPAA, Supabase exige acuerdo **BAA**, complemento HIPAA y, como mínimo, plan **Team** (precio público de referencia desde USD 599/mes, más complemento y opciones exigidas de backup/seguridad). Esto excede el presupuesto base actual de SpukLab.
+
+Documentación oficial:
+- https://supabase.com/docs/guides/platform/hipaa-projects
+- https://supabase.com/docs/guides/deployment/shared-responsibility-model
+- https://supabase.com/pricing
+
+**Regla de lanzamiento:** la opción en inglés y los SMS manuales pueden validarse con datos ficticios. No ofrecer CITHELA para tratar datos de pacientes de una clínica estadounidense cubierta por HIPAA hasta resolver el cumplimiento integral, proveedor de base de datos/BAA, recuperación ante desastres y revisión legal. Para un profesional no sanitario, la ruta comercial es distinta y puede evaluarse sin HIPAA, pero siguen rigiendo privacidad, telecomunicaciones y reglas A2P SMS.
+
+## Ruta comercial sugerida
+
+1. Ofrecer inicialmente CITHELA en inglés como agenda a un profesional **no sanitario** estadounidense en piloto limitado, con registro por correo y SMS manual revisado.
+2. Si el caso es sanitario, presupuestar una arquitectura y obligaciones HIPAA por separado antes de prometer precio de suscripción.
+3. Contratar SMS automático solo si existe demanda suficiente para cubrir número, registro de marca/campaña, mensajes, almacenamiento de consentimiento y soporte de exclusiones.
