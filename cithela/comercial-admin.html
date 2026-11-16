@@ -75,9 +75,10 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <select id="booking-tenant"></select>
   <p class="message" id="booking-admin-status" role="status" aria-live="polite"></p>
   <div id="booking-admin-form" hidden>
-    <label for="booking-slug">Identificador público del enlace</label>
-    <input id="booking-slug" maxlength="50" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="jose-lopez">
-    <p class="muted">Solo minúsculas, números y guiones (3 a 50 caracteres). Cambiarlo desactiva el enlace anterior.</p>
+    <label for="booking-slug">Nombre público del enlace</label>
+    <input id="booking-slug" maxlength="50" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="consultorio-odontologico">
+    <button type="button" class="secondary" id="booking-name-suggestion" style="margin-top:8px">Usar nombre comercial</button>
+    <p class="muted">Elegí un nombre fácil de compartir. Si cambia, los enlaces y QR anteriores siguen funcionando.</p>
     <label for="booking-locale">Idioma inicial</label>
     <select id="booking-locale"><option value="es">Español</option><option value="en">English</option></select>
     <label for="booking-zone">Zona horaria del establecimiento</label>
@@ -272,6 +273,12 @@ function showAccounts(tenants){
  $('account-count').textContent=rows.length===1?'1 agenda registrada':rows.length+' agendas registradas';
 }
 let bookingSettings=null,bookingSerial=0;
+function bookingNameFromBrand(name){
+ let slug=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+   .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50).replace(/-+$/,'');
+ if(slug.length<3||['cithela','admin','login','booking','reservar','www','app','api','signup'].includes(slug))slug=(slug||'mi-espacio')+'-turnos';
+ return slug.slice(0,50).replace(/-+$/,'');
+}
 function bookingSay(message,error=false){
  const target=$('booking-admin-status');target.textContent=message;
  target.style.color=error?'#96354a':'#285c53';
@@ -283,7 +290,7 @@ function bookingError(error){
   resources_missing:'Falta un profesional activo.',
   hours_missing:'Faltan horarios de atención.',
   appointment_history_locked:'No se puede cambiar la zona horaria porque ya existen turnos.',
-  slug_in_use:'Ese identificador público ya está en uso.',
+  slug_in_use:'Ese nombre ya está usado por otro establecimiento. Probá agregar localidad o especialidad.',
   invalid_settings:'Revisá el identificador y el idioma del enlace.',
   tenant_inactive:'El establecimiento está inactivo.',
   forbidden:'No hay autorización para esta operación.'
@@ -294,6 +301,9 @@ function presentBooking(x){
  bookingSettings=x;
  $('booking-admin-form').hidden=false;
  $('booking-slug').value=x.slug||'';
+ const friendly=bookingNameFromBrand(x.tenant_name);
+ $('booking-name-suggestion').hidden=friendly===x.slug;
+ $('booking-name-suggestion').textContent='Usar nombre comercial: '+friendly;
  $('booking-locale').value=x.locale||'es';
  if(!$('booking-zone').querySelector('option[value="'+x.timezone+'"]')){
   const option=document.createElement('option');option.value=x.timezone;option.textContent=x.timezone;
@@ -335,6 +345,11 @@ function selectBookingTenants(tenants){
  loadPlatformBooking();
 }
 $('booking-tenant').addEventListener('change',loadPlatformBooking);
+$('booking-name-suggestion').addEventListener('click',()=>{
+ if(!bookingSettings)return;
+ $('booking-slug').value=bookingNameFromBrand(bookingSettings.tenant_name);
+ $('booking-slug').focus();
+});
 $('booking-save').addEventListener('click',async()=>{
  if(!bookingSettings)return;
  const tenant=$('booking-tenant').value;
@@ -347,7 +362,7 @@ $('booking-save').addEventListener('click',async()=>{
  const button=$('booking-save');button.disabled=true;bookingSay('Guardando enlace…');
  try{
   const x=await call('booking_save',{tenant_id:tenant,slug,locale:$('booking-locale').value,enabled});
-  presentBooking(x);bookingSay('Configuración guardada en CITHELA. '+(x.enabled?'Enlace activo.':'Reservas desactivadas.'));
+  presentBooking(x);bookingSay('Configuración guardada en CITHELA. '+(x.enabled?'Enlace activo.':'Reservas desactivadas.')+' Los enlaces anteriores siguen funcionando.');
  }catch(e){bookingSay('No se pudo guardar: '+bookingError(e),true)}
  finally{button.disabled=false}
 });

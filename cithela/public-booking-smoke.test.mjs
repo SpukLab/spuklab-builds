@@ -98,3 +98,33 @@ test('professional agenda offers booking shortcut to authorized cloud owners and
   assert.match(html,/bookingShortcut\.hidden=!\(active&&\['owner','admin'\]\.includes\(s\.membership\?\.role\)\)/);
   assert.match(html,/id="cfg-section-public-booking"/);
 });
+
+test('booking link name is generated from familiar business name and changing it is opt-in',()=>{
+ const html=read('compartir.html');
+ const start=html.indexOf('function linkNameFromBrand(name){');
+ const end=html.indexOf('function updateLinkNamePreview(){',start);
+ assert.ok(start>=0&&end>start);
+ const linkName=new Function(html.slice(start,end)+';return linkNameFromBrand')();
+ assert.equal(linkName('Consultorio odontológico'),'consultorio-odontologico');
+ assert.equal(linkName('Alma y Pampa'),'alma-y-pampa');
+ assert.equal(linkName('Tovar & Associates Inc'),'tovar-associates-inc');
+ assert.equal(linkName('CITHELA'),'cithela-turnos');
+ assert.match(html,/id="suggest-slug"/);
+ assert.match(html,/Nombre de tu enlace/);
+ assert.match(html,/El enlace anterior seguirá funcionando/);
+ assert.match(html,/settings=x;\$\('slug'\)\.value=x.slug/);
+ assert.match(html,/\$\('tenant-wrap'\)\.hidden=rows\.length===1/);
+});
+test('old booking link slug routes stay bound to same tenant across catalog, slots and email attach',()=>{
+ const sql=read('sql/20261115_public_booking_slug_routes.sql');
+ assert.match(sql,/create table if not exists public\.cithela_public_booking_slug_routes/);
+ assert.match(sql,/alter table public\.cithela_public_booking_slug_routes enable row level security/);
+ assert.match(sql,/revoke all on public\.cithela_public_booking_slug_routes from public,anon,authenticated/);
+ assert.match(sql,/create trigger cithela_track_public_booking_slug/);
+ assert.match(sql,/errcode='23505'/);
+ for(const fn of ['public_booking_attach','public_booking_catalog','public_booking_slots']){
+   assert.ok(sql.includes('FUNCTION cithela_private.'+fn+'('),fn+' route check');
+ }
+ assert.equal((sql.match(/where r\.slug=p_slug/g)||[]).length,3);
+ assert.doesNotMatch(sql,/drop table public\.cithela_public_booking_settings/);
+});
