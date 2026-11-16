@@ -66,3 +66,17 @@ test('tenant logo is limited to immutable image path in that tenant public brand
   assert.equal(logo({tenant_id:id,logo_object_path:'another-tenant/logo-'+'a'.repeat(32)+'.png'}),'');
   assert.equal(logo({tenant_id:id,logo_object_path:id+'/private.pdf'}),'');
 });
+
+test('booking sharing distinguishes expired subscription and hides inactive QR actions',()=>{
+  const html=read('compartir.html');
+  const sql=read('sql/20261115_public_booking_error_clarity.sql');
+  assert.match(sql,/code','subscription_required'/);
+  assert.match(sql,/code','services_missing'/);
+  assert.match(sql,/code','resources_missing'/);
+  assert.match(sql,/code','hours_missing'/);
+  assert.match(html,/commercial_status==='trial_expired'/);
+  assert.match(html,/El período de prueba o la suscripción no permiten nuevas reservas/);
+  assert.match(html,/settings\.enabled&&settings\.commercial_can_book!==false/);
+  assert.match(html,/\$\(key\)\.disabled=!active/);
+  assert.match(html,/QR disponible después de activar las reservas/);
+});
