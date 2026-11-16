@@ -270,6 +270,103 @@ function showAccounts(tenants){
  $('account-empty').hidden=rows.length>0;
  $('account-count').textContent=rows.length===1?'1 agenda registrada':rows.length+' agendas registradas';
 }
+let bookingSettings=null,bookingSerial=0;
+function bookingSay(message,error=false){
+ const target=$('booking-admin-status');target.textContent=message;
+ target.style.color=error?'#96354a':'#285c53';
+}
+function bookingError(error){
+ const codes={
+  subscription_required:'La prueba o suscripción está vencida. Otorgá una cortesía válida desde el panel superior antes de activar.',
+  services_missing:'Falta un servicio activo.',
+  resources_missing:'Falta un profesional activo.',
+  hours_missing:'Faltan horarios de atención.',
+  appointment_history_locked:'No se puede cambiar la zona horaria porque ya existen turnos.',
+  slug_in_use:'Ese identificador público ya está en uso.',
+  invalid_settings:'Revisá el identificador y el idioma del enlace.',
+  tenant_inactive:'El establecimiento está inactivo.',
+  forbidden:'No hay autorización para esta operación.'
+ };
+ return codes[String(error?.message||'')]||String(error?.message||'No se pudo completar la operación.');
+}
+function presentBooking(x){
+ bookingSettings=x;
+ $('booking-admin-form').hidden=false;
+ $('booking-slug').value=x.slug||'';
+ $('booking-locale').value=x.locale||'es';
+ if(!$('booking-zone').querySelector('option[value="'+x.timezone+'"]')){
+  const option=document.createElement('option');option.value=x.timezone;option.textContent=x.timezone;
+  $('booking-zone').append(option);
+ }
+ $('booking-zone').value=x.timezone||'America/Argentina/Buenos_Aires';
+ $('booking-enabled').checked=x.enabled===true;
+ const active=x.enabled===true&&x.commercial_can_book===true;
+ $('booking-shared').hidden=!active;
+ $('booking-public-url').textContent=active?x.url:'';
+ $('booking-qr').replaceChildren();
+ if(active&&window.QRCode){
+  new QRCode($('booking-qr'),{text:x.url,width:182,height:182,colorDark:'#213b36',
+    colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+ }
+ $('booking-copy').disabled=!active;
+ if(x.commercial_can_book===false)
+  bookingSay('Reservas bloqueadas por el estado comercial de este establecimiento. Se puede editar el enlace, pero no activarlo.',true);
+ else bookingSay(active?'Enlace activo y listo para compartir.':'Reservas públicas desactivadas para este establecimiento.');
+}
+async function loadPlatformBooking(){
+ const tid=$('booking-tenant').value,serial=++bookingSerial;
+ bookingSettings=null;$('booking-admin-form').hidden=true;
+ if(!tid){bookingSay('Seleccioná un establecimiento.');return}
+ bookingSay('Consultando enlace y permisos…');
+ try{
+  const x=await call('booking_read',{tenant_id:tid});
+  if(serial!==bookingSerial)return;
+  presentBooking(x);
+ }catch(e){
+  if(serial===bookingSerial)bookingSay('No se pudo consultar el enlace: '+bookingError(e),true);
+ }
+}
+function selectBookingTenants(tenants){
+ const prev=$('booking-tenant').value;
+ const choices=tenants.map(t=>({value:t.id,label:t.name}));
+ selectOptions('booking-tenant',choices);
+ if(choices.some(c=>c.value===prev))$('booking-tenant').value=prev;
+ loadPlatformBooking();
+}
+$('booking-tenant').addEventListener('change',loadPlatformBooking);
+$('booking-save').addEventListener('click',async()=>{
+ if(!bookingSettings)return;
+ const tenant=$('booking-tenant').value;
+ const slug=$('booking-slug').value.trim().toLowerCase();
+ if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){bookingSay('Identificador inválido. Usá 3–50 letras minúsculas, números o guiones.',true);return}
+ if($('booking-zone').value!==bookingSettings.timezone){bookingSay('Guardá primero la zona horaria.',true);return}
+ const enabled=$('booking-enabled').checked;
+ if(enabled&&bookingSettings.commercial_can_book!==true){bookingSay(bookingError({message:'subscription_required'}),true);return}
+ if(enabled&&!bookingSettings.enabled&&!confirm('¿Habilitar reservas públicas para '+bookingSettings.tenant_name+'?'))return;
+ const button=$('booking-save');button.disabled=true;bookingSay('Guardando enlace…');
+ try{
+  const x=await call('booking_save',{tenant_id:tenant,slug,locale:$('booking-locale').value,enabled});
+  presentBooking(x);bookingSay('Configuración guardada en CITHELA. '+(x.enabled?'Enlace activo.':'Reservas desactivadas.'));
+ }catch(e){bookingSay('No se pudo guardar: '+bookingError(e),true)}
+ finally{button.disabled=false}
+});
+$('booking-save-zone').addEventListener('click',async()=>{
+ if(!bookingSettings)return;
+ const timezone=$('booking-zone').value;
+ if(timezone===bookingSettings.timezone){bookingSay('Esa zona horaria ya está guardada.');return}
+ if(!confirm('Solo se puede cambiar la zona horaria si no existen turnos. ¿Continuar?'))return;
+ const button=$('booking-save-zone');button.disabled=true;bookingSay('Guardando zona horaria…');
+ try{
+  await call('booking_timezone',{tenant_id:$('booking-tenant').value,timezone});
+  await loadPlatformBooking();bookingSay('Zona horaria actualizada correctamente.');
+ }catch(e){bookingSay('No se pudo cambiar la zona horaria: '+bookingError(e),true)}
+ finally{button.disabled=false}
+});
+$('booking-copy').addEventListener('click',async()=>{
+ if(!bookingSettings?.enabled||!bookingSettings?.commercial_can_book)return;
+ try{await navigator.clipboard.writeText(bookingSettings.url);bookingSay('Enlace copiado.')}
+ catch{bookingSay('Copiá el enlace de la caja de texto.',true)}
+});
 function show(snapshot){
  last=snapshot;
  showAccounts(snapshot.tenants||[]);
@@ -288,6 +385,7 @@ function show(snapshot){
  selectOptions('tenant-select',tenantOptions);
  if(tenantOptions.some(t=>t.value===previousTenant))$('tenant-select').value=previousTenant;
  updateCourtesyState();
+ selectBookingTenants(snapshot.tenants||[]);
  const courtesy=$('courtesy-message');
  const currentTenant=snapshot.tenants?.find(t=>t.id===$('tenant-select').value);
  if(currentTenant?.complimentary_until){
