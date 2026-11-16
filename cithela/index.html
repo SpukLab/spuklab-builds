@@ -1189,6 +1189,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   <div class="patient-portal-content">
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
+    <button class="mb ghost" id="patient-open-professional" type="button" onclick="patientSwitchToProfessional()" style="margin:4px 0 14px;">Ingresar como profesional</button>
+    <p class="contact-note" style="margin:0 0 12px;">Si tu cuenta profesional es diferente, podrás ingresar con ella sin buscar nuevamente el acceso.</p>
     <details id="patient-enroll-panel" class="patient-shared-panel" hidden style="margin:12px 0;">
       <summary>Vincular WhatsApp (opcional)</summary>
       <div style="padding:12px 0 4px;">
@@ -3617,8 +3619,22 @@ async function resumeCloudSession(){
     return;
   }
   if(!s.signedIn)return;
-  if(s.membership&&s.tenant){
-    await loginWithCloudSession();return;
+  // A Supabase Auth session can appear before its professional membership is
+  // loaded (particularly after returning to an existing iOS Safari tab).
+  // Resolve the workspace once more before considering any patient routing.
+  const active=s.membership&&s.tenant?s:await CithelaCloud.refresh();
+  if(!active.signedIn)return;
+  if(active.membership&&active.tenant){
+    setRole('medico');
+    me={role:'medico',nombre:(active.email||'Profesional').split('@')[0],cloud:true};
+    goMed();
+    return;
+  }
+  if(active.error){
+    setRole('medico');
+    scr('login');
+    toast('No se pudo recuperar tu acceso. Reintentá ingresar o recargá la página.',5500);
+    return;
   }
   // Linked patients keep their portal. Accounts with no professional workspace
   // and no patient record must remain in the professional onboarding flow,
@@ -3630,12 +3646,12 @@ async function resumeCloudSession(){
     showProfessionalWorkspaceSetup();
     return;
   }
-  setRole('paciente');$('l-patient-email').value=s.email||'';
+  setRole('paciente');$('l-patient-email').value=active.email||'';
   if(result?.profiles?.length){
     patientNoLinkedProfile=false;
     patientPortalData=result;
-    me={role:'paciente',cloud:true,email:s.email||null,phone:s.phone||null,
-      identity:s.phone?'phone:'+s.phone:'email:'+String(s.email||'').toLowerCase(),
+    me={role:'paciente',cloud:true,email:active.email||null,phone:active.phone||null,
+      identity:active.phone?'phone:'+active.phone:'email:'+String(active.email||'').toLowerCase(),
       nombre:result.profiles[0].name};
     goPac();
   }else{
@@ -3883,6 +3899,48 @@ function doLogin(){
   }
 }
 
+async function patientSwitchToProfessional(){
+  const button=$('patient-open-professional');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  try{
+    // A verified workspace may belong to the same signed-in identity.
+    // Never treat a patient-only session as a professional authorization.
+    const session=await CithelaCloud.refresh();
+    if(session.signedIn&&session.membership&&session.tenant){
+      setRole('medico');
+      me={role:'medico',nombre:(session.email||'Profesional').split('@')[0],cloud:true};
+      goMed();
+      return;
+    }
+    if(session.error)throw Error('No se pudo comprobar la sesión. Reintentá.');
+    // Supabase shares its default Auth storage across tabs of this origin.
+    // Switching to a *different* professional account requires local sign-out.
+    if(session.signedIn)await CithelaCloud.signOut();
+    ++patientPortalRequest;
+    ++patientSlotRequest;
+    ++patientBookingRequest;
+    patientBookingState=null;
+    patientRescheduleState=null;
+    patientPortalData=null;
+    patientNoLinkedProfile=false;
+    patientWhatsappOtpSent=false;
+    patientEnrollPending=null;patientEnrollBusy=false;
+    patientLinkedPhonePending=null;patientLinkedPhoneBusy=false;
+    patientSharedDrafts.clear();patientSharedOpen.clear();
+    hideVisiblePasswords();
+    me={};
+    setRole('medico');
+    $('l-cloud-email').value='';
+    $('l-cloud-password').value='';
+    scr('login');
+    toast('Ingresá con tu cuenta profesional.',3400);
+  }catch(err){
+    toast(err?.message||'No se pudo cambiar al acceso profesional.',4600);
+  }finally{
+    if(button)button.disabled=false;
+  }
+}
 async function logout(){
   const previous=me;
   ++patientPortalRequest;
