@@ -132,6 +132,13 @@ html,body{min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM 
 .cithela-booking-shortcut__copy small{display:block;font-size:.72rem;line-height:1.45;color:var(--ink2)}
 .cithela-booking-shortcut__link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;flex:none;text-decoration:none;padding:9px 11px;background:var(--teal-light);border-radius:8px;color:var(--teal2);font-weight:650;font-size:.76rem}
 .cithela-booking-shortcut__link:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.cithela-booking-shortcut{display:block}
+.cithela-booking-shortcut__header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cithela-booking-shortcut__language{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.74rem;color:var(--ink2);font-weight:600;margin:13px 0 0;padding-top:12px;border-top:var(--line)}
+.cithela-booking-shortcut__language select{width:auto;min-height:39px;min-width:120px;background:var(--surface-soft);border:1px solid var(--border-color);border-radius:8px;padding:8px 10px;color:var(--ink);font:inherit;font-weight:500}
+.cithela-booking-shortcut__language select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.cithela-booking-shortcut__status{font-size:.7rem;line-height:1.45;color:var(--ink2);margin:7px 0 0}
+.cithela-booking-shortcut__status[hidden]{display:none!important}
 @media(max-width:350px){.cithela-booking-shortcut{flex-wrap:wrap}.cithela-booking-shortcut__link{width:100%}}
 
 /* NAV */
@@ -659,11 +666,22 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <p class="cithela-first-steps__note">No hace falta enviar invitaciones para registrar personas y otorgar turnos. Esta guía se oculta después del primer turno.</p>
     </section>
     <section id="professional-public-booking-shortcut" class="cithela-booking-shortcut" hidden aria-label="Reservas online para tus pacientes">
-      <div class="cithela-booking-shortcut__copy">
-        <strong>Reservas online</strong>
-        <small>Compartí tu enlace o QR con tus pacientes.</small>
+      <div class="cithela-booking-shortcut__header">
+        <div class="cithela-booking-shortcut__copy">
+          <strong>Reservas online</strong>
+          <small>Compartí tu enlace o QR con tus pacientes.</small>
+        </div>
+        <a class="cithela-booking-shortcut__link" href="./compartir.html">Ver enlace y QR</a>
       </div>
-      <a class="cithela-booking-shortcut__link" href="./compartir.html">Ver enlace y QR</a>
+      <label class="cithela-booking-shortcut__language" for="professional-booking-language">
+        Idioma inicial para pacientes
+        <select id="professional-booking-language" disabled aria-describedby="professional-booking-language-status"
+          onchange="changeProfessionalBookingLanguage(this)">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <p id="professional-booking-language-status" class="cithela-booking-shortcut__status" role="status" aria-live="polite" hidden></p>
     </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
@@ -1979,6 +1997,25 @@ const CithelaCloud=(()=>{
     return {ok:true,email:clean};
   }
 
+  async function publicBookingConfig(locale){
+    if(!state.session||!state.tenant||!state.membership||
+      !['owner','admin'].includes(state.membership.role))
+      throw Error('No tenés autorización para modificar las reservas públicas.');
+    if(locale!==undefined&&!['es','en'].includes(locale))
+      throw Error('Idioma no válido');
+    const tenantId=state.tenant.id;
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_public_booking_config',{
+      p_tenant_id:tenantId,
+      p_save:locale!==undefined,
+      p_locale:locale??null
+    });
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo consultar la configuración.');
+    if(!state.session||state.tenant?.id!==tenantId)
+      throw Error('La sesión profesional cambió durante la operación.');
+    return data;
+  }
   async function sendPatientMagicLink(email){
     const c=await getClient();
     const clean=String(email||'').trim();
@@ -2418,7 +2455,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -3931,6 +3968,69 @@ function tab(sc,id,btn){
   if(sc==='paciente'&&id==='sacar')renderCalPac();
 }
 
+let professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
+function professionalBookingLanguageMessage(message,error=false){
+  const status=$('professional-booking-language-status');
+  if(!status)return;
+  status.textContent=message;
+  status.hidden=!message;
+  status.style.color=error?'var(--danger)':'var(--ink2)';
+}
+async function loadProfessionalBookingLanguage(tenantId){
+  const field=$('professional-booking-language');
+  if(!field)return;
+  if(professionalBookingLocale.tenantId!==tenantId){
+    professionalBookingLocale={tenantId,locale:null,loading:false,saving:false};
+    field.disabled=true;
+    professionalBookingLanguageMessage('Cargando idioma…');
+  }
+  if(professionalBookingLocale.loading||professionalBookingLocale.saving||
+      professionalBookingLocale.locale)return;
+  professionalBookingLocale.loading=true;
+  try{
+    const config=await CithelaCloud.publicBookingConfig();
+    if(professionalBookingLocale.tenantId!==tenantId)return;
+    const locale=config.locale==='en'?'en':'es';
+    professionalBookingLocale.locale=locale;
+    field.value=locale;
+    professionalBookingLanguageMessage('');
+  }catch(err){
+    if(professionalBookingLocale.tenantId===tenantId)
+      professionalBookingLanguageMessage('No se pudo cargar el idioma. Abrí «Ver enlace y QR» para revisarlo.',true);
+  }finally{
+    if(professionalBookingLocale.tenantId===tenantId){
+      professionalBookingLocale.loading=false;
+      field.disabled=!professionalBookingLocale.locale;
+    }
+  }
+}
+async function changeProfessionalBookingLanguage(field){
+  const tenantId=CithelaCloud.state().tenant?.id;
+  const cache=professionalBookingLocale;
+  const next=field.value;
+  if(!tenantId||cache.tenantId!==tenantId||cache.loading||cache.saving||
+     !['es','en'].includes(next))return;
+  if(next===cache.locale)return;
+  cache.saving=true;field.disabled=true;
+  professionalBookingLanguageMessage('Guardando idioma…');
+  try{
+    const updated=await CithelaCloud.publicBookingConfig(next);
+    if(professionalBookingLocale!==cache||cache.tenantId!==tenantId)return;
+    cache.locale=updated.locale==='en'?'en':'es';
+    field.value=cache.locale;
+    professionalBookingLanguageMessage('Idioma guardado. Tus pacientes podrán cambiarlo desde la página de reservas.');
+  }catch(err){
+    if(professionalBookingLocale===cache){
+      field.value=cache.locale||'es';
+      professionalBookingLanguageMessage('No se pudo guardar el idioma. Revisá la configuración de reservas.',true);
+    }
+  }finally{
+    if(professionalBookingLocale===cache){
+      cache.saving=false;
+      field.disabled=!cache.locale;
+    }
+  }
+}
 function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
@@ -3974,7 +4074,14 @@ function renderProfessionalMode(){
   }
   const bookingShortcut=$('professional-public-booking-shortcut');
   if(bookingShortcut){
-    bookingShortcut.hidden=!(active&&['owner','admin'].includes(s.membership?.role));
+    const visible=active&&['owner','admin'].includes(s.membership?.role);
+    bookingShortcut.hidden=!visible;
+    if(visible&&s.tenant?.id)void loadProfessionalBookingLanguage(s.tenant.id);
+    else{
+      professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
+      const field=$('professional-booking-language');
+      if(field)field.disabled=true;
+    }
   }
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);

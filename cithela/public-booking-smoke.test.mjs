@@ -95,7 +95,8 @@ test('professional agenda offers booking shortcut to authorized cloud owners and
   const html=read('index.html');
   assert.match(html,/id="professional-public-booking-shortcut"[^>]*hidden/);
   assert.match(html,/class="cithela-booking-shortcut__link" href="\.\/compartir\.html"/);
-  assert.match(html,/bookingShortcut\.hidden=!\(active&&\['owner','admin'\]\.includes\(s\.membership\?\.role\)\)/);
+  assert.match(html,/bookingShortcut\.hidden=!visible/);
+  assert.match(html,/const visible=active&&\['owner','admin'\]\.includes\(s\.membership\?\.role\)/);
   assert.match(html,/id="cfg-section-public-booking"/);
 });
 
@@ -127,4 +128,30 @@ test('old booking link slug routes stay bound to same tenant across catalog, slo
  }
  assert.equal((sql.match(/where r\.slug=p_slug/g)||[]).length,3);
  assert.doesNotMatch(sql,/drop table public\.cithela_public_booking_settings/);
+});
+
+test('professional agenda lets authorized owners choose default booking-page language',()=>{
+  const html=read('index.html');
+  assert.match(html,/id="professional-booking-language" disabled/);
+  assert.match(html,/Idioma inicial para pacientes/);
+  assert.match(html,/onchange="changeProfessionalBookingLanguage\(this\)"/);
+  assert.match(html,/id="professional-booking-language-status"/);
+  assert.match(html,/publicBookingConfig,signOut,bootstrap/);
+  assert.match(html,/bookingShortcut\.hidden=!visible/);
+  assert.match(html,/\['owner','admin'\]\.includes\(s\.membership\?\.role\)/);
+  assert.match(html,/if\(visible&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
+  assert.match(html,/p_tenant_id:tenantId,\s*p_save:locale!==undefined,\s*p_locale:locale\?\?null/);
+  assert.match(html,/professionalBookingLanguageMessage\('Idioma guardado/);
+  assert.match(html,/field\.value=cache\.locale\|\|'es'/);
+  const js=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+    .map(m=>m[1]).filter(s=>s.trim());
+  for(const source of js)assert.doesNotThrow(()=>new Function(source));
+});
+
+test('booking page honors professional default locale, with patient override taking priority',()=>{
+  const html=read('reservar.html');
+  assert.match(html,/const urlLocale=qs\.get\('lang'\)==='en'\|\|qs\.get\('lang'\)==='es'\?qs\.get\('lang'\):null/);
+  assert.match(html,/if\(!urlLocale\)lang=x\.locale==='en'\?'en':'es'/);
+  assert.doesNotMatch(html,/!navigator\.language\.toLowerCase\(\)\.startsWith\('en'\)/);
+  assert.match(html,/lang=lang==='es'\?'en':'es';i18n\(\)/);
 });
