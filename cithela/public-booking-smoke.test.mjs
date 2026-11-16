@@ -91,12 +91,15 @@ test('public booking keeps an accessible, subtle language switch',()=>{
   assert.match(html,/\$\('language'\)\.addEventListener\('click'/);
 });
 
-test('professional agenda offers booking shortcut to authorized cloud owners and admins',()=>{
+test('professional agenda exposes compact copy/share/QR only for authorized enabled workspaces',()=>{
   const html=read('index.html');
-  assert.match(html,/id="professional-public-booking-shortcut"[^>]*hidden/);
+  assert.match(html,/id="professional-public-booking-shortcut" class="cithela-share-strip" hidden/);
   assert.match(html,/class="cithela-booking-shortcut__link" href="\.\/compartir\.html"/);
-  assert.match(html,/bookingShortcut\.hidden=!visible/);
-  assert.match(html,/const visible=active&&\['owner','admin'\]\.includes\(s\.membership\?\.role\)/);
+  assert.match(html,/id="professional-share-copy"/);
+  assert.match(html,/id="professional-share-native"/);
+  assert.match(html,/const shareAllowed=active&&\['owner','admin','operator'\]/);
+  assert.match(html,/data\.enabled===true&&/);
+  assert.match(html,/updateProfessionalBookingShareVisibility/);
   assert.match(html,/id="cfg-section-public-booking"/);
 });
 
@@ -136,10 +139,10 @@ test('professional agenda lets authorized owners choose default booking-page lan
   assert.match(html,/Idioma inicial para pacientes/);
   assert.match(html,/onchange="changeProfessionalBookingLanguage\(this\)"/);
   assert.match(html,/id="professional-booking-language-status"/);
-  assert.match(html,/publicBookingConfig,signOut,bootstrap/);
-  assert.match(html,/bookingShortcut\.hidden=!visible/);
-  assert.match(html,/\['owner','admin'\]\.includes\(s\.membership\?\.role\)/);
-  assert.match(html,/if\(visible&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
+  assert.match(html,/publicBookingConfig,professionalBookingShare,signOut,bootstrap/);
+  assert.match(html,/id="professional-booking-language-settings" hidden/);
+  assert.match(html,/const manageAllowed=active&&\['owner','admin'\]/);
+  assert.match(html,/if\(manageAllowed&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
   assert.match(html,/p_tenant_id:tenantId,\s*p_save:locale!==undefined,\s*p_locale:locale\?\?null/);
   assert.match(html,/professionalBookingLanguageMessage\('Idioma guardado/);
   assert.match(html,/field\.value=cache\.locale\|\|'es'/);
@@ -154,4 +157,20 @@ test('booking page honors professional default locale, with patient override tak
   assert.match(html,/if\(!urlLocale\)lang=x\.locale==='en'\?'en':'es'/);
   assert.doesNotMatch(html,/!navigator\.language\.toLowerCase\(\)\.startsWith\('en'\)/);
   assert.match(html,/lang=lang==='es'\?'en':'es';i18n\(\)/);
+});
+
+
+test('read-only public booking share requires tenant membership and keeps settings protected',()=>{
+ const sql=read('sql/20261116_professional_booking_share.sql');
+ assert.match(sql,/m\.user_id=auth\.uid\(\)/);
+ assert.match(sql,/m\.role in \('owner','admin','operator'\)/);
+ assert.match(sql,/t\.status='active'/);
+ assert.match(sql,/security definer set search_path=''/);
+ assert.match(sql,/security invoker set search_path=''/);
+ assert.match(sql,/revoke all on function public\.cithela_professional_booking_share\(uuid\) from public,anon/);
+ assert.match(sql,/grant execute on function public\.cithela_professional_booking_share\(uuid\) to authenticated/);
+ const ui=read('compartir.html');
+ assert.match(ui,/\.in\('role',\['owner','admin','operator'\]\)/);
+ assert.match(ui,/\$\('settings-section'\)\.hidden=!canManage/);
+ assert.match(ui,/await client\.rpc\('cithela_professional_booking_share'/);
 });
