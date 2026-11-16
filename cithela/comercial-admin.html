@@ -232,7 +232,8 @@ function updateCourtesyState(){
  }else if(hasGrant){
   state.textContent='Cortesía existente: podés agregar más días sin acortar el plazo anterior.';
  }else if(selected.status==='trialing'){
-  state.textContent='Prueba gratuita activa. Los días de gracia se sumarán después de finalizar la prueba.';
+  const expired=selected.trial_ends_at&&Date.parse(selected.trial_ends_at)<Date.now();
+  state.textContent=expired?'La prueba venció. Una cortesía habilita nuevamente las reservas a partir de su registro.':'Prueba gratuita activa. Los días de gracia se sumarán después de finalizar la prueba.';
  }else{
   state.textContent='Podés habilitar o ampliar el acceso gratuito. Se solicitará confirmación.';
  }
@@ -379,7 +380,7 @@ function show(snapshot){
  $('select-price').disabled=price.length===0;
  const tenantOptions=(snapshot.tenants||[]).map(t=>({
   value:t.id,
-  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status)
+  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status==='trialing'&&t.trial_ends_at&&Date.parse(t.trial_ends_at)<Date.now()?'Prueba vencida':t.status)
  }));
  const previousTenant=$('tenant-select').value;
  selectOptions('tenant-select',tenantOptions);
@@ -410,7 +411,23 @@ async function call(action,payload={}){
  if(!supa)throw Error('Sin sesión de CITHELA');
  const {data,error}=await supa.functions.invoke('cithela-commercial-admin',
   {body:{action,payload}});
- if(error)throw Error('Acceso no disponible o acción rechazada por el servidor');
+ if(error){
+  let code='';
+  try{const response=error.context;if(response&&typeof response.clone==='function'){
+    const detail=await response.clone().json();code=String(detail?.code||'');
+  }}catch{}
+  const descriptions={
+    tenant_not_eligible:'Esta cuenta no reúne las condiciones para otorgar la cortesía.',
+    invalid_reason:'Ingresá un motivo de al menos 5 caracteres.',
+    invalid_days:'La cantidad de días no es válida.',
+    grant_already_exists:'Ya existe una cortesía vigente.',
+    already_unlimited:'La cuenta ya tiene una cortesía sin vencimiento.',
+    forbidden:'No tenés permisos para realizar esta operación.',
+    not_platform_admin:'La sesión no pertenece al administrador comercial autorizado.',
+    unauthenticated:'La sesión administrativa venció.'
+  };
+  throw Error(descriptions[code]||'El servidor rechazó la acción. Verificá tu sesión administrativa y volvé a consultar el estado.');
+ }
  if(data?.ok!==true)throw Error('No se aplicó el cambio: '+(data?.code||'sin respuesta'));
  return data;
 }
@@ -432,7 +449,11 @@ async function action(name,payload,askConfirm){
  try{
   const res=await call(name,payload);
   busy=false;await reload();
-  (isCourtesy?courtesyTell:tell)('Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
+  const extended=name==='extend_free'&&res.code==='access_extended';
+  const expiry=extended?(res.new_until?new Date(res.new_until).toLocaleDateString('es-AR'):'sin vencimiento'):null;
+  (isCourtesy?courtesyTell:tell)(extended?
+    'Cortesía registrada correctamente. Acceso extendido hasta '+expiry+'. Ya aparece en el estado comercial actualizado.':
+    'Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
  }catch(e){(isCourtesy?courtesyTell:tell)(e.message)}finally{busy=false}
 }
 $('tenant-select').addEventListener('change',()=>{updateCourtesyState();$('courtesy-message').textContent='';});
@@ -474,7 +495,12 @@ $('grant-free').addEventListener('click',()=>{
   courtesyTell('Este establecimiento no admite una ampliación. Elegí una cuenta comercial elegible.');return;
  }
  if(selected.grant_unlimited){courtesyTell('Esta cuenta ya tiene acceso gratuito sin vencimiento.');return;}
- if(!reason||reason.length<5){courtesyTell('Indicá un motivo de al menos 5 caracteres.');return;}
+ if(!reason||reason.length<5){
+  courtesyTell('No se otorgaron días: completá el motivo de la cortesía (mínimo 5 caracteres).');
+  $('free-reason').setAttribute('aria-invalid','true');
+  $('free-reason').focus();return;
+ }
+ $('free-reason').removeAttribute('aria-invalid');
  if(Number.isNaN(days)){courtesyTell('Elegí una duración válida de 1 a 730 días.');return;}
  const term=days===null?'acceso sin vencimiento':days+' días adicionales';
  action('extend_free',{tenant_id:tenant,reason,days},
