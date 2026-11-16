@@ -23,7 +23,7 @@ p{color:var(--sub)}.intro{max-width:750px}.intro p{font-size:.98rem}.notice{back
 .card.wide{grid-column:1/-1}.eyebrow{font-size:.62rem;letter-spacing:.15em;color:#478578;font-weight:820;margin:0 0 14px}.card>p{font-size:.86rem}
 label{font-size:.8rem;font-weight:700;display:block;margin:15px 0 6px;color:#3b6158}
 input,select,textarea{width:100%;min-height:46px;border:1px solid #b8cbc2;background:white;color:#1d3731;border-radius:9px;padding:10px 12px}
-textarea{resize:vertical;min-height:86px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.small{font-size:.77rem}.message{min-height:25px;padding:6px 0;color:#285c53;font-size:.86rem}
+textarea{resize:vertical;min-height:86px}textarea[aria-invalid=true]{border:2px solid #a33c50}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.small{font-size:.77rem}.message{min-height:25px;padding:6px 0;color:#285c53;font-size:.86rem}
 table{width:100%;border-collapse:collapse;font-size:.81rem}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #dfebe4}th{color:#4d6d62;font-size:.75rem}td{overflow-wrap:anywhere}
 .scroll{overflow-x:auto}.hint{color:#785c44;background:#f7eee4;padding:10px 13px;border-radius:8px;font-size:.79rem}
 [hidden]{display:none!important}
@@ -67,6 +67,42 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <p id="account-empty" hidden>No hay agendas registradas.</p>
   <p class="muted">Para consultar invitaciones pendientes o canjeadas, abrí <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
  </section>
+ <section class="card" id="booking-admin" aria-labelledby="booking-admin-title" style="margin-top:18px">
+  <p class="eyebrow">ENLACES PÚBLICOS · ADMINISTRACIÓN SPUKLAB</p>
+  <h2 id="booking-admin-title">Reservas públicas de establecimientos</h2>
+  <p>Configurá el enlace de un profesional sin ingresar en su cuenta. No cambia sus turnos ni la prueba comercial. El QR solo aparece cuando el enlace está habilitado.</p>
+  <label for="booking-tenant">Establecimiento</label>
+  <select id="booking-tenant"></select>
+  <p class="message" id="booking-admin-status" role="status" aria-live="polite"></p>
+  <div id="booking-admin-form" hidden>
+    <label for="booking-slug">Identificador público del enlace</label>
+    <input id="booking-slug" maxlength="50" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="jose-lopez">
+    <p class="muted">Solo minúsculas, números y guiones (3 a 50 caracteres). Cambiarlo desactiva el enlace anterior.</p>
+    <label for="booking-locale">Idioma inicial</label>
+    <select id="booking-locale"><option value="es">Español</option><option value="en">English</option></select>
+    <label for="booking-zone">Zona horaria del establecimiento</label>
+    <select id="booking-zone">
+      <option value="America/Argentina/Buenos_Aires">Argentina · Buenos Aires</option>
+      <option value="America/Denver">EE. UU. · Mountain (Utah)</option>
+      <option value="America/New_York">EE. UU. · Eastern</option>
+      <option value="America/Chicago">EE. UU. · Central</option>
+      <option value="America/Los_Angeles">EE. UU. · Pacific</option>
+      <option value="America/Phoenix">EE. UU. · Arizona</option>
+    </select>
+    <p class="muted">El cambio de zona horaria solo se permite si todavía no hay turnos registrados.</p>
+    <button id="booking-save-zone" type="button" class="secondary">Guardar zona horaria</button>
+    <label for="booking-enabled" style="display:flex;align-items:center;gap:12px;margin:20px 0">
+      <input id="booking-enabled" type="checkbox" style="width:22px;height:22px;min-height:22px">
+      Permitir reservas públicas
+    </label>
+    <button id="booking-save" type="button">Guardar enlace de reservas</button>
+    <div id="booking-shared" hidden style="margin-top:15px">
+      <p id="booking-public-url" class="hint" style="overflow-wrap:anywhere"></p>
+      <div id="booking-qr" style="margin:15px auto;max-width:190px"></div>
+      <button type="button" class="secondary" id="booking-copy">Copiar enlace</button>
+    </div>
+  </div>
+ </section>
  <div class="cards">
   <section class="card" aria-labelledby="price-title">
    <p class="eyebrow">01 / VALORES COMERCIALES</p>
@@ -105,7 +141,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    </div>
    <p class="hint" id="courtesy-timing">Los días se suman desde el último vencimiento entre la prueba, la suscripción y la cortesía previa (o desde hoy, si todo venció). Podés ampliar el acceso en cualquier momento: jamás se acorta. No genera pagos ni modifica las señas de pacientes.</p>
    <label for="free-reason">Motivo de la cortesía</label>
-   <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required></textarea>
+   <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required>Extensión de prueba CITHELA para evaluación del servicio y reservas públicas</textarea>
    <div class="actions">
     <button type="button" id="grant-free">Agregar días de acceso</button>
     <button class="alert" type="button" id="revoke-free">Revocar cortesía (excepcional)</button>
@@ -163,6 +199,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="./commercial/selfservice-admin.js?v=20261110-qa"></script>
 <script src="./commercial/admin-auth.js?v=20261110-final"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
 <script>
 'use strict';
 const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
