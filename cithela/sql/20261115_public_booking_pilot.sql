@@ -163,7 +163,7 @@ begin
   if v_linked is not null then
     return jsonb_build_object('ok',true,'tenant_id',v_tenant,'person_id',v_linked,'existing',true);
   end if;
-  select count(*),min(p.id) into v_count,v_person from public.cithela_people p
+  select count(*),(array_agg(p.id order by p.created_at))[1] into v_count,v_person from public.cithela_people p
     where p.tenant_id=v_tenant and lower(btrim(p.contact_email))=v_email;
   if v_count>1 then return jsonb_build_object('ok',false,'code','contact_ambiguous'); end if;
   if v_count=1 and exists(select 1 from public.cithela_patient_links l
