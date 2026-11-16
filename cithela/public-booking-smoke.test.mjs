@@ -90,3 +90,11 @@ test('public booking keeps an accessible, subtle language switch',()=>{
   assert.match(html,/\$\('language'\)\.setAttribute\('aria-label'/);
   assert.match(html,/\$\('language'\)\.addEventListener\('click'/);
 });
+
+test('professional agenda offers booking shortcut to authorized cloud owners and admins',()=>{
+  const html=read('index.html');
+  assert.match(html,/id="professional-public-booking-shortcut"[^>]*hidden/);
+  assert.match(html,/class="cithela-booking-shortcut__link" href="\.\/compartir\.html"/);
+  assert.match(html,/bookingShortcut\.hidden=!\(active&&\['owner','admin'\]\.includes\(s\.membership\?\.role\)\)/);
+  assert.match(html,/id="cfg-section-public-booking"/);
+});
