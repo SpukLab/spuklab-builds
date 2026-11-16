@@ -25,6 +25,7 @@ test("SMS contains no diagnostic data and requires explicit consent",()=>{
   assert.match(r.message,/Sign in/);
   assert.match(r.uri,/^sms:\+14155550132\?body=/);
   assert.equal(r.automatic,false);
+  assert.equal(smsSegments(r.message).segments,1,"short neutral US message should fit one SMS segment");
   assert.equal(r.provider,null);
   assert.doesNotMatch(r.message,/treatment|diagnosis|odontogram/);
   assert.equal(decodeURIComponent(r.uri.split("?body=")[1]),r.message);
