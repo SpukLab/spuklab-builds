@@ -29,13 +29,16 @@ button:disabled{opacity:.45;cursor:default}
 <body>
 <header><strong>CITHELA</strong><a href="./index.html">Volver a la agenda</a></header>
 <main>
-<h1>Enlace público de reservas</h1><p>Compartí un enlace directo desde WhatsApp, SMS, Instagram o un código QR. El paciente no necesita una invitación previa.</p><p class="small">Este selector muestra solo los establecimientos de la cuenta profesional actual. Para administrar otros establecimientos con tu cuenta de SpukLab, ingresá al <a href="./comercial-admin.html#booking-admin">Centro comercial → Enlaces públicos</a>.</p>
+<h1>Mis reservas online</h1><p>Este es el enlace de tu establecimiento para recibir solicitudes de turnos. Copialo o compartí el QR desde WhatsApp, SMS o redes, sin invitar previamente a cada paciente.</p>
 <div class="info" id="status" role="status" aria-live="polite">Comprobando sesión…</div>
 <div id="panel" hidden>
 <section><h2>Configuración del establecimiento</h2>
-<label for="tenant">Establecimiento</label><select id="tenant"></select>
-<label for="slug">Identificador del enlace</label><input id="slug" maxlength="50" autocomplete="off" autocorrect="off" spellcheck="false" pattern="[a-z0-9][a-z0-9-]{2,49}" placeholder="jose-lopez">
-<p class="small">Solo letras minúsculas, números y guiones. Cambiarlo deja sin servicio el enlace anterior.</p>
+<div id="tenant-wrap"><label for="tenant">Establecimiento</label><select id="tenant"></select></div>
+<label for="slug">Nombre de tu enlace</label>
+<input id="slug" maxlength="50" autocomplete="off" autocorrect="off" spellcheck="false" pattern="[a-z0-9][a-z0-9-]{2,49}" placeholder="mi-consultorio" aria-describedby="slug-hint slug-preview">
+<button class="secondary" type="button" id="suggest-slug" style="margin-top:5px;padding:8px 10px;font-size:.79rem"></button>
+<p class="small" id="slug-hint">Usá el nombre de tu establecimiento, sin espacios ni tildes. Es único para cada profesional. Podés cambiarlo sin perder los enlaces o QR que ya compartiste.</p>
+<p class="small" id="slug-preview" role="status" aria-live="polite"></p>
 <label for="locale">Idioma inicial de la página pública</label><select id="locale"><option value="es">Español</option><option value="en">English</option></select>
 <label for="zone">Zona horaria del establecimiento</label>
 <select id="zone">
@@ -84,20 +87,44 @@ function bookingErrorMessage(error){
    resources_missing:'Falta configurar al menos un profesional activo en la agenda.',
    hours_missing:'Falta configurar al menos un horario de atención en la agenda.',
    agenda_not_ready:'Revisá los servicios, profesionales y horarios de atención.',
-   slug_in_use:'Ese identificador del enlace ya está en uso.'
+   slug_in_use:'Ese nombre de enlace ya está en uso por otro establecimiento. Probá agregar la ciudad o tu especialidad.'
  };
  return descriptions[code]||code;
 }
 function safeUrl(slug){return 'https://spuklab.github.io/spuklab-builds/cithela/reservar.html?c='+encodeURIComponent(slug)}
-async function load(){settings=null;$('share-output').hidden=true;const id=$('tenant').value;if(!id)return;try{const x=await rpc({p_tenant_id:id});settings=x;$('slug').value=x.slug;$('locale').value=x.locale;$('enabled').checked=x.enabled;if(!$('zone').querySelector('option[value="'+x.timezone+'"]')){const opt=document.createElement('option');opt.value=x.timezone;opt.textContent=x.timezone;$('zone').appendChild(opt)}$('zone').value=x.timezone;renderShare();const block=commercialMessage(x);status(block||'Configuración cargada. Los cambios no se publican hasta guardarlos.',!!block)}catch(e){status('No se pudo cargar la configuración: '+e.message,true)}}
+function linkNameFromBrand(name){
+  let slug=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50).replace(/-+$/,'');
+  if(slug.length<3||['cithela','admin','login','booking','reservar','www','app','api','signup'].includes(slug))slug=(slug||'mi-espacio')+'-turnos';
+  return slug.slice(0,50).replace(/-+$/,'');
+}
+function updateLinkNamePreview(){
+  if(!settings)return;
+  const candidate=$('slug').value.trim().toLowerCase();
+  $('slug-preview').textContent=!/^[a-z0-9][a-z0-9-]{2,49}$/.test(candidate)
+    ?'Escribí un nombre válido: mínimo 3 caracteres.'
+    :candidate===settings.slug
+      ?'Este es el enlace actual. Solo se modifica cuando guardás.'
+      :'Nuevo enlace al guardar: '+safeUrl(candidate)+'. El enlace anterior seguirá funcionando.';
+}
+async function load(){settings=null;$('share-output').hidden=true;const id=$('tenant').value;if(!id)return;try{const x=await rpc({p_tenant_id:id});settings=x;$('slug').value=x.slug;
+const proposed=linkNameFromBrand(x.tenant_name);$('suggest-slug').textContent='Usar nombre comercial: '+proposed;
+$('suggest-slug').hidden=proposed===x.slug;updateLinkNamePreview();$('locale').value=x.locale;$('enabled').checked=x.enabled;if(!$('zone').querySelector('option[value="'+x.timezone+'"]')){const opt=document.createElement('option');opt.value=x.timezone;opt.textContent=x.timezone;$('zone').appendChild(opt)}$('zone').value=x.timezone;renderShare();const block=commercialMessage(x);status(block||'Configuración cargada. Los cambios no se publican hasta guardarlos.',!!block)}catch(e){status('No se pudo cargar la configuración: '+e.message,true)}}
 function renderShare(){if(!settings)return;const url=safeUrl(settings.slug);const active=!!settings.enabled&&settings.commercial_can_book!==false;$('share-output').hidden=false;$('url').textContent=url;$('availability').textContent=active?'Enlace público activado.':settings.enabled?'Enlace suspendido por el estado comercial: no permite reservar.':'Vista previa del enlace. Activá y guardá las reservas para generar el QR y compartirlo.';for(const key of ['copy','sms','wa','download'])$(key).disabled=!active;$('qr').replaceChildren();if(!active){$('qr').textContent='QR disponible después de activar las reservas.';return}if(window.QRCode){new QRCode($('qr'),{text:url,width:182,height:182,colorDark:'#243b35',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}else{$('qr').textContent='QR no disponible sin conexión a la biblioteca.'}}
 $('tenant').addEventListener('change',load);
+$('slug').addEventListener('input',updateLinkNamePreview);
+$('suggest-slug').addEventListener('click',()=>{
+  if(!settings)return;
+  $('slug').value=linkNameFromBrand(settings.tenant_name);
+  updateLinkNamePreview();$('slug').focus();
+});
 $('save-zone').addEventListener('click',async()=>{if(!settings)return;const zone=$('zone').value;if(zone===settings.timezone){status('La zona horaria ya está guardada.');return}if(!confirm('¿Cambiar la zona horaria? Sólo está permitido antes de tener turnos registrados.'))return;$('save-zone').disabled=true;try{const {data,error}=await client.rpc('cithela_public_booking_timezone_update',{p_tenant_id:$('tenant').value,p_timezone:zone});if(error)throw error;if(!data?.ok)throw Error(data?.code||'error');await load();status('Zona horaria guardada: '+zone)}catch(e){status(e.message==='appointment_history_locked'?'Este espacio ya tiene turnos. Por seguridad, no puede cambiarse la zona horaria desde aquí.':e.message,true)}finally{$('save-zone').disabled=false}});
-$('save').addEventListener('click',async()=>{if(!settings)return;if($('enabled').checked&&$('zone').value!==settings.timezone){status('Guardá la zona horaria antes de activar las reservas.',true);return}const slug=$('slug').value.trim().toLowerCase();if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){status('El identificador debe tener entre 3 y 50 caracteres: letras, números o guiones.',true);return}if($('enabled').checked&&settings.commercial_can_book===false){status(commercialMessage(settings)||bookingErrorMessage({message:'subscription_required'}),true);return}if($('enabled').checked&&!settings.enabled&&!confirm('¿Habilitar reservas públicas? Revisá previamente servicios, horarios y disponibilidad.'))return;$('save').disabled=true;try{const x=await rpc({p_tenant_id:$('tenant').value,p_save:true,p_slug:slug,p_enabled:$('enabled').checked,p_locale:$('locale').value});settings=x;renderShare();status('Configuración guardada. '+(x.enabled?'El enlace está habilitado.':'El enlace permanece desactivado.'))}catch(e){status('No se pudo guardar: '+bookingErrorMessage(e),true)}finally{$('save').disabled=false}});
+$('save').addEventListener('click',async()=>{if(!settings)return;if($('enabled').checked&&$('zone').value!==settings.timezone){status('Guardá la zona horaria antes de activar las reservas.',true);return}const slug=$('slug').value.trim().toLowerCase();if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){status('El nombre del enlace debe tener entre 3 y 50 caracteres: letras, números o guiones.',true);return}if($('enabled').checked&&settings.commercial_can_book===false){status(commercialMessage(settings)||bookingErrorMessage({message:'subscription_required'}),true);return}if($('enabled').checked&&!settings.enabled&&!confirm('¿Habilitar reservas públicas? Revisá previamente servicios, horarios y disponibilidad.'))return;$('save').disabled=true;try{const x=await rpc({p_tenant_id:$('tenant').value,p_save:true,p_slug:slug,p_enabled:$('enabled').checked,p_locale:$('locale').value});settings=x;$('suggest-slug').hidden=linkNameFromBrand(x.tenant_name)===x.slug;
+updateLinkNamePreview();renderShare();status('Configuración guardada. '+(x.enabled?'El enlace está habilitado.':'El enlace permanece desactivado.')+' Los enlaces anteriores siguen funcionando.')}catch(e){status('No se pudo guardar: '+bookingErrorMessage(e),true)}finally{$('save').disabled=false}});
 $('copy').addEventListener('click',async()=>{const url=safeUrl(settings.slug);try{await navigator.clipboard.writeText(url);status('Enlace copiado.')}catch{status('Seleccioná el enlace en pantalla y copialo.',true)}});
 $('sms').addEventListener('click',()=>{const url=safeUrl(settings.slug);location.href='sms:?&body='+encodeURIComponent('Reservá tu turno / Book an appointment: '+url)});
 $('wa').addEventListener('click',()=>{const url=safeUrl(settings.slug);window.open('https://wa.me/?text='+encodeURIComponent('Reservá tu turno / Book an appointment: '+url),'_blank','noopener')});
 $('download').addEventListener('click',()=>{const canvas=$('qr').querySelector('canvas');const img=$('qr').querySelector('img');const src=canvas?.toDataURL('image/png')||img?.src;if(!src){status('No se pudo generar el QR.',true);return}const a=document.createElement('a');a.href=src;a.download='cithela-'+settings.slug+'-qr.png';a.click()});
-(async()=>{try{if(!client)throw Error('Supabase JS no disponible');const {data:{user},error}=await client.auth.getUser();if(error||!user)throw Error('Iniciá sesión en CITHELA como propietario o administrador.');sessionUser=user;const {data:rows,error:err}=await client.from('cithela_tenant_memberships').select('tenant_id,role').eq('user_id',user.id).in('role',['owner','admin']);if(err)throw err;if(!rows?.length)throw Error('Esta cuenta no administra establecimientos.');const {data:names}=await client.from('cithela_tenants').select('id,display_name').in('id',rows.map(x=>x.tenant_id));for(const x of rows){const o=document.createElement('option');o.value=x.tenant_id;o.textContent=names?.find(t=>t.id===x.tenant_id)?.display_name||('Establecimiento · '+x.tenant_id.slice(0,8));$('tenant').appendChild(o)}$('panel').hidden=false;await load()}catch(e){status(e.message||'No se pudo recuperar la sesión.',true)}})();
+(async()=>{try{if(!client)throw Error('Supabase JS no disponible');const {data:{user},error}=await client.auth.getUser();if(error||!user)throw Error('Iniciá sesión en CITHELA como propietario o administrador.');sessionUser=user;const {data:rows,error:err}=await client.from('cithela_tenant_memberships').select('tenant_id,role').eq('user_id',user.id).in('role',['owner','admin']);if(err)throw err;if(!rows?.length)throw Error('Esta cuenta no administra establecimientos.');$('tenant-wrap').hidden=rows.length===1;const {data:names}=await client.from('cithela_tenants').select('id,display_name').in('id',rows.map(x=>x.tenant_id));for(const x of rows){const o=document.createElement('option');o.value=x.tenant_id;o.textContent=names?.find(t=>t.id===x.tenant_id)?.display_name||('Establecimiento · '+x.tenant_id.slice(0,8));$('tenant').appendChild(o)}$('panel').hidden=false;await load()}catch(e){status(e.message||'No se pudo recuperar la sesión.',true)}})();
 </script>
 </body></html>
