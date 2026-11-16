@@ -3,7 +3,11 @@
 import {LOCALE_KEY,selectLocale,normalizeLocale,t} from "./locale.mjs";
 const fixed=[
  ["#rb-med","professional"],["#rb-pac","patient"],
- ["#professional-login-button","login"],["#professional-login-fields label[for='l-cloud-email']","professionalEmail"],
+ ["#professional-login-button","login"],
+ ["#professional-login-fields p a[href='./acceso-whatsapp.html']","whatsappSignIn"],
+ ["#professional-login-fields .hint","sessionStays"],
+ ["#login-meta","tagline"],
+ ["#professional-login-fields label[for='l-cloud-email']","professionalEmail"],
  ["#professional-login-fields label[for='l-cloud-password']","password"],
  ["#professional-login-fields button[onclick='requestProfessionalPasswordReset()']","forgotPassword"],
  ["#screen-medico .nav-out","signOut"],["#screen-patient-cloud .nav-out","signOut"],
@@ -92,6 +96,10 @@ export function applyLocale(next=locale){
     if(el)setLabel(el,t(key,locale));
   }
   patientUiTranslate(locale);
+  const ph=document.getElementById("l-cloud-password");
+  if(ph)ph.placeholder=t("passwordPlaceholder",locale);
+  const mail=document.getElementById("l-cloud-email");
+  if(mail)mail.placeholder=t("emailPlaceholder",locale);
   document.querySelectorAll("[data-cithela-language]").forEach(btn=>{
     const chosen=normalizeLocale(btn.dataset.cithelaLanguage)===locale;
     btn.setAttribute("aria-pressed",String(chosen));
