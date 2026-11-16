@@ -31,3 +31,38 @@ test('professional sharing retains explicit enable switch',()=>{
   assert.match(html,/cithela_public_booking_config/);
   assert.match(html,/cithela_public_booking_timezone_update/);
 });
+
+test('email verification return preserves chosen slot without leaking contact information',()=>{
+  const html=read('reservar.html');
+  const start=html.indexOf('function bookingRedirectUrl(){');
+  const end=html.indexOf('function tenantBrandLogoUrl(x){',start);
+  assert.ok(start>0&&end>start);
+  const source=html.slice(start,end);
+  const factory=new Function('URL','location','slug','lang','data','chosen','$',
+    source+'; return bookingRedirectUrl();');
+  const fields={service:{value:'service-id'},resource:{value:'staff-id'},date:{value:'2026-12-01'}};
+  const value=factory(URL,{origin:'https://example.org',pathname:'/cithela/reservar.html'},
+    'dentist','en',{tenant_id:'tenant-id'},'13:30',id=>fields[id]);
+  const url=new URL(value);
+  assert.equal(url.searchParams.get('lang'),'en');
+  assert.equal(url.searchParams.get('c'),'dentist');
+  assert.equal(url.searchParams.get('service'),'service-id');
+  assert.equal(url.searchParams.get('resource'),'staff-id');
+  assert.equal(url.searchParams.get('date'),'2026-12-01');
+  assert.equal(url.searchParams.get('time'),'13:30');
+  for(const secret of ['email','name','token','person'])assert.equal(url.searchParams.has(secret),false);
+});
+
+test('tenant logo is limited to immutable image path in that tenant public branding bucket',()=>{
+  const html=read('reservar.html');
+  const start=html.indexOf('function tenantBrandLogoUrl(x){');
+  const end=html.indexOf('function applyTenantBrand(x){',start);
+  assert.ok(start>0&&end>start);
+  const source=html.slice(start,end);
+  const logo=new Function('URL_SUPA',source+';return tenantBrandLogoUrl;')('https://example.supabase.co');
+  const id='aabbccdd-1111-2222-3333-444455556666';
+  const path=id+'/logo-'+'a'.repeat(32)+'.png';
+  assert.match(logo({tenant_id:id,logo_object_path:path}),/cithela-branding/);
+  assert.equal(logo({tenant_id:id,logo_object_path:'another-tenant/logo-'+'a'.repeat(32)+'.png'}),'');
+  assert.equal(logo({tenant_id:id,logo_object_path:id+'/private.pdf'}),'');
+});
