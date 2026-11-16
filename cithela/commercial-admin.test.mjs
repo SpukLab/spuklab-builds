@@ -256,3 +256,41 @@ test('grace extension command never processes subscriptions or lowers access tim
  assert.doesNotMatch(migration,/UPDATE\s+cithela_private\.cithela_commercial_entitlements/i);
  assert.doesNotMatch(migration,/(?:UPDATE|INSERT INTO)\s+cithela_private\.cithela_mp/i);
 });
+
+test('platform booking actions remain server-gated and field-restricted',async()=>{
+ for(const action of ['booking_read','booking_save','booking_timezone']){
+  const {settings,commands}=options();
+  const payload=action==='booking_read'?{tenant_id:other}:
+   action==='booking_save'?{tenant_id:other,slug:'dentist-test',locale:'es',enabled:false}:
+   {tenant_id:other,timezone:'America/Denver'};
+  const response=await parse(await handleCithelaCommercialAdmin(req(action,payload),settings));
+  assert.equal(response.status,200);
+  assert.equal(commands[0].action,action);
+  const blocked=await parse(await handleCithelaCommercialAdmin(
+   req(action,{...payload,override_role:'admin'}),settings));
+  assert.equal(blocked.status,400);
+  const unapproved=await parse(await handleCithelaCommercialAdmin(
+   req(action,payload),options({resolveUser:async()=>({id:other,emailConfirmed:true})}).settings));
+  assert.equal(unapproved.status,403);
+ }
+ const sql=readFileSync(new URL('./sql/20261115_platform_booking_admin.sql',import.meta.url),'utf8');
+ assert.match(sql,/revoke all on function public\.cithela_commercial_admin_booking_command/);
+ assert.match(sql,/from public,anon,authenticated/);
+ assert.match(sql,/to service_role/);
+ assert.match(sql,/cithela_public_booking_admin_audit/);
+});
+test('commercial admin gives explicit courtesy validation and tenant-wide booking options',()=>{
+ const html=readFileSync(new URL('./comercial-admin.html',import.meta.url),'utf8');
+ assert.match(html,/id="booking-tenant"/);
+ assert.match(html,/id="booking-save"/);
+ assert.match(html,/id="booking-qr"/);
+ assert.match(html,/selectBookingTenants\(snapshot\.tenants\|\|\[\]\)/);
+ assert.match(html,/No se otorgaron días: completá el motivo/);
+ assert.match(html,/Cortesía registrada correctamente/);
+ assert.match(html,/Extensión de prueba CITHELA para evaluación del servicio/);
+ const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+   .map(m=>m[1]).filter(Boolean);
+ for(const script of scripts)assert.doesNotThrow(()=>new Function(script));
+ const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+ assert.equal(ids.length,new Set(ids).size);
+});

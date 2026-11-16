@@ -23,7 +23,7 @@ p{color:var(--sub)}.intro{max-width:750px}.intro p{font-size:.98rem}.notice{back
 .card.wide{grid-column:1/-1}.eyebrow{font-size:.62rem;letter-spacing:.15em;color:#478578;font-weight:820;margin:0 0 14px}.card>p{font-size:.86rem}
 label{font-size:.8rem;font-weight:700;display:block;margin:15px 0 6px;color:#3b6158}
 input,select,textarea{width:100%;min-height:46px;border:1px solid #b8cbc2;background:white;color:#1d3731;border-radius:9px;padding:10px 12px}
-textarea{resize:vertical;min-height:86px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.small{font-size:.77rem}.message{min-height:25px;padding:6px 0;color:#285c53;font-size:.86rem}
+textarea{resize:vertical;min-height:86px}textarea[aria-invalid=true]{border:2px solid #a33c50}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.small{font-size:.77rem}.message{min-height:25px;padding:6px 0;color:#285c53;font-size:.86rem}
 table{width:100%;border-collapse:collapse;font-size:.81rem}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #dfebe4}th{color:#4d6d62;font-size:.75rem}td{overflow-wrap:anywhere}
 .scroll{overflow-x:auto}.hint{color:#785c44;background:#f7eee4;padding:10px 13px;border-radius:8px;font-size:.79rem}
 [hidden]{display:none!important}
@@ -67,6 +67,42 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <p id="account-empty" hidden>No hay agendas registradas.</p>
   <p class="muted">Para consultar invitaciones pendientes o canjeadas, abrí <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
  </section>
+ <section class="card" id="booking-admin" aria-labelledby="booking-admin-title" style="margin-top:18px">
+  <p class="eyebrow">ENLACES PÚBLICOS · ADMINISTRACIÓN SPUKLAB</p>
+  <h2 id="booking-admin-title">Reservas públicas de establecimientos</h2>
+  <p>Configurá el enlace de un profesional sin ingresar en su cuenta. No cambia sus turnos ni la prueba comercial. El QR solo aparece cuando el enlace está habilitado.</p>
+  <label for="booking-tenant">Establecimiento</label>
+  <select id="booking-tenant"></select>
+  <p class="message" id="booking-admin-status" role="status" aria-live="polite"></p>
+  <div id="booking-admin-form" hidden>
+    <label for="booking-slug">Identificador público del enlace</label>
+    <input id="booking-slug" maxlength="50" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="jose-lopez">
+    <p class="muted">Solo minúsculas, números y guiones (3 a 50 caracteres). Cambiarlo desactiva el enlace anterior.</p>
+    <label for="booking-locale">Idioma inicial</label>
+    <select id="booking-locale"><option value="es">Español</option><option value="en">English</option></select>
+    <label for="booking-zone">Zona horaria del establecimiento</label>
+    <select id="booking-zone">
+      <option value="America/Argentina/Buenos_Aires">Argentina · Buenos Aires</option>
+      <option value="America/Denver">EE. UU. · Mountain (Utah)</option>
+      <option value="America/New_York">EE. UU. · Eastern</option>
+      <option value="America/Chicago">EE. UU. · Central</option>
+      <option value="America/Los_Angeles">EE. UU. · Pacific</option>
+      <option value="America/Phoenix">EE. UU. · Arizona</option>
+    </select>
+    <p class="muted">El cambio de zona horaria solo se permite si todavía no hay turnos registrados.</p>
+    <button id="booking-save-zone" type="button" class="secondary">Guardar zona horaria</button>
+    <label for="booking-enabled" style="display:flex;align-items:center;gap:12px;margin:20px 0">
+      <input id="booking-enabled" type="checkbox" style="width:22px;height:22px;min-height:22px">
+      Permitir reservas públicas
+    </label>
+    <button id="booking-save" type="button">Guardar enlace de reservas</button>
+    <div id="booking-shared" hidden style="margin-top:15px">
+      <p id="booking-public-url" class="hint" style="overflow-wrap:anywhere"></p>
+      <div id="booking-qr" style="margin:15px auto;max-width:190px"></div>
+      <button type="button" class="secondary" id="booking-copy">Copiar enlace</button>
+    </div>
+  </div>
+ </section>
  <div class="cards">
   <section class="card" aria-labelledby="price-title">
    <p class="eyebrow">01 / VALORES COMERCIALES</p>
@@ -105,7 +141,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    </div>
    <p class="hint" id="courtesy-timing">Los días se suman desde el último vencimiento entre la prueba, la suscripción y la cortesía previa (o desde hoy, si todo venció). Podés ampliar el acceso en cualquier momento: jamás se acorta. No genera pagos ni modifica las señas de pacientes.</p>
    <label for="free-reason">Motivo de la cortesía</label>
-   <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required></textarea>
+   <textarea id="free-reason" maxlength="240" placeholder="Ej. Profesional invitado a piloto de 30 días" required>Extensión de prueba CITHELA para evaluación del servicio y reservas públicas</textarea>
    <div class="actions">
     <button type="button" id="grant-free">Agregar días de acceso</button>
     <button class="alert" type="button" id="revoke-free">Revocar cortesía (excepcional)</button>
@@ -163,6 +199,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="./commercial/selfservice-admin.js?v=20261110-qa"></script>
 <script src="./commercial/admin-auth.js?v=20261110-final"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
 <script>
 'use strict';
 const SUPABASE_URL='https://mcqknmqhtmihegmifuka.supabase.co';
@@ -195,7 +232,8 @@ function updateCourtesyState(){
  }else if(hasGrant){
   state.textContent='Cortesía existente: podés agregar más días sin acortar el plazo anterior.';
  }else if(selected.status==='trialing'){
-  state.textContent='Prueba gratuita activa. Los días de gracia se sumarán después de finalizar la prueba.';
+  const expired=selected.trial_ends_at&&Date.parse(selected.trial_ends_at)<Date.now();
+  state.textContent=expired?'La prueba venció. Una cortesía habilita nuevamente las reservas a partir de su registro.':'Prueba gratuita activa. Los días de gracia se sumarán después de finalizar la prueba.';
  }else{
   state.textContent='Podés habilitar o ampliar el acceso gratuito. Se solicitará confirmación.';
  }
@@ -233,6 +271,103 @@ function showAccounts(tenants){
  $('account-empty').hidden=rows.length>0;
  $('account-count').textContent=rows.length===1?'1 agenda registrada':rows.length+' agendas registradas';
 }
+let bookingSettings=null,bookingSerial=0;
+function bookingSay(message,error=false){
+ const target=$('booking-admin-status');target.textContent=message;
+ target.style.color=error?'#96354a':'#285c53';
+}
+function bookingError(error){
+ const codes={
+  subscription_required:'La prueba o suscripción está vencida. Otorgá una cortesía válida desde el panel superior antes de activar.',
+  services_missing:'Falta un servicio activo.',
+  resources_missing:'Falta un profesional activo.',
+  hours_missing:'Faltan horarios de atención.',
+  appointment_history_locked:'No se puede cambiar la zona horaria porque ya existen turnos.',
+  slug_in_use:'Ese identificador público ya está en uso.',
+  invalid_settings:'Revisá el identificador y el idioma del enlace.',
+  tenant_inactive:'El establecimiento está inactivo.',
+  forbidden:'No hay autorización para esta operación.'
+ };
+ return codes[String(error?.message||'')]||String(error?.message||'No se pudo completar la operación.');
+}
+function presentBooking(x){
+ bookingSettings=x;
+ $('booking-admin-form').hidden=false;
+ $('booking-slug').value=x.slug||'';
+ $('booking-locale').value=x.locale||'es';
+ if(!$('booking-zone').querySelector('option[value="'+x.timezone+'"]')){
+  const option=document.createElement('option');option.value=x.timezone;option.textContent=x.timezone;
+  $('booking-zone').append(option);
+ }
+ $('booking-zone').value=x.timezone||'America/Argentina/Buenos_Aires';
+ $('booking-enabled').checked=x.enabled===true;
+ const active=x.enabled===true&&x.commercial_can_book===true;
+ $('booking-shared').hidden=!active;
+ $('booking-public-url').textContent=active?x.url:'';
+ $('booking-qr').replaceChildren();
+ if(active&&window.QRCode){
+  new QRCode($('booking-qr'),{text:x.url,width:182,height:182,colorDark:'#213b36',
+    colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+ }
+ $('booking-copy').disabled=!active;
+ if(x.commercial_can_book===false)
+  bookingSay('Reservas bloqueadas por el estado comercial de este establecimiento. Se puede editar el enlace, pero no activarlo.',true);
+ else bookingSay(active?'Enlace activo y listo para compartir.':'Reservas públicas desactivadas para este establecimiento.');
+}
+async function loadPlatformBooking(){
+ const tid=$('booking-tenant').value,serial=++bookingSerial;
+ bookingSettings=null;$('booking-admin-form').hidden=true;
+ if(!tid){bookingSay('Seleccioná un establecimiento.');return}
+ bookingSay('Consultando enlace y permisos…');
+ try{
+  const x=await call('booking_read',{tenant_id:tid});
+  if(serial!==bookingSerial)return;
+  presentBooking(x);
+ }catch(e){
+  if(serial===bookingSerial)bookingSay('No se pudo consultar el enlace: '+bookingError(e),true);
+ }
+}
+function selectBookingTenants(tenants){
+ const prev=$('booking-tenant').value;
+ const choices=tenants.map(t=>({value:t.id,label:t.name}));
+ selectOptions('booking-tenant',choices);
+ if(choices.some(c=>c.value===prev))$('booking-tenant').value=prev;
+ loadPlatformBooking();
+}
+$('booking-tenant').addEventListener('change',loadPlatformBooking);
+$('booking-save').addEventListener('click',async()=>{
+ if(!bookingSettings)return;
+ const tenant=$('booking-tenant').value;
+ const slug=$('booking-slug').value.trim().toLowerCase();
+ if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){bookingSay('Identificador inválido. Usá 3–50 letras minúsculas, números o guiones.',true);return}
+ if($('booking-zone').value!==bookingSettings.timezone){bookingSay('Guardá primero la zona horaria.',true);return}
+ const enabled=$('booking-enabled').checked;
+ if(enabled&&bookingSettings.commercial_can_book!==true){bookingSay(bookingError({message:'subscription_required'}),true);return}
+ if(enabled&&!bookingSettings.enabled&&!confirm('¿Habilitar reservas públicas para '+bookingSettings.tenant_name+'?'))return;
+ const button=$('booking-save');button.disabled=true;bookingSay('Guardando enlace…');
+ try{
+  const x=await call('booking_save',{tenant_id:tenant,slug,locale:$('booking-locale').value,enabled});
+  presentBooking(x);bookingSay('Configuración guardada en CITHELA. '+(x.enabled?'Enlace activo.':'Reservas desactivadas.'));
+ }catch(e){bookingSay('No se pudo guardar: '+bookingError(e),true)}
+ finally{button.disabled=false}
+});
+$('booking-save-zone').addEventListener('click',async()=>{
+ if(!bookingSettings)return;
+ const timezone=$('booking-zone').value;
+ if(timezone===bookingSettings.timezone){bookingSay('Esa zona horaria ya está guardada.');return}
+ if(!confirm('Solo se puede cambiar la zona horaria si no existen turnos. ¿Continuar?'))return;
+ const button=$('booking-save-zone');button.disabled=true;bookingSay('Guardando zona horaria…');
+ try{
+  await call('booking_timezone',{tenant_id:$('booking-tenant').value,timezone});
+  await loadPlatformBooking();bookingSay('Zona horaria actualizada correctamente.');
+ }catch(e){bookingSay('No se pudo cambiar la zona horaria: '+bookingError(e),true)}
+ finally{button.disabled=false}
+});
+$('booking-copy').addEventListener('click',async()=>{
+ if(!bookingSettings?.enabled||!bookingSettings?.commercial_can_book)return;
+ try{await navigator.clipboard.writeText(bookingSettings.url);bookingSay('Enlace copiado.')}
+ catch{bookingSay('Copiá el enlace de la caja de texto.',true)}
+});
 function show(snapshot){
  last=snapshot;
  showAccounts(snapshot.tenants||[]);
@@ -245,12 +380,13 @@ function show(snapshot){
  $('select-price').disabled=price.length===0;
  const tenantOptions=(snapshot.tenants||[]).map(t=>({
   value:t.id,
-  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status)
+  label:t.name+' · '+(t.status==='legacy'?'Piloto protegido':t.complimentary?'Cortesía vigente':t.has_unrevoked_grant?'Cortesía vencida (revocar para renovar)':t.status==='trialing'&&t.trial_ends_at&&Date.parse(t.trial_ends_at)<Date.now()?'Prueba vencida':t.status)
  }));
  const previousTenant=$('tenant-select').value;
  selectOptions('tenant-select',tenantOptions);
  if(tenantOptions.some(t=>t.value===previousTenant))$('tenant-select').value=previousTenant;
  updateCourtesyState();
+ selectBookingTenants(snapshot.tenants||[]);
  const courtesy=$('courtesy-message');
  const currentTenant=snapshot.tenants?.find(t=>t.id===$('tenant-select').value);
  if(currentTenant?.complimentary_until){
@@ -275,7 +411,23 @@ async function call(action,payload={}){
  if(!supa)throw Error('Sin sesión de CITHELA');
  const {data,error}=await supa.functions.invoke('cithela-commercial-admin',
   {body:{action,payload}});
- if(error)throw Error('Acceso no disponible o acción rechazada por el servidor');
+ if(error){
+  let code='';
+  try{const response=error.context;if(response&&typeof response.clone==='function'){
+    const detail=await response.clone().json();code=String(detail?.code||'');
+  }}catch{}
+  const descriptions={
+    tenant_not_eligible:'Esta cuenta no reúne las condiciones para otorgar la cortesía.',
+    invalid_reason:'Ingresá un motivo de al menos 5 caracteres.',
+    invalid_days:'La cantidad de días no es válida.',
+    grant_already_exists:'Ya existe una cortesía vigente.',
+    already_unlimited:'La cuenta ya tiene una cortesía sin vencimiento.',
+    forbidden:'No tenés permisos para realizar esta operación.',
+    not_platform_admin:'La sesión no pertenece al administrador comercial autorizado.',
+    unauthenticated:'La sesión administrativa venció.'
+  };
+  throw Error(descriptions[code]||'El servidor rechazó la acción. Verificá tu sesión administrativa y volvé a consultar el estado.');
+ }
  if(data?.ok!==true)throw Error('No se aplicó el cambio: '+(data?.code||'sin respuesta'));
  return data;
 }
@@ -297,7 +449,11 @@ async function action(name,payload,askConfirm){
  try{
   const res=await call(name,payload);
   busy=false;await reload();
-  (isCourtesy?courtesyTell:tell)('Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
+  const extended=name==='extend_free'&&res.code==='access_extended';
+  const expiry=extended?(res.new_until?new Date(res.new_until).toLocaleDateString('es-AR'):'sin vencimiento'):null;
+  (isCourtesy?courtesyTell:tell)(extended?
+    'Cortesía registrada correctamente. Acceso extendido hasta '+expiry+'. Ya aparece en el estado comercial actualizado.':
+    'Guardado: '+res.code+'. Ningún pago ni dato de agenda fue eliminado.');
  }catch(e){(isCourtesy?courtesyTell:tell)(e.message)}finally{busy=false}
 }
 $('tenant-select').addEventListener('change',()=>{updateCourtesyState();$('courtesy-message').textContent='';});
@@ -339,7 +495,12 @@ $('grant-free').addEventListener('click',()=>{
   courtesyTell('Este establecimiento no admite una ampliación. Elegí una cuenta comercial elegible.');return;
  }
  if(selected.grant_unlimited){courtesyTell('Esta cuenta ya tiene acceso gratuito sin vencimiento.');return;}
- if(!reason||reason.length<5){courtesyTell('Indicá un motivo de al menos 5 caracteres.');return;}
+ if(!reason||reason.length<5){
+  courtesyTell('No se otorgaron días: completá el motivo de la cortesía (mínimo 5 caracteres).');
+  $('free-reason').setAttribute('aria-invalid','true');
+  $('free-reason').focus();return;
+ }
+ $('free-reason').removeAttribute('aria-invalid');
  if(Number.isNaN(days)){courtesyTell('Elegí una duración válida de 1 a 730 días.');return;}
  const term=days===null?'acceso sin vencimiento':days+' días adicionales';
  action('extend_free',{tenant_id:tenant,reason,days},
