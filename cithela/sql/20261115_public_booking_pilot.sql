@@ -192,3 +192,34 @@ revoke all on function cithela_private.public_booking_attach(text,text) from pub
 grant execute on function cithela_private.public_booking_attach(text,text) to authenticated;
 revoke all on function public.cithela_public_booking_attach(text,text) from public,anon;
 grant execute on function public.cithela_public_booking_attach(text,text) to authenticated;
+
+-- Time zone may be changed by tenant owner/admin only while no appointment history exists.
+-- Never reinterpret existing absolute appointment timestamps.
+create or replace function cithela_private.public_booking_timezone_update(p_tenant_id uuid,p_timezone text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_actor uuid:=auth.uid();v_old text;
+begin
+  if v_actor is null then return jsonb_build_object('ok',false,'code','unauthenticated'); end if;
+  if not exists(select 1 from public.cithela_tenant_memberships m
+    where m.tenant_id=p_tenant_id and m.user_id=v_actor and m.role in ('owner','admin'))
+    then return jsonb_build_object('ok',false,'code','forbidden'); end if;
+  if p_timezone is null or length(p_timezone)>100 or not exists(
+    select 1 from pg_catalog.pg_timezone_names z where z.name=p_timezone
+  ) then return jsonb_build_object('ok',false,'code','invalid_timezone'); end if;
+  select timezone into v_old from public.cithela_tenants t
+    where t.id=p_tenant_id and t.status='active' for update;
+  if v_old is null then return jsonb_build_object('ok',false,'code','tenant_inactive'); end if;
+  if v_old=p_timezone then return jsonb_build_object('ok',true,'timezone',v_old,'changed',false); end if;
+  if exists(select 1 from public.cithela_appointments a where a.tenant_id=p_tenant_id)
+    then return jsonb_build_object('ok',false,'code','appointment_history_locked'); end if;
+  update public.cithela_tenants set timezone=p_timezone where id=p_tenant_id;
+  return jsonb_build_object('ok',true,'timezone',p_timezone,'changed',true);
+end $$;
+create or replace function public.cithela_public_booking_timezone_update(p_tenant_id uuid,p_timezone text)
+returns jsonb language sql security invoker set search_path='' as $$
+  select cithela_private.public_booking_timezone_update(p_tenant_id,p_timezone);
+$$;
+revoke all on function cithela_private.public_booking_timezone_update(uuid,text) from public,anon;
+grant execute on function cithela_private.public_booking_timezone_update(uuid,text) to authenticated;
+revoke all on function public.cithela_public_booking_timezone_update(uuid,text) from public,anon;
+grant execute on function public.cithela_public_booking_timezone_update(uuid,text) to authenticated;
