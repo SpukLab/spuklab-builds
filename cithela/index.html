@@ -448,6 +448,14 @@ textarea.inp{resize:vertical;min-height:72px;}
 
 .cday{width:100%;min-width:0;background:transparent;font:inherit;color:inherit;display:flex;flex-direction:column;justify-content:center;align-items:center;}
 .cday:focus-visible{outline:3px solid var(--teal2);outline-offset:1px;}
+/* Compact sharing actions; editing belongs under Ajustes. */
+.cithela-share-strip{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 16px;padding:7px 0;border-bottom:1px solid var(--border-color);}
+.cithela-share-strip[hidden]{display:none!important;}
+.cithela-share-strip__label{font-size:.76rem;font-weight:600;color:var(--ink2);}
+.cithela-share-strip__actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.cithela-share-strip__actions button,.cithela-share-strip__actions a{display:inline-flex;justify-content:center;align-items:center;min-height:38px;border-radius:9px;padding:8px 11px;border:1px solid var(--border-color);background:var(--white);color:var(--teal2);font:inherit;font-size:.75rem;font-weight:600;text-decoration:none;cursor:pointer;}
+.cithela-share-strip__actions button:focus-visible,.cithela-share-strip__actions a:focus-visible{outline:3px solid var(--teal2);outline-offset:2px;}
+@media(max-width:440px){.cithela-share-strip__label{flex-basis:100%;}.cithela-share-strip__actions{width:100%;}.cithela-share-strip__actions>*{flex:1;}}
 /* Pilot UX ergonomics: smaller menu, visible tasks, readable and thumb-sized controls. */
 .visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
 .agenda-primary-action{margin:-2px 0 16px;}
@@ -509,7 +517,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
 <link rel="icon" type="image/png" sizes="32x32" href="./brand/cithela-favicon-32.png?v=20261110-final">
 <link rel="manifest" href="./brand/cithela.webmanifest?v=20261110-final">
-<script src="./commercial/auth-captcha.js?v=20261112-login-fix"></script>
+<script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
 </head>
 <body>
 
@@ -665,23 +673,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       </div>
       <p class="cithela-first-steps__note">No hace falta enviar invitaciones para registrar personas y otorgar turnos. Esta guía se oculta después del primer turno.</p>
     </section>
-    <section id="professional-public-booking-shortcut" class="cithela-booking-shortcut" hidden aria-label="Reservas online para tus pacientes">
-      <div class="cithela-booking-shortcut__header">
-        <div class="cithela-booking-shortcut__copy">
-          <strong>Reservas online</strong>
-          <small>Compartí tu enlace o QR con tus pacientes.</small>
-        </div>
-        <a class="cithela-booking-shortcut__link" href="./compartir.html">Ver enlace y QR</a>
+    <section id="professional-public-booking-shortcut" class="cithela-share-strip" hidden aria-label="Compartir reservas públicas">
+      <span class="cithela-share-strip__label">Reservas online</span>
+      <div class="cithela-share-strip__actions">
+        <button type="button" id="professional-share-copy" onclick="copyProfessionalBookingLink()">Copiar enlace</button>
+        <button type="button" id="professional-share-native" onclick="shareProfessionalBookingLink()">Compartir</button>
+        <a class="cithela-booking-shortcut__link" href="./compartir.html" aria-label="Mostrar código QR de reservas">Ver QR</a>
       </div>
-      <label class="cithela-booking-shortcut__language" for="professional-booking-language">
-        Idioma inicial para pacientes
-        <select id="professional-booking-language" disabled aria-describedby="professional-booking-language-status"
-          onchange="changeProfessionalBookingLanguage(this)">
-          <option value="es">Español</option>
-          <option value="en">English</option>
-        </select>
-      </label>
-      <p id="professional-booking-language-status" class="cithela-booking-shortcut__status" role="status" aria-live="polite" hidden></p>
     </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
     <div class="week-nav">
@@ -1019,11 +1017,21 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
     </details>
 <details class="cithela-config-group" id="cfg-section-public-booking">
-  <summary>Enlace público y QR de reservas<span aria-hidden="true">⌄</span></summary>
+  <summary>Reservas online, enlace e idioma<span aria-hidden="true">⌄</span></summary>
   <div class="form-card" style="margin-bottom:14px;">
-    <p class="contact-note">Compartí un enlace desde WhatsApp, SMS o Instagram. El paciente elige servicio, fecha y horario sin invitación previa y verifica su correo antes de solicitar el turno. Las reservas quedan pendientes de confirmación.</p>
-    <a class="btn-main" href="./compartir.html" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Configurar y compartir enlace</a>
-    <p class="contact-note">La activación corresponde al propietario o administrador de un establecimiento CITHELA Cloud.</p>
+    <p class="contact-note">Configurá el enlace público de reservas, el código QR y el idioma inicial. Los turnos solicitados quedan pendientes de confirmación.</p>
+    <div id="professional-booking-language-settings" hidden>
+      <label class="lbl" for="professional-booking-language">Idioma inicial para pacientes</label>
+      <select class="inp" id="professional-booking-language" disabled aria-describedby="professional-booking-language-status"
+        onchange="changeProfessionalBookingLanguage(this)">
+        <option value="es">Español</option>
+        <option value="en">English</option>
+      </select>
+      <p id="professional-booking-language-status" class="contact-note" role="status" aria-live="polite" hidden></p>
+      <p class="contact-note">Los pacientes pueden cambiar el idioma desde la página de reservas.</p>
+    </div>
+    <a class="btn-main" href="./compartir.html" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Administrar enlace y QR</a>
+    <p class="contact-note">Solo propietarios y administradores pueden modificar esta configuración. El personal autorizado puede compartir el enlace desde Agenda.</p>
   </div>
 </details>
 <details class="cithela-config-group" id="cfg-section-payments">
@@ -1999,6 +2007,15 @@ const CithelaCloud=(()=>{
     return {ok:true,email:clean};
   }
 
+  async function professionalBookingShare(){
+    const tenantId=state.tenant?.id;
+    if(!tenantId)throw Error('No hay establecimiento activo.');
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_professional_booking_share',{p_tenant_id:tenantId});
+    if(error)throw error;
+    if(!data?.ok)throw Error(data?.code||'No se pudo obtener el enlace de reservas.');
+    return data;
+  }
   async function publicBookingConfig(locale){
     if(!state.session||!state.tenant||!state.membership||
       !['owner','admin'].includes(state.membership.role))
@@ -2457,7 +2474,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,professionalBookingShare,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -4027,6 +4044,53 @@ function tab(sc,id,btn){
 }
 
 let professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
+let professionalBookingShareState={tenantId:null,url:'',loading:false,checked:false};
+async function loadProfessionalBookingShare(tenantId){
+  if(professionalBookingShareState.tenantId!==tenantId)
+    professionalBookingShareState={tenantId,url:'',loading:false,checked:false};
+  const current=professionalBookingShareState;
+  if(current.checked||current.loading)return;
+  current.loading=true;
+  try{
+    const data=await CithelaCloud.professionalBookingShare();
+    if(professionalBookingShareState!==current)return;
+    const url=typeof data.url==='string'?data.url:'';
+    // The server authorizes the tenant and enables sharing; never invent a URL.
+    current.url=data.enabled===true&&/^https:\/\/spuklab\.github\.io\/spuklab-builds\/cithela\/reservar\.html\?c=[a-z0-9-]+$/.test(url)?url:'';
+    current.checked=true;
+  }catch{
+    if(professionalBookingShareState===current)current.checked=false;
+  }finally{
+    if(professionalBookingShareState===current){
+      current.loading=false;
+      updateProfessionalBookingShareVisibility();
+    }
+  }
+}
+function updateProfessionalBookingShareVisibility(){
+  const section=$('professional-public-booking-shortcut');if(!section)return;
+  const s=CithelaCloud.state();
+  const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(s.membership?.role);
+  section.hidden=!(allowed&&professionalBookingShareState.tenantId===s.tenant?.id&&professionalBookingShareState.url);
+}
+async function copyProfessionalBookingLink(){
+  const url=professionalBookingShareState.url;
+  if(!url)return toast('El enlace de reservas no está disponible.');
+  try{
+    if(!navigator.clipboard?.writeText)throw Error('clipboard_unavailable');
+    await navigator.clipboard.writeText(url);
+    toast('Enlace copiado.');
+  }catch{toast('No se pudo copiar. Abrí «Ver QR» para seleccionar el enlace.');}
+}
+async function shareProfessionalBookingLink(){
+  const url=professionalBookingShareState.url;
+  if(!url)return toast('El enlace de reservas no está disponible.');
+  if(navigator.share){
+    try{await navigator.share({title:'Reservas de turnos',url});return;}
+    catch(e){if(e?.name==='AbortError')return;}
+  }
+  await copyProfessionalBookingLink();
+}
 function professionalBookingLanguageMessage(message,error=false){
   const status=$('professional-booking-language-status');
   if(!status)return;
@@ -4054,7 +4118,7 @@ async function loadProfessionalBookingLanguage(tenantId){
     professionalBookingLanguageMessage('');
   }catch(err){
     if(professionalBookingLocale.tenantId===tenantId)
-      professionalBookingLanguageMessage('No se pudo cargar el idioma. Abrí «Ver enlace y QR» para revisarlo.',true);
+      professionalBookingLanguageMessage('No se pudo cargar el idioma. Reintentá desde «Administrar enlace y QR».',true);
   }finally{
     if(professionalBookingLocale.tenantId===tenantId){
       professionalBookingLocale.loading=false;
@@ -4130,16 +4194,18 @@ function renderProfessionalMode(){
     el.style.display=active?'none':'block';
     if(!active)el.textContent=note;
   }
-  const bookingShortcut=$('professional-public-booking-shortcut');
-  if(bookingShortcut){
-    const visible=active&&['owner','admin'].includes(s.membership?.role);
-    bookingShortcut.hidden=!visible;
-    if(visible&&s.tenant?.id)void loadProfessionalBookingLanguage(s.tenant.id);
-    else{
-      professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
-      const field=$('professional-booking-language');
-      if(field)field.disabled=true;
-    }
+  const shareAllowed=active&&['owner','admin','operator'].includes(s.membership?.role);
+  if(shareAllowed&&s.tenant?.id)void loadProfessionalBookingShare(s.tenant.id);
+  else professionalBookingShareState={tenantId:null,url:'',loading:false,checked:false};
+  updateProfessionalBookingShareVisibility();
+  const manageAllowed=active&&['owner','admin'].includes(s.membership?.role);
+  const localeSettings=$('professional-booking-language-settings');
+  if(localeSettings)localeSettings.hidden=!manageAllowed;
+  if(manageAllowed&&s.tenant?.id)void loadProfessionalBookingLanguage(s.tenant.id);
+  else{
+    professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
+    const field=$('professional-booking-language');
+    if(field)field.disabled=true;
   }
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
