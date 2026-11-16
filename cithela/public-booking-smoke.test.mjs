@@ -146,3 +146,11 @@ test('professional agenda lets authorized owners choose default booking-page lan
     .map(m=>m[1]).filter(s=>s.trim());
   for(const source of js)assert.doesNotThrow(()=>new Function(source));
 });
+
+test('booking page honors professional default locale, with patient override taking priority',()=>{
+  const html=read('reservar.html');
+  assert.match(html,/const urlLocale=qs\.get\('lang'\)==='en'\|\|qs\.get\('lang'\)==='es'\?qs\.get\('lang'\):null/);
+  assert.match(html,/if\(!urlLocale\)lang=x\.locale==='en'\?'en':'es'/);
+  assert.doesNotMatch(html,/!navigator\.language\.toLowerCase\(\)\.startsWith\('en'\)/);
+  assert.match(html,/lang=lang==='es'\?'en':'es';i18n\(\)/);
+});
