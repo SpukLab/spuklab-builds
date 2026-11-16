@@ -32,7 +32,8 @@ button:disabled{opacity:.45;cursor:default}
 <h1>Mis reservas online</h1><p>Este es el enlace de tu establecimiento para recibir solicitudes de turnos. Copialo o compartí el QR desde WhatsApp, SMS o redes, sin invitar previamente a cada paciente.</p>
 <div class="info" id="status" role="status" aria-live="polite">Comprobando sesión…</div>
 <div id="panel" hidden>
-<section><h2>Configuración del establecimiento</h2>
+<p class="small" id="share-mode-note" hidden>Podés copiar, enviar o mostrar el QR. Los cambios de configuración corresponden al propietario o administrador.</p>
+<section id="settings-section"><h2>Configuración del establecimiento</h2>
 <div id="tenant-wrap"><label for="tenant">Establecimiento</label><select id="tenant"></select></div>
 <label for="slug">Nombre de tu enlace</label>
 <input id="slug" maxlength="50" autocomplete="off" autocorrect="off" spellcheck="false" pattern="[a-z0-9][a-z0-9-]{2,49}" placeholder="mi-consultorio" aria-describedby="slug-hint slug-preview">
@@ -71,7 +72,7 @@ button:disabled{opacity:.45;cursor:default}
 'use strict';
 const $=id=>document.getElementById(id);
 const client=window.supabase?.createClient('https://mcqknmqhtmihegmifuka.supabase.co','sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc',{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-let settings=null,sessionUser=null;
+let settings=null,sessionUser=null;const memberRoles=new Map();
 function status(msg,error){$('status').textContent=msg;$('status').className='info'+(error?' bad':'')}
 async function rpc(args){const {data,error}=await client.rpc('cithela_public_booking_config',args);if(error)throw error;if(!data?.ok)throw Error(data?.code||'invalid_response');return data}
 function commercialMessage(x){
@@ -110,8 +111,26 @@ function updateLinkNamePreview(){
 async function load(){settings=null;$('share-output').hidden=true;const id=$('tenant').value;if(!id)return;try{const x=await rpc({p_tenant_id:id});settings=x;$('slug').value=x.slug;
 const proposed=linkNameFromBrand(x.tenant_name);$('suggest-slug').textContent='Usar nombre comercial: '+proposed;
 $('suggest-slug').hidden=proposed===x.slug;updateLinkNamePreview();$('locale').value=x.locale;$('enabled').checked=x.enabled;if(!$('zone').querySelector('option[value="'+x.timezone+'"]')){const opt=document.createElement('option');opt.value=x.timezone;opt.textContent=x.timezone;$('zone').appendChild(opt)}$('zone').value=x.timezone;renderShare();const block=commercialMessage(x);status(block||'Configuración cargada. Los cambios no se publican hasta guardarlos.',!!block)}catch(e){status('No se pudo cargar la configuración: '+e.message,true)}}
-function renderShare(){if(!settings)return;const url=safeUrl(settings.slug);const active=!!settings.enabled&&settings.commercial_can_book!==false;$('share-output').hidden=false;$('url').textContent=url;$('availability').textContent=active?'Enlace público activado.':settings.enabled?'Enlace suspendido por el estado comercial: no permite reservar.':'Vista previa del enlace. Activá y guardá las reservas para generar el QR y compartirlo.';for(const key of ['copy','sms','wa','download'])$(key).disabled=!active;$('qr').replaceChildren();if(!active){$('qr').textContent='QR disponible después de activar las reservas.';return}if(window.QRCode){new QRCode($('qr'),{text:url,width:182,height:182,colorDark:'#243b35',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}else{$('qr').textContent='QR no disponible sin conexión a la biblioteca.'}}
-$('tenant').addEventListener('change',load);
+function renderShare(){if(!settings)return;const url=settings.slug?safeUrl(settings.slug):'';const active=!!settings.enabled&&settings.commercial_can_book!==false&&!!url;$('share-output').hidden=false;$('url').textContent=url||'No hay enlace de reservas habilitado.';$('availability').textContent=active?'Enlace público activado.':settings.enabled?'Enlace suspendido por el estado comercial: no permite reservar.':'Vista previa del enlace. Activá y guardá las reservas para generar el QR y compartirlo.';for(const key of ['copy','sms','wa','download'])$(key).disabled=!active;$('qr').replaceChildren();if(!active){$('qr').textContent='QR disponible después de activar las reservas.';return}if(window.QRCode){new QRCode($('qr'),{text:url,width:182,height:182,colorDark:'#243b35',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}else{$('qr').textContent='QR no disponible sin conexión a la biblioteca.'}}
+async function loadAuthorizedSharing(){
+ const id=$('tenant').value;
+ const canManage=['owner','admin'].includes(memberRoles.get(id));
+ $('settings-section').hidden=!canManage;
+ $('share-mode-note').hidden=canManage;
+ if(canManage){await load();return;}
+ settings=null;
+ $('share-output').hidden=true;
+ if(!id)return;
+ try{
+  const {data,error}=await client.rpc('cithela_professional_booking_share',{p_tenant_id:id});
+  if(error)throw error;
+  if(!data?.ok)throw Error(data?.code||'Acceso no autorizado.');
+  settings={slug:data.slug||null,enabled:data.enabled===true,commercial_can_book:data.enabled===true};
+  renderShare();
+  status(data.enabled===true?'Enlace listo para compartir.':'El establecimiento todavía no tiene reservas públicas activas.');
+ }catch(e){status('No se pudo consultar el enlace: '+(e.message||'Error de conexión'),true)}
+}
+$('tenant').addEventListener('change',loadAuthorizedSharing);
 $('slug').addEventListener('input',updateLinkNamePreview);
 $('suggest-slug').addEventListener('click',()=>{
   if(!settings)return;
@@ -125,6 +144,6 @@ $('copy').addEventListener('click',async()=>{const url=safeUrl(settings.slug);tr
 $('sms').addEventListener('click',()=>{const url=safeUrl(settings.slug);location.href='sms:?&body='+encodeURIComponent('Reservá tu turno / Book an appointment: '+url)});
 $('wa').addEventListener('click',()=>{const url=safeUrl(settings.slug);window.open('https://wa.me/?text='+encodeURIComponent('Reservá tu turno / Book an appointment: '+url),'_blank','noopener')});
 $('download').addEventListener('click',()=>{const canvas=$('qr').querySelector('canvas');const img=$('qr').querySelector('img');const src=canvas?.toDataURL('image/png')||img?.src;if(!src){status('No se pudo generar el QR.',true);return}const a=document.createElement('a');a.href=src;a.download='cithela-'+settings.slug+'-qr.png';a.click()});
-(async()=>{try{if(!client)throw Error('Supabase JS no disponible');const {data:{user},error}=await client.auth.getUser();if(error||!user)throw Error('Iniciá sesión en CITHELA como propietario o administrador.');sessionUser=user;const {data:rows,error:err}=await client.from('cithela_tenant_memberships').select('tenant_id,role').eq('user_id',user.id).in('role',['owner','admin']);if(err)throw err;if(!rows?.length)throw Error('Esta cuenta no administra establecimientos.');$('tenant-wrap').hidden=rows.length===1;const {data:names}=await client.from('cithela_tenants').select('id,display_name').in('id',rows.map(x=>x.tenant_id));for(const x of rows){const o=document.createElement('option');o.value=x.tenant_id;o.textContent=names?.find(t=>t.id===x.tenant_id)?.display_name||('Establecimiento · '+x.tenant_id.slice(0,8));$('tenant').appendChild(o)}$('panel').hidden=false;await load()}catch(e){status(e.message||'No se pudo recuperar la sesión.',true)}})();
+(async()=>{try{if(!client)throw Error('Supabase JS no disponible');const {data:{user},error}=await client.auth.getUser();if(error||!user)throw Error('Iniciá sesión en CITHELA como propietario o administrador.');sessionUser=user;const {data:rows,error:err}=await client.from('cithela_tenant_memberships').select('tenant_id,role').eq('user_id',user.id).in('role',['owner','admin','operator']);if(err)throw err;if(!rows?.length)throw Error('Esta cuenta no tiene acceso profesional a establecimientos.');$('tenant-wrap').hidden=rows.length===1;const {data:names}=await client.from('cithela_tenants').select('id,display_name').in('id',rows.map(x=>x.tenant_id));for(const x of rows){memberRoles.set(x.tenant_id,x.role);const o=document.createElement('option');o.value=x.tenant_id;o.textContent=names?.find(t=>t.id===x.tenant_id)?.display_name||('Establecimiento · '+x.tenant_id.slice(0,8));$('tenant').appendChild(o)}$('panel').hidden=false;await loadAuthorizedSharing()}catch(e){status(e.message||'No se pudo recuperar la sesión.',true)}})();
 </script>
 </body></html>
