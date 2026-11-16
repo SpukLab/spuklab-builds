@@ -11,7 +11,7 @@ function locale(){
 const el=document.createElement("dialog");
 el.id="cithela-sms-dialog";
 el.setAttribute("aria-labelledby","cithela-sms-title");
-el.style.cssText="border:1px solid var(--border-color,#dce8e3);border-radius:14px;background:#fff;color:#243733;max-width:520px;width:calc(100vw - 24px);padding:20px;box-shadow:0 18px 45px #24373333;font:14px/1.45 'DM Sans',sans-serif;";
+el.style.cssText="position:fixed;inset:0;margin:auto;max-height:calc(100dvh - 24px);overflow-y:auto;border:1px solid var(--border-color,#dce8e3);border-radius:14px;background:#fff;color:#243733;max-width:520px;width:calc(100vw - 24px);padding:20px;box-shadow:0 18px 45px #24373333;font:14px/1.45 'DM Sans',sans-serif;";
 el.innerHTML=`
   <h2 id="cithela-sms-title" style="margin:0 0 12px;font-size:1.25rem"></h2>
   <p id="cithela-sms-intro" style="margin:0 0 9px;font-size:.84rem;color:#536961"></p>
