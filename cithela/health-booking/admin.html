@@ -79,6 +79,7 @@ button:disabled{cursor:not-allowed;opacity:.4}
       <button type="button" class="primary" id="save">Guardar tarifa en esta simulación</button>
       <button type="button" id="new">Nueva regla</button>
       <button type="button" id="archive" disabled>Desactivar</button>
+      <button type="button" id="restore" disabled>Reactivar</button>
     </div>
     <p id="feedback" class="notice" role="status" aria-live="polite" hidden></p>
   </div>
@@ -167,6 +168,7 @@ function updateEditable(){
     $(id).disabled=!editable;
   }
   $("archive").disabled=!editable||!selection||!store.list().find(x=>x.id===selection.id)?.active;
+  $("restore").disabled=!editable||!selection||store.list().find(x=>x.id===selection.id)?.active!==false;
   $("amount-row").hidden=$("status").value==="a_confirmar";
 }
 function renderList(){
@@ -218,6 +220,13 @@ function archive(){
     renderList();preview();updateEditable();show("Tarifa desactivada en la simulación.");
   }catch(e){show(e.message,true);}
 }
+function restore(){
+  if(!selection)return;
+  try{
+    selection=store.changeActivity(selection.id,selection.version,true);
+    renderList();preview();updateEditable();show("Tarifa reactivada en la simulación.");
+  }catch(e){show(e.message,true);}
+}
 for(const t of sampleTenants)add($("tenant"),t.tenantId,t.name);
 $("tenant").addEventListener("change",storeForTenant);
 $("role").addEventListener("change",storeForTenant);
@@ -229,6 +238,7 @@ $("status").addEventListener("change",updateEditable);
 $("save").addEventListener("click",save);
 $("new").addEventListener("click",reset);
 $("archive").addEventListener("click",archive);
+$("restore").addEventListener("click",restore);
 storeForTenant();
 </script>
 </body>
