@@ -11,7 +11,8 @@ const HEADERS={
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIONS=new Set(['read','create_price','choose_price',
   'grant_free','extend_free','revoke_free','set_retention',
-  'booking_read','booking_save','booking_timezone']);
+  'booking_read','booking_save','booking_timezone',
+  'modules_read','modules_set']);
 const send=(status,code,extra={})=>Response.json({ok:status===200,code,...extra},
   {status,headers:HEADERS});
 
@@ -57,7 +58,10 @@ export async function handleCithelaCommercialAdmin(request,settings) {
   set_retention:['review_days','purge_review_days'],
   booking_read:['tenant_id'],
   booking_save:['tenant_id','slug','locale','enabled'],
-  booking_timezone:['tenant_id','timezone']
+  booking_timezone:['tenant_id','timezone'],
+  modules_read:[],
+  modules_set:['tenant_id','code','state','expires_at','quoted_minor',
+    'quoted_currency','note','expected_version']
  };
  if(Object.keys(input.payload).some(k=>!allowed[input.action].includes(k)))
     return send(400,'unexpected_field');
