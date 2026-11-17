@@ -62,3 +62,12 @@ test("los importes se presentan como referencia, no como autorización ni cobro"
  assert.match(sql,/No se confía en un importe enviado por el navegador/);
  assert.doesNotMatch(edit,/mercadopago\.com|paypal\.com|navigator\.share/);
 });
+
+test('la selección sanitaria exige consentimiento y registra fecha, no diagnósticos',()=>{
+ const addition=repo('supabase/cithela_health_consent_20261117.sql');
+ assert.match(addition,/coverage_consent' is distinct from 'true'::jsonb/);
+ assert.match(addition,/add column consent_at timestamptz/);
+ assert.match(addition,/cithela_health_booking_consent_required/);
+ assert.match(page,/id="health-consent" type="checkbox"/);
+ assert.match(page,/coverage_consent:true/);
+});
