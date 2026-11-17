@@ -21,7 +21,9 @@ const CODE_LABELS = Object.freeze({
   amount_limit:"El importe supera el máximo permitido.",
   catalog_limit:"Se alcanzó el límite de servicios valorizados.",
   not_found:"El presupuesto ya no está disponible.",
-  missing_version:"Actualizá el presupuesto antes de guardarlo."
+  missing_version:"Actualizá el presupuesto antes de guardarlo.",
+  dental_not_enabled:"Cobertura odontológica no habilitada para este establecimiento.",
+  invalid_dental_coverage:"Revisá la obra social, autorización y monto reconocido."
 });
 export function quoteError(code) {
   return CODE_LABELS[code] || "No se pudo completar la operación (" + String(code||"error") + ").";
@@ -51,14 +53,17 @@ export function createQuoteCloudApi(client,tenantId) {
     tenantId,
     people:()=>query("cithela_people","id,display_name"),
     services:()=>query("cithela_services","id,name,active"),
+    settings:()=>rpc("settings.get").then(x=>({dentalEnabled:x.dental_enabled===true})),
     catalog:()=>rpc("catalog.list").then(x=>x.catalog),
     quotes:(personId)=>rpc("quote.list",personId?{person_id:personId}:{}).then(x=>x.quotes),
-    save:({id,personId,items,discountMinor,validityDays,expectedUpdatedAt,requestId})=>
+    save:({id,personId,items,discountMinor,validityDays,expectedUpdatedAt,requestId,dentalCoverage})=>
       rpc("quote.save",{
         ...(id?{id,expected_updated_at:expectedUpdatedAt}:{}),
         person_id:personId,items:items.map(l=>({
           name:l.name,quantity:l.quantity,unit_minor:l.unitMinor
-        })),discount_minor:discountMinor,validity_days:validityDays
+        })),
+        ...(dentalCoverage!==undefined?{dental_coverage:dentalCoverage}:{}),
+        discount_minor:discountMinor,validity_days:validityDays
       },requestId),
     status:({id,status,expectedUpdatedAt})=>
       rpc("quote.status",{id,status,expected_updated_at:expectedUpdatedAt}),
