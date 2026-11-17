@@ -8,6 +8,11 @@ export const HEALTH_PROFILES = Object.freeze([...PROFILES]);
 export const COVERAGE_KINDS = Object.freeze([...KINDS]);
 
 const isId=v=>typeof v==="string"&&UUIDISH.test(v);
+function validIsoDate(v){
+  if(typeof v!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
+  const day=new Date(v+"T12:00:00Z");
+  return !Number.isNaN(day.getTime())&&day.toISOString().slice(0,10)===v;
+}
 function minor(v){
   if(!Number.isSafeInteger(v)||v<0||v>MAX_MINOR)throw Error("Importe inválido");
   return v;
@@ -24,7 +29,7 @@ export function validateRate(rule){
   if(typeof rule.active!=="boolean"||typeof rule.currency!=="string"||rule.currency!=="ARS")throw Error("Estado/moneda inválidos");
   if(rule.status!=="orientativo"&&rule.status!=="a_confirmar")throw Error("Estado de precio inválido");
   if(rule.status==="a_confirmar"&&rule.amountMinor!==null)throw Error("Precio no verificado");
-  if(rule.validUntil!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(rule.validUntil)||Number.isNaN(Date.parse(rule.validUntil+"T12:00:00Z"))))throw Error("Fecha de convenio inválida");
+  if(rule.validUntil!==null&&!validIsoDate(rule.validUntil))throw Error("Fecha de convenio inválida");
   return Object.freeze({...rule});
 }
 function formatARS(amount){
@@ -36,7 +41,7 @@ function formatARS(amount){
  * valores ni confirmar afiliación. Sin coincidencia exacta: no informa precio.
  */
 export function resolveConsultationRate({tenantId,serviceId,kind="particular",providerId=null,planId=null,rules=[],today="2026-11-17"}){
-  if(!isId(tenantId)||!isId(serviceId)||!KINDS.includes(kind)||!/^\d{4}-\d{2}-\d{2}$/.test(today)){
+  if(!isId(tenantId)||!isId(serviceId)||!KINDS.includes(kind)||!validIsoDate(today)){
     throw Error("Selección inválida");
   }
   if(kind!=="particular"&&(!isId(providerId)||!isId(planId))){
@@ -66,5 +71,5 @@ export function availableServices(tenant){
   if(!tenant||!isId(tenant.tenantId)||!PROFILES.includes(tenant.profile))throw Error("Establecimiento inválido");
   const services=Array.isArray(tenant.services)?tenant.services:[];
   return services.filter(s=>s.tenantId===tenant.tenantId&&s.active===true&&isId(s.id)&&typeof s.name==="string"&&s.name.trim()&&
-    Number.isInteger(s.durationMin)&&s.durationMin>=15&&s.durationMin<=720);
+    Number.isInteger(s.durationMin)&&s.durationMin>=15&&s.durationMin<=720&&s.durationMin%15===0);
 }
