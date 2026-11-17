@@ -63,6 +63,8 @@ async function testBooking(browser,health){
   await page.locator('#health-panel').waitFor({state:'visible'});
   await page.locator('#health-kind').selectOption('obra_social');
   await page.locator('#health-rate').selectOption(rate);
+  assert.equal(await page.locator('#health-consent-line').isHidden(),false);
+  await page.locator('#health-consent').check();
   assert.match(await page.locator('#health-price').textContent(),/1\.500/);
  }else{
   assert.equal(await page.locator('#health-panel').isHidden(),true);
@@ -79,6 +81,7 @@ async function testBooking(browser,health){
   assert.equal(made[0].args.p_rate_id,rate);
   assert.equal(made[0].args.p_rate_version,3);
   assert.equal(made[0].args.p_payload.service_id,service);
+  assert.equal(made[0].args.p_payload.coverage_consent,true);
   assert.equal(Object.hasOwn(made[0].args.p_payload,'amount_minor'),false);
  }
  assert.ok(errors.length===0,'browser errors: '+errors.join(' | '));
