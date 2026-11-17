@@ -31,7 +31,10 @@ Deno.serve(async(request:Request)=>{
     async execute(actorId:string,action:string,payload:unknown){
       if(!client)throw Error('console_disabled');
       const booking=['booking_read','booking_save','booking_timezone'].includes(action);
-      const {data,error}=await client.rpc(booking?'cithela_commercial_admin_booking_command':'cithela_commercial_admin_command',{
+      const modules=['modules_read','modules_set'].includes(action);
+      const command=modules?'cithela_package_admin_command':
+        booking?'cithela_commercial_admin_booking_command':'cithela_commercial_admin_command';
+      const {data,error}=await client.rpc(command,{
         p_actor:actorId,p_action:action,p_payload:payload
       });
       if(error)throw Error('command_unavailable');
