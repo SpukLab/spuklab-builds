@@ -1,7 +1,9 @@
 # CITHELA · Paquetes por cuenta y caducidad · 17/11/2026
 
 ## Estado
-Módulo independiente del precio de consulta y de las suscripciones de Mercado Pago. **Preparado para piloto de administración, no representa cobros ejecutados.** La app existente no se deshabilita; los módulos no probados quedan indisponibles.
+Estructura privada aplicada en Supabase CITHELA el 17/11/2026 mediante la migración `cithela_account_packages_20261117`. Función Edge administrativa actualizada a la versión 16, con JWT obligatorio, UID permitido y comandos restringidos. **La cuenta de cada profesional conserva su situación comercial previa y los cuatro módulos nuevos tienen `available=false`, sin asignaciones ni accesos activados.** No hay cobros ejecutados.
+
+El ensayo real previo se realizó en una transacción revertida; validó que `anon` y `authenticated` no pueden ejecutar el RPC administrativo y que intentar activar el módulo de salud antes de su disponibilidad devuelve `module_not_ready`. Después del despliegue se verificaron 4 definiciones, 0 activaciones, 0 asignaciones y `automatic_purge=false`.
 
 ## Cuenta profesional
 Cada tenant conserva:
