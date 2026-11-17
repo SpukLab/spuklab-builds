@@ -67,6 +67,38 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <p id="account-empty" hidden>No hay agendas registradas.</p>
   <p class="muted">Para consultar invitaciones pendientes o canjeadas, abrí <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
  </section>
+ <section class="card" id="package-controls" aria-labelledby="package-controls-title" style="margin-top:18px">
+  <p class="eyebrow">PAQUETES POR ESTABLECIMIENTO · PILOTO CONTROLADO</p>
+  <h2 id="package-controls-title">Funciones y precio por cuenta</h2>
+  <p>Autorizá individualmente los módulos de cada profesional. Los módulos en preparación no pueden activarse hasta que estén validados. El precio indicado es una referencia contractual: no crea cobros ni suscripciones.</p>
+  <label for="package-tenant">Cuenta profesional</label><select id="package-tenant"></select>
+  <label for="package-code">Paquete o módulo</label><select id="package-code"></select>
+  <p id="package-detail" class="hint"></p>
+  <div class="cards" style="margin:0">
+   <div>
+    <label for="package-state">Estado de autorización</label>
+    <select id="package-state"><option value="requested">Solicitado / pendiente</option>
+    <option value="pilot">Piloto autorizado</option>
+    <option value="active">Contratado / habilitado</option>
+    <option value="disabled">Deshabilitado</option></select>
+   </div>
+   <div><label for="package-expiry">Vigencia del módulo (opcional)</label><input id="package-expiry" type="date"></div>
+   <div><label for="package-currency">Moneda del precio pactado</label>
+    <select id="package-currency"><option value="">Sin precio pactado</option><option value="ARS">ARS</option><option value="USD">USD</option></select></div>
+   <div><label for="package-amount">Importe mensual pactado</label><input type="number" inputmode="decimal" id="package-amount" min="0" max="1000000000" step="0.01" placeholder="Solo referencia, sin cobrar"></div>
+  </div>
+  <label for="package-note">Nota interna breve</label>
+  <textarea id="package-note" maxlength="240" placeholder="Ej. Solicitud de prueba odontológica, pendiente de validar privacidad y funcionamiento"></textarea>
+  <div class="actions"><button type="button" id="package-save">Guardar configuración de esta cuenta</button></div>
+  <p class="message" id="package-status" role="status" aria-live="polite">Consultando módulos de la cuenta…</p>
+  <p class="hint">El estado de paquetes es independiente de la caducidad de la cuenta y de los turnos. No existe borrado automático ni envío masivo de WhatsApp.</p>
+ </section>
+ <section class="card" id="expiry-notices" aria-labelledby="expiry-notices-title" style="margin-top:18px">
+  <h2 id="expiry-notices-title">Avisos previos al vencimiento</h2>
+  <p>Revisión de cuentas con vencimiento próximo: 14, 7, 3 y 1 día antes. El botón prepara un texto para WhatsApp; <strong>no envía ningún mensaje</strong>. Verificá siempre el destinatario.</p>
+  <div id="expiry-list" role="list"></div>
+  <p id="expiry-empty" class="muted">No hay cuentas con alertas de vencimiento en este momento.</p>
+ </section>
  <section class="card" id="booking-admin" aria-labelledby="booking-admin-title" style="margin-top:18px">
   <p class="eyebrow">ENLACES PÚBLICOS · ADMINISTRACIÓN SPUKLAB</p>
   <h2 id="booking-admin-title">Reservas públicas de establecimientos</h2>
@@ -273,6 +305,122 @@ function showAccounts(tenants){
  $('account-count').textContent=rows.length===1?'1 agenda registrada':rows.length+' agendas registradas';
 }
 let bookingSettings=null,bookingSerial=0;
+let moduleSnapshot=null,moduleLoading=false;
+const packageSay=(message,error=false)=>{
+ $('package-status').textContent=message;
+ $('package-status').style.color=error?'#96354a':'#285c53';
+};
+function formatDay(value){
+ if(!value)return 'Sin vencimiento informado';
+ const d=new Date(value);
+ return Number.isNaN(d.getTime())?'Sin fecha válida':d.toLocaleDateString('es-AR');
+}
+function renderModulePanel(){
+ const data=moduleSnapshot;
+ if(!data)return;
+ const availableTenants=data.accounts||[];
+ const prevTenant=$('package-tenant').value;
+ selectOptions('package-tenant',availableTenants.map(t=>({value:t.tenant_id,label:t.name})));
+ if(availableTenants.some(t=>t.tenant_id===prevTenant))$('package-tenant').value=prevTenant;
+ const prevCode=$('package-code').value;
+ selectOptions('package-code',(data.catalog||[]).map(c=>({
+   value:c.code,label:c.label+(c.available?' · disponible':' · en preparación')
+ })));
+ if((data.catalog||[]).some(c=>c.code===prevCode))$('package-code').value=prevCode;
+ presentSelectedPackage();
+ renderExpiryNotices();
+}
+function presentSelectedPackage(){
+ const t=$('package-tenant').value,code=$('package-code').value;
+ const info=moduleSnapshot?.catalog?.find(x=>x.code===code);
+ const grant=moduleSnapshot?.grants?.find(x=>x.tenant_id===t&&x.code===code);
+ if(!info)return;
+ $('package-detail').textContent=info.summary+' · '+(info.available?'Módulo validado para activación':'En preparación: solo se puede registrar una solicitud.');
+ $('package-state').value=grant?.state||'requested';
+ $('package-expiry').value=grant?.expires_at?.slice(0,10)||'';
+ $('package-currency').value=grant?.quoted_currency||'';
+ $('package-amount').value=grant?.quoted_minor===null||grant?.quoted_minor===undefined
+   ?'':String(Number(grant.quoted_minor)/100);
+ $('package-note').value=grant?.note||'';
+ for(const choice of $('package-state').options){
+   choice.disabled=!info.available&&['pilot','active'].includes(choice.value);
+ }
+ $('package-save').disabled=!t;
+ packageSay(grant?'Configuración guardada. Versión '+grant.version+'.':'Sin autorización previa. No hay cobros ni activaciones.');
+}
+async function loadModules(){
+ if(moduleLoading)return;
+ moduleLoading=true;
+ try{
+  moduleSnapshot=await call('modules_read',{});
+  renderModulePanel();
+ }catch(e){
+  packageSay('La configuración de paquetes aún no está habilitada en el servidor. Las agendas no se modificaron.',true);
+ }finally{moduleLoading=false;}
+}
+function renderExpiryNotices(){
+ const now=Date.now(),week=86400000;
+ const due=(moduleSnapshot?.accounts||[]).map(t=>{
+   const end=t.expires_at?Date.parse(t.expires_at):NaN;
+   return {...t,days:Number.isFinite(end)?Math.ceil((end-now)/week):null};
+ }).filter(t=>t.days!==null&&t.days>=0&&t.days<=14&&t.access_status!=='legacy')
+   .sort((a,b)=>a.days-b.days);
+ const list=$('expiry-list');list.replaceChildren();
+ for(const a of due){
+  const row=document.createElement('div');row.className='message';
+  const title=document.createElement('strong');
+  title.textContent=a.name+' · '+(a.days===0?'Vence hoy':a.days+' días para vencer');
+  const sub=document.createElement('p');
+  sub.className='hint';
+  sub.textContent='Acceso '+a.access_status+' · finaliza '+formatDay(a.expires_at);
+  const textToSend='Hola, te escribimos desde CITHELA (SpukLab). Tu acceso a la agenda está previsto hasta el '+formatDay(a.expires_at)+'. Queremos avisarte con anticipación para revisar juntos la continuidad, sin afectar tus datos. Si necesitás renovar o extender la prueba, respondé este mensaje.';
+  const copy=document.createElement('button');copy.type='button';copy.className='secondary';
+  copy.textContent='Copiar aviso para WhatsApp';
+  copy.addEventListener('click',async()=>{
+   try{await navigator.clipboard.writeText(textToSend);packageSay('Aviso copiado. Pegalo al contacto correcto antes de enviarlo.');}
+   catch{packageSay('No se pudo copiar. Usá WhatsApp manualmente desde el dispositivo.',true);}
+  });
+  row.append(title,sub,copy);list.append(row);
+ }
+ $('expiry-empty').hidden=due.length>0;
+}
+async function saveSelectedModule(){
+ if(moduleLoading||!moduleSnapshot)return;
+ const tenantId=$('package-tenant').value,code=$('package-code').value;
+ const tenant=moduleSnapshot.accounts.find(t=>t.tenant_id===tenantId);
+ const metadata=moduleSnapshot.catalog.find(x=>x.code===code);
+ if(!tenant||!metadata)return;
+ const state=$('package-state').value;
+ if(!metadata.available&&['pilot','active'].includes(state)){
+  packageSay('El módulo todavía no está validado. Podés registrarlo como solicitado.',true);return;
+ }
+ const currency=$('package-currency').value;
+ const str=$('package-amount').value.trim();
+ const val=str===''?null:Number(str);
+ if((currency==='')!==(val===null)||(![null].includes(val)&&(!Number.isFinite(val)||val<0||val>1000000000
+  ||Math.round(val*100)!==val*100))){
+  packageSay('Ingresá moneda e importe válidos, o dejá ambos vacíos.',true);return;
+ }
+ const date=$('package-expiry').value;
+ const deadline=date?new Date(date+'T23:59:59.000Z').toISOString():null;
+ const previous=moduleSnapshot.grants.find(g=>g.tenant_id===tenantId&&g.code===code);
+ const payload={tenant_id:tenantId,code,state,expires_at:deadline,
+   quoted_minor:val===null?null:Math.round(val*100),
+   quoted_currency:currency||null,
+   note:$('package-note').value.trim(),expected_version:previous?.version||0};
+ if(!window.confirm('¿Guardar '+metadata.label+' para '+tenant.name+' como '+state+'? No se cobrarán importes ni se borrarán datos.'))return;
+ $('package-save').disabled=true;
+ try{
+  await call('modules_set',payload);
+  await loadModules();
+  packageSay('Paquete registrado y auditado. No se generó cobro ni se modificó ninguna reserva.');
+ }catch(e){packageSay(e.message,true);}
+ finally{$('package-save').disabled=false;}
+}
+$('package-tenant').addEventListener('change',presentSelectedPackage);
+$('package-code').addEventListener('change',presentSelectedPackage);
+$('package-save').addEventListener('click',saveSelectedModule);
+
 function bookingNameFromBrand(name){
  let slug=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
    .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50).replace(/-+$/,'');
@@ -451,6 +599,7 @@ async function reload(){
  busy=true;try{
   const res=await call('read',{});
   show(res);
+  await loadModules();
   $('gate').hidden=true;$('console').hidden=false;
   tell('Información actualizada. No hay cambios de cobro ni borrados.');
  }catch(e){gate(e.message)}finally{busy=false}
