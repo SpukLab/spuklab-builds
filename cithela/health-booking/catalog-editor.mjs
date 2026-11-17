@@ -59,15 +59,17 @@ export function createDemoEditor({tenantId,role="owner",tenants=[],providers=[],
       rows=previous?rows.map(r=>r.id===result.id?result:r):[...rows,result];
       return Object.freeze({...result});
     },
-    archive(id,expectedVersion){
+    changeActivity(id,expectedVersion,active){
       ensureEditor();
+      if(typeof active!=="boolean")throw Error("Estado de actividad inválido.");
       const previous=rows.find(r=>r.id===id);
       if(!previous)throw Error("Tarifa inexistente para este establecimiento.");
       if(previous.version!==expectedVersion)throw Error("Otro cambio modificó esta tarifa. Actualizá el listado.");
-      const updated=Object.freeze({...previous,active:false,version:previous.version+1});
+      const updated=Object.freeze({...previous,active,version:previous.version+1});
       rows=rows.map(r=>r.id===id?updated:r);
       return Object.freeze({...updated});
     },
+    archive(id,expectedVersion){return this.changeActivity(id,expectedVersion,false);},
     preview({serviceId,kind,providerId=null,planId=null,today="2026-11-17"}){
       assertSelection({serviceId,kind,providerId,planId});
       return resolveConsultationRate({tenantId,serviceId,kind,providerId,planId,today,rules:rows});
