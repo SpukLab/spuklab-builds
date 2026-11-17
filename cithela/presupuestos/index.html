@@ -124,11 +124,45 @@ p{margin:0 0 12px}
         <hr class="sep">
         <div id="items" aria-live="polite"></div>
       </div>
+      <div class="panel" id="odontologia-coverage">
+        <h2>3. Obra social o prepaga</h2>
+        <p class="muted">Opcional para odontología · datos ficticios. No verifica afiliación, autorización ni cobertura.</p>
+        <label class="field">Modalidad de atención
+          <select id="coverage-kind">
+            <option value="particular">Particular</option>
+            <option value="obra_social">Obra social</option>
+            <option value="prepaga">Prepaga</option>
+          </select>
+        </label>
+        <div id="coverage-fields" hidden>
+          <label class="field">Nombre de la entidad
+            <input id="coverage-provider" maxlength="100" placeholder="Ej. Obra social de prueba">
+          </label>
+          <label class="field">Plan (opcional)
+            <input id="coverage-plan" maxlength="80" placeholder="Ej. Plan A">
+          </label>
+          <label class="field">Autorización informada por el profesional
+            <select id="coverage-status">
+              <option value="sin_verificar">Sin verificar</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="autorizada">Autorizada (carga manual)</option>
+              <option value="rechazada">No autorizada</option>
+            </select>
+          </label>
+          <div id="coverage-authorized" hidden>
+            <label class="field">Monto reconocido informado (ARS)
+              <input id="coverage-approved" inputmode="decimal" placeholder="0">
+            </label>
+          </div>
+        </div>
+        <p class="muted" id="coverage-preview" aria-live="polite">Atención particular.</p>
+        <p class="muted">No ingresar números de afiliación, diagnósticos ni documentación médica.</p>
+      </div>
     </section>
     <aside>
       <div class="panel">
         <div class="row" style="align-items:center;justify-content:space-between">
-          <h2 style="margin:0">3. Resumen</h2><span class="pill" id="status">Borrador</span>
+          <h2 style="margin:0">4. Resumen</h2><span class="pill" id="status">Borrador</span>
         </div>
         <p class="muted">Estimación en pesos argentinos · sin cobro asociado</p>
         <hr class="sep">
@@ -163,6 +197,7 @@ p{margin:0 0 12px}
   <table><thead><tr><th>Concepto</th><th>Importe</th></tr></thead><tbody id="print-rows"></tbody></table>
   <p id="print-subtotal"></p><p id="print-discount"></p>
   <div class="print-total" id="print-total"></div>
+  <p id="print-coverage"></p>
   <p class="print-footer">Estimación orientativa sujeta a evaluación y confirmación profesional. Documento de prueba sin validez comercial.</p>
 </section>
 <dialog id="message-dialog" aria-labelledby="dialog-title">
@@ -177,12 +212,22 @@ p{margin:0 0 12px}
 </dialog>
 <script type="module">
 import {pesosToMinor,moneyARS,makeLine,calculateQuote,whatsappSummary,transitionStatus} from "./core.mjs";
+import {dentalPaymentBreakdown,dentalCoverageNote} from "./odontologia.mjs";
 const $ = id => document.getElementById(id);
 const presets = {"Limpieza dental":"35000","Restauración":"60000","Consulta":"25000"};
 const lines = [makeLine({name:"Limpieza dental",unitMinor:pesosToMinor("35000")})];
 let currentStatus = "borrador";
 const escapeHtml = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function snapshot(){return calculateQuote(lines,pesosToMinor($("discount").value));}
+function coverageSnapshot(totalMinor){
+  const kind=$("coverage-kind").value;
+  const status=$("coverage-status").value;
+  return dentalPaymentBreakdown(totalMinor,{
+    kind,provider:$("coverage-provider").value,plan:$("coverage-plan").value,status,
+    coveredMinor:kind!=="particular"&&status==="autorizada"
+      ? pesosToMinor($("coverage-approved").value) : null
+  });
+}
 function notice(message, isError=false){$("feedback").textContent=message;$("feedback").style.color=isError?"#8e3548":"#23665e";}
 function getFields(){
   return {professional:$("professional").value.trim() || "Profesional",patient:$("patient").value,
@@ -199,11 +244,23 @@ function render(){
   $("mark-accepted").disabled=currentStatus!=="enviado";
   $("mark-rejected").disabled=!["borrador","enviado"].includes(currentStatus);
   for(const id of ["professional","patient","reference","validity","service","custom-service","price","quantity"]){$(id).disabled=currentStatus!=="borrador";}
+  const covered=$("coverage-kind").value!=="particular";
+  $("coverage-fields").hidden=!covered;
+  $("coverage-authorized").hidden=!covered||$("coverage-status").value!=="autorizada";
+  for(const id of ["coverage-kind","coverage-provider","coverage-plan","coverage-status","coverage-approved"]){
+    $(id).disabled=currentStatus!=="borrador";
+  }
   $("add").disabled=currentStatus!=="borrador";
   $("discount").disabled=currentStatus!=="borrador";
   $("pdf").disabled=!lines.length;
   $("whatsapp").disabled=!lines.length;
-  try{const q=snapshot();$("subtotal").textContent=moneyARS(q.subtotalMinor);$("total").textContent=moneyARS(q.totalMinor);if(q.lines.length)notice("");}
+  try{
+    const q=snapshot();
+    $("subtotal").textContent=moneyARS(q.subtotalMinor);
+    $("total").textContent=moneyARS(q.totalMinor);
+    $("coverage-preview").textContent=dentalCoverageNote(q.totalMinor,coverageSnapshot(q.totalMinor).coverage,moneyARS);
+    if(q.lines.length)notice("");
+  }
   catch(e){$("subtotal").textContent="—";$("total").textContent="—";notice(e.message,true);}
 }
 $("service").addEventListener("change",()=>{
@@ -221,6 +278,9 @@ $("add").addEventListener("click",()=>{
   }catch(e){notice(e.message,true);}
 });
 $("discount").addEventListener("input",render);
+for(const id of ["coverage-kind","coverage-provider","coverage-plan","coverage-status","coverage-approved"]){
+  $(id).addEventListener(id==="coverage-provider"||id==="coverage-plan"||id==="coverage-approved"?"input":"change",render);
+}
 function fillPrint(quote,fields){
   $("print-professional").textContent="Profesional: "+fields.professional;
   $("print-meta").textContent="Paciente: "+fields.patient+" · Referencia: "+fields.reference+" · Validez: "+fields.validity;
@@ -228,13 +288,20 @@ function fillPrint(quote,fields){
   $("print-subtotal").textContent="Subtotal: "+moneyARS(quote.subtotalMinor);
   $("print-discount").textContent=quote.discountMinor?"Descuento: −"+moneyARS(quote.discountMinor):"";
   $("print-total").textContent="Total: "+moneyARS(quote.totalMinor);
+  $("print-coverage").textContent=dentalCoverageNote(quote.totalMinor,coverageSnapshot(quote.totalMinor).coverage,moneyARS);
 }
 $("pdf").addEventListener("click",()=>{
   try{fillPrint(snapshot(),getFields());window.print();}
   catch(e){notice(e.message,true);}
 });
 $("whatsapp").addEventListener("click",()=>{
-  try{$("message").value=whatsappSummary({...getFields(),quote:snapshot()});$("copy-feedback").textContent="";$("message-dialog").showModal();}
+  try{
+    const quote=snapshot();
+    const note=dentalCoverageNote(quote.totalMinor,coverageSnapshot(quote.totalMinor).coverage,moneyARS);
+    $("message").value=whatsappSummary({...getFields(),quote})+"\n\n"+note;
+    $("copy-feedback").textContent="";
+    $("message-dialog").showModal();
+  }
   catch(e){notice(e.message,true);}
 });
 $("copy").addEventListener("click",async()=>{
