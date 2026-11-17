@@ -94,3 +94,27 @@ test("tenant selection is restricted to the requested professional membership",a
   await assert.rejects(connectQuoteCloud(lib,"cccccccc-cccc-4ccc-8ccc-cccccccccccc"),/establecimiento profesional/);
   await assert.rejects(connectQuoteCloud(lib,"../other-tenant"),/inválido/);
 });
+
+test("la habilitación odontológica se lee de servidor y está cerrada por defecto",async()=>{
+  const {client,calls}=mock(),api=createQuoteCloudApi(client,TENANT);
+  client.rpc=async(name,payload)=>{
+    calls.push({name,payload});
+    return {data:{ok:true,dental_enabled:false},error:null};
+  };
+  assert.deepEqual(await api.settings(),{dentalEnabled:false});
+  assert.equal(calls[0].payload.p_command,"settings.get");
+});
+test("presupuesto particular no inyecta cobertura si falta habilitación",async()=>{
+  const {client,calls}=mock(),api=createQuoteCloudApi(client,TENANT);
+  await api.save({personId:"person",items:[],discountMinor:0,validityDays:7,requestId:"request-unique-23"});
+  assert.equal(Object.hasOwn(calls[0].payload.p_payload,"dental_coverage"),false);
+});
+test("cobertura solo envía campos declarados, no sumas ni afiliación",async()=>{
+  const {client,calls}=mock(),api=createQuoteCloudApi(client,TENANT);
+  const coverage={kind:"obra_social",provider:"Ficticia",plan:"A",status:"autorizada",covered_minor:1000};
+  await api.save({personId:"person",items:[],discountMinor:0,validityDays:7,requestId:"request-unique-24",dentalCoverage:coverage});
+  assert.deepEqual(calls[0].payload.p_payload.dental_coverage,coverage);
+  assert.equal(Object.hasOwn(calls[0].payload.p_payload,"total_minor"),false);
+  await api.save({personId:"person",items:[],discountMinor:0,validityDays:7,requestId:"request-unique-25",dentalCoverage:null});
+  assert.equal(calls[1].payload.p_payload.dental_coverage,null);
+});
