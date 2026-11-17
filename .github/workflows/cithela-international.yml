@@ -1,0 +1,44 @@
+name: CITHELA EN + manual SMS pilot
+on:
+  push:
+    paths:
+      - 'cithela/international/**'
+      - 'cithela/index.html'
+      - '.github/workflows/cithela-international.yml'
+  pull_request:
+    paths:
+      - 'cithela/international/**'
+      - 'cithela/index.html'
+      - '.github/workflows/cithela-international.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Locale, SMS and app integration tests
+        run: |
+          node --test cithela/international/locale-sms.test.mjs cithela/international/integration.test.mjs cithela/international/sms-policy.test.mjs cithela/international/utah-services.test.mjs
+          node --check cithela/international/locale.mjs
+          node --check cithela/international/locale-ui.mjs
+          node --check cithela/international/sms.mjs
+          node --check cithela/international/sms-policy.mjs
+          node --check cithela/international/utah-services.mjs
+          node --check cithela/international/sms-ui.mjs
+      - name: Install isolated browser
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - name: Bilingual login and manual SMS composer browser test
+        run: node cithela/international/browser-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cithela-international-layout
+          path: cithela-en-sms-*.png
+          retention-days: 7

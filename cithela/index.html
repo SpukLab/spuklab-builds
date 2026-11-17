@@ -513,6 +513,11 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 .cloud-brand-selected{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap;}
 .cloud-brand-selected img{display:block;width:78px;height:78px;object-fit:contain;background:var(--white);border:var(--line);border-radius:12px;padding:4px;}
 .cloud-brand-selected span{font-weight:600;color:var(--ink2);}
+/* CITHELA bilingual shell, independent of patient account credentials. */
+.cithela-language-chooser{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin:2px 0 14px;}
+.cithela-language-chooser button{min-width:42px;min-height:38px;background:transparent;color:var(--ink2);font:700 12px "DM Sans",sans-serif;border:1px solid var(--border-color);border-radius:8px;cursor:pointer;}
+.cithela-language-chooser button.is-selected{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal2);}
+.cithela-language-chooser button:focus-visible{outline:3px solid var(--teal2);outline-offset:2px;}
 </style>
 
 <link rel="icon" type="image/png" sizes="32x32" href="./brand/cithela-favicon-32.png?v=20261110-final">
@@ -528,6 +533,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <div class="login-mark" role="img" aria-label="Símbolo CITHELA"></div>
     <h1 id="login-brand">CITHELA</h1>
     <p class="address" id="login-meta">Agenda · Organiza · Conecta</p>
+    <div class="cithela-language-chooser" data-cithela-language-chooser>
+      <button type="button" data-cithela-language="es-AR" aria-pressed="true">ES</button>
+      <button type="button" data-cithela-language="en-US" aria-pressed="false">EN</button>
+    </div>
     <div class="seg">
       <button class="seg-btn on" id="rb-med" onclick="setRole('medico');return false;">Profesional</button>
       <button class="seg-btn js-person-singular" id="rb-pac" onclick="setRole('paciente');return false;">Paciente</button>
@@ -843,6 +852,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-config" class="pane">
+    <div class="cithela-language-chooser" data-cithela-language-chooser>
+      <button type="button" data-cithela-language="es-AR" aria-pressed="true">ES</button>
+      <button type="button" data-cithela-language="en-US" aria-pressed="false">EN</button>
+    </div>
     <p class="settings-intro">Configurá horarios, ausencias y servicios. Los reportes y las herramientas de mantenimiento están al final. <a href="./acceso-whatsapp.html">Vincular mi WhatsApp para ingresar</a></p>
 
     <h2 class="settings-group-title">Agenda y atención</h2>
@@ -1195,6 +1208,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
   <div class="patient-portal-content">
+    <div class="cithela-language-chooser" data-cithela-language-chooser>
+      <button type="button" data-cithela-language="es-AR" aria-pressed="true">ES</button>
+      <button type="button" data-cithela-language="en-US" aria-pressed="false">EN</button>
+    </div>
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
     <p class="contact-note" id="patient-cloud-identity"></p>
     <button class="mb ghost" id="patient-open-professional" type="button" onclick="patientSwitchToProfessional()" style="margin:4px 0 14px;">Ingresar como profesional</button>
@@ -1295,6 +1312,8 @@ const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud sessi
 const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 // Pilot-only UI gate; NOT an authorization boundary. RPC validates auth and membership.
 const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams(location.search).get('pilotTenant')==='1';
+// Manual text composer QA only; no SMS API or automatic sending.
+const CITHELA_SMS_PREVIEW_ENABLED=new URLSearchParams(location.search).get('smsPreview')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -5076,6 +5095,18 @@ CITHELA verificará tu número con un código de 6 dígitos por WhatsApp. El enl
   openWhatsAppMessage(n,msg);
 }
 
+function prepareCithelaSMS(personId,mode='access'){
+  if(!CITHELA_SMS_PREVIEW_ENABLED||!professionalCloudWritable())return;
+  const p=cloudPersonById(personId);
+  const phone=String(p?.tel||'').trim();
+  const clinic=String(CithelaCloud.state().tenant?.display_name||'CITHELA').trim();
+  // Phone OTP invitations rely on WhatsApp and MUST NOT be repackaged as SMS.
+  const accessUrl=mode==='invitation'?$('cloud-invite-link')?.value:CITHELA_PUBLIC_URL;
+  if(!accessUrl||!window.CithelaSMS){
+    toast('El borrador de SMS no está disponible. Podés copiar el acceso.',4400);return;
+  }
+  window.CithelaSMS.openForPerson({phone,clinic,accessUrl,purpose:mode});
+}
 async function cloudIssueInvite(personId){
   if(!professionalCloudWritable())return;
   const email=$('cloud-invite-email')?.value.trim();
@@ -5096,6 +5127,7 @@ async function cloudIssueInvite(personId){
       <input class="inp" id="cloud-invite-link" readonly autocomplete="off" value="${escHtml(patientInviteLink(r.invite_code,r.email))}">
       <button type="button" class="btn-main soft" onclick="copyPatientInviteLink()">Copiar enlace</button>
       ${whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="sharePatientInviteWhatsApp('${personId}')">Compartir invitación por WhatsApp</button>`:''}
+      ${CITHELA_SMS_PREVIEW_ENABLED&&whatsapp?`<button type="button" class="btn-main soft" style="margin-top:8px;" onclick="prepareCithelaSMS('${personId}','invitation')">Preparar SMS con enlace de correo</button>`:''}
       <details style="margin-top:12px;"><summary class="contact-note" style="cursor:pointer;">Código manual (solo si falla el enlace)</summary>
         <input class="inp" id="cloud-invite-code" readonly autocomplete="off" value="${escHtml(r.invite_code)}" style="margin-top:8px;font-size:.75rem;">
         <button type="button" class="btn-main soft" onclick="copyPatientInviteCode()">Copiar código</button>
@@ -5255,6 +5287,7 @@ async function cloudVerFicha(id){
           ingrese a CITHELA y reserve sus turnos, sin necesitar correo.
           Antes de enviarla, comprobá que el chat corresponda al destinatario correcto.
         </p>
+        ${CITHELA_SMS_PREVIEW_ENABLED&&wa?`<button type="button" class="btn-main soft" style="margin-bottom:10px;" onclick="prepareCithelaSMS('${p.id}')">Preparar SMS de acceso a turnos</button>`:''}
         ${wa?`<button type="button" class="btn-main" onclick="cloudIssuePhoneInvite('${p.id}')">Preparar invitación por WhatsApp</button>
           <div id="cloud-whatsapp-invite-result" style="margin-top:10px;"></div>`
           :'<p class="ops-note">La ficha necesita un WhatsApp válido para enviar la invitación.</p>'}
@@ -7607,6 +7640,7 @@ CithelaCloud.init().then(resumeCloudSession).catch(()=>{
   // Keep the login form available when session recovery fails.
 });
 </script>
-
+<script type="module" src="./international/locale-ui.mjs"></script>
+<script type="module" src="./international/sms-ui.mjs"></script>
 </body>
 </html>
