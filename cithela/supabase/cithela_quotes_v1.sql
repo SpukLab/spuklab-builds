@@ -28,6 +28,7 @@ create table if not exists public.cithela_quotes (
   status text not null default 'borrador'
     check (status in ('borrador','enviado','aceptado','rechazado')),
   items jsonb not null check (jsonb_typeof(items)='array' and jsonb_array_length(items) between 1 and 50),
+  dental_coverage jsonb check (dental_coverage is null or jsonb_typeof(dental_coverage)='object'),
   currency text not null default 'ARS' check(currency='ARS'),
   subtotal_minor bigint not null check(subtotal_minor between 0 and 100000000000),
   discount_minor bigint not null default 0 check(discount_minor between 0 and 100000000000),
@@ -52,9 +53,11 @@ create index if not exists cithela_quotes_recent_idx
 create table if not exists cithela_private.cithela_quote_enablements (
   tenant_id uuid primary key references public.cithela_tenants(id) on delete cascade,
   enabled boolean not null default false,
+  dental_enabled boolean not null default false,
   enabled_at timestamptz,
   updated_at timestamptz not null default now(),
-  check ((enabled and enabled_at is not null) or (not enabled))
+  check ((enabled and enabled_at is not null) or (not enabled)),
+  check (not dental_enabled or enabled)
 );
 alter table cithela_private.cithela_quote_enablements enable row level security;
 revoke all on cithela_private.cithela_quote_enablements from public,anon,authenticated;
@@ -79,6 +82,9 @@ declare
   v_catalog public.cithela_quote_catalog%rowtype;
   v_expected timestamptz; v_status text; v_previous_status text; v_result jsonb;
   v_request text := btrim(coalesce(p_request_id,''));
+  v_dental jsonb := null;
+  v_kind text; v_provider text; v_plan text; v_dental_status text;
+  v_covered_minor bigint;
 begin
   if v_actor is null then return jsonb_build_object('ok',false,'code','unauthenticated'); end if;
   if p_tenant_id is null or length(v_request) not between 8 and 150 or
@@ -86,7 +92,7 @@ begin
      octet_length(p_payload::text)>32000 then
     return jsonb_build_object('ok',false,'code','invalid_payload');
   end if;
-  if p_command not in ('catalog.list','catalog.upsert','catalog.archive',
+  if p_command not in ('settings.get','catalog.list','catalog.upsert','catalog.archive',
                       'quote.list','quote.save','quote.status') then
     return jsonb_build_object('ok',false,'code','unsupported_command');
   end if;
@@ -106,6 +112,11 @@ begin
     return jsonb_build_object('ok',false,'code','feature_disabled');
   end if;
 
+  if p_command='settings.get' then
+    return jsonb_build_object('ok',true,'dental_enabled',coalesce(
+      (select e.dental_enabled from cithela_private.cithela_quote_enablements e
+        where e.tenant_id=p_tenant_id and e.enabled=true),false));
+  end if;
   if p_command='catalog.list' then
     select coalesce(jsonb_agg(to_jsonb(q) order by q.name),'[]'::jsonb)
     into v_items from (
@@ -125,7 +136,7 @@ begin
     select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at desc),'[]'::jsonb)
     into v_items from (
       select q.id,q.person_id,p.display_name as patient_name,
-        q.reference,q.status,q.currency,q.items,q.subtotal_minor,
+        q.reference,q.status,q.currency,q.items,q.dental_coverage,q.subtotal_minor,
         q.discount_minor,q.total_minor,q.validity_days,
         q.created_at,q.updated_at,q.sent_at,q.decided_at
       from public.cithela_quotes q
@@ -223,7 +234,7 @@ begin
 
   if p_command='quote.save' then
     if (select count(*) from jsonb_object_keys(p_payload) as f(k)
-      where k not in ('id','person_id','items','discount_minor','validity_days','expected_updated_at'))>0 then
+      where k not in ('id','person_id','items','dental_coverage','discount_minor','validity_days','expected_updated_at'))>0 then
       return jsonb_build_object('ok',false,'code','invalid_payload');
     end if;
     if jsonb_typeof(p_payload->'person_id') is distinct from 'string' or
@@ -284,7 +295,8 @@ begin
        where tenant_id=p_tenant_id and request_id=v_request;
       if found then
         if v_existing.person_id<>v_person or v_existing.items<>v_items
-           or v_existing.discount_minor<>v_discount or v_existing.validity_days<>v_validity then
+           or v_existing.discount_minor<>v_discount or v_existing.validity_days<>v_validity
+           or v_existing.dental_coverage is distinct from v_dental then
            return jsonb_build_object('ok',false,'code','idempotency_conflict');
         end if;
         return jsonb_build_object('ok',true,'code','replayed','id',v_existing.id,
@@ -292,11 +304,11 @@ begin
       end if;
       v_id:=gen_random_uuid();
       insert into public.cithela_quotes(
-        id,tenant_id,person_id,created_by,request_id,reference,items,
+        id,tenant_id,person_id,created_by,request_id,reference,items,dental_coverage,
         subtotal_minor,discount_minor,total_minor,validity_days)
       values (v_id,p_tenant_id,v_person,v_actor,v_request,
         'P-'||upper(substr(replace(v_id::text,'-',''),1,20)),
-        v_items,v_subtotal,v_discount,v_subtotal-v_discount,v_validity)
+        v_items,v_dental,v_subtotal,v_discount,v_subtotal-v_discount,v_validity)
       returning * into v_existing;
     else
       if v_expected is null then return jsonb_build_object('ok',false,'code','missing_version'); end if;
@@ -309,7 +321,7 @@ begin
       if v_existing.updated_at<>v_expected then
         return jsonb_build_object('ok',false,'code','stale_write'); end if;
       update public.cithela_quotes
-         set person_id=v_person,items=v_items,subtotal_minor=v_subtotal,
+         set person_id=v_person,items=v_items,dental_coverage=v_dental,subtotal_minor=v_subtotal,
           discount_minor=v_discount,total_minor=v_subtotal-v_discount,
           validity_days=v_validity,updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
        where tenant_id=p_tenant_id and id=v_id returning * into v_existing;
