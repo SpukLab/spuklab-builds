@@ -136,7 +136,12 @@ begin
     select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at desc),'[]'::jsonb)
     into v_items from (
       select q.id,q.person_id,p.display_name as patient_name,
-        q.reference,q.status,q.currency,q.items,q.dental_coverage,q.subtotal_minor,
+        q.reference,q.status,q.currency,q.items,
+        case when exists (
+          select 1 from cithela_private.cithela_quote_enablements e
+          where e.tenant_id=p_tenant_id and e.enabled=true and e.dental_enabled=true
+        ) then q.dental_coverage else null end as dental_coverage,
+        q.subtotal_minor,
         q.discount_minor,q.total_minor,q.validity_days,
         q.created_at,q.updated_at,q.sent_at,q.decided_at
       from public.cithela_quotes q
