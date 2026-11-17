@@ -39,7 +39,9 @@ test("no permite permisos de operador para crear o archivar",()=>{
 test("un establecimiento no puede editar tarifas de otro",()=>{
   const m=make("med_demo","admin");
   assert.throws(()=>m.save(form),/otro establecimiento/);
-  assert.throws(()=>m.save({...form,tenantId:"med_demo",serviceId:"consulta"}),/Ya existe|Entidad o plan|permiso|No se/);
+  const saved=m.save({...form,tenantId:"med_demo",serviceId:"control"});
+  assert.equal(saved.tenantId,"med_demo");
+  assert.equal(m.list().every(x=>x.tenantId==="med_demo"),true);
   assert.throws(()=>m.archive("seed_999",1),/inexistente/);
   assert.equal(m.list().every(x=>x.tenantId==="med_demo"),true);
 });
