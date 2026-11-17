@@ -82,11 +82,20 @@ No activar autorespuesta, WhatsApp automático, historia clínica, odontograma, 
 - Los presupuestos enviados o resueltos muestran su estado como solo lectura, sin el texto ambiguo «Actualizar borrador».
 - En el cambio de sesión, el módulo invalida respuestas de solicitudes pendientes para que una operación de la cuenta anterior no repueble la pantalla.
 
-## Odontología — obra social/prepaga (prototipo del 17/11/2026)
+## Odontología — obra social y prepaga · revisión 17/11/2026
 
-- La demostración visual de `presupuestos/index.html` incorpora **Particular / Obra social / Prepaga**, entidad, plan opcional y estado de autorización manual.
-- `odontologia.mjs` y sus pruebas diferencian el **importe del tratamiento** del **monto reconocido por cobertura** y de la **diferencia estimada a cargo del paciente**. Sin una autorización marcada manualmente no se infiere ni muestra copago: el importe queda indeterminado.
-- No solicitar número de afiliación, historia clínica ni documentos. No consultar coberturas ni inventar porcentajes. El presupuesto no es factura, liquidación ni autorización de la entidad.
-- **Alcance actual:** demo con datos ficticios, no guarda cobertura en el servidor. No incorporar el formulario directamente al `cloud.html` productivo sin snapshot persistido, controles por tenant/rol, auditoría, política de privacidad y pruebas.
-- Siguiente cambio sobre esta misma PR: agregar metadatos de cobertura al esquema/RPC con validación de campos permitidos, histórico inmutable, pruebas de aislamiento con JWT y opción visible únicamente en el perfil odontológico cuando la empresa habilite Presupuestos.
-- No modificar precios del catálogo por defecto al seleccionar una obra social. Los aranceles por convenio necesitan acuerdos, vigencia, autorización y verificación propios.
+- **Interfaz con datos ficticios:** `presupuestos/index.html` muestra Particular, Obra social, Prepaga, entidad/plan, estado de autorización manual y diferencia estimada solo si se informa un monto reconocido.
+- **Interfaz profesional Cloud (preparada en esta rama, NO publicada):** `cloud.html` solicita el permiso `settings.get` al servidor. Solo muestra cobertura si el establecimiento tiene `dental_enabled=true`. El rubro configurado en el navegador no da permisos.
+- **Base de datos preparada, NO aplicada:** `cithela_quotes_v1.sql` define `dental_coverage` como snapshot opcional en cada presupuesto; el RPC valida tipo, campos, rangos, estado y monto; rechaza escrituras cuando el tenant no tiene habilitado el módulo. La lectura del dato se oculta si se deshabilita. No se modifica el servicio/turno ni se recalculan presupuestos históricos.
+- **Controles:** el estado «autorizada» es **registro manual del profesional**, no una verificación automática ni garantía de pago de la entidad. La diferencia a cargo del paciente es orientativa; si la autorización está pendiente, no se muestra como copago definido.
+- **Autorización independiente:** `cithela_quote_enablements.enabled` se mantiene apagado por defecto y `dental_enabled` también. El administrador técnico habilita un establecimiento después de la validación. No se habilitan profesionales automáticamente.
+- **Privacidad:** no pedir números de afiliación, diagnósticos, W-2, datos fiscales ni documentación médica en este MVP. Los conceptos de tratamientos pueden revelar datos sensibles; definir plazo de conservación, permisos, consentimientos y soporte de borrado/exportación antes de uso real.
+- **Bloqueos de lanzamiento:** respaldo/restore verificado, SQL real y JWT HTTP de usuarios distintos, RLS multi-establecimiento, Safari físico, PDF, mensajes y política de retención. Las pruebas actuales de Node/Chromium/WebKit y análisis estático SQL no equivalen a una prueba end-to-end contra producción.
+
+### Activación técnica prevista
+
+Con la migración revisada aplicada en un entorno autorizado, activar solo el tenant piloto exacto (UUID verificado) en `cithela_private.cithela_quote_enablements`, con `enabled=true`, `dental_enabled=true`, `enabled_at=now()`. No ejecutar ese paso en cuentas activas hasta completar `PILOTO.md`. Una deshabilitación debe conservar los documentos históricos y ocultar la cobertura desde la API.
+
+### Compartir presupuestos
+
+La exportación y WhatsApp utilizan únicamente el snapshot **guardado**. Ningún cambio del formulario sin guardar se incorpora al PDF/mensaje. En un presupuesto particular no se registra entidad ni plan. No se genera factura ni se registra pago.
