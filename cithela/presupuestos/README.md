@@ -82,6 +82,12 @@ No activar autorespuesta, WhatsApp automático, historia clínica, odontograma, 
 - Los presupuestos enviados o resueltos muestran su estado como solo lectura, sin el texto ambiguo «Actualizar borrador».
 - En el cambio de sesión, el módulo invalida respuestas de solicitudes pendientes para que una operación de la cuenta anterior no repueble la pantalla.
 
+## Separación entre reserva y presupuesto (decisión 17/11)
+
+La cobertura que modifica el **precio de una consulta** se elige durante la reserva, después de seleccionar el servicio y antes de elegir fecha/horario. El prototipo multirrubro está en la PR #170 (`cithela/health-booking/`). Este módulo de **Presupuestos** se mantiene para tratamientos, procedimientos, sesiones combinadas o estimaciones posteriores: no debe ser el único lugar donde aparece la obra social.
+
+No duplicar tarifas independientes sin un identificador de convenio/versionado. Cuando la reserva necesite mostrar un copago, lo obtiene del catálogo seguro de tarifas del establecimiento y deja el importe sujeto a confirmación. El presupuesto puede utilizar el mismo servicio y mostrar detalles de cobertura cuando corresponda, pero no altera retrospectivamente el precio de una consulta ya solicitada.
+
 ## Odontología — obra social y prepaga · revisión 17/11/2026
 
 - **Interfaz con datos ficticios:** `presupuestos/index.html` muestra Particular, Obra social, Prepaga, entidad/plan, estado de autorización manual y diferencia estimada solo si se informa un monto reconocido.
