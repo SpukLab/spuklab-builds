@@ -84,7 +84,8 @@ create or replace function public.cithela_health_rates_admin(
  p_tenant_id uuid,p_action text,p_payload jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $function$
 declare
- v_actor uuid:=auth.uid();v_items jsonb;v_existing cithela_private.cithela_health_rates%rowtype;
+ v_actor uuid:=auth.uid();v_items jsonb;v_services jsonb;
+ v_existing cithela_private.cithela_health_rates%rowtype;
  v_id uuid;v_service uuid;v_kind text;v_provider text;v_plan text;v_status text;
  v_active boolean;v_amount bigint;v_version bigint;v_end date;v_service_owner uuid;
  v_has_feature boolean;v_row cithela_private.cithela_health_rates%rowtype;
@@ -107,7 +108,12 @@ begin
       order by r.created_at,r.id),'[]'::jsonb)
       into v_items from cithela_private.cithela_health_rates r
       where r.tenant_id=p_tenant_id;
-    return jsonb_build_object('ok',true,'rates',v_items,'enabled',v_has_feature);
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id',s.id,'name',s.name,'duration_min',s.duration_min,
+      'active',s.active) order by s.name),'[]'::jsonb) into v_services
+      from public.cithela_services s where s.tenant_id=p_tenant_id and s.active;
+    return jsonb_build_object('ok',true,'rates',v_items,
+      'services',v_services,'enabled',v_has_feature);
   end if;
   if p_action not in ('upsert','archive','restore') then
     return jsonb_build_object('ok',false,'code','unknown_action');end if;
