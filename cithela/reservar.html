@@ -195,7 +195,7 @@ async function loadHealthRates(){
   healthEnabled=result.enabled===true&&healthRates.length>0;
   if(healthEnabled){
    $('health-kind').replaceChildren();
-   const kinds=[...new Set(healthRates.map(r=>r.kind))];
+   const kinds=['particular',...new Set(healthRates.filter(r=>r.kind!=='particular').map(r=>r.kind))];
    for(const kind of kinds)option($('health-kind'),kind,
      kind==='particular'?t('coveragePrivate'):kind==='obra_social'?t('coverageSocial'):t('coveragePrepaid'));
    const recovered=healthRates.find(r=>r.id===restore.rate);
@@ -219,7 +219,7 @@ const rate=selectedHealthRate();
 $('selection').textContent=[s?.name,r?.name,
  rate?(rate.kind==='particular'?t('coveragePrivate'):rate.provider+' · '+rate.plan):'',
  $('date').value,chosen,data.timezone].filter(Boolean).join(' · ');
-$('book').disabled=loading||healthLoading||(healthEnabled&&!rate)||!session||!$('full-name').value.trim()||!chosen;$('verified-panel').hidden=!session;$('email-panel').hidden=!!session;if(session)$('verified-text').textContent=t('verified')+': '+(session.user?.email||'')}
+$('book').disabled=loading||healthLoading||(healthEnabled&&!rate&&$('health-kind').value!=='particular')||!session||!$('full-name').value.trim()||!chosen;$('verified-panel').hidden=!session;$('email-panel').hidden=!!session;if(session)$('verified-text').textContent=t('verified')+': '+(session.user?.email||'')}
 function wallIso(day,hm,tz){const [y,m,d]=day.split('-').map(Number),[h,min]=hm.split(':').map(Number);const desired=Date.UTC(y,m-1,d,h,min);let ts=desired;for(let i=0;i<4;i++){const parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(ts));const q=Object.fromEntries(parts.map(p=>[p.type,p.value]));ts-=Date.UTC(+q.year,+q.month-1,+q.day,+q.hour,+q.minute)-desired}return new Date(ts).toISOString()}
 function showError(e){const code=String(e?.message||'');msg(code==='contact_in_use'||code==='contact_ambiguous'?t('already'):code==='slot_unavailable'?t('slotTaken'):['rate_changed','module_not_enabled','selection_conflict'].includes(code)?t('coverageChanged'):t('error')+' '+t('retry'),true)}
 async function signIn(){const email=$('email').value.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){msg(t('email'),true);return}loading=true;$('send-email').disabled=true;try{const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:bookingRedirectUrl(),shouldCreateUser:true}});if(error)throw error;msg(t('emailSent'));$('otp-section').hidden=false;}catch(e){showError(e)}finally{loading=false;$('send-email').disabled=false}}
@@ -233,7 +233,7 @@ async function switchEmail(){
   }catch(e){showError(e)}finally{loading=false;updateContact()}
 }
 async function book(){if(loading||healthLoading||!chosen||!session||!data)return;
-const selectedRate=selectedHealthRate();if(healthEnabled&&!selectedRate){msg(t('coverageChanged'),true);return;}const name=$('full-name').value.trim();if(!name||name.length>100){msg(t('name'),true);return}loading=true;updateContact();msg('');try{const attach=await rpc('cithela_public_booking_attach',{p_slug:slug,p_display_name:name});personId=attach.person_id;const key=['cithela',slug,attach.person_id,$('service').value,$('resource').value,$('date').value,chosen,selectedRate?.id||'',selectedRate?.version||''].join('|');let reqId;try{const saved=JSON.parse(sessionStorage.getItem('cithela-public-attempt')||'null');reqId=saved?.key===key?saved.id:null;}catch{}if(!reqId){reqId='public-'+crypto.randomUUID();try{sessionStorage.setItem('cithela-public-attempt',JSON.stringify({key,id:reqId}))}catch{}}
+const selectedRate=selectedHealthRate();if(healthEnabled&&!selectedRate&&$('health-kind').value!=='particular'){msg(t('coverageChanged'),true);return;}const name=$('full-name').value.trim();if(!name||name.length>100){msg(t('name'),true);return}loading=true;updateContact();msg('');try{const attach=await rpc('cithela_public_booking_attach',{p_slug:slug,p_display_name:name});personId=attach.person_id;const key=['cithela',slug,attach.person_id,$('service').value,$('resource').value,$('date').value,chosen,selectedRate?.id||'',selectedRate?.version||''].join('|');let reqId;try{const saved=JSON.parse(sessionStorage.getItem('cithela-public-attempt')||'null');reqId=saved?.key===key?saved.id:null;}catch{}if(!reqId){reqId='public-'+crypto.randomUUID();try{sessionStorage.setItem('cithela-public-attempt',JSON.stringify({key,id:reqId}))}catch{}}
 const payload={person_id:personId,service_id:$('service').value,resource_id:$('resource').value,starts_at:wallIso($('date').value,chosen,data.timezone),reason:''};
 const result=selectedRate
   ?await rpc('cithela_health_booking_create',{p_tenant_id:data.tenant_id,
