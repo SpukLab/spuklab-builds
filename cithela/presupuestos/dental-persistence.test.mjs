@@ -28,7 +28,7 @@ test("solo se escriben campos de cobertura permitidos",()=>{
 });
 
 test("listado, impresión y mensajes usan snapshot del servidor",()=>{
-  assert.match(sql,/then q\\.dental_coverage else null end as dental_coverage/);
+  assert.match(sql,/then q\.dental_coverage else null end as dental_coverage/);
   assert.match(ui,/dental_coverage:.*dentalCoverage/);
   assert.match(ui,/resetDental\(quote\.dental_coverage\)/);
   assert.match(ui,/resetDental\(previous\.dental_coverage\)/);
