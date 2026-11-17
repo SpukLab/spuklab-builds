@@ -1,10 +1,11 @@
 import {pesosToMinor,moneyARS,makeLine,calculateQuote,whatsappSummary} from "./core.mjs";
 import {connectQuoteCloud} from "./cloud.mjs";
+import {dentalPaymentBreakdown,dentalCoverageNote} from "./odontologia.mjs";
 
 const $=id=>document.getElementById(id);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const state={
-  api:null,tenant:null,role:null,
+  api:null,tenant:null,role:null,dentalEnabled:false,
   people:[],services:[],catalog:[],quotes:[],
   lines:[],current:null,dirty:false,pendingRequest:null,busy:false,editingCatalogId:null,
   selectedPersonId:"",sessionEpoch:0
@@ -23,6 +24,33 @@ function storedReady(){return !!state.current&&!state.dirty;}
 function isDraft(){return !state.current||state.current.status==="borrador";}
 function isEditable(){return !state.busy&&isDraft();}
 function buildSnapshot(){return calculateQuote(state.lines,pesosToMinor($("discount").value));}
+function dentalForm(totalMinor){
+  if(!state.dentalEnabled)return undefined;
+  const kind=$("dental-kind").value;
+  if(kind==="particular")return null;
+  const status=$("dental-status").value;
+  const coverage=dentalPaymentBreakdown(totalMinor,{
+    kind,provider:$("dental-provider").value,plan:$("dental-plan").value,status,
+    coveredMinor:status==="autorizada"?pesosToMinor($("dental-amount").value):null
+  }).coverage;
+  return {kind:coverage.kind,provider:coverage.provider,plan:coverage.plan,
+    status:coverage.status,covered_minor:coverage.coveredMinor};
+}
+function savedDentalNote(quote){
+  if(!quote?.dental_coverage)return "";
+  const d=quote.dental_coverage;
+  return dentalCoverageNote(Number(quote.total_minor),{
+    kind:d.kind,provider:d.provider,plan:d.plan,status:d.status,coveredMinor:d.covered_minor
+  },moneyARS);
+}
+function resetDental(coverage=null){
+  $("dental-kind").value=coverage?.kind||"particular";
+  $("dental-provider").value=coverage?.provider||"";
+  $("dental-plan").value=coverage?.plan||"";
+  $("dental-status").value=coverage?.status||"sin_verificar";
+  $("dental-amount").value=coverage?.covered_minor===null||coverage?.covered_minor===undefined
+    ?"0":String(Number(coverage.covered_minor)/100);
+}
 function markDirty(){state.pendingRequest=null;if(state.current)state.dirty=true;render();}
 function unsavedWork(){
   return state.dirty||(!state.current&&(
@@ -79,6 +107,13 @@ function renderQuotes(){
 }
 function render(){
   const editable=isEditable();
+  $("dental-panel").hidden=!state.dentalEnabled;
+  const covered=state.dentalEnabled&&$("dental-kind").value!=="particular";
+  $("dental-fields").hidden=!covered;
+  $("dental-amount-row").hidden=!covered||$("dental-status").value!=="autorizada";
+  for(const id of ["dental-kind","dental-provider","dental-plan","dental-status","dental-amount"]){
+    $(id).disabled=!editable||!state.dentalEnabled;
+  }
   $("tenant-name").textContent=state.tenant?.display_name||"Establecimiento";
   const roleLabels={owner:"Propietario",admin:"Administrador",operator:"Operador"};
   $("role-name").textContent="Acceso: "+(roleLabels[state.role]||"Profesional");
@@ -119,6 +154,15 @@ function render(){
     const q=buildSnapshot();
     $("subtotal").textContent=moneyARS(q.subtotalMinor);
     $("total").textContent=moneyARS(q.totalMinor);
+    if(state.dentalEnabled){
+      const dental=dentalForm(q.totalMinor);
+      $("dental-summary").textContent=dental
+        ?dentalCoverageNote(q.totalMinor,{
+          kind:dental.kind,provider:dental.provider,plan:dental.plan,
+          status:dental.status,coveredMinor:dental.covered_minor
+        },moneyARS)
+        :"Atención particular.";
+    }
   }catch(e){
     $("subtotal").textContent="—";$("total").textContent="—";
     if(state.lines.length)message(e.message,true);
@@ -140,6 +184,7 @@ function newQuote(clearPatient=false){
   if(clearPatient)$("patient").value="";
   state.selectedPersonId=$("patient").value;
   $("discount").value="0";$("validity").value="7";
+  resetDental();
   $("line-name").value="";$("line-price").value="";$("line-quantity").value="1";$("catalog-select").value="";
   message("");
   render();
@@ -153,6 +198,7 @@ function loadQuote(id){
   state.lines=quote.items.map(l=>makeLine({name:l.name,quantity:Number(l.quantity),unitMinor:Number(l.unit_minor)}));
   $("discount").value=String(Number(quote.discount_minor)/100);
   $("validity").value=String(quote.validity_days);
+  resetDental(quote.dental_coverage);
   message("");render();
 }
 function duplicateQuote(){
@@ -166,6 +212,7 @@ function duplicateQuote(){
   $("patient").value=previous.person_id;
   $("discount").value=String(Number(previous.discount_minor)/100);
   $("validity").value=String(previous.validity_days);
+  resetDental(previous.dental_coverage);
   $("line-name").value="";$("line-price").value="";$("catalog-select").value="";
   render();
   message("Copia lista como borrador nuevo. El presupuesto original no cambió.");
@@ -180,6 +227,7 @@ async function save(){
   if(!isDraft()||!currentPerson())return;
   await runBusy(async()=>{
     const quote=buildSnapshot();
+    const dentalCoverage=dentalForm(quote.totalMinor);
     const personId=currentPerson().id;
     const prior=state.current;
     const api=state.api,epoch=state.sessionEpoch;
@@ -188,7 +236,7 @@ async function save(){
     const result=await api.save({
       ...(prior?{id:prior.id,expectedUpdatedAt:prior.updated_at}:{}),
       personId,items:quote.lines,discountMinor:quote.discountMinor,
-      validityDays,requestId
+      validityDays,requestId,dentalCoverage
     });
     if(state.sessionEpoch!==epoch||state.api!==api)return;
     const snapshot={
@@ -200,7 +248,8 @@ async function save(){
         name:l.name,quantity:l.quantity,unit_minor:l.unitMinor,total_minor:l.totalMinor
       })),
       subtotal_minor:quote.subtotalMinor,discount_minor:quote.discountMinor,
-      total_minor:result.total_minor,validity_days:validityDays
+      total_minor:result.total_minor,validity_days:validityDays,
+      dental_coverage:dentalCoverage===undefined?(prior?.dental_coverage||null):dentalCoverage
     };
     keepSavedQuote(snapshot);
     await updateSavedHistory(snapshot,prior?"Borrador actualizado.":"Presupuesto guardado.");
