@@ -81,3 +81,12 @@ No activar autorespuesta, WhatsApp automático, historia clínica, odontograma, 
 - En móvil el editor administrativo del catálogo está plegado de manera predeterminada, evitando desplazar el resumen y la acción Guardar hasta el final de un formulario secundario.
 - Los presupuestos enviados o resueltos muestran su estado como solo lectura, sin el texto ambiguo «Actualizar borrador».
 - En el cambio de sesión, el módulo invalida respuestas de solicitudes pendientes para que una operación de la cuenta anterior no repueble la pantalla.
+
+## Odontología — obra social/prepaga (prototipo del 17/11/2026)
+
+- La demostración visual de `presupuestos/index.html` incorpora **Particular / Obra social / Prepaga**, entidad, plan opcional y estado de autorización manual.
+- `odontologia.mjs` y sus pruebas diferencian el **importe del tratamiento** del **monto reconocido por cobertura** y de la **diferencia estimada a cargo del paciente**. Sin una autorización marcada manualmente no se infiere ni muestra copago: el importe queda indeterminado.
+- No solicitar número de afiliación, historia clínica ni documentos. No consultar coberturas ni inventar porcentajes. El presupuesto no es factura, liquidación ni autorización de la entidad.
+- **Alcance actual:** demo con datos ficticios, no guarda cobertura en el servidor. No incorporar el formulario directamente al `cloud.html` productivo sin snapshot persistido, controles por tenant/rol, auditoría, política de privacidad y pruebas.
+- Siguiente cambio sobre esta misma PR: agregar metadatos de cobertura al esquema/RPC con validación de campos permitidos, histórico inmutable, pruebas de aislamiento con JWT y opción visible únicamente en el perfil odontológico cuando la empresa habilite Presupuestos.
+- No modificar precios del catálogo por defecto al seleccionar una obra social. Los aranceles por convenio necesitan acuerdos, vigencia, autorización y verificación propios.
