@@ -139,7 +139,7 @@ test('professional agenda lets authorized owners choose default booking-page lan
   assert.match(html,/Idioma inicial para pacientes/);
   assert.match(html,/onchange="changeProfessionalBookingLanguage\(this\)"/);
   assert.match(html,/id="professional-booking-language-status"/);
-  assert.match(html,/publicBookingConfig,professionalBookingShare,signOut,bootstrap/);
+  assert.match(html,/publicBookingConfig,professionalBookingShare,(?:professionalPackages,)?signOut,bootstrap/);
   assert.match(html,/id="professional-booking-language-settings" hidden/);
   assert.match(html,/const manageAllowed=active&&\['owner','admin'\]/);
   assert.match(html,/if\(manageAllowed&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
