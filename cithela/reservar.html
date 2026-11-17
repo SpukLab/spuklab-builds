@@ -52,6 +52,14 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 <label for="service" data-i="service"></label><select id="service"></select>
 <label for="resource" data-i="professional"></label><select id="resource"></select>
 <p class="muted" id="deposit"></p>
+<div id="health-panel" hidden>
+ <label for="health-kind" data-i="coverageMode"></label>
+ <select id="health-kind"></select>
+ <label for="health-rate" data-i="coveragePlan"></label>
+ <select id="health-rate"></select>
+ <p class="muted" id="health-price" role="status" aria-live="polite"></p>
+ <p class="muted" data-i="coverageWarning"></p>
+</div>
 </section>
 <section class="card" id="step-date" hidden><h2><span class="step">2</span><span data-i="chooseTime"></span></h2>
 <label for="date" data-i="date"></label><input id="date" type="date">
@@ -91,12 +99,13 @@ const client=window.supabase?.createClient(URL_SUPA,KEY_SUPA,{auth:{persistSessi
 window.CithelaAuthCaptcha?.wrap(client);
 const $=id=>document.getElementById(id);
 const L={
-es:{kicker:'Reservas online',loading:'Consultando disponibilidad…',intro:'Seleccioná un servicio y elegí un horario.',chooseService:'Elegí un servicio',service:'Servicio',professional:'Profesional',chooseTime:'Elegí día y horario',date:'Fecha',yourDetails:'Tus datos',emailPrompt:'Para confirmar tu identidad, verificá tu correo. No necesitás crear una contraseña.',email:'Correo electrónico',sendLink:'Enviar acceso a mi correo',emailExplain:'Abrí el enlace que recibas o escribí el código. Si no aparece, revisá Spam / Correo no deseado y Promociones. Evitá solicitar varios enlaces seguidos.',otp:'Código recibido',verify:'Verificar código',name:'Nombre y apellido',privacy:'Tus datos se compartirán únicamente con el establecimiento para gestionar este turno. No ingreses información médica sensible.',request:'Solicitar turno',requestReceived:'Solicitud recibida',myAppointments:'Ver mis turnos',none:'No hay horarios disponibles para esta fecha. Probá otro día.',choose:'Elegí un horario para continuar.',verifyFirst:'Verificá tu correo antes de solicitar el turno.',verified:'Correo verificado',emailSent:'Revisá tu correo, incluidos Spam y Promociones. Regresá a esta página después de verificar.',pending:'Tu turno quedó pendiente de confirmación por el establecimiento.',error:'No pudimos completar la operación.',retry:'Reintentá o contactá directamente al establecimiento.',unavailable:'Este enlace no está disponible por el momento.',deposit:'Seña solicitada por el establecimiento: ',noDeposit:'Este servicio no requiere seña.',localTime:'Horario local del establecimiento: ',switchEmail:'Cambiar de correo',already:'Este correo corresponde a una ficha vinculada a otra cuenta. Contactá al establecimiento.',slotTaken:'Ese horario se ocupó. Elegí otro.',loginWarning:'Si ya ingresaste en CITHELA con otro correo, cerrá esa sesión antes de continuar.',loadingSlots:'Buscando horarios…'},
-en:{kicker:'Online booking',loading:'Checking availability…',intro:'Select a service and choose an available time.',chooseService:'Choose a service',service:'Service',professional:'Professional',chooseTime:'Choose a date and time',date:'Date',yourDetails:'Your details',emailPrompt:'Verify your email to request this appointment. No password is required.',email:'Email address',sendLink:'Send email sign-in link',emailExplain:'Open the email link or enter the code. If you cannot find the message, check Spam/Junk and Promotions. Avoid requesting many links in a row.',otp:'Email code',verify:'Verify code',name:'Full name',privacy:'Your information will only be shared with this practice to manage your appointment. Do not enter sensitive medical details.',request:'Request appointment',requestReceived:'Request received',myAppointments:'View my appointments',none:'No available times for this date. Try another day.',choose:'Select a time to continue.',verifyFirst:'Verify your email before requesting an appointment.',verified:'Verified email',emailSent:'Check your inbox, including Spam and Promotions, then return to this page.',pending:'Your appointment is pending confirmation from the practice.',error:'The request could not be completed.',retry:'Please retry or contact the practice directly.',unavailable:'This booking link is currently unavailable.',deposit:'Deposit requested by the practice: ',noDeposit:'No deposit required for this service.',localTime:'Practice time zone: ',switchEmail:'Use another email',already:'This email belongs to a profile linked to another account. Contact the practice.',slotTaken:'This time was taken. Please select another.',loginWarning:'If you are already signed in to CITHELA with another email, sign out before continuing.',loadingSlots:'Loading available times…'}};
+es:{kicker:'Reservas online',loading:'Consultando disponibilidad…',intro:'Seleccioná un servicio y elegí un horario.',chooseService:'Elegí un servicio',service:'Servicio',professional:'Profesional',chooseTime:'Elegí día y horario',date:'Fecha',yourDetails:'Tus datos',emailPrompt:'Para confirmar tu identidad, verificá tu correo. No necesitás crear una contraseña.',email:'Correo electrónico',sendLink:'Enviar acceso a mi correo',emailExplain:'Abrí el enlace que recibas o escribí el código. Si no aparece, revisá Spam / Correo no deseado y Promociones. Evitá solicitar varios enlaces seguidos.',otp:'Código recibido',verify:'Verificar código',name:'Nombre y apellido',privacy:'Tus datos se compartirán únicamente con el establecimiento para gestionar este turno. No ingreses información médica sensible.',request:'Solicitar turno',requestReceived:'Solicitud recibida',myAppointments:'Ver mis turnos',none:'No hay horarios disponibles para esta fecha. Probá otro día.',choose:'Elegí un horario para continuar.',verifyFirst:'Verificá tu correo antes de solicitar el turno.',verified:'Correo verificado',emailSent:'Revisá tu correo, incluidos Spam y Promociones. Regresá a esta página después de verificar.',pending:'Tu turno quedó pendiente de confirmación por el establecimiento.',error:'No pudimos completar la operación.',retry:'Reintentá o contactá directamente al establecimiento.',unavailable:'Este enlace no está disponible por el momento.',deposit:'Seña solicitada por el establecimiento: ',noDeposit:'Este servicio no requiere seña.',localTime:'Horario local del establecimiento: ',switchEmail:'Cambiar de correo',already:'Este correo corresponde a una ficha vinculada a otra cuenta. Contactá al establecimiento.',slotTaken:'Ese horario se ocupó. Elegí otro.',loginWarning:'Si ya ingresaste en CITHELA con otro correo, cerrá esa sesión antes de continuar.',loadingSlots:'Buscando horarios…',coverageMode:'Modalidad de la consulta',coveragePlan:'Entidad y plan',coverageWarning:'Valor orientativo; la afiliación, el convenio y la autorización deben confirmarse con el profesional.',coverageUnlisted:'Importe a confirmar con el profesional.',coverageFailed:'No pudimos comprobar el precio de la cobertura.',coverageChanged:'La tarifa cambió. Volvé a elegir la cobertura.',coveragePrivate:'Particular',coverageSocial:'Obra social',coveragePrepaid:'Prepaga'},
+en:{kicker:'Online booking',loading:'Checking availability…',intro:'Select a service and choose an available time.',chooseService:'Choose a service',service:'Service',professional:'Professional',chooseTime:'Choose a date and time',date:'Date',yourDetails:'Your details',emailPrompt:'Verify your email to request this appointment. No password is required.',email:'Email address',sendLink:'Send email sign-in link',emailExplain:'Open the email link or enter the code. If you cannot find the message, check Spam/Junk and Promotions. Avoid requesting many links in a row.',otp:'Email code',verify:'Verify code',name:'Full name',privacy:'Your information will only be shared with this practice to manage your appointment. Do not enter sensitive medical details.',request:'Request appointment',requestReceived:'Request received',myAppointments:'View my appointments',none:'No available times for this date. Try another day.',choose:'Select a time to continue.',verifyFirst:'Verify your email before requesting an appointment.',verified:'Verified email',emailSent:'Check your inbox, including Spam and Promotions, then return to this page.',pending:'Your appointment is pending confirmation from the practice.',error:'The request could not be completed.',retry:'Please retry or contact the practice directly.',unavailable:'This booking link is currently unavailable.',deposit:'Deposit requested by the practice: ',noDeposit:'No deposit required for this service.',localTime:'Practice time zone: ',switchEmail:'Use another email',already:'This email belongs to a profile linked to another account. Contact the practice.',slotTaken:'This time was taken. Please select another.',loginWarning:'If you are already signed in to CITHELA with another email, sign out before continuing.',loadingSlots:'Loading available times…',coverageMode:'Appointment payment type',coveragePlan:'Provider and plan',coverageWarning:'Indicative amount; membership, plan and authorization must be checked with the practice.',coverageUnlisted:'Amount to be confirmed by the practice.',coverageFailed:'We could not check the coverage price.',coverageChanged:'The price changed. Please select your coverage again.',coveragePrivate:'Private pay',coverageSocial:'Health insurance',coveragePrepaid:'Prepaid health plan'}};
 const urlLocale=qs.get('lang')==='en'||qs.get('lang')==='es'?qs.get('lang'):null;
 let lang=urlLocale||'es';
 let data=null,chosen='',session=null,loading=false,personId=null;
-const restore={service:qs.get('service')||'',resource:qs.get('resource')||'',date:qs.get('date')||'',time:qs.get('time')||''};
+let healthRates=[],healthEnabled=false,healthLoading=false,healthSerial=0;
+const restore={service:qs.get('service')||'',resource:qs.get('resource')||'',date:qs.get('date')||'',time:qs.get('time')||'',rate:qs.get('rate')||''};
 function bookingRedirectUrl(){
   const u=new URL(location.origin+location.pathname);
   u.searchParams.set('c',slug);u.searchParams.set('lang',lang);
@@ -105,6 +114,7 @@ function bookingRedirectUrl(){
     u.searchParams.set('resource',$('resource').value);
     u.searchParams.set('date',$('date').value);
     u.searchParams.set('time',chosen);
+    const rate=selectedHealthRate();if(rate)u.searchParams.set('rate',rate.id);
   }
   return u.toString();
 }
@@ -132,7 +142,7 @@ function applyTenantBrand(x){
 const t=key=>L[lang][key]||key;
 function i18n(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(x=>x.textContent=t(x.dataset.i));$('language').textContent=lang==='es'?'EN':'ES';
 $('language').setAttribute('aria-label',lang==='es'?'Cambiar idioma a inglés':'Switch language to Spanish');
-$('language').setAttribute('title',lang==='es'?'English':'Español');$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();updateContact();} }
+$('language').setAttribute('title',lang==='es'?'English':'Español');$('intro').textContent=t('intro');$('kicker').textContent=t('kicker');if(data){$('timezone').textContent=t('localTime')+data.timezone;renderDeposit();renderHealth();updateContact();} }
 function msg(text,error=false){$('message').textContent=text||'';$('message').className='msg'+(error?' error':'');$('message').hidden=!text;}
 async function rpc(name,args){if(!client)throw Error('Supabase unavailable');const {data:result,error}=await client.rpc(name,args);if(error)throw error;if(!result?.ok)throw Error(result?.code||'error');return result}
 function dateHere(){const parts=new Intl.DateTimeFormat('en-US',{timeZone:data.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const m=Object.fromEntries(parts.map(p=>[p.type,p.value]));return m.year+'-'+m.month+'-'+m.day}
@@ -143,17 +153,75 @@ if(x.services.some(v=>v.id===restore.service))$('service').value=restore.service
 if(x.resources.some(v=>v.id===restore.resource))$('resource').value=restore.resource;
 if(/^\d{4}-\d{2}-\d{2}$/.test(restore.date)&&restore.date>=$('date').min&&restore.date<=$('date').max)
   $('date').value=restore.date;
-$('step-service').hidden=false;$('step-date').hidden=false;msg('');i18n();loadSlots()}
+$('step-service').hidden=false;$('step-date').hidden=false;msg('');i18n();loadHealthRates();loadSlots()}
 function renderDeposit(){if(!data)return;const s=data.services.find(x=>x.id===$('service').value);$('deposit').textContent=!s?'':Number(s.deposit_amount_minor)>0?t('deposit')+new Intl.NumberFormat(lang==='en'?'en-US':'es-AR',{style:'currency',currency:s.deposit_currency||'ARS'}).format(s.deposit_amount_minor/100):t('noDeposit')}
+function selectedHealthRate(){
+ return healthEnabled?healthRates.find(r=>r.id===$('health-rate').value&&r.kind===$('health-kind').value):null;
+}
+function renderHealth(){
+ $('health-panel').hidden=!healthEnabled;
+ if(!healthEnabled)return;
+ const rate=selectedHealthRate();
+ if(!rate){$('health-price').textContent=t('coverageUnlisted');return;}
+ $('health-price').textContent=rate.price_status==='a_confirmar'||rate.amount_minor===null
+   ?t('coverageUnlisted')
+   :new Intl.NumberFormat(lang==='en'?'en-US':'es-AR',
+     {style:'currency',currency:'ARS'}).format(Number(rate.amount_minor)/100)
+    +' · '+(lang==='es'?'importe orientativo':'indicative price');
+}
+function renderHealthRates(){
+ const kind=$('health-kind').value;
+ $('health-rate').replaceChildren();
+ for(const r of healthRates.filter(x=>x.kind===kind)){
+  const name=r.kind==='particular'?t('coveragePrivate'):r.provider+' · '+r.plan;
+  option($('health-rate'),r.id,name);
+ }
+ if(restore.rate&&healthRates.some(r=>r.id===restore.rate&&r.kind===kind)){
+   $('health-rate').value=restore.rate;restore.rate='';
+ }
+ renderHealth();updateContact();
+}
+function changeHealthKind(){
+ renderHealthRates();
+}
+async function loadHealthRates(){
+ const serial=++healthSerial,service=$('service').value;
+ healthLoading=true;healthEnabled=false;healthRates=[];$('health-panel').hidden=true;
+ updateContact();
+ try{
+  const result=await rpc('cithela_health_public_rates',{p_slug:slug,p_service_id:service});
+  if(serial!==healthSerial||service!==$('service').value)return;
+  healthRates=Array.isArray(result.rates)?result.rates:[];
+  healthEnabled=result.enabled===true&&healthRates.length>0;
+  if(healthEnabled){
+   $('health-kind').replaceChildren();
+   const kinds=[...new Set(healthRates.map(r=>r.kind))];
+   for(const kind of kinds)option($('health-kind'),kind,
+     kind==='particular'?t('coveragePrivate'):kind==='obra_social'?t('coverageSocial'):t('coveragePrepaid'));
+   const recovered=healthRates.find(r=>r.id===restore.rate);
+   if(recovered)$('health-kind').value=recovered.kind;
+   renderHealthRates();
+  }
+ }catch(e){
+  if(serial===healthSerial){healthEnabled=false;healthRates=[];$('health-panel').hidden=true;}
+ }finally{
+  if(serial===healthSerial){healthLoading=false;renderHealth();updateContact();}
+ }
+}
 async function loadSlots(){chosen='';$('step-contact').hidden=true;$('slots').replaceChildren();$('no-slots').textContent=t('loadingSlots');if(!data)return;const service=$('service').value,resource=$('resource').value,day=$('date').value;if(!service||!resource||!day)return;const key=service+'|'+resource+'|'+day;loadSlots.key=key;try{const r=await rpc('cithela_public_booking_slots',{p_slug:slug,p_service_id:service,p_resource_id:resource,p_date:day});if(loadSlots.key!==key)return;$('slots').replaceChildren();(r.slots||[]).forEach(h=>{const b=document.createElement('button');b.type='button';b.textContent=h;b.setAttribute('aria-pressed','false');b.addEventListener('click',()=>selectSlot(h,b));$('slots').appendChild(b)});$('no-slots').textContent=(r.slots||[]).length?'':t('none');
 if(restore.time&&(r.slots||[]).includes(restore.time)){
   const button=[...$('slots').children].find(b=>b.textContent===restore.time);
   if(button){selectSlot(restore.time,button);restore.time='';}
 }}catch(e){$('no-slots').textContent=t('error');msg(t('retry'),true)}}
 function selectSlot(h,button){chosen=h;for(const b of $('slots').children)b.setAttribute('aria-pressed',String(b===button));$('step-contact').hidden=false;updateContact();$('step-contact').scrollIntoView({behavior:'smooth',block:'nearest'})}
-function updateContact(){if(!data||!chosen)return;const s=data.services.find(x=>x.id===$('service').value),r=data.resources.find(x=>x.id===$('resource').value);$('selection').textContent=[s?.name,r?.name,$('date').value,chosen,data.timezone].filter(Boolean).join(' · ');$('book').disabled=loading||!session||!$('full-name').value.trim()||!chosen;$('verified-panel').hidden=!session;$('email-panel').hidden=!!session;if(session)$('verified-text').textContent=t('verified')+': '+(session.user?.email||'')}
+function updateContact(){if(!data||!chosen)return;const s=data.services.find(x=>x.id===$('service').value),r=data.resources.find(x=>x.id===$('resource').value);
+const rate=selectedHealthRate();
+$('selection').textContent=[s?.name,r?.name,
+ rate?(rate.kind==='particular'?t('coveragePrivate'):rate.provider+' · '+rate.plan):'',
+ $('date').value,chosen,data.timezone].filter(Boolean).join(' · ');
+$('book').disabled=loading||healthLoading||(healthEnabled&&!rate)||!session||!$('full-name').value.trim()||!chosen;$('verified-panel').hidden=!session;$('email-panel').hidden=!!session;if(session)$('verified-text').textContent=t('verified')+': '+(session.user?.email||'')}
 function wallIso(day,hm,tz){const [y,m,d]=day.split('-').map(Number),[h,min]=hm.split(':').map(Number);const desired=Date.UTC(y,m-1,d,h,min);let ts=desired;for(let i=0;i<4;i++){const parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(ts));const q=Object.fromEntries(parts.map(p=>[p.type,p.value]));ts-=Date.UTC(+q.year,+q.month-1,+q.day,+q.hour,+q.minute)-desired}return new Date(ts).toISOString()}
-function showError(e){const code=String(e?.message||'');msg(code==='contact_in_use'||code==='contact_ambiguous'?t('already'):code==='slot_unavailable'?t('slotTaken'):t('error')+' '+t('retry'),true)}
+function showError(e){const code=String(e?.message||'');msg(code==='contact_in_use'||code==='contact_ambiguous'?t('already'):code==='slot_unavailable'?t('slotTaken'):['rate_changed','module_not_enabled','selection_conflict'].includes(code)?t('coverageChanged'):t('error')+' '+t('retry'),true)}
 async function signIn(){const email=$('email').value.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){msg(t('email'),true);return}loading=true;$('send-email').disabled=true;try{const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:bookingRedirectUrl(),shouldCreateUser:true}});if(error)throw error;msg(t('emailSent'));$('otp-section').hidden=false;}catch(e){showError(e)}finally{loading=false;$('send-email').disabled=false}}
 async function verify(){const email=$('email').value.trim().toLowerCase(),token=$('otp').value.trim();if(!email||!token)return;loading=true;$('verify-otp').disabled=true;try{const {error}=await client.auth.verifyOtp({email,token,type:'email'});if(error)throw error;await authRefresh();msg('')}catch(e){showError(e)}finally{loading=false;$('verify-otp').disabled=false}}
 async function authRefresh(){const {data:r,error}=await client.auth.getUser();session=(!error&&r?.user?.email_confirmed_at)?{user:r.user}:null;updateContact()}
@@ -164,11 +232,20 @@ async function switchEmail(){
     $('verified-panel').hidden=true;$('email-panel').hidden=false;msg('');
   }catch(e){showError(e)}finally{loading=false;updateContact()}
 }
-async function book(){if(loading||!chosen||!session||!data)return;const name=$('full-name').value.trim();if(!name||name.length>100){msg(t('name'),true);return}loading=true;updateContact();msg('');try{const attach=await rpc('cithela_public_booking_attach',{p_slug:slug,p_display_name:name});personId=attach.person_id;const key=['cithela',slug,attach.person_id,$('service').value,$('resource').value,$('date').value,chosen].join('|');let reqId;try{const saved=JSON.parse(sessionStorage.getItem('cithela-public-attempt')||'null');reqId=saved?.key===key?saved.id:null;}catch{}if(!reqId){reqId='public-'+crypto.randomUUID();try{sessionStorage.setItem('cithela-public-attempt',JSON.stringify({key,id:reqId}))}catch{}}
+async function book(){if(loading||healthLoading||!chosen||!session||!data)return;
+const selectedRate=selectedHealthRate();if(healthEnabled&&!selectedRate){msg(t('coverageChanged'),true);return;}const name=$('full-name').value.trim();if(!name||name.length>100){msg(t('name'),true);return}loading=true;updateContact();msg('');try{const attach=await rpc('cithela_public_booking_attach',{p_slug:slug,p_display_name:name});personId=attach.person_id;const key=['cithela',slug,attach.person_id,$('service').value,$('resource').value,$('date').value,chosen,selectedRate?.id||'',selectedRate?.version||''].join('|');let reqId;try{const saved=JSON.parse(sessionStorage.getItem('cithela-public-attempt')||'null');reqId=saved?.key===key?saved.id:null;}catch{}if(!reqId){reqId='public-'+crypto.randomUUID();try{sessionStorage.setItem('cithela-public-attempt',JSON.stringify({key,id:reqId}))}catch{}}
 const payload={person_id:personId,service_id:$('service').value,resource_id:$('resource').value,starts_at:wallIso($('date').value,chosen,data.timezone),reason:''};
-const result=await rpc('cithela_patient_booking_create',{p_tenant_id:data.tenant_id,p_request_id:reqId,p_payload:payload});$('step-service').hidden=true;$('step-date').hidden=true;$('step-contact').hidden=true;$('success').hidden=false;$('success-text').textContent=t('pending');msg('');}catch(e){showError(e);if(String(e?.message)==='slot_unavailable')loadSlots()}finally{loading=false;updateContact()}}
+const result=selectedRate
+  ?await rpc('cithela_health_booking_create',{p_tenant_id:data.tenant_id,
+    p_request_id:reqId,p_payload:payload,p_rate_id:selectedRate.id,
+    p_rate_version:selectedRate.version})
+  :await rpc('cithela_patient_booking_create',{p_tenant_id:data.tenant_id,
+    p_request_id:reqId,p_payload:payload});$('step-service').hidden=true;$('step-date').hidden=true;$('step-contact').hidden=true;$('success').hidden=false;$('success-text').textContent=t('pending');msg('');}catch(e){showError(e);if(String(e?.message)==='slot_unavailable')loadSlots()}finally{loading=false;updateContact()}}
 $('language').addEventListener('click',()=>{lang=lang==='es'?'en':'es';i18n()});
-for(const key of ['service','resource','date'])$(key).addEventListener('change',()=>{renderDeposit();loadSlots()});
+$('service').addEventListener('change',()=>{renderDeposit();loadHealthRates();loadSlots()});
+for(const key of ['resource','date'])$(key).addEventListener('change',()=>{renderDeposit();loadSlots()});
+$('health-kind').addEventListener('change',changeHealthKind);
+$('health-rate').addEventListener('change',()=>{renderHealth();updateContact();});
 $('switch-email').addEventListener('click',switchEmail);$('full-name').addEventListener('input',updateContact);$('send-email').addEventListener('click',signIn);$('verify-otp').addEventListener('click',verify);$('book').addEventListener('click',book);
 (async()=>{i18n();msg(t('loading'));if(!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)){msg(t('unavailable'),true);return}try{const x=await rpc('cithela_public_booking_catalog',{p_slug:slug});loadCatalog(x);await authRefresh();client.auth.onAuthStateChange(()=>setTimeout(authRefresh,0));}catch(e){msg(t('unavailable'),true)}})();
 </script>
