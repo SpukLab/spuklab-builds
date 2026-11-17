@@ -37,7 +37,7 @@ function dentalForm(totalMinor){
     status:coverage.status,covered_minor:coverage.coveredMinor};
 }
 function savedDentalNote(quote){
-  if(!quote?.dental_coverage)return "";
+  if(!state.dentalEnabled||!quote?.dental_coverage)return "";
   const d=quote.dental_coverage;
   return dentalCoverageNote(Number(quote.total_minor),{
     kind:d.kind,provider:d.provider,plan:d.plan,status:d.status,coveredMinor:d.covered_minor
