@@ -157,7 +157,7 @@ begin
     v_money:=(p_payload->>'quoted_minor')::bigint;
     if v_money>100000000000 then return jsonb_build_object('ok',false,'code','invalid_price');end if;
     v_currency:=p_payload->>'quoted_currency';
-    if v_currency not in ('ARS','USD') then
+    if v_currency is null or v_currency not in ('ARS','USD') then
       return jsonb_build_object('ok',false,'code','invalid_currency');end if;
   elsif p_payload?'quoted_currency' and jsonb_typeof(p_payload->'quoted_currency')<>'null' then
     return jsonb_build_object('ok',false,'code','invalid_price');
