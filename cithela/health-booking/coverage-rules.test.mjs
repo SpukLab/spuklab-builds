@@ -63,3 +63,17 @@ test("precio cero requiere configuración; nunca inferir gratuidad",()=>{
   assert.equal(r.amountMinor,0);
   assert.match(r.warning,/confirmar/);
 });
+
+test("no admitir vigencias inventadas ni calendarios ambiguos",()=>{
+  assert.throws(()=>validateRate({...sampleRules[0],validUntil:"2026-02-31"}),/Fecha de convenio/);
+  assert.throws(()=>validateRate({...sampleRules[0],validUntil:"2027-02-29"}),/Fecha de convenio/);
+  assert.throws(()=>resolveConsultationRate({...req,today:"2026-02-30"}),/Selección inválida/);
+  assert.equal(validateRate({...sampleRules[0],validUntil:"2028-02-29"}).validUntil,"2028-02-29");
+});
+test("agenda de salud respeta intervalos de 15 minutos",()=>{
+  const t={...sampleTenants[0],services:[
+    ...sampleTenants[0].services,
+    {id:"invalid20",tenantId:"dental_demo",name:"Duración incompatible",durationMin:20,active:true}
+  ]};
+  assert.equal(availableServices(t).length,2);
+});
