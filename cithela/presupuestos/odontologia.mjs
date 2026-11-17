@@ -13,7 +13,7 @@ function safeMinor(value, label) {
 
 function safeName(value, label, max) {
   const text = String(value ?? "").trim();
-  if (text.length > max || /[\\r\\n\\t]/.test(text)) throw new RangeError(label + " inválido.");
+  if (text.length > max || /[\r\n\t]/.test(text)) throw new RangeError(label + " inválido.");
   return text;
 }
 
@@ -63,13 +63,13 @@ export function dentalCoverageNote(totalMinor, data, money) {
   const label = coverage.kind === "obra_social" ? "Obra social" : "Prepaga";
   const line = label + ": " + coverage.provider + (coverage.plan ? " · Plan " + coverage.plan : "");
   if (coveredMinor === null) {
-    return line + "\\nCobertura: " + ({
+    return line + "\nCobertura: " + ({
       sin_verificar: "sin verificar", pendiente: "autorización pendiente",
       rechazada: "no autorizada"
-    }[coverage.status]) + ".\\nEl importe a cargo del paciente no está confirmado.";
+    }[coverage.status]) + ".\nEl importe a cargo del paciente no está confirmado.";
   }
-  return line + "\\nAutorización registrada manualmente por el profesional." +
-    "\\nMonto reconocido informado: " + money(coveredMinor) +
-    "\\nDiferencia estimada del paciente: " + money(patientMinor) +
-    "\\nSujeto a confirmación de la entidad; no constituye autorización ni factura.";
+  return line + "\nAutorización registrada manualmente por el profesional." +
+    "\nMonto reconocido informado: " + money(coveredMinor) +
+    "\nDiferencia estimada del paciente: " + money(patientMinor) +
+    "\nSujeto a confirmación de la entidad; no constituye autorización ni factura.";
 }
