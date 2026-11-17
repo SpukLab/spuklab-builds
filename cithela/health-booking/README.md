@@ -27,6 +27,9 @@ Cada establecimiento puede elegir aceptar o no determinada entidad. El menú de 
 ## Entregado en esta PR
 
 - `index.html`: prototipo interactivo de reserva para tres tipos de establecimiento con datos **ficticios** y sin envío al servidor.
+- `admin.html`: prototipo editable de **Configuración → Servicios → Precios y coberturas**, con elección de establecimiento, servicio, particular/obra social/prepaga, entidad/plan, precio orientativo o «a confirmar», vigencia, edición, desactivación/reactivación y vista previa de lo que vería el paciente. Las modificaciones **solo existen en memoria mientras la página está abierta** y se reinician al cambiar el rol/establecimiento.
+- `catalog-editor.mjs`: simulador de permisos owner/admin vs operator, aislamiento por tenant, rechazo de duplicados y revisión de versión para evitar sobrescribir cambios; esto **no sustituye la autorización server-side**.
+- `catalog-editor.test.mjs` y `admin-ui.test.mjs`: pruebas de la lógica del editor, formato monetario, permisos simulados, ausencia de datos personales y llamadas a servicios.
 - `coverage-rules.mjs`: lógica pura para resolver **importe orientativo** con coincidencia exacta y cierre seguro ante ambigüedad, ausencia o caducidad.
 - `sample-data.mjs`: tres establecimientos ficticios y ejemplos numéricos inventados.
 - `coverage-rules.test.mjs`: pruebas de separación por tenant, servicios, planes, precios vencidos, no heredar precio particular y requisitos de confirmación.
@@ -50,4 +53,4 @@ Se requiere una implementación server-side revisable e inactiva por defecto:
 
 ## Siguiente paso verificable
 
-Después de validar este prototipo visual con el odontólogo, diseñar la pantalla de Configuración → Servicios → Precios y coberturas y su RPC de administración. **No fusionar ni aplicar SQL a producción** sin las pruebas end-to-end y privacidad. La integración eventual en `reservar.html` debe incluir feature flag apagado y regresiones sin cambio de comportamiento en peluquería.
+La pantalla de **Configuración → Servicios → Precios y coberturas** ya está diseñada como simulación local. El siguiente trabajo pendiente es implementar el **RPC real de administración**, los permisos por servidor, la persistencia y la lectura pública segura de convenios y tarifas. **No fusionar ni aplicar SQL a producción** sin las pruebas end-to-end y privacidad. La integración eventual en `reservar.html` debe incluir feature flag apagado y regresiones sin cambio de comportamiento en peluquería.
