@@ -291,6 +291,7 @@ function printQuote(){
   $("print-sub").textContent="Subtotal: "+moneyARS(Number(q.subtotal_minor));
   $("print-disc").textContent=Number(q.discount_minor)>0?"Descuento: −"+moneyARS(Number(q.discount_minor)):"";
   $("print-total").textContent="Total estimado: "+moneyARS(Number(q.total_minor));
+  $("print-dental").textContent=savedDentalNote(q);
   window.print();
 }
 function shareQuote(){
@@ -303,7 +304,7 @@ function shareQuote(){
     quote:{currency:"ARS",lines:q.items.map(l=>({
       name:l.name,quantity:Number(l.quantity),unitMinor:Number(l.unit_minor),totalMinor:Number(l.total_minor)
     })),subtotalMinor:Number(q.subtotal_minor),discountMinor:Number(q.discount_minor),totalMinor:Number(q.total_minor)}
-  });
+  })+(savedDentalNote(q)?"\n\n"+savedDentalNote(q):"");
   $("copy-feedback").textContent="";
   $("share-dialog").showModal();
 }
@@ -312,6 +313,9 @@ function populatePeople(){
     state.people.map(p=>'<option value="'+escape(p.id)+'">'+escape(p.display_name)+'</option>').join("");
 }
 function mountEvents(){
+  for(const id of ["dental-kind","dental-provider","dental-plan","dental-status","dental-amount"]){
+    $(id).addEventListener(["dental-provider","dental-plan","dental-amount"].includes(id)?"input":"change",markDirty);
+  }
   document.querySelector("header .return")?.addEventListener("click",event=>{
     if(!confirmDiscard())event.preventDefault();
   });
@@ -411,7 +415,7 @@ async function initialize(){
       state.sessionEpoch++;
       state.people=[];state.services=[];state.catalog=[];state.quotes=[];
       state.lines=[];state.current=null;state.pendingRequest=null;state.api=null;
-      state.tenant=null;state.selectedPersonId="";
+      state.tenant=null;state.selectedPersonId="";state.dentalEnabled=false;
       if($("share-dialog").open)$("share-dialog").close();
       $("patient").innerHTML="";
       $("quote-list").textContent="";
@@ -423,15 +427,19 @@ async function initialize(){
       $("print-sub").textContent="";
       $("print-disc").textContent="";
       $("print-total").textContent="";
+      $("print-dental").textContent="";
+      $("dental-summary").textContent="";
+      resetDental();
       $("tenant-name").textContent="";
       $("workspace").hidden=true;
       bootstrapMessage(switched
         ?"Cambió la cuenta profesional. Volvé a ingresar para cargar el establecimiento correcto."
         :"La sesión se cerró. Volvé a ingresar desde CITHELA.",true);
     });
-    const [people,catalog,services]=await Promise.all([api.people(),api.catalog(),api.services()]);
+    const [people,catalog,services,settings]=await Promise.all([api.people(),api.catalog(),api.services(),api.settings()]);
     if(state.api!==api)return; // An auth change may have invalidated this pending load.
     state.people=people;state.catalog=catalog;state.services=services;
+    state.dentalEnabled=settings.dentalEnabled;
     populatePeople();renderCatalog();mountEvents();
     $("catalog-admin").hidden=!["owner","admin"].includes(role);
     $("workspace").hidden=false;
