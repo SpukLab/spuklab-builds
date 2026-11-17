@@ -1033,6 +1033,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <p class="contact-note">Los pacientes pueden cambiar el idioma desde la página de reservas.</p>
     </div>
     <a class="btn-main" href="./compartir.html" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Administrar enlace y QR</a>
+    <a class="btn-main soft" id="professional-health-settings" href="./configurar-coberturas.html" hidden style="display:block;text-align:center;text-decoration:none;margin-top:10px;">Precios y coberturas de consultas</a>
     <p class="contact-note">Solo propietarios y administradores pueden modificar esta configuración. El personal autorizado puede compartir el enlace desde Agenda.</p>
   </div>
 </details>
@@ -2009,6 +2010,15 @@ const CithelaCloud=(()=>{
     return {ok:true,email:clean};
   }
 
+  async function professionalPackages(){
+    if(!state.session||!state.tenant?.id)throw Error('No hay establecimiento profesional activo.');
+    const tenantId=state.tenant.id;
+    const c=await getClient();
+    const {data,error}=await c.rpc('cithela_professional_packages',{p_tenant_id:tenantId});
+    if(error||!data?.ok)throw Error('No se pudo consultar módulos.');
+    if(state.tenant?.id!==tenantId)throw Error('El establecimiento activo cambió.');
+    return data;
+  }
   async function professionalBookingShare(){
     const tenantId=state.tenant?.id;
     if(!tenantId)throw Error('No hay establecimiento activo.');
@@ -2476,7 +2486,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,professionalBookingShare,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,professionalBookingShare,professionalPackages,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -4155,9 +4165,26 @@ async function changeProfessionalBookingLanguage(field){
     }
   }
 }
+let healthShortcutTenant=null;
+function updateHealthShortcut(active,tenant,role){
+ const link=$('professional-health-settings');
+ if(!link)return;
+ if(!active||!tenant?.id||!['owner','admin'].includes(role)){
+   link.hidden=true;healthShortcutTenant=null;return;
+ }
+ if(healthShortcutTenant===tenant.id)return;
+ healthShortcutTenant=tenant.id;link.hidden=true;
+ CithelaCloud.professionalPackages().then(status=>{
+   const now=CithelaCloud.state();
+   if(now.tenant?.id!==tenant.id||!professionalCloudReady())return;
+   const module=(status.modules||[]).find(item=>item.code==='salud');
+   link.hidden=!['requested','pilot','active'].includes(module?.state);
+ }).catch(()=>{if(CithelaCloud.state().tenant?.id===tenant.id)link.hidden=true;});
+}
 function renderProfessionalMode(){
   const active=professionalCloudReady();
   const s=CithelaCloud.state(),tenant=active?s.tenant:null;
+  updateHealthShortcut(active,tenant,s.membership?.role);
   renderLocalDemoKeySection();
   const localPreferences=$('cfg-section-business');
   if(localPreferences){
