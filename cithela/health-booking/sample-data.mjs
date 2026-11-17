@@ -2,11 +2,11 @@
 export const sampleTenants = Object.freeze([
   {tenantId:"dental_demo",profile:"odontologia",name:"Consultorio odontológico (demostración)",services:[
     {id:"consulta",tenantId:"dental_demo",name:"Consulta odontológica",durationMin:30,active:true},
-    {id:"control",tenantId:"dental_demo",name:"Control periódico",durationMin:20,active:true}
+    {id:"control",tenantId:"dental_demo",name:"Control periódico",durationMin:30,active:true}
   ]},
   {tenantId:"med_demo",profile:"medicina",name:"Consultorio médico (demostración)",services:[
     {id:"consulta",tenantId:"med_demo",name:"Consulta médica general",durationMin:30,active:true},
-    {id:"control",tenantId:"med_demo",name:"Control clínico",durationMin:20,active:true}
+    {id:"control",tenantId:"med_demo",name:"Control clínico",durationMin:30,active:true}
   ]},
   {tenantId:"psych_demo",profile:"psicologia",name:"Consultorio de psicología (demostración)",services:[
     {id:"entrevista",tenantId:"psych_demo",name:"Entrevista inicial",durationMin:50,active:true},
