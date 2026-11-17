@@ -276,7 +276,7 @@ create or replace function public.cithela_health_booking_create(
  p_tenant_id uuid,p_request_id text,p_payload jsonb,
  p_rate_id uuid,p_rate_version bigint)
 returns jsonb language plpgsql security definer set search_path='' as $function$
-declare v_actor uuid:=auth.uid();v_service uuid;v_rate cithela_private.cithela_health_rates%rowtype;
+declare v_actor uuid:=auth.uid();v_service uuid;v_timezone text;v_rate cithela_private.cithela_health_rates%rowtype;
   v_response jsonb;v_appointment uuid;v_selection cithela_private.cithela_health_booking_selections%rowtype;
 begin
  if v_actor is null then return jsonb_build_object('ok',false,'code','unauthenticated');end if;
@@ -287,13 +287,16 @@ begin
     '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
    then return jsonb_build_object('ok',false,'code','invalid_service');end if;
  v_service:=(p_payload->>'service_id')::uuid;
+ select timezone into v_timezone from public.cithela_tenants t where t.id=p_tenant_id;
+ if v_timezone is null then return jsonb_build_object('ok',false,'code','tenant_inactive');end if;
  if not cithela_private.cithela_health_ready(p_tenant_id) then
    return jsonb_build_object('ok',false,'code','module_not_enabled');end if;
  select * into v_rate from cithela_private.cithela_health_rates r
    where r.id=p_rate_id and r.tenant_id=p_tenant_id and r.service_id=v_service
      and r.active for share;
  if not found or v_rate.version<>p_rate_version or
-    (v_rate.valid_until is not null and v_rate.valid_until<current_date) then
+    (v_rate.valid_until is not null and v_rate.valid_until<
+       (statement_timestamp() at time zone v_timezone)::date) then
    return jsonb_build_object('ok',false,'code','rate_changed');end if;
  -- La rutina existente verifica email/teléfono, vínculo, disponibilidad, tenant,
  -- duplicados e idempotencia. No se confía en un importe enviado por el navegador.
