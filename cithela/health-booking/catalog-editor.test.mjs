@@ -78,3 +78,19 @@ test("la simulación no altera los datos de muestra usados por la reserva",()=>{
   assert.equal(sampleRules.length,n);
   assert.equal(sampleRules.some(r=>r.serviceId==="control"&&r.kind==="obra_social"),false);
 });
+
+test("reactivar no duplica la tarifa ni altera otros servicios",()=>{
+  const m=make(),old=m.list().find(r=>r.serviceId==="consulta"&&r.kind==="particular");
+  const oldCount=m.list().length;
+  const off=m.archive(old.id,old.version);
+  assert.equal(m.preview({serviceId:"consulta",kind:"particular"}).state,"contact");
+  const on=m.changeActivity(off.id,off.version,true);
+  assert.equal(on.version,off.version+1);
+  assert.equal(m.list().length,oldCount);
+  assert.equal(m.preview({serviceId:"consulta",kind:"particular"}).state,"estimated");
+  assert.throws(()=>m.changeActivity(off.id,off.version,true),/Otro cambio/);
+});
+test("reactivar tampoco está permitido para operadores",()=>{
+  const m=make("dental_demo","operator");
+  assert.throws(()=>m.changeActivity(m.list()[0].id,1,true),/propietarios y administradores/);
+});
