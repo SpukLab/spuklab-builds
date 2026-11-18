@@ -74,3 +74,9 @@ test('la selección sanitaria exige consentimiento y registra fecha, no diagnós
  assert.match(page,/id="health-consent" type="checkbox"/);
  assert.match(page,/coverage_consent:true/);
 });
+
+test("editor uses dedicated Supabase endpoint instead of shadowing global URL",()=>{
+ assert.doesNotMatch(edit,/\\b(?:const|let|var)\\s+URL\\s*=/);
+ assert.match(edit,/const CITHELA_SUPABASE_ENDPOINT='https:\\/\\/mcqknmqhtmihegmifuka\\.supabase\\.co'/);
+ assert.match(edit,/createClient\\(CITHELA_SUPABASE_ENDPOINT,KEY,/);
+});
