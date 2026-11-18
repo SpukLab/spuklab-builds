@@ -104,6 +104,9 @@ async function testAdmin(browser){
  const url=pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href;
  await page.goto(url,{waitUntil:'domcontentloaded'});
  await page.locator('#editor').waitFor({state:'visible'});
+ assert.equal(await page.evaluate(()=>typeof URL),'function','native URL constructor must remain accessible');
+ assert.equal(await page.evaluate(()=>new URL('https://mcqknmqhtmihegmifuka.supabase.co').hostname),
+   'mcqknmqhtmihegmifuka.supabase.co');
  await page.locator('#kind').selectOption('obra_social');
  await page.locator('#provider').fill('Entidad ficticia');
  await page.locator('#plan').fill('Plan de prueba');
