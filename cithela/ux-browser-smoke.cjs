@@ -196,6 +196,14 @@ const { pathToFileURL } = require('node:url');
       });
       assert.ok(overview.visible,'overview should be visible to professional cloud sessions');
       assert.equal(overview.items,2,'both upcoming appointments must show independently of selected day');
+      assert.equal(await page.locator('.agenda-overview-item .agenda-overview-new').count(),1,
+        'recent badge applies only to a recently submitted pending appointment');
+      assert.match(await page.locator('.agenda-overview-pending .agenda-overview-status').textContent(),/Por confirmar/);
+      assert.match(await page.locator('.agenda-overview-item:not(.agenda-overview-pending) .agenda-overview-status').textContent(),/Confirmado/);
+      assert.equal(await page.locator('.agenda-overview-item:not(.agenda-overview-pending) .agenda-overview-new').count(),0,
+        'confirmed appointments are not wrongly marked new');
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),
+        'compact cards should not overflow mobile screens');
       assert.match(overview.summary,/1 por confirmar/);
       assert.match(overview.text,/Coloración ficticia/);
       assert.match(overview.text,/Tattoo ficticio/);

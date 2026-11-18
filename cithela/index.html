@@ -196,14 +196,16 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .agenda-overview-day{border-top:var(--line);margin-top:12px;padding-top:12px}
 .agenda-overview-day-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.78rem;font-weight:750;color:var(--ink2);margin:0 0 7px}
 .agenda-overview-count{color:var(--ink3);font-size:.7rem;white-space:nowrap}
-.agenda-overview-item{background:var(--bg);border-radius:10px;padding:11px;margin:7px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center}
+.agenda-overview-item{background:var(--bg);border-radius:10px;padding:8px 10px;margin:5px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;align-items:center}
 .agenda-overview-item strong{font-size:.91rem;line-height:1.35}
-.agenda-overview-item p{margin:4px 0 0;font-size:.73rem;color:var(--ink2);line-height:1.5;overflow-wrap:anywhere}
+.agenda-overview-item p{margin:2px 0 0;font-size:.72rem;color:var(--ink2);line-height:1.35;overflow-wrap:anywhere}
 .agenda-overview-time{font-weight:700;color:var(--teal2);font-variant-numeric:tabular-nums}
-.agenda-overview-item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
-.agenda-overview-item-actions button{min-height:42px;padding:8px 10px;font-size:.73rem}
-.agenda-overview-pending{border-left:3px solid var(--teal)}
-.agenda-overview-new{font-size:.66rem;font-weight:800;color:var(--teal2);margin-left:5px}
+.agenda-overview-item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
+.agenda-overview-item-actions button{min-height:42px;padding:7px 9px;font-size:.72rem}
+.agenda-overview-pending{border-left:3px solid var(--teal);background:var(--surface-soft)}
+.agenda-overview-new{font-size:.63rem;font-weight:800;color:var(--teal2);margin-left:6px;white-space:nowrap}
+.agenda-overview-status{font-weight:750;color:var(--teal2)}
+.agenda-overview-item:not(.agenda-overview-pending) .agenda-overview-status{color:var(--ink2)}
 .agenda-overview-empty{background:var(--bg);border-radius:10px;padding:17px;font-size:.82rem;color:var(--ink2)}
 .agenda-overview-more{display:block;width:100%;margin-top:12px;min-height:44px}
 .agenda-overview-more[hidden]{display:none!important}
@@ -4474,8 +4476,8 @@ function renderUpcomingAgenda(){
     }
     const person=cloudPersonById(t.pacienteId);
     const raw=cloudAppointmentRaw(t.id);
-    const recent=Number.isFinite(Date.parse(raw?.created_at||''))&&
-      Date.now()-Date.parse(raw.created_at)<48*60*60*1000;
+    const recent=t.estado==='pendiente'&&Number.isFinite(Date.parse(raw?.created_at||''))&&
+      Date.now()>=Date.parse(raw.created_at)&&Date.now()-Date.parse(raw.created_at)<48*60*60*1000;
     const card=document.createElement('div');
     card.className='agenda-overview-item'+(t.estado==='pendiente'?' agenda-overview-pending':'');
     const content=document.createElement('div');
@@ -4485,12 +4487,15 @@ function renderUpcomingAgenda(){
     headline.append(hour,document.createTextNode(person?.nombre||'Persona sin nombre'));
     if(recent){
       const badge=document.createElement('span');
-      badge.className='agenda-overview-new';badge.textContent='Nueva';
+      badge.className='agenda-overview-new';badge.textContent='Reciente';
       headline.append(badge);
     }
     const details=document.createElement('p');
-    details.textContent=(t.servicioNombre||'Servicio')+' · '+
-      (t.estado==='pendiente'?'Pendiente de confirmación':'Confirmado');
+    details.append(document.createTextNode((t.servicioNombre||'Servicio')+' · '));
+    const stateLabel=document.createElement('span');
+    stateLabel.className='agenda-overview-status';
+    stateLabel.textContent=t.estado==='pendiente'?'Por confirmar':'Confirmado';
+    details.append(stateLabel);
     content.append(headline,details);
     const actions=document.createElement('div');actions.className='agenda-overview-item-actions';
     const jump=document.createElement('button');jump.type='button';jump.className='mb ghost';
