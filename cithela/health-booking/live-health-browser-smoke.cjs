@@ -104,6 +104,11 @@ async function testAdmin(browser){
  const url=pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href;
  await page.goto(url,{waitUntil:'domcontentloaded'});
  await page.locator('#editor').waitFor({state:'visible'});
+ assert.match(await page.locator('#preview-price').textContent(),/Todavía no definiste un importe/);
+ await page.locator('#amount').fill('importe incorrecto');
+ assert.match(await page.locator('#preview-price').textContent(),/Revisá el formato del importe/);
+ await page.locator('#amount').fill('');
+ assert.match(await page.locator('#preview-price').textContent(),/Todavía no definiste un importe/);
  assert.equal(await page.evaluate(()=>typeof URL),'function','native URL constructor must remain accessible');
  assert.equal(await page.evaluate(()=>new URL('https://mcqknmqhtmihegmifuka.supabase.co').hostname),
    'mcqknmqhtmihegmifuka.supabase.co');
