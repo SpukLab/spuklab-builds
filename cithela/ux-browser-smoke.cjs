@@ -164,6 +164,59 @@ const { pathToFileURL } = require('node:url');
       assert.ok(expanded.documentWidth<=width+2,'Agenda buttons overflow at '+width);
       console.log('PASS cloud appointment actions '+width+'px');
 
+      // Two synthetic cloud appointments on different days: the new general agenda
+      // must display them regardless of which week/day is currently selected.
+      const overview=await page.evaluate(()=>{
+        const first=new Date(),later=new Date();
+        first.setDate(first.getDate()+1);
+        later.setDate(later.getDate()+23);
+        const firstKey=dk(first),laterKey=dk(later);
+        const bookings=[
+          {id:'11111111-1111-4111-8111-111111111111',pacienteId:'test-one',fecha:firstKey,
+           hora:'11:00',estado:'pendiente',servicioNombre:'Coloración ficticia',
+           duracionMin:90,resourceName:'Profesional de prueba',motivo:''},
+          {id:'22222222-2222-4222-8222-222222222222',pacienteId:'test-two',fecha:laterKey,
+           hora:'15:30',estado:'confirmado',servicioNombre:'Tattoo ficticio',
+           duracionMin:45,resourceName:'Profesional de prueba',motivo:''}
+        ];
+        cloudAppointmentViews=()=>bookings;
+        cloudPersonById=id=>({nombre:id==='test-one'?'Paciente de ejemplo A':'Paciente de ejemplo B'});
+        cloudAppointmentRaw=()=>({starts_at:new Date(Date.now()+86400000).toISOString(),
+          created_at:new Date().toISOString(),deposit_amount_minor:0,deposit_status:'none'});
+        selDate=dk(new Date());wkOff=0;
+        renderAgenda();
+        return {
+          firstKey,laterKey,
+          visible:!document.getElementById('agenda-overview').hidden,
+          summary:document.getElementById('agenda-overview-summary').textContent,
+          items:document.querySelectorAll('.agenda-overview-item').length,
+          text:document.getElementById('agenda-overview-list').textContent,
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.ok(overview.visible,'overview should be visible to professional cloud sessions');
+      assert.equal(overview.items,2,'both upcoming appointments must show independently of selected day');
+      assert.match(overview.summary,/1 por confirmar/);
+      assert.match(overview.text,/Coloración ficticia/);
+      assert.match(overview.text,/Tattoo ficticio/);
+      assert.ok(overview.width<=width+2,'upcoming agenda overflow at '+width);
+      await page.locator('#agenda-overview-period').selectOption('7');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1,
+        '7-day period should exclude appointment 23 days ahead');
+      await page.locator('#agenda-overview-period').selectOption('30');
+      await page.locator('#agenda-overview-filter').selectOption('pending');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1);
+      assert.equal(await page.locator('.agenda-overview-item-actions button').count(),2,
+        'pending appointment needs jump and confirmation without weekly scanning');
+      await page.locator('.agenda-overview-item-actions button[data-agenda-action="day"]').click();
+      assert.equal(await page.evaluate(()=>selDate),overview.firstKey,
+        'Ver día should select its real week and date in the calendar');
+      await page.locator('#agenda-overview-filter').selectOption('confirmed');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1,
+        'confirmed appointment must remain discoverable with filter');
+      await page.locator('#agenda-overview-filter').selectOption('all');
+      console.log('PASS upcoming professional agenda '+width+'px');
+
       // Patient identity is generated from two distinct, synthetic fields.
       const patient=await page.evaluate(()=>{
         document.getElementById('screen-medico').classList.remove('active');
