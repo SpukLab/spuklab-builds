@@ -11,7 +11,15 @@ const rate='55555555-5555-4555-8555-555555555555';
 async function mock(page,health=true){
  await page.addInitScript(({tenant,service,resource,person,rate,health})=>{
   window.__calls=[];
-  window.supabase={createClient:()=>({
+  window.supabase={createClient:(endpoint)=>{
+   // Replica the SDK's real URL validation. A top-level `const URL`
+   // in the page would shadow native URL and raise "Provided URL is malformed".
+   try{
+     const parsed=new URL(endpoint);
+     if(parsed.protocol!=='https:'||parsed.hostname!=='mcqknmqhtmihegmifuka.supabase.co')
+       throw Error('Unexpected Supabase host');
+   }catch{throw Error('Invalid supabaseUrl: Provided URL is malformed.');}
+   return ({
    auth:{
     async getUser(){return {data:{user:{id:'fake-identity',email:'fake@example.invalid',
       email_confirmed_at:'2026-11-01T00:00:00Z'}},error:null}},
@@ -47,7 +55,7 @@ async function mock(page,health=true){
     else data={ok:false,code:'unknown_rpc'};
     return {data,error:null};
    }
-  })};
+  });}};
  },{tenant,service,resource,person,rate,health});
  await page.route(/^https?:\/\//,route=>route.abort());
 }
@@ -96,6 +104,9 @@ async function testAdmin(browser){
  const url=pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href;
  await page.goto(url,{waitUntil:'domcontentloaded'});
  await page.locator('#editor').waitFor({state:'visible'});
+ assert.equal(await page.evaluate(()=>typeof URL),'function','native URL constructor must remain accessible');
+ assert.equal(await page.evaluate(()=>new URL('https://mcqknmqhtmihegmifuka.supabase.co').hostname),
+   'mcqknmqhtmihegmifuka.supabase.co');
  await page.locator('#kind').selectOption('obra_social');
  await page.locator('#provider').fill('Entidad ficticia');
  await page.locator('#plan').fill('Plan de prueba');
@@ -128,10 +139,18 @@ async function testSdkUnavailable(browser){
 async function testNoSession(browser){
  const page=await browser.newPage({viewport:{width:390,height:844}});
  await page.addInitScript(()=>{
-  window.supabase={createClient:()=>({
+  window.supabase={createClient:(endpoint)=>{
+   // Replica the SDK's real URL validation. A top-level `const URL`
+   // in the page would shadow native URL and raise "Provided URL is malformed".
+   try{
+     const parsed=new URL(endpoint);
+     if(parsed.protocol!=='https:'||parsed.hostname!=='mcqknmqhtmihegmifuka.supabase.co')
+       throw Error('Unexpected Supabase host');
+   }catch{throw Error('Invalid supabaseUrl: Provided URL is malformed.');}
+   return ({
     auth:{async getUser(){return {data:{user:null},error:null}}},
     rpc:async()=>({data:{ok:false,code:'unauthenticated'},error:null})
-  })};
+  });}};
  });
  await page.route(/^https?:\/\//,route=>route.abort());
  await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
@@ -147,10 +166,18 @@ async function testNoSession(browser){
 async function testHungSession(browser){
  const page=await browser.newPage({viewport:{width:390,height:844}});
  await page.addInitScript(()=>{
-  window.supabase={createClient:()=>({
+  window.supabase={createClient:(endpoint)=>{
+   // Replica the SDK's real URL validation. A top-level `const URL`
+   // in the page would shadow native URL and raise "Provided URL is malformed".
+   try{
+     const parsed=new URL(endpoint);
+     if(parsed.protocol!=='https:'||parsed.hostname!=='mcqknmqhtmihegmifuka.supabase.co')
+       throw Error('Unexpected Supabase host');
+   }catch{throw Error('Invalid supabaseUrl: Provided URL is malformed.');}
+   return ({
     auth:{getUser:()=>new Promise(()=>{})},
     rpc:async()=>({data:{ok:false},error:null})
-  })};
+  });}};
  });
  await page.route(/^https?:\/\//,route=>route.abort());
  await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
