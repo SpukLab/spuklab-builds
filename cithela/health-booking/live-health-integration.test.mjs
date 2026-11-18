@@ -47,7 +47,10 @@ test("página pública solo muestra coberturas de un tenant habilitado",()=>{
  assert.match(page,/id="health-price" role="status"/);
 });
 test("recovery de sesión y rol de cuenta a través de Auth/RPC, no de controles del navegador",()=>{
- assert.match(edit,/client\.auth\.getUser\(\)/);
+ assert.match(edit,/authClient\.auth\.getUser\(\)/);
+ assert.match(edit,/bounded\(authClient\.auth\.getUser\(\),8000/);
+ assert.match(edit,/id="session-help"/);
+ assert.match(edit,/id="session-retry"/);
  assert.match(edit,/cithela_health_my_accounts/);
  assert.match(edit,/cithela_health_rates_admin/);
  assert.doesNotMatch(edit,/SUPABASE_SERVICE_ROLE_KEY|service_role|\bfetch\('/);
