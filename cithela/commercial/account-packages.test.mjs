@@ -117,5 +117,5 @@ test("una tarifa nueva no presupone precio gratuito",()=>{
  const html=read("configurar-coberturas.html");
  assert.match(html,/id="amount"[^>]*placeholder="Ej\. 8500,00" autocomplete="off"/);
  assert.match(html,/\$\('amount'\)\.value='';\$\('valid-until'\)\.value='';/);
- assert.match(html,/if\(!\/\^\(0\|\[1-9\]/);
+ assert.match(html,/Ingresá un importe válido sin separadores de miles/);
 });
