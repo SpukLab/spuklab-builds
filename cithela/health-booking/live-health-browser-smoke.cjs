@@ -112,11 +112,65 @@ async function testAdmin(browser){
  await page.close();
  console.log('PASS authenticated professional editor draft');
 }
+async function testSdkUnavailable(browser){
+ const page=await browser.newPage({viewport:{width:390,height:844}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route(/^https?:\/\//,route=>route.abort());
+ await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
+    {waitUntil:'domcontentloaded'});
+ await page.locator('#session-help').waitFor({state:'visible',timeout:16000});
+ assert.match(await page.locator('#notice').textContent(),/No pudimos cargar el acceso de CITHELA/);
+ assert.equal(await page.locator('#session-retry').isVisible(),true);
+ assert.equal(errors.length,0,'no JavaScript errors when both CDN resources fail');
+ await page.close();
+ console.log('PASS iPhone: sin CDN muestra recuperación sin pantalla bloqueada');
+}
+async function testNoSession(browser){
+ const page=await browser.newPage({viewport:{width:390,height:844}});
+ await page.addInitScript(()=>{
+  window.supabase={createClient:()=>({
+    auth:{async getUser(){return {data:{user:null},error:null}}},
+    rpc:async()=>({data:{ok:false,code:'unauthenticated'},error:null})
+  })};
+ });
+ await page.route(/^https?:\/\//,route=>route.abort());
+ await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
+    {waitUntil:'domcontentloaded'});
+ await page.locator('#session-help').waitFor({state:'visible'});
+ assert.match(await page.locator('#notice').textContent(),/Ingresá como profesional/);
+ assert.equal(await page.locator('#editor').isHidden(),true);
+ assert.equal(await page.locator('#session-retry').isVisible(),true);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3));
+ await page.close();
+ console.log('PASS iPhone: sesión ausente muestra salida clara');
+}
+async function testHungSession(browser){
+ const page=await browser.newPage({viewport:{width:390,height:844}});
+ await page.addInitScript(()=>{
+  window.supabase={createClient:()=>({
+    auth:{getUser:()=>new Promise(()=>{})},
+    rpc:async()=>({data:{ok:false},error:null})
+  })};
+ });
+ await page.route(/^https?:\/\//,route=>route.abort());
+ await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
+    {waitUntil:'domcontentloaded'});
+ await page.locator('#session-help').waitFor({state:'visible',timeout:14000});
+ assert.match(await page.locator('#notice').textContent(),/tardó demasiado/);
+ assert.equal(await page.locator('#editor').isHidden(),true);
+ await page.locator('#session-retry').click();
+ assert.match(await page.locator('#notice').textContent(),/Comprobando tu sesión profesional/);
+ await page.close();
+ console.log('PASS iPhone: autenticación bloqueada no deja la página congelada');
+}
 (async()=>{
  const browser=await chromium.launch({headless:true});
  try{
   await testBooking(browser,false);
   await testBooking(browser,true);
   await testAdmin(browser);
+  await testNoSession(browser);
+  await testHungSession(browser);
+  await testSdkUnavailable(browser);
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

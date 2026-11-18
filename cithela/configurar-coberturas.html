@@ -17,7 +17,9 @@ p{margin:10px 0}small,.hint{font-size:12px;color:var(--sub)}.eyebrow{color:#347f
 label{display:block;font-size:12px;font-weight:700;margin:15px 0 6px}input,select{font:inherit;width:100%;padding:12px;min-height:44px;border-radius:9px;border:1px solid #c7d9d2;background:#fbfdfb;color:var(--ink)}
 input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #7fcab8;outline-offset:2px}.two{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 button{font:inherit;min-height:43px;border-radius:9px;padding:10px 13px;background:white;border:1px solid #bdd5cb;color:#24695e;font-weight:700;cursor:pointer}
-button.primary{background:var(--teal);color:white;border-color:var(--teal)}button:disabled{opacity:.45;cursor:default}.buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.buttons button{flex:1}
+button.primary{background:var(--teal);color:white;border-color:var(--teal)}
+.session-login{display:inline-flex;justify-content:center;align-items:center;text-align:center;
+ border:1px solid #bdd5cb;border-radius:9px;padding:10px 13px;text-decoration:none;color:#24695e;font-weight:700;min-height:43px;flex:1}button:disabled{opacity:.45;cursor:default}.buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.buttons button{flex:1}
 .msg{border-radius:10px;background:#eef6f2;padding:13px;color:#325f55;font-size:13px;margin:15px 0}
 .msg.error{background:#fff1f1;color:#a0374d}.banner{background:#fcf6e9;color:#826028;padding:13px;border-radius:10px;font-size:13px;margin:12px 0}
 .rule{display:block;text-align:left;width:100%;margin:9px 0;padding:13px;background:#f9fcfa;border-radius:10px}.rule.selected{background:#e1f4ec;border-color:#24786e}
@@ -33,6 +35,14 @@ button.primary{background:var(--teal);color:white;border-color:var(--teal)}butto
 <h1>Precios y coberturas de tus consultas</h1>
 <p class="hint">Configurá servicios particulares, obras sociales y prepagas. Los importes son orientativos y no representan una afiliación validada ni un cobro.</p>
 <p id="notice" role="status" aria-live="polite" class="msg">Comprobando tu sesión profesional…</p>
+<div id="session-help" class="card" hidden>
+ <p>Si abriste este enlace desde ChatGPT u otro navegador, puede que CITHELA no comparta esa sesión. Usá el mismo navegador donde ingresaste como profesional.</p>
+ <div class="buttons">
+  <button id="session-retry" type="button" class="primary">Reintentar conexión</button>
+  <a class="session-login" href="./index.html">Volver al acceso profesional</a>
+ </div>
+</div>
+<noscript><p class="msg error">Activá JavaScript para consultar tu cuenta. Podés regresar al acceso profesional.</p></noscript>
 <section id="editor" hidden>
 <div class="card">
   <h2>Establecimiento</h2>
@@ -84,13 +94,59 @@ button.primary{background:var(--teal);color:white;border-color:var(--teal)}butto
 </div>
 </section>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
 <script>
 'use strict';
 const URL='https://mcqknmqhtmihegmifuka.supabase.co';
 const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const $=id=>document.getElementById(id);
-const client=window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+let client=null;
+const sdkUrls=[
+ 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js',
+ 'https://unpkg.com/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js'
+];
+function bounded(promise,ms,errorText){
+ let timeout;
+ return Promise.race([
+   Promise.resolve(promise),
+   new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error(errorText)),ms);})
+ ]).finally(()=>clearTimeout(timeout));
+}
+function loadScript(url){
+ if(window.supabase?.createClient)return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  const script=document.createElement('script');script.src=url;script.async=true;
+  const done=fn=>{
+    clearTimeout(timeout);
+    script.onload=null;script.onerror=null;
+    fn();
+  };
+  const timeout=setTimeout(()=>{
+    script.remove();done(()=>reject(Error('La conexión está demorando demasiado.')));
+  },5000);
+  script.onload=()=>done(()=>{
+    window.supabase?.createClient?resolve():reject(Error('No se pudo iniciar la librería de acceso.'))
+  });
+  script.onerror=()=>{script.remove();done(()=>reject(Error('No se pudo descargar la librería de acceso.')))};
+  document.head.append(script);
+ });
+}
+async function ensureClient(){
+ if(client)return client;
+ if(!window.supabase?.createClient){
+  let lastError;
+  for(const url of sdkUrls){
+   try{await loadScript(url);break;}catch(err){lastError=err;}
+  }
+  if(!window.supabase?.createClient)throw Error(
+   'No pudimos cargar el acceso de CITHELA. Revisá tu conexión y reintentá.'
+  );
+ }
+ client=window.supabase.createClient(URL,KEY,{
+   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+ });
+ return client;
+}
+
 const state={accounts:[],rates:[],services:[],selected:null,loadSerial:0,enabled:false,busy:false};
 const say=(message,error=false)=>{$('notice').textContent=message;$('notice').className='msg'+(error?' error':'')};
 const sel=(id,options)=>{
@@ -107,8 +163,9 @@ const moneyMinor=raw=>{
  return Number(a)*100+Number(b.padEnd(2,'0'));
 };
 async function rpc(name,args){
- if(!client)throw Error('No se pudo cargar la conexión. Volvé a abrir CITHELA.');
- const {data,error}=await client.rpc(name,args);
+ if(!client)throw Error('Todavía no se inició la conexión.');
+ const {data,error}=await bounded(client.rpc(name,args),10000,
+   'La consulta de CITHELA está demorando demasiado. Reintentá sin cerrar tu sesión.');
  if(error)throw error;
  if(data?.ok!==true)throw Error(data?.code||'No se pudo realizar la operación.');
  return data;
@@ -221,18 +278,34 @@ $('save').addEventListener('click',()=>update('upsert'));
 $('archive').addEventListener('click',()=>update('archive'));
 $('restore').addEventListener('click',()=>update('restore'));
 $('new').addEventListener('click',reset);
-(async()=>{
+let bootSerial=0;
+async function startProfessional(){
+ const serial=++bootSerial;
+ $('session-help').hidden=true;$('editor').hidden=true;
+ say('Comprobando tu sesión profesional…');
  try{
-  if(!client)throw Error('No se pudo cargar el servicio.');
-  const {data:{user},error}=await client.auth.getUser();
-  if(error||!user)throw Error('Ingresá primero desde el acceso profesional de CITHELA.');
+  const authClient=await ensureClient();
+  if(serial!==bootSerial)return;
+  const {data,error}=await bounded(authClient.auth.getUser(),8000,
+    'La sesión tardó demasiado en responder. Puede haber otra pestaña bloqueando la sesión. Cerrá pestañas duplicadas de CITHELA y reintentá.');
+  if(serial!==bootSerial)return;
+  if(error||!data?.user)throw Error('Ingresá como profesional desde CITHELA en este mismo navegador.');
   const r=await rpc('cithela_health_my_accounts',{});
+  if(serial!==bootSerial)return;
   state.accounts=r.accounts||[];
-  if(!state.accounts.length)throw Error('Esta cuenta no administra un establecimiento profesional.');
+  if(!state.accounts.length)throw Error('Esta sesión no administra un establecimiento profesional.');
   sel('tenant',state.accounts.map(x=>[x.tenant_id,x.name]));
-  $('editor').hidden=false;await loadTenant();
- }catch(e){say(e.message,true);}
-})();
+  $('editor').hidden=false;
+  await loadTenant();
+ }catch(e){
+  if(serial!==bootSerial)return;
+  $('editor').hidden=true;
+  say(e?.message||'No se pudo verificar la sesión.',true);
+  $('session-help').hidden=false;
+ }
+}
+$('session-retry').addEventListener('click',startProfessional);
+startProfessional();
 </script>
 </body>
 </html>
