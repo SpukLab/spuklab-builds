@@ -56,6 +56,45 @@ const { pathToFileURL } = require('node:url');
         'calendar arrows too small at '+width);
       assert.ok(geometry.statsAfterList, 'weekly stats should follow agenda tasks');
       assert.ok(geometry.hasMessages, 'WhatsApp Messages navigation must survive UX merge');
+      // The share and language controls belong in Ajustes, not in the agenda.
+      const structure=await page.evaluate(()=>{
+        const agenda=document.getElementById('p-medico-agenda');
+        const settings=document.getElementById('p-medico-config');
+        const share=document.getElementById('professional-public-booking-shortcut');
+        const booking=document.getElementById('cfg-section-public-booking');
+        const hours=document.getElementById('cfg-section-hours');
+        return {
+          shareInAgenda:agenda.contains(share),
+          shareInSettings:settings.contains(share)&&booking.contains(share),
+          languageInSettings:booking.contains(document.getElementById('professional-booking-language')),
+          qrInSettings:booking.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
+          bookingBeforeHours:!!(booking.compareDocumentPosition(hours)&Node.DOCUMENT_POSITION_FOLLOWING),
+          foldedWeek:document.getElementById('agenda-weekly-details')?.tagName,
+          foldedOps:document.getElementById('agenda-ops-details')?.tagName,
+          uniqueShare:document.querySelectorAll('#professional-public-booking-shortcut').length
+        };
+      });
+      assert.equal(structure.shareInAgenda,false,'booking share must not occupy Agenda');
+      assert.equal(structure.shareInSettings,true,'booking share must be in Ajustes / Reservas online');
+      assert.equal(structure.languageInSettings,true,'language is configured together with booking link');
+      assert.equal(structure.qrInSettings,'./compartir.html','operators retain QR/share access');
+      assert.equal(structure.bookingBeforeHours,true,'Reservas online must be reachable without scrolling through schedules');
+      assert.equal(structure.foldedWeek,'DETAILS','weekly agenda should be collapsible');
+      assert.equal(structure.foldedOps,'DETAILS','operational notices should be collapsible');
+      assert.equal(structure.uniqueShare,1,'do not duplicate sharing controls');
+      await page.evaluate(()=>{
+        document.getElementById('ops-queue-wrap').style.display='block';
+        document.getElementById('ops-queue-summary').textContent='2 señas pendientes';
+      });
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),false);
+      assert.match(await page.locator('#agenda-ops-details > summary').textContent(),/2 señas pendientes/);
+      await page.locator('#agenda-ops-details > summary').click();
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),true);
+      await page.locator('#agenda-ops-details > summary').click();
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),false);
+      await page.evaluate(()=>document.getElementById('ops-queue-wrap').style.display='none');
+      console.log('PASS booking settings and collapsible operations '+width+'px');
+
       // Exercise the real tab handler and the reports round trip (no data writes).
       await page.locator('#medico-tab-config').click();
       assert.equal(await page.locator('#p-medico-config').evaluate(el => el.classList.contains('on')), true,
@@ -208,6 +247,16 @@ const { pathToFileURL } = require('node:url');
       assert.match(overview.text,/Coloración ficticia/);
       assert.match(overview.text,/Tattoo ficticio/);
       assert.ok(overview.width<=width+2,'upcoming agenda overflow at '+width);
+      await page.evaluate(()=>applyAgendaFoldsMode(true));
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),false,
+        'cloud professional should see upcoming agenda before daily calendar');
+      // Re-rendering must not override a fold that the professional opened manually.
+      await page.locator('#agenda-weekly-details > summary').click();
+      await page.evaluate(()=>applyAgendaFoldsMode(true));
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),true,
+        'manual fold choice must survive normal refresh');
+      await page.locator('#agenda-weekly-details > summary').click();
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),false);
       await page.locator('#agenda-overview-period').selectOption('7');
       assert.equal(await page.locator('.agenda-overview-item').count(),1,
         '7-day period should exclude appointment 23 days ahead');
@@ -217,6 +266,8 @@ const { pathToFileURL } = require('node:url');
       assert.equal(await page.locator('.agenda-overview-item-actions button').count(),2,
         'pending appointment needs jump and confirmation without weekly scanning');
       await page.locator('.agenda-overview-item-actions button[data-agenda-action="day"]').click();
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),true,
+        'Ver día opens the collapsed calendar before navigation');
       assert.equal(await page.evaluate(()=>selDate),overview.firstKey,
         'Ver día should select its real week and date in the calendar');
       await page.locator('#agenda-overview-filter').selectOption('confirmed');
