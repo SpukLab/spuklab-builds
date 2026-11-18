@@ -37,7 +37,10 @@ test('appointments before weekly metrics; people search before collapsed add for
 test('configuration prioritizes daily use; nested details remain balanced',()=>{
  const cfg=slice('id="p-medico-config"','<div class="byline">');
  const order=[...cfg.matchAll(/id="cfg-section-([^"]+)"/g)].map(m=>m[1]);
- assert.deepEqual(order,['hours','availability','services','resources','reminders','business','branding','public-booking','payments','cloud','infrastructure','security']);
+ assert.deepEqual(order,['public-booking','hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
+ assert.ok(cfg.indexOf('id="professional-public-booking-shortcut"')>cfg.indexOf('id="cfg-section-public-booking"'));
+ assert.ok(cfg.indexOf('id="professional-public-booking-shortcut"')<cfg.indexOf('id="cfg-section-hours"'));
+ assert.ok(cfg.includes('id="professional-booking-language"'),'language remains in Ajustes');
  let depth=0;
  for(const token of (cfg.match(/<\/?details\b[^>]*>/g)||[])){
    depth+=token.startsWith('</')?-1:1;
@@ -384,4 +387,16 @@ test('phone invite allows copying personal URL on iPad without WhatsApp installe
  assert.match(code,/Copiar enlace para enviarlo desde otro dispositivo/);
  assert.match(code,/navigator\.clipboard\?\.writeText/);
  assert.match(code,/document\.execCommand\('copy'\)/);
+});
+
+test('agenda keeps upcoming turn list prominent; secondary operations and calendar are collapsible',()=>{
+ const agenda=slice('id="p-medico-agenda"','id="p-medico-pacientes"');
+ assert.ok(agenda.indexOf('id="agenda-overview"')<agenda.indexOf('id="agenda-ops-details"'));
+ assert.ok(agenda.indexOf('id="agenda-ops-details"')<agenda.indexOf('id="agenda-weekly-details"'));
+ assert.match(agenda,/<details class="cithela-agenda-fold" id="agenda-ops-details">/);
+ assert.match(agenda,/<details class="cithela-agenda-fold" id="agenda-weekly-details" open>/);
+ assert.match(agenda,/id="agenda-list"/);
+ assert.doesNotMatch(agenda,/id="professional-public-booking-shortcut"/);
+ assert.match(html,/const calendar=\$\('agenda-weekly-details'\);if\(calendar\)calendar\.open=true/);
+ assert.match(html,/const shareAllowed=active&&\['owner','admin','operator'\]/);
 });
