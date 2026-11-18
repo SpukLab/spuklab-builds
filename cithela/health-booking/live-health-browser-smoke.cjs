@@ -32,7 +32,7 @@ async function mock(page,health=true){
     let data;
     if(name==='cithela_public_booking_catalog')data={
       ok:true,tenant_id:tenant,name:'Consultorio ficticio',timezone:'America/Argentina/Buenos_Aires',
-      locale:'es',services:[{id:service,name:'Consulta',duration_min:30,deposit_amount_minor:0,deposit_currency:'ARS'}],
+      locale:'es',services:[{id:service,name:'Consulta',duration_min:30,deposit_amount_minor:health?25000:0,deposit_currency:'ARS'}],
       resources:[{id:resource,name:'Profesional de prueba'}]
     };
     else if(name==='cithela_public_booking_slots')data={ok:true,slots:['10:00','10:30']};
@@ -78,6 +78,19 @@ async function testBooking(browser,health){
   assert.equal(await page.locator('#health-panel').isHidden(),true);
  }
  await page.locator('#slots button').first().click();
+ if(health){
+  assert.match(await page.locator('#selection-price').textContent(),/1\\.500/);
+  assert.match(await page.locator('#selection-price').textContent(),/Importe orientativo/);
+  assert.match(await page.locator('#selection-deposit').textContent(),/250/);
+  assert.match(await page.locator('#selection-terms').textContent(),/seña se informa por separado/);
+  assert.equal(await page.locator('#selection-pricing').isHidden(),false);
+  await page.locator('#language').click();
+  assert.match(await page.locator('#selection-price').textContent(),/Indicative appointment price/);
+  assert.match(await page.locator('#selection-terms').textContent(),/deposit is listed separately/);
+  await page.locator('#language').click();
+ }else{
+  assert.equal(await page.locator('#selection-pricing').isHidden(),true);
+ }
  await page.locator('#full-name').fill('Paciente de prueba');
  await page.locator('#book').click();
  await page.locator('#success').waitFor({state:'visible'});
