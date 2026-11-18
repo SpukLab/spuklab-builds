@@ -206,6 +206,7 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .agenda-overview-new{font-size:.66rem;font-weight:800;color:var(--teal2);margin-left:5px}
 .agenda-overview-empty{background:var(--bg);border-radius:10px;padding:17px;font-size:.82rem;color:var(--ink2)}
 .agenda-overview-more{display:block;width:100%;margin-top:12px;min-height:44px}
+.agenda-overview-more[hidden]{display:none!important}
 .cal-day-count{font-size:.64rem;line-height:1.05;color:var(--teal2);font-weight:800;font-variant-numeric:tabular-nums}
 .cday.sel .cal-day-count{color:var(--white)}
 @media(max-width:370px){.agenda-overview{padding:13px 11px}.agenda-overview-heading h2{font-size:1.12rem}.agenda-overview-heading .mb{padding:8px;font-size:.71rem}.agenda-overview-item{grid-template-columns:1fr}.agenda-overview-item-actions{justify-content:flex-start}}
@@ -4413,6 +4414,135 @@ function renderStats(){
     <div class="sc"><div class="sv">${confirmed}</div><div class="sl">Confirm.</div></div>
     <div class="sc"><div class="sv">${pending}</div><div class="sl">Pendientes</div></div>`;
 }
+
+
+let agendaOverviewLimit=12;
+function agendaOverviewFilterRows(views,days,status){
+  return (views||[])
+    .filter(t=>isOpenAppointment(t)&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<days)
+    .filter(t=>status==='all'||t.estado===('pending'===status?'pendiente':'confirmado'))
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora)||a.id.localeCompare(b.id));
+}
+function agendaOverviewDateText(key){
+  if(dayDistance(key)===0)return 'Hoy';
+  if(dayDistance(key)===1)return 'Mañana';
+  const d=dp(key);
+  return new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'long'}).format(d);
+}
+function renderUpcomingAgenda(){
+  const wrap=$('agenda-overview'),list=$('agenda-overview-list');
+  if(!wrap||!list)return;
+  const cloud=professionalCloudReady();
+  wrap.hidden=!cloud;
+  if(!cloud){list.replaceChildren();return;}
+  const days=Number($('agenda-overview-period').value)||30;
+  const status=$('agenda-overview-filter').value;
+  const all=agendaOverviewFilterRows(cloudAppointmentViews(),days,'all');
+  const pending=all.filter(t=>t.estado==='pendiente').length;
+  const confirmed=all.length-pending;
+  const rows=agendaOverviewFilterRows(all,days,status);
+  const state=CithelaCloud.state();
+  const summary=$('agenda-overview-summary');
+  summary.textContent=pending+' por confirmar · '+confirmed+' confirmados · próximos '+days+' días'+
+    (state.error?' · Sincronización pendiente; reintentá':'');
+  list.replaceChildren();
+  $('agenda-overview-more').hidden=rows.length<=agendaOverviewLimit;
+  $('agenda-overview-more').textContent='Mostrar '+Math.min(20,rows.length-agendaOverviewLimit)+' turnos más';
+  if(!rows.length){
+    const empty=document.createElement('p');
+    empty.className='agenda-overview-empty';
+    empty.textContent=status==='pending'?'No hay turnos pendientes en este período.':
+      status==='confirmed'?'No hay turnos confirmados en este período.':
+      'No hay turnos próximos en este período.';
+    list.append(empty);
+    return;
+  }
+  let groupKey='',group=null;
+  const selected=rows.slice(0,agendaOverviewLimit);
+  for(const t of selected){
+    if(t.fecha!==groupKey){
+      groupKey=t.fecha;
+      group=document.createElement('section');group.className='agenda-overview-day';
+      group.setAttribute('aria-label',agendaOverviewDateText(t.fecha));
+      const h=document.createElement('div');h.className='agenda-overview-day-heading';
+      const heading=document.createElement('strong');
+      heading.textContent=agendaOverviewDateText(t.fecha);
+      const count=document.createElement('span');count.className='agenda-overview-count';
+      const n=rows.filter(r=>r.fecha===t.fecha).length;
+      count.textContent=n+' turno'+(n===1?'':'s');
+      h.append(heading,count);group.append(h);list.append(group);
+    }
+    const person=cloudPersonById(t.pacienteId);
+    const raw=cloudAppointmentRaw(t.id);
+    const recent=Number.isFinite(Date.parse(raw?.created_at||''))&&
+      Date.now()-Date.parse(raw.created_at)<48*60*60*1000;
+    const card=document.createElement('div');
+    card.className='agenda-overview-item'+(t.estado==='pendiente'?' agenda-overview-pending':'');
+    const content=document.createElement('div');
+    const headline=document.createElement('strong');
+    const hour=document.createElement('span');hour.className='agenda-overview-time';
+    hour.textContent=t.hora+' · ';
+    headline.append(hour,document.createTextNode(person?.nombre||'Persona sin nombre'));
+    if(recent){
+      const badge=document.createElement('span');
+      badge.className='agenda-overview-new';badge.textContent='Nueva';
+      headline.append(badge);
+    }
+    const details=document.createElement('p');
+    details.textContent=(t.servicioNombre||'Servicio')+' · '+
+      (t.estado==='pendiente'?'Pendiente de confirmación':'Confirmado');
+    content.append(headline,details);
+    const actions=document.createElement('div');actions.className='agenda-overview-item-actions';
+    const jump=document.createElement('button');jump.type='button';jump.className='mb ghost';
+    jump.textContent='Ver día';jump.dataset.agendaAction='day';jump.dataset.appointmentId=t.id;
+    actions.append(jump);
+    if(t.estado==='pendiente'&&professionalCloudWritable()){
+      const confirm=document.createElement('button');confirm.type='button';confirm.className='mb confirm';
+      confirm.textContent='Confirmar';confirm.dataset.agendaAction='confirm';
+      confirm.dataset.appointmentId=t.id;
+      actions.append(confirm);
+    }
+    card.append(content,actions);group.append(card);
+  }
+}
+function jumpToAgendaDay(key){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(key))return;
+  const monday=dk(weekDays(0)[0]);
+  wkOff=Math.floor(Math.round((dp(key)-dp(monday))/86400000)/7);
+  selDate=key;
+  renderCal('med');renderStats();renderAgenda();
+  $('agenda-list').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('agenda-overview-period').addEventListener('change',()=>{
+  agendaOverviewLimit=12;renderUpcomingAgenda();
+});
+$('agenda-overview-filter').addEventListener('change',()=>{
+  agendaOverviewLimit=12;renderUpcomingAgenda();
+});
+$('agenda-overview-more').addEventListener('click',()=>{
+  agendaOverviewLimit+=20;renderUpcomingAgenda();
+});
+$('agenda-overview-list').addEventListener('click',event=>{
+  const button=event.target.closest('button[data-agenda-action]');
+  if(!button||!event.currentTarget.contains(button)||!professionalCloudReady())return;
+  const id=button.dataset.appointmentId;
+  const item=cloudAppointmentViews().find(x=>x.id===id&&isOpenAppointment(x));
+  if(!item)return;
+  if(button.dataset.agendaAction==='day')jumpToAgendaDay(item.fecha);
+  else if(button.dataset.agendaAction==='confirm'&&item.estado==='pendiente'&&professionalCloudWritable())
+    cloudConfirmAppointment(id);
+});
+$('agenda-overview-refresh').addEventListener('click',async event=>{
+  const button=event.currentTarget;
+  if(button.disabled||!professionalCloudReady())return;
+  button.disabled=true;button.textContent='Actualizando…';
+  try{
+    const state=await CithelaCloud.refresh();
+    if(state.error)throw Error(state.error);
+    toast('Agenda actualizada');
+  }catch(e){toast('No se pudo actualizar: '+(e?.message||'reintentá'),4500);}
+  finally{button.disabled=false;button.textContent='Actualizar';}
+});
 
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
