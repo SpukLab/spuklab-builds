@@ -112,6 +112,19 @@ async function testAdmin(browser){
  await page.close();
  console.log('PASS authenticated professional editor draft');
 }
+async function testSdkUnavailable(browser){
+ const page=await browser.newPage({viewport:{width:390,height:844}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route(/^https?:\/\//,route=>route.abort());
+ await page.goto(pathToFileURL(path.join(__dirname,'..','configurar-coberturas.html')).href,
+    {waitUntil:'domcontentloaded'});
+ await page.locator('#session-help').waitFor({state:'visible',timeout:16000});
+ assert.match(await page.locator('#notice').textContent(),/No pudimos cargar el acceso de CITHELA/);
+ assert.equal(await page.locator('#session-retry').isVisible(),true);
+ assert.equal(errors.length,0,'no JavaScript errors when both CDN resources fail');
+ await page.close();
+ console.log('PASS iPhone: sin CDN muestra recuperación sin pantalla bloqueada');
+}
 async function testNoSession(browser){
  const page=await browser.newPage({viewport:{width:390,height:844}});
  await page.addInitScript(()=>{
@@ -158,5 +171,6 @@ async function testHungSession(browser){
   await testAdmin(browser);
   await testNoSession(browser);
   await testHungSession(browser);
+  await testSdkUnavailable(browser);
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
