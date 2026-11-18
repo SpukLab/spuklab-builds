@@ -184,6 +184,32 @@ nav{background:var(--white);border-bottom:var(--line);padding:0 20px;height:56px
 .sh:first-child{margin-top:0;}
 .eyebrow{font-size:.64rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;}
 
+/* Vista general de turnos — solo CITHELA Cloud, sin buscar semanas. */
+.agenda-overview{background:var(--white);border:var(--line);border-radius:var(--r);padding:17px 16px;margin:14px 0 20px;box-shadow:var(--sh)}
+.agenda-overview-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.agenda-overview-heading h2{margin:0;font-size:1.24rem;line-height:1.2;color:var(--ink)}
+.agenda-overview-heading .mb{flex:none;min-height:44px;white-space:nowrap}
+.agenda-overview-summary{font-size:.82rem;color:var(--ink2);font-weight:650;line-height:1.5;margin:8px 0 10px}
+.agenda-overview-filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 14px}
+.agenda-overview-filters label{font-size:.7rem;color:var(--ink3);font-weight:700}
+.agenda-overview-filters select{display:block;width:100%;border:var(--line);background:var(--white);border-radius:9px;min-height:44px;margin-top:5px;color:var(--ink);font:inherit;font-size:.81rem;padding:9px}
+.agenda-overview-day{border-top:var(--line);margin-top:12px;padding-top:12px}
+.agenda-overview-day-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.78rem;font-weight:750;color:var(--ink2);margin:0 0 7px}
+.agenda-overview-count{color:var(--ink3);font-size:.7rem;white-space:nowrap}
+.agenda-overview-item{background:var(--bg);border-radius:10px;padding:11px;margin:7px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center}
+.agenda-overview-item strong{font-size:.91rem;line-height:1.35}
+.agenda-overview-item p{margin:4px 0 0;font-size:.73rem;color:var(--ink2);line-height:1.5;overflow-wrap:anywhere}
+.agenda-overview-time{font-weight:700;color:var(--teal2);font-variant-numeric:tabular-nums}
+.agenda-overview-item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.agenda-overview-item-actions button{min-height:42px;padding:8px 10px;font-size:.73rem}
+.agenda-overview-pending{border-left:3px solid var(--teal)}
+.agenda-overview-new{font-size:.66rem;font-weight:800;color:var(--teal2);margin-left:5px}
+.agenda-overview-empty{background:var(--bg);border-radius:10px;padding:17px;font-size:.82rem;color:var(--ink2)}
+.agenda-overview-more{display:block;width:100%;margin-top:12px;min-height:44px}
+.agenda-overview-more[hidden]{display:none!important}
+.cal-day-count{font-size:.64rem;line-height:1.05;color:var(--teal2);font-weight:800;font-variant-numeric:tabular-nums}
+.cday.sel .cal-day-count{color:var(--white)}
+@media(max-width:370px){.agenda-overview{padding:13px 11px}.agenda-overview-heading h2{font-size:1.12rem}.agenda-overview-heading .mb{padding:8px;font-size:.71rem}.agenda-overview-item{grid-template-columns:1fr}.agenda-overview-item-actions{justify-content:flex-start}}
 /* WEEK NAV */
 .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .wn-lbl{font-size:.84rem;font-weight:600;color:var(--ink2);}
@@ -684,6 +710,35 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       </div>
     </section>
     <p class="ops-note" id="mode-agenda" role="status" style="display:none;margin-bottom:12px;"></p>
+    <section class="agenda-overview" id="agenda-overview" hidden aria-labelledby="agenda-overview-title">
+      <div class="agenda-overview-heading">
+        <div>
+          <p class="sh" style="margin:0 0 4px;">AGENDA GENERAL · SIN RECORRER CADA DÍA</p>
+          <h2 id="agenda-overview-title">Próximos turnos</h2>
+          <p class="agenda-overview-summary" id="agenda-overview-summary" role="status" aria-live="polite"></p>
+        </div>
+        <button id="agenda-overview-refresh" class="mb ghost" type="button">Actualizar</button>
+      </div>
+      <div class="agenda-overview-filters">
+        <label for="agenda-overview-period">Período
+          <select id="agenda-overview-period">
+            <option value="7">7 días</option>
+            <option value="30" selected>30 días</option>
+            <option value="90">90 días</option>
+          </select>
+        </label>
+        <label for="agenda-overview-filter">Mostrar
+          <select id="agenda-overview-filter">
+            <option value="all">Todos los turnos</option>
+            <option value="pending">Por confirmar</option>
+            <option value="confirmed">Confirmados</option>
+          </select>
+        </label>
+      </div>
+      <div id="agenda-overview-list" class="agenda-overview-list"></div>
+      <button class="agenda-overview-more mb ghost" id="agenda-overview-more" hidden type="button">Mostrar más turnos</button>
+      <p class="contact-note">Los pendientes son solicitudes registradas. Tocá «Ver día» para abrirlas en la agenda.</p>
+    </section>
     <div class="week-nav">
       <button class="wn-btn" onclick="changeWeek(-1)">‹</button>
       <span class="wn-lbl" id="wk-lbl">—</span>
@@ -1920,7 +1975,7 @@ const CithelaCloud=(()=>{
         c.from('cithela_resources').select('id,name,active').eq('tenant_id',tenantId).eq('active',true).order('name'),
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
-        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,updated_at,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
+        c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,created_at,updated_at,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
         c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason').eq('tenant_id',tenantId).order('starts_at',{ascending:true}),
         commercialStatusQ
       ]);
@@ -4327,14 +4382,16 @@ function renderCal(who){
   const turns=cloudMode?cloudAppointmentViews():DB.t();
   $(id).innerHTML=days.map((d,i)=>{
     const key=dk(d);
-    const dot=turns.some(t=>t.fecha===key&&isOpenAppointment(t));
+    const dayTurns=turns.filter(t=>t.fecha===key&&isOpenAppointment(t));
+    const pendingCount=dayTurns.filter(t=>t.estado==='pendiente').length;
+    const dot=dayTurns.length>0;
     const closed=cloudMode?!cloudDayOpen(key):isDayBlocked(key);
     const sel=selDate===key;
     return`<button type="button" class="cday${sel?' sel':''}${key===tod?' tod':''}"
-      aria-pressed="${sel}" aria-label="${fmt(d)}${closed?' · día sin disponibilidad':''}"
+      aria-pressed="${sel}" aria-label="${fmt(d)}${dayTurns.length?' · '+dayTurns.length+' turnos':''}${pendingCount?' · '+pendingCount+' pendientes':''}${closed?' · día sin disponibilidad':''}"
       style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
       <span class="dn">${DN[i]}</span><span class="dd">${d.getDate()}</span>
-      ${dot&&!sel?'<span class="ddot"></span>':'<span style="height:7px"></span>'}
+      ${dot?'<span class="cal-day-count" aria-hidden="true">'+dayTurns.length+' turno'+(dayTurns.length===1?'':'s')+'</span>':'<span style="height:7px"></span>'}
     </button>`;
   }).join('');
 }
@@ -4357,6 +4414,135 @@ function renderStats(){
     <div class="sc"><div class="sv">${confirmed}</div><div class="sl">Confirm.</div></div>
     <div class="sc"><div class="sv">${pending}</div><div class="sl">Pendientes</div></div>`;
 }
+
+
+let agendaOverviewLimit=12;
+function agendaOverviewFilterRows(views,days,status){
+  return (views||[])
+    .filter(t=>isOpenAppointment(t)&&dayDistance(t.fecha)>=0&&dayDistance(t.fecha)<days)
+    .filter(t=>status==='all'||t.estado===('pending'===status?'pendiente':'confirmado'))
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora)||a.id.localeCompare(b.id));
+}
+function agendaOverviewDateText(key){
+  if(dayDistance(key)===0)return 'Hoy';
+  if(dayDistance(key)===1)return 'Mañana';
+  const d=dp(key);
+  return new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'long'}).format(d);
+}
+function renderUpcomingAgenda(){
+  const wrap=$('agenda-overview'),list=$('agenda-overview-list');
+  if(!wrap||!list)return;
+  const cloud=professionalCloudReady();
+  wrap.hidden=!cloud;
+  if(!cloud){list.replaceChildren();return;}
+  const days=Number($('agenda-overview-period').value)||30;
+  const status=$('agenda-overview-filter').value;
+  const all=agendaOverviewFilterRows(cloudAppointmentViews(),days,'all');
+  const pending=all.filter(t=>t.estado==='pendiente').length;
+  const confirmed=all.length-pending;
+  const rows=agendaOverviewFilterRows(all,days,status);
+  const state=CithelaCloud.state();
+  const summary=$('agenda-overview-summary');
+  summary.textContent=pending+' por confirmar · '+confirmed+' confirmado'+(confirmed===1?'':'s')+' · próximos '+days+' días'+
+    (state.error?' · Sincronización pendiente; reintentá':'');
+  list.replaceChildren();
+  $('agenda-overview-more').hidden=rows.length<=agendaOverviewLimit;
+  $('agenda-overview-more').textContent='Mostrar '+Math.min(20,Math.max(0,rows.length-agendaOverviewLimit))+' turnos más';
+  if(!rows.length){
+    const empty=document.createElement('p');
+    empty.className='agenda-overview-empty';
+    empty.textContent=status==='pending'?'No hay turnos pendientes en este período.':
+      status==='confirmed'?'No hay turnos confirmados en este período.':
+      'No hay turnos próximos en este período.';
+    list.append(empty);
+    return;
+  }
+  let groupKey='',group=null;
+  const selected=rows.slice(0,agendaOverviewLimit);
+  for(const t of selected){
+    if(t.fecha!==groupKey){
+      groupKey=t.fecha;
+      group=document.createElement('section');group.className='agenda-overview-day';
+      group.setAttribute('aria-label',agendaOverviewDateText(t.fecha));
+      const h=document.createElement('div');h.className='agenda-overview-day-heading';
+      const heading=document.createElement('strong');
+      heading.textContent=agendaOverviewDateText(t.fecha);
+      const count=document.createElement('span');count.className='agenda-overview-count';
+      const n=rows.filter(r=>r.fecha===t.fecha).length;
+      count.textContent=n+' turno'+(n===1?'':'s');
+      h.append(heading,count);group.append(h);list.append(group);
+    }
+    const person=cloudPersonById(t.pacienteId);
+    const raw=cloudAppointmentRaw(t.id);
+    const recent=Number.isFinite(Date.parse(raw?.created_at||''))&&
+      Date.now()-Date.parse(raw.created_at)<48*60*60*1000;
+    const card=document.createElement('div');
+    card.className='agenda-overview-item'+(t.estado==='pendiente'?' agenda-overview-pending':'');
+    const content=document.createElement('div');
+    const headline=document.createElement('strong');
+    const hour=document.createElement('span');hour.className='agenda-overview-time';
+    hour.textContent=t.hora+' · ';
+    headline.append(hour,document.createTextNode(person?.nombre||'Persona sin nombre'));
+    if(recent){
+      const badge=document.createElement('span');
+      badge.className='agenda-overview-new';badge.textContent='Nueva';
+      headline.append(badge);
+    }
+    const details=document.createElement('p');
+    details.textContent=(t.servicioNombre||'Servicio')+' · '+
+      (t.estado==='pendiente'?'Pendiente de confirmación':'Confirmado');
+    content.append(headline,details);
+    const actions=document.createElement('div');actions.className='agenda-overview-item-actions';
+    const jump=document.createElement('button');jump.type='button';jump.className='mb ghost';
+    jump.textContent='Ver día';jump.dataset.agendaAction='day';jump.dataset.appointmentId=t.id;
+    actions.append(jump);
+    if(t.estado==='pendiente'&&professionalCloudWritable()){
+      const confirm=document.createElement('button');confirm.type='button';confirm.className='mb confirm';
+      confirm.textContent='Confirmar';confirm.dataset.agendaAction='confirm';
+      confirm.dataset.appointmentId=t.id;
+      actions.append(confirm);
+    }
+    card.append(content,actions);group.append(card);
+  }
+}
+function jumpToAgendaDay(key){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(key))return;
+  const monday=dk(weekDays(0)[0]);
+  wkOff=Math.floor(Math.round((dp(key)-dp(monday))/86400000)/7);
+  selDate=key;
+  renderCal('med');renderStats();renderAgenda();
+  $('agenda-list').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('agenda-overview-period').addEventListener('change',()=>{
+  agendaOverviewLimit=12;renderUpcomingAgenda();
+});
+$('agenda-overview-filter').addEventListener('change',()=>{
+  agendaOverviewLimit=12;renderUpcomingAgenda();
+});
+$('agenda-overview-more').addEventListener('click',()=>{
+  agendaOverviewLimit+=20;renderUpcomingAgenda();
+});
+$('agenda-overview-list').addEventListener('click',event=>{
+  const button=event.target.closest('button[data-agenda-action]');
+  if(!button||!event.currentTarget.contains(button)||!professionalCloudReady())return;
+  const id=button.dataset.appointmentId;
+  const item=cloudAppointmentViews().find(x=>x.id===id&&isOpenAppointment(x));
+  if(!item)return;
+  if(button.dataset.agendaAction==='day')jumpToAgendaDay(item.fecha);
+  else if(button.dataset.agendaAction==='confirm'&&item.estado==='pendiente'&&professionalCloudWritable())
+    cloudConfirmAppointment(id);
+});
+$('agenda-overview-refresh').addEventListener('click',async event=>{
+  const button=event.currentTarget;
+  if(button.disabled||!professionalCloudReady())return;
+  button.disabled=true;button.textContent='Actualizando…';
+  try{
+    const state=await CithelaCloud.refresh();
+    if(state.error)throw Error(state.error);
+    toast('Agenda actualizada');
+  }catch(e){toast('No se pudo actualizar: '+(e?.message||'reintentá'),4500);}
+  finally{button.disabled=false;button.textContent='Actualizar';}
+});
 
 function renderOpsQueue(){
   const wrap=$('ops-queue-wrap'),el=$('ops-queue');if(!wrap||!el)return;
@@ -4436,6 +4622,7 @@ function renderOpsQueue(){
 }
 
 function renderAgenda(){
+  renderUpcomingAgenda();
   renderOpsQueue();
   renderNtCreatedSummary();
   const key=selDate||today();
