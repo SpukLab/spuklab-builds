@@ -79,7 +79,7 @@ async function testBooking(browser,health){
  }
  await page.locator('#slots button').first().click();
  if(health){
-  assert.match(await page.locator('#selection-price').textContent(),/1\\.500/);
+  assert.ok((await page.locator('#selection-price').textContent()).includes('1.500'));
   assert.match(await page.locator('#selection-price').textContent(),/Importe orientativo/);
   assert.match(await page.locator('#selection-deposit').textContent(),/250/);
   assert.match(await page.locator('#selection-terms').textContent(),/seña se informa por separado/);
