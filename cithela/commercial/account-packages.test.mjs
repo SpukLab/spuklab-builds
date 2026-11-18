@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {runInNewContext} from "node:vm";
 import {handleCithelaCommercialAdmin} from "./commercial-admin-handler.mjs";
 const read=(path)=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const admin="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -70,4 +71,51 @@ test("enrutado de Edge conduce módulos solo al RPC separado",()=>{
  const code=read("edge/cithela-commercial-admin/index.ts");
  assert.match(code,/modules=\['modules_read','modules_set'\]\.includes\(action\)/);
  assert.match(code,/cithela_package_admin_command/);
+});
+
+test("módulos en prueba que vencen generan avisos distintos de los vencimientos de cuenta",async()=>{
+ const html=read("comercial-admin.html");
+ const start=html.indexOf("function renderExpiryNotices(){");
+ const end=html.indexOf("async function saveSelectedModule(){",start);
+ assert.ok(start>0&&end>start,"la consola debe declarar los avisos antes de guardar");
+ const source=html.slice(start,end);
+ const copied=[];
+ const elements={
+  "expiry-list":{children:[],replaceChildren(){this.children=[]},append(...items){this.children.push(...items)}},
+  "expiry-empty":{hidden:false}
+ };
+ const document={
+  createElement(tag){
+   return {tag,children:[],className:"",textContent:"",
+    handlers:{},append(...nodes){this.children.push(...nodes)},
+    addEventListener(name,handler){this.handlers[name]=handler}};
+  }
+ };
+ const moduleSnapshot={
+  accounts:[{tenant_id:"clinic-pilot",name:"Consultorio ficticio",access_status:"complimentary",
+    expires_at:new Date(Date.now()+50*86400000).toISOString()}],
+  catalog:[{code:"salud",label:"Coberturas de salud"}],
+  grants:[{tenant_id:"clinic-pilot",code:"salud",state:"pilot",
+    expires_at:new Date(Date.now()+4*86400000).toISOString()}]
+ };
+ runInNewContext(source+"\nrenderExpiryNotices();",{
+  moduleSnapshot,document,$:id=>elements[id],packageSay:()=>{},
+  navigator:{clipboard:{writeText:async text=>copied.push(text)}},
+  formatDay:x=>x.slice(0,10),Date,Map
+ });
+ assert.equal(elements["expiry-empty"].hidden,true);
+ assert.equal(elements["expiry-list"].children.length,1,
+   "una prueba de salud debe advertirse, aunque la cuenta siga vigente");
+ const row=elements["expiry-list"].children[0];
+ assert.match(row.children[0].textContent,/Módulo/);
+ assert.match(row.children[1].textContent,/Coberturas de salud/);
+ await row.children[2].handlers.click();
+ assert.match(copied[0],/piloto del módulo Coberturas de salud/);
+ assert.match(copied[0],/agenda y los datos existentes no se eliminan/);
+});
+test("una tarifa nueva no presupone precio gratuito",()=>{
+ const html=read("configurar-coberturas.html");
+ assert.match(html,/id="amount"[^>]*placeholder="Ej\. 8500,00" autocomplete="off"/);
+ assert.match(html,/\$\('amount'\)\.value='';\$\('valid-until'\)\.value='';/);
+ assert.match(html,/Ingresá un importe válido sin separadores de miles/);
 });
