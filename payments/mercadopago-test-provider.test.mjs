@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTestPreapproval,createTestPreapproval,readTestPreapproval}
+import {buildTestPreapproval,createTestPreapproval,readTestPreapproval,validateTestSubscriptionSnapshot}
   from './mercadopago-test-provider.mjs';
 const intent={live_mode:false,currency_id:'ARS',
  external_reference:'cithela_1234567890123456',amount_minor:1500000,
@@ -34,7 +34,7 @@ test('creates pending checkout but never activates tenant',async()=>{
    id:'abc123',external_reference:intent.external_reference,status:'pending',
    init_point:'https://www.mercadopago.com.ar/subscriptions/checkout'})};
  }});
- assert.equal(r.code,'created_pending');
+ assert.equal(r.code,'created_pending_payment_not_authorized');
  assert.equal(Object.hasOwn(r,'entitlement'),false);
 });
 test('provider lookup never grants access',async()=>{
@@ -43,4 +43,20 @@ test('provider lookup never grants access',async()=>{
   id:'abc123',external_reference:intent.external_reference,status:'authorized'})})});
  assert.equal(r.status,'authorized');
  assert.equal(Object.hasOwn(r,'entitlement'),false);
+});
+
+test('subscription status alone never enables entitlement',()=>{
+ const i={...intent,provider_subscription_id:'abc123'};
+ const result=validateTestSubscriptionSnapshot(i,{ok:true,code:'read_only',
+  provider_subscription_id:'abc123',external_reference:intent.external_reference,
+  status:'authorized'});
+ assert.equal(result.ok,true);
+ assert.equal(result.payment_verified,false);
+ assert.equal(result.entitlement_activation_allowed,false);
+});
+test('wrong subscription cannot be reconciled',()=>{
+ const result=validateTestSubscriptionSnapshot({...intent,provider_subscription_id:'other'},
+ {ok:true,code:'read_only',provider_subscription_id:'abc123',
+  external_reference:intent.external_reference,status:'authorized'});
+ assert.equal(result.code,'subscription_intent_mismatch');
 });
