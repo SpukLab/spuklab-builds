@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTestPreapproval,createTestPreapproval,readTestPreapproval,validateTestSubscriptionSnapshot}
+import {buildTestPreapproval,createTestPreapproval,readTestPreapproval,validateTestSubscriptionSnapshot,verifyTestProviderIdentity}
   from './mercadopago-test-provider.mjs';
 const intent={live_mode:false,currency_id:'ARS',
  external_reference:'cithela_1234567890123456',amount_minor:1500000,
@@ -59,4 +59,15 @@ test('wrong subscription cannot be reconciled',()=>{
  {ok:true,code:'read_only',provider_subscription_id:'abc123',
   external_reference:intent.external_reference,status:'authorized'});
  assert.equal(result.code,'subscription_intent_mismatch');
+});
+
+test('provider seller and amount must match prepared test intent',()=>{
+ const snapshot={ok:true,code:'read_only',provider_subscription_id:'abc123',
+ external_reference:intent.external_reference,collector_id:intent.collector_id,
+ live_mode:false,currency_id:'ARS',amount:15000,status:'pending'};
+ assert.equal(verifyTestProviderIdentity(intent,snapshot).ok,true);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,collector_id:'999'}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,amount:15001}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,live_mode:true}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,currency_id:'USD'}).ok,false);
 });
