@@ -726,9 +726,29 @@ $('mp-test-check').addEventListener('click',async()=>{
    forbidden:'La cuenta actual no tiene permisos para diagnósticos internos.',
    unauthenticated:'La sesión expiró. Ingresá nuevamente en CITHELA.'
   };
-  status.textContent=error
-   ?'No se pudo completar la comprobación. Revisá la sesión o la disponibilidad del servicio.'
-   :(descriptions[data?.code]||'Respuesta no reconocida del servicio de diagnóstico.');
+  if(error){
+   let code='',httpStatus=0;
+   try{
+    const response=error.context;
+    httpStatus=Number(response?.status)||0;
+    if(response&&typeof response.clone==='function'){
+     const detail=await response.clone().json();
+     code=typeof detail?.code==='string'?detail.code:'';
+    }
+   }catch{}
+   const statusMessages={
+    401:'La sesión administrativa no fue aceptada. Volvé a ingresar.',
+    403:'La cuenta no está autorizada para este diagnóstico.',
+    429:'Demasiadas solicitudes. Esperá unos minutos.',
+    502:'Mercado Pago o el servicio de conexión no respondió correctamente.',
+    503:'El diagnóstico no está disponible en Supabase.'
+   };
+   status.textContent=descriptions[code]||statusMessages[httpStatus]||
+    'No se pudo completar la comprobación. Verificá la conexión e intentá nuevamente.';
+  }else{
+   status.textContent=descriptions[data?.code]||
+    'Respuesta no reconocida del servicio de diagnóstico.';
+  }
  }catch{
   status.textContent='No se pudo contactar el servicio de diagnóstico.';
  }finally{
