@@ -3,7 +3,7 @@ import {
   listFormsForService, simulateSubmission, MAX_FIELDS
 } from './form-model.mjs';
 
-// Únicamente memoria del navegador, sin localStorage, fetch, API ni cookies.
+// Demostración local solo en memoria; no tiene persistencia ni comunicación externa.
 const services = {
   peluqueria: [{ id: 'corte', label: 'Corte' }, { id: 'coloracion', label: 'Coloración' }],
   tattoo: [{ id: 'tattoo', label: 'Sesión de tatuaje' }, { id: 'consulta', label: 'Consulta inicial' }],
