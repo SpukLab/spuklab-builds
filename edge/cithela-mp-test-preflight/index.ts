@@ -22,7 +22,16 @@ Deno.serve(async req=>{
   const {data:membership,error:memberError}=await client.from("cithela_tenant_memberships").select("role").eq("tenant_id",body.tenantId).eq("user_id",user.id).maybeSingle();
   if(memberError)return out(503,"membership_unavailable");
   if(membership?.role!=="owner")return out(403,"not_tenant_owner");
-  if(body.action==="status"){\n   const {data:snapshot,error:snapshotError}=await client.rpc("cithela_mp_test_subscription_snapshot",{p_tenant_id:body.tenantId,p_owner_user_id:user.id});\n   if(snapshotError)return out(503,"snapshot_unavailable");\n   if(!snapshot?.ok)return out(403,snapshot?.code||"not_eligible");\n   // Return only non-sensitive state, never merchant identity, tokens or amounts.\n   return out(200,snapshot.code,{stage:snapshot.stage||null,\n    linked:!!snapshot.provider_subscription_id,live_mode:snapshot.live_mode??false,\n    payment_verified:false,entitlement_activation_allowed:false});\n  }\n  // Private entitlements are not exposed to the public Data API; use a
+  if(body.action==="status"){
+   const {data:snapshot,error:snapshotError}=await client.rpc("cithela_mp_test_subscription_snapshot",{p_tenant_id:body.tenantId,p_owner_user_id:user.id});
+   if(snapshotError)return out(503,"snapshot_unavailable");
+   if(!snapshot?.ok)return out(403,snapshot?.code||"not_eligible");
+   // Return only non-sensitive state, never merchant identity, tokens or amounts.
+   return out(200,snapshot.code,{stage:snapshot.stage||null,
+    linked:!!snapshot.provider_subscription_id,live_mode:snapshot.live_mode??false,
+    payment_verified:false,entitlement_activation_allowed:false});
+  }
+  // Private entitlements are not exposed to the public Data API; use a
   // service-role RPC instead of selecting an unexposed schema.
   const {data:prepared,error:rpcError}=await client.rpc("cithela_mp_test_preflight",{p_tenant_id:body.tenantId,p_owner_user_id:user.id});
   if(rpcError)return out(503,"preflight_unavailable");
