@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>CITHELA · Flujo de formularios · Laboratorio</title>
+<style>
+:root{color-scheme:light;--ink:#23383d;--muted:#64777c;--bg:#f3f8f6;--line:#d9e8e4;--sea:#167a7c;--deep:#173f42;--danger:#aa3e4c}
+*{box-sizing:border-box}body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);margin:0}
+header{background:var(--deep);color:white;padding:24px max(18px,calc((100vw - 1000px)/2))}
+h1{font-size:1.55rem;letter-spacing:-.03em;margin:0}header p{margin:5px 0 0;color:#b9d8d4;font-size:.86rem}
+main{max-width:1000px;margin:20px auto 50px;padding:0 17px}
+.notice{border:1px solid #acd5cb;background:#e8f5f1;border-radius:12px;padding:12px 15px;font-size:.85rem;margin-bottom:15px}
+.tabs{display:flex;gap:7px;overflow-x:auto;padding:3px 0 14px}.tabs button{white-space:nowrap;min-width:0;flex:1;background:#dcece7;color:#245458}
+.tabs button[aria-selected="true"]{background:var(--deep);color:white}
+section{border:1px solid var(--line);background:#fff;border-radius:16px;padding:20px;box-shadow:0 5px 20px #173f4206;min-height:300px}
+section[hidden]{display:none}h2{font-size:1.1rem;margin:0 0 10px}p{margin:9px 0 14px}
+small,.muted{font-size:.8rem;color:var(--muted)}
+label{font-size:.82rem;font-weight:650;display:block;margin:13px 0 5px}
+input,textarea,select{display:block;width:100%;padding:11px 12px;border:1px solid #b4ceca;border-radius:9px;font:inherit;color:var(--ink);background:#fff;min-height:43px}
+textarea{min-height:90px;resize:vertical}
+button{border:0;padding:11px 14px;background:var(--sea);color:white;border-radius:9px;font:inherit;font-weight:650;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #64c4c4;outline-offset:2px}
+.buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}
+.status{font-size:.84rem;background:#f1f8f5;padding:10px 12px;border-radius:10px;margin-top:13px;min-height:38px}
+.status:empty{display:none}
+.fields{margin:14px 0}.question{padding:12px 0;border-bottom:1px solid var(--line)}
+.question:last-child{border-bottom:0}
+.question .check{display:flex;align-items:center;gap:10px;font-weight:500}
+.question .check input{width:20px;min-height:20px;height:20px}
+dl{display:grid;grid-template-columns:minmax(80px,1fr) 2fr;margin:12px 0;gap:7px 14px;font-size:.88rem}
+dt{color:var(--muted)}dd{margin:0;font-weight:550}
+.summary{border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:15px;background:#fbfdfc}
+.answer{border-bottom:1px solid var(--line);padding:10px 0}.answer:last-child{border:0}
+.answer strong{display:block;font-size:.84rem}.answer p{margin:2px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(min-width:800px){.steps{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:15px}.side{padding:17px;border-radius:13px;border:1px solid var(--line);background:#edf6f2;height:max-content}}
+@media(max-width:799px){section{padding:17px}.side{font-size:.8rem;margin-top:14px;color:var(--muted)}}
+</style>
+</head>
+<body>
+<header><h1>CITHELA · Formularios antes del turno</h1><p>Flujo experimental — profesional → cliente → ficha</p></header>
+<main>
+<div class="notice"><strong>Solo una demostración.</strong> No utiliza cuentas ni turnos reales, no se comunica con Supabase, no envía WhatsApp y no guarda respuestas. No ingreses datos personales o médicos reales.</div>
+<div class="tabs" role="tablist" aria-label="Pasos del circuito">
+<button type="button" role="tab" id="tab-profesional" aria-controls="panel-profesional" aria-selected="true" data-step="profesional">1. Profesional</button>
+<button type="button" role="tab" id="tab-cliente" aria-controls="panel-cliente" aria-selected="false" data-step="cliente">2. Cliente</button>
+<button type="button" role="tab" id="tab-ficha" aria-controls="panel-ficha" aria-selected="false" data-step="ficha">3. Ficha</button>
+</div>
+<div class="steps">
+<div>
+<section role="tabpanel" id="panel-profesional" aria-labelledby="tab-profesional">
+<h2>Enviar formulario previo al turno</h2>
+<p class="muted">El formulario se vincula al servicio y a una persona de ejemplo. En CITHELA real se usará el directorio de clientes existente.</p>
+<label for="sector">Establecimiento ficticio</label>
+<select id="sector"><option value="peluqueria">Peluquería Pampa (demo)</option><option value="tatuaje">Estudio de tatuajes (demo)</option></select>
+<label for="servicio">Servicio</label>
+<select id="servicio"></select>
+<div class="summary"><strong>Destinatario:</strong> Persona de prueba · <strong>Turno:</strong> turno ficticio 01</div>
+<div class="buttons"><button type="button" id="crear-solicitud">Preparar solicitud</button></div>
+<div id="estado-profesional" class="status" role="status" aria-live="polite"></div>
+</section>
+<section role="tabpanel" id="panel-cliente" aria-labelledby="tab-cliente" hidden>
+<h2>Completar antes del turno</h2>
+<p id="cliente-info" class="muted">Primero prepará una solicitud desde la pestaña profesional.</p>
+<form id="form-cliente" hidden novalidate>
+<div id="preguntas" class="fields"></div>
+<div class="buttons"><button type="submit">Validar y enviar (simulación)</button></div>
+</form>
+<div id="estado-cliente" class="status" role="status" aria-live="polite"></div>
+</section>
+<section role="tabpanel" id="panel-ficha" aria-labelledby="tab-ficha" hidden>
+<h2>Ficha de cliente · Formularios</h2>
+<p class="muted">Vista ficticia del historial asociado a un cliente y a su turno. Solo personal autorizado debería verla en producción.</p>
+<div id="ficha-resumen" class="summary">Todavía no se preparó una solicitud.</div>
+<div id="ficha-respuestas"></div>
+<div id="estado-ficha" class="status" role="status" aria-live="polite"></div>
+</section>
+</div>
+<aside class="side"><strong>Recorrido previsto</strong><p>1. Elegir servicio y preparar una solicitud.</p><p>2. El cliente verifica su acceso y completa preguntas.</p><p>3. El profesional consulta respuestas desde la ficha.</p><p class="muted">La verificación del cliente y los permisos del servidor son requisitos pendientes, no funciones activas.</p></aside>
+</div>
+</main>
+<script type="module" src="./flow-preview.mjs"></script>
+</body></html>
