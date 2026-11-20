@@ -1,7 +1,6 @@
 create or replace function public.cithela_mp_test_preflight(p_tenant_id uuid,p_owner_user_id uuid)
 returns jsonb language plpgsql security definer set search_path='' as $$
 begin
- if auth.role() <> 'service_role' then return jsonb_build_object('ok',false,'code','forbidden'); end if;
  if not exists(select 1 from public.cithela_tenant_memberships m
  join cithela_private.cithela_commercial_entitlements e on e.tenant_id=m.tenant_id
  join auth.users u on u.id=m.user_id
