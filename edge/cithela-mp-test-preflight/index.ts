@@ -11,7 +11,7 @@ Deno.serve(async req=>{
  const token=/^Bearer\s+([^\s]+)$/i.exec(req.headers.get("authorization")||"")?.[1];
  if(!token)return out(401,"unauthenticated");
  let body;try{const raw=await req.text();if(raw.length>1024)return out(413,"request_too_large");body=JSON.parse(raw);}catch{return out(400,"invalid_request");}
- if(!body||Object.keys(body).sort().join(",")!=="tenantId"||!UUID.test(body.tenantId||""))return out(400,"invalid_tenant");
+ if(!body||!["tenantId","action,tenantId"].includes(Object.keys(body).sort().join(","))||!UUID.test(body.tenantId||"")||(body.action!==undefined&&body.action!=="status"))return out(400,"invalid_tenant");
  const url=Deno.env.get("SUPABASE_URL")||"",key=serverKey();
  if(!url||!key)return out(503,"server_unavailable");
  try{
@@ -22,7 +22,7 @@ Deno.serve(async req=>{
   const {data:membership,error:memberError}=await client.from("cithela_tenant_memberships").select("role").eq("tenant_id",body.tenantId).eq("user_id",user.id).maybeSingle();
   if(memberError)return out(503,"membership_unavailable");
   if(membership?.role!=="owner")return out(403,"not_tenant_owner");
-  // Private entitlements are not exposed to the public Data API; use a
+  if(body.action==="status"){\n   const {data:snapshot,error:snapshotError}=await client.rpc("cithela_mp_test_subscription_snapshot",{p_tenant_id:body.tenantId,p_owner_user_id:user.id});\n   if(snapshotError)return out(503,"snapshot_unavailable");\n   if(!snapshot?.ok)return out(403,snapshot?.code||"not_eligible");\n   // Return only non-sensitive state, never merchant identity, tokens or amounts.\n   return out(200,snapshot.code,{stage:snapshot.stage||null,\n    linked:!!snapshot.provider_subscription_id,live_mode:snapshot.live_mode??false,\n    payment_verified:false,entitlement_activation_allowed:false});\n  }\n  // Private entitlements are not exposed to the public Data API; use a
   // service-role RPC instead of selecting an unexposed schema.
   const {data:prepared,error:rpcError}=await client.rpc("cithela_mp_test_preflight",{p_tenant_id:body.tenantId,p_owner_user_id:user.id});
   if(rpcError)return out(503,"preflight_unavailable");
