@@ -32,8 +32,11 @@ export function createDraft({ id, tenantId, serviceId, title, role }) {
 export function makeField({ id, label, type = 'text', required = false, options = [] }) {
   if (!FIELD_TYPES.includes(type)) fail('invalid_field_type');
   if (typeof required !== 'boolean') fail('invalid_required');
+  const safeId = requiredString(id, 64);
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(safeId)) fail('invalid_field_id');
+  if (!Array.isArray(options)) fail('invalid_options');
   const normalized = {
-    id: requiredString(id, 64),
+    id: safeId,
     label: requiredString(label, 120),
     type,
     required,
