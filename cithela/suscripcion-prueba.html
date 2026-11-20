@@ -11,7 +11,7 @@ a{color:#165c61}.warning{font-weight:600}
 <h1>CITHELA · Suscripción de prueba</h1>
 <p class="muted">Diagnóstico de solo lectura. No crea suscripciones, no solicita tarjetas ni modifica tu cuenta.</p>
 <p id="identity">Comprobando sesión…</p>
-<button type="button" id="check" disabled>Comprobar mi cuenta</button>
+<p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
 <p class="warning">Los pagos de prueba todavía no están habilitados.</p>
 <p><a href="./">Volver a CITHELA</a></p>
@@ -23,6 +23,7 @@ const $=id=>document.getElementById(id);
 const client=window.supabase?.createClient(
  'https://mcqknmqhtmihegmifuka.supabase.co',
  'sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc');
+const ALMA_TENANT='e680ebd3-a031-4968-905a-e829ab3b5dfe';
 let tenantId=null;
 async function load(){
  if(!client){$('identity').textContent='No se pudo cargar la autenticación.';return;}
@@ -32,10 +33,23 @@ async function load(){
  const {data,error:membershipError}=await client.from('cithela_tenant_memberships')
   .select('tenant_id,role').eq('user_id',user.id).eq('role','owner');
  if(membershipError||!Array.isArray(data)){ $('result').textContent='No se pudo comprobar la titularidad.';return;}
- if(data.length!==1){$('result').textContent='La cuenta tiene '+data.length+' establecimientos como propietario. Seleccioná uno desde CITHELA; no se ejecutó ninguna acción.';return;}
- tenantId=data[0].tenant_id;$('check').disabled=false;
+ if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;
+ $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
 }
+$('preflight').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('preflight').disabled=true;$('result').textContent='Validando requisitos del servidor…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-test-preflight',{body:{tenantId}});
+  if(error)throw error;
+  $('result').textContent=data?.code==='eligible_no_payment_created'&&data?.checkout_enabled===false&&data?.subscription_created===false
+   ?'REQUISITOS CORRECTOS: propietario verificado, cuenta elegible.\nCheckout desactivado. Sin pago ni suscripción creada.'
+   :'La validación no fue aprobada: '+(data?.code||'respuesta inesperada');
+ }catch{$('result').textContent='No se pudo validar. Revisá la sesión o intentá nuevamente.';}
+ finally{$('preflight').disabled=false;}
+});
 $('check').addEventListener('click',async()=>{
  if(!tenantId)return;
  $('check').disabled=true;$('result').textContent='Consultando estado…';
