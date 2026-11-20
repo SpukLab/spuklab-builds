@@ -2,7 +2,7 @@ import { createDraft, addField, publishForm } from './form-model.mjs';
 import { createFormRequest, viewRequestForPerson, submitFormRequest, viewSubmittedForStaff } from './flow-model.mjs';
 
 // Datos enteramente inventados, solo en memoria de esta pestaña.
-// No hay fetch, Supabase, localStorage, cookies ni procesamiento de pagos.
+// No hay conexiones de red, sesiones, datos persistentes ni pagos.
 const catalog = {
   peluqueria: {
     label: 'Peluquería Pampa (demo)',
