@@ -76,7 +76,9 @@ export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}
       return fail('unexpected_provider_response');
     return {ok:true,code:'read_only',provider_subscription_id:d.id,
       external_reference:d.external_reference,status:d.status,
-      payer_id:d.payer_id??null};
+      payer_id:d.payer_id??null,collector_id:d.collector_id??null,
+      live_mode:d.live_mode,amount:d.auto_recurring?.transaction_amount,
+      currency_id:d.auto_recurring?.currency_id};
   }catch{return fail('provider_unavailable');}
 }
 
@@ -90,4 +92,19 @@ export function validateTestSubscriptionSnapshot(intent,snapshot){
  return {ok:true,code:'subscription_identity_verified',
    subscription_status:snapshot.status,payment_verified:false,
    entitlement_activation_allowed:false};
+}
+
+/** Verify seller and financial identity before any server-side binding. */
+export function verifyTestProviderIdentity(intent,snapshot){
+ if(!validIntent(intent)||!snapshot?.ok||snapshot.code!=='read_only'||
+   snapshot.external_reference!==intent.external_reference||
+   String(snapshot.collector_id)!==intent.collector_id||
+   snapshot.live_mode!==false||snapshot.currency_id!=='ARS'||
+   typeof snapshot.amount!=='number'||!Number.isFinite(snapshot.amount)||
+   Math.round(snapshot.amount*100)!==intent.amount_minor||
+   !ID.test(snapshot.provider_subscription_id||''))
+   return fail('provider_identity_mismatch');
+ return {ok:true,code:'provider_identity_verified',
+   provider_subscription_id:snapshot.provider_subscription_id,
+   payment_verified:false,entitlement_activation_allowed:false};
 }
