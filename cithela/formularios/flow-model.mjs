@@ -73,7 +73,7 @@ export function submitFormRequest(request, { tenantId, personId, now, expectedRe
   if (request.status === 'submitted') {
     const validated = validateAnswers(request.template, answers);
     if (validated.ok && asSubmitted(validated.values) === asSubmitted(request.answerData)) {
-      return { request, replayed: true };
+      return { ok: true, request, replayed: true };
     }
     err('already_submitted');
   }
@@ -95,6 +95,7 @@ export function submitFormRequest(request, { tenantId, personId, now, expectedRe
 }
 export function revokeFormRequest(request, { tenantId, actorRole, expectedRevision }) {
   enforceStaff(request, { tenantId, role: actorRole });
+  if (!['owner', 'admin'].includes(actorRole)) err('forbidden');
   if (request.status !== 'pending') err('cannot_revoke');
   if (request.revision !== expectedRevision) err('stale_write');
   return { ...request, status: 'revoked', revision: request.revision + 1 };
