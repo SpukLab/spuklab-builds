@@ -3,6 +3,8 @@
  * Server-side ONLY. Does not grant entitlements or process webhook claims.
  * Caller must verify a prepared intent, authenticated tenant owner, merchant,
  * explicit consent and test seller credential BEFORE invoking create.
+ * NOTE: pending preapprovals are NOT automatic recurring charges; this is a
+ * pending-payment flow only. Use authorized preapproval for automatic billing.
  */
 const BASE='https://api.mercadopago.com';
 const REF=/^cithela_[A-Za-z0-9_-]{12,100}$/;
@@ -56,7 +58,7 @@ export async function createTestPreapproval({intent,payerEmail,backUrl,token,fet
     if(checkout.protocol!=='https:'||
        !/(^|\.)mercadopago\.(com|com\.ar)$/.test(checkout.hostname))
       return fail('invalid_checkout_origin');
-    return {ok:true,code:'created_pending',provider_subscription_id:data.id,
+    return {ok:true,code:'created_pending_payment_not_authorized',provider_subscription_id:data.id,
       checkout_url:checkout.toString()};
   }catch{return fail('provider_unavailable');}
 }
@@ -76,4 +78,16 @@ export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}
       external_reference:d.external_reference,status:d.status,
       payer_id:d.payer_id??null};
   }catch{return fail('provider_unavailable');}
+}
+
+/** Strict provider-to-intent comparison. Never infer payment approval here. */
+export function validateTestSubscriptionSnapshot(intent,snapshot){
+ if(!validIntent(intent)||!snapshot?.ok||snapshot.code!=='read_only'||
+    snapshot.external_reference!==intent.external_reference||
+    snapshot.provider_subscription_id!==intent.provider_subscription_id)
+   return fail('subscription_intent_mismatch');
+ // Subscription status alone does not prove a successful recurring charge.
+ return {ok:true,code:'subscription_identity_verified',
+   subscription_status:snapshot.status,payment_verified:false,
+   entitlement_activation_allowed:false};
 }
