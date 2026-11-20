@@ -56,6 +56,12 @@ test('identificadores duplicados y límite de campos', () => {
   for (let i = 1; i < MAX_FIELDS; i++) form = addField(form, field('f-' + i), admin);
   assert.throws(() => addField(form, field('extra'), admin), { message: 'field_limit' });
 });
+test('identificadores de campos compatibles con el backend', () => {
+  assert.throws(() => makeField(field('id con espacios')), { message: 'invalid_field_id' });
+  assert.throws(() => makeField(field('1-invalido')), { message: 'invalid_field_id' });
+  assert.throws(() => makeField({ ...field('correcto'), options: null }), { message: 'invalid_options' });
+});
+
 test('opciones de selección deben ser únicas y válidas', () => {
   assert.throws(() => makeField(field('a', 'select', true, ['Si', 'si'])), { message: 'duplicate_options' });
   assert.throws(() => makeField(field('a', 'select', true, ['Única'])), { message: 'invalid_options' });
