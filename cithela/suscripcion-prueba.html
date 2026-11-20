@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CITHELA · Diagnóstico de suscripción</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;background:#f5f8f8;color:#172c31}
+body{margin:0;padding:24px}.wrap{max-width:600px;margin:30px auto}.panel{background:#fff;border:1px solid #dce5e4;border-radius:18px;padding:24px}
+h1{font-size:1.5rem}p{line-height:1.5}.muted{color:#52666a}.status{background:#edf5f4;border-radius:10px;padding:14px;white-space:pre-wrap}
+button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}
+a{color:#165c61}.warning{font-weight:600}
+</style></head><body><main class="wrap"><section class="panel">
+<h1>CITHELA · Suscripción de prueba</h1>
+<p class="muted">Diagnóstico de solo lectura. No crea suscripciones, no solicita tarjetas ni modifica tu cuenta.</p>
+<p id="identity">Comprobando sesión…</p>
+<button type="button" id="check" disabled>Comprobar mi cuenta</button>
+<p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p class="warning">Los pagos de prueba todavía no están habilitados.</p>
+<p><a href="./">Volver a CITHELA</a></p>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const client=window.supabase?.createClient(
+ 'https://mcqknmqhtmihegmifuka.supabase.co',
+ 'sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc');
+let tenantId=null;
+async function load(){
+ if(!client){$('identity').textContent='No se pudo cargar la autenticación.';return;}
+ const {data:{user},error}=await client.auth.getUser();
+ if(error||!user){$('identity').textContent='Iniciá sesión en CITHELA antes de abrir esta página.';return;}
+ $('identity').textContent='Sesión: '+(user.email||'cuenta profesional');
+ const {data,error:membershipError}=await client.from('cithela_tenant_memberships')
+  .select('tenant_id,role').eq('user_id',user.id).eq('role','owner');
+ if(membershipError||!Array.isArray(data)){ $('result').textContent='No se pudo comprobar la titularidad.';return;}
+ if(data.length!==1){$('result').textContent='La cuenta tiene '+data.length+' establecimientos como propietario. Seleccioná uno desde CITHELA; no se ejecutó ninguna acción.';return;}
+ tenantId=data[0].tenant_id;$('check').disabled=false;
+ $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
+}
+$('check').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('check').disabled=true;$('result').textContent='Consultando estado…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-test-preflight',
+   {body:{tenantId,action:'status'}});
+  if(error)throw error;
+  const messages={no_subscription:'Todavía no hay suscripción de prueba registrada.',
+   snapshot:'Existe una solicitud registrada.',
+   not_tenant_owner:'La cuenta no es propietaria del establecimiento.'};
+  $('result').textContent=(messages[data?.code]||'Estado no reconocido.')+
+   (data?.stage?'\nEtapa: '+data.stage:'')+
+   '\nPago verificado: NO. No se activó ningún cobro.';
+ }catch{$('result').textContent='No se pudo consultar el estado. Verificá la sesión e intentá nuevamente.';}
+ finally{$('check').disabled=false;}
+});
+load();
+</script></body></html>
