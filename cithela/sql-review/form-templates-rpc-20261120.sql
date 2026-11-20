@@ -179,7 +179,7 @@ begin
     where m.tenant_id=p_tenant_id and m.user_id=v_actor
       and m.role in ('owner','admin') and t.status='active'
   ) then return jsonb_build_object('ok',false,'code','forbidden'); end if;
-  if p_action not in ('publish','archive') or p_expected_version is null
+  if p_action is null or p_action not in ('publish','archive') or p_expected_version is null
     or p_expected_version<1 then
     return jsonb_build_object('ok',false,'code','invalid_action');
   end if;
@@ -193,6 +193,10 @@ begin
     if v_row.status<>'draft' or jsonb_array_length(v_row.fields)=0 then
       return jsonb_build_object('ok',false,'code','invalid_transition');
     end if;
+    if not exists (
+      select 1 from public.cithela_services s
+      where s.tenant_id=p_tenant_id and s.id=v_row.service_id and s.active
+    ) then return jsonb_build_object('ok',false,'code','service_inactive'); end if;
     v_next:='published';
   else
     if v_row.status not in ('draft','published') then
