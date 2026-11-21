@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTestPreapproval,createTestPreapproval,readTestPreapproval,validateTestSubscriptionSnapshot,verifyTestProviderIdentity}
+import {buildTestPreapproval,createTestPreapproval,readTestPreapproval,validateTestSubscriptionSnapshot,verifyTestProviderIdentity,authorizeInternalTestCheckout}
   from './mercadopago-test-provider.mjs';
 const intent={live_mode:false,currency_id:'ARS',
  external_reference:'cithela_1234567890123456',amount_minor:1500000,
@@ -70,4 +70,19 @@ test('provider seller and amount must match prepared test intent',()=>{
  assert.equal(verifyTestProviderIdentity(intent,{...snapshot,amount:15001}).ok,false);
  assert.equal(verifyTestProviderIdentity(intent,{...snapshot,live_mode:true}).ok,false);
  assert.equal(verifyTestProviderIdentity(intent,{...snapshot,currency_id:'USD'}).ok,false);
+});
+
+test('checkout gate requires owner, preflight, explicit consent and test accounts',()=>{
+ const valid={tenantId:'e680ebd3-a031-4968-905a-e829ab3b5dfe',
+  ownerEmail:'alma.y.pampa@gmail.com',confirmedOwner:true,
+  preflight:{ok:true,code:'eligible'},explicitConsent:true,
+  serverFeatureEnabled:true,verifiedTestSeller:true,verifiedTestBuyer:true};
+ assert.equal(authorizeInternalTestCheckout(valid).ok,true);
+ for(const field of ['confirmedOwner','explicitConsent','serverFeatureEnabled',
+  'verifiedTestSeller','verifiedTestBuyer']){
+  assert.equal(authorizeInternalTestCheckout({...valid,[field]:false}).ok,false,field);
+ }
+ assert.equal(authorizeInternalTestCheckout({...valid,tenantId:'00000000-0000-4000-8000-000000000000'}).ok,false);
+ assert.equal(authorizeInternalTestCheckout({...valid,ownerEmail:'dentrix.8m@gmail.com'}).ok,false);
+ assert.equal(authorizeInternalTestCheckout({...valid,preflight:{ok:false,code:'not_eligible'}}).ok,false);
 });
