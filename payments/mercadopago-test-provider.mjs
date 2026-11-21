@@ -108,3 +108,25 @@ export function verifyTestProviderIdentity(intent,snapshot){
    provider_subscription_id:snapshot.provider_subscription_id,
    payment_verified:false,entitlement_activation_allowed:false};
 }
+
+/**
+ * Fail-closed decision for whether a test checkout may be exposed.
+ * A successful eligibility check alone is never sufficient.
+ * Do not allow real money or public tenant checkout via this gate.
+ */
+export function authorizeInternalTestCheckout({
+  tenantId,ownerEmail,confirmedOwner,preflight,explicitConsent,
+  serverFeatureEnabled,verifiedTestSeller,verifiedTestBuyer
+}={}){
+  if(tenantId!=='e680ebd3-a031-4968-905a-e829ab3b5dfe'||
+     String(ownerEmail||'').toLowerCase()!=='alma.y.pampa@gmail.com'||
+     confirmedOwner!==true)return fail('internal_owner_only');
+  if(preflight?.ok!==true||preflight.code!=='eligible')
+    return fail('preflight_required');
+  if(explicitConsent!==true)return fail('explicit_consent_required');
+  if(serverFeatureEnabled!==true)return fail('checkout_disabled');
+  if(verifiedTestSeller!==true||verifiedTestBuyer!==true)
+    return fail('test_accounts_unverified');
+  return {ok:true,code:'test_checkout_gate_open',
+    entitlement_activation_allowed:false};
+}
