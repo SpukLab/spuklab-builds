@@ -2,6 +2,7 @@ import {
   createDraft, addField, removeField, publishForm,
   listFormsForService, simulateSubmission, MAX_FIELDS
 } from './form-model.mjs';
+import { listPresetChoices, instantiatePreset } from './presets.mjs';
 
 // Demostración local solo en memoria; no tiene persistencia ni comunicación externa.
 const services = {
@@ -27,7 +28,8 @@ const errorText = {
   required: 'Falta una respuesta obligatoria.',
   invalid_option: 'Elegí una opción válida.',
   too_long: 'La respuesta supera el límite.',
-  unknown_field: 'Se recibieron preguntas no reconocidas.'
+  unknown_field: 'Se recibieron preguntas no reconocidas.',
+  preset_not_found: 'Seleccioná una plantilla válida.'
 };
 const message = code => errorText[code] || String(code || 'Revisá los datos.');
 const status = (id, text) => { $(id).textContent = text; };
@@ -38,7 +40,18 @@ const el = (tag, text, cls) => {
   return item;
 };
 
+function refreshPresets() {
+  const select = $('preset');
+  select.replaceChildren();
+  for (const preset of listPresetChoices($('tenant').value)) {
+    const option = el('option', preset.name);
+    option.value = preset.id;
+    option.title = preset.description;
+    select.append(option);
+  }
+}
 function refreshServices() {
+  refreshPresets();
   const list = $('service');
   list.replaceChildren();
   for (const service of services[$('tenant').value]) {
@@ -128,6 +141,24 @@ $('service').addEventListener('change', updateContext);
 $('field-type').addEventListener('change', () =>
   $('choices-area').classList.toggle('hidden', $('field-type').value !== 'select')
 );
+$('use-preset').addEventListener('click', () => {
+  try {
+    if (draft?.fields.length && !window.confirm('¿Reemplazar el borrador actual por esta plantilla?')) return;
+    counter++;
+    draft = instantiatePreset({
+      presetId: $('preset').value,
+      id: 'demo-form-' + counter,
+      ...ctx(),
+      role: 'owner'
+    });
+    $('form-title').value = draft.title;
+    current = null;
+    status('status', 'Plantilla cargada para este servicio. Podés personalizar las preguntas.');
+    render();
+  } catch (error) {
+    status('status', message(error.code));
+  }
+});
 $('create').addEventListener('click', () => {
   try {
     counter++;
