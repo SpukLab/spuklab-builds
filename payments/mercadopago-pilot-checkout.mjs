@@ -42,13 +42,27 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
     const created = await createTestPreapproval({
       intent, payerEmail:accounts.buyerEmail, backUrl:returnUrl, token, fetchImpl
     });
-    if (!created.ok) return failure('provider_outcome_pending');
+    if (!created.ok) {
+      // A failed POST can have an ambiguous provider outcome; never retry creation automatically.
+      // Only emit an allowlisted internal error code. No provider payload, token or payer data.
+      console.warn('cithela_mp_checkout_diagnostic',JSON.stringify({
+        phase:'create_preapproval',category:created.code || 'unknown_failure',
+        retry_allowed:false
+      }));
+      return failure('provider_outcome_pending');
+    }
     candidate = created;
   } else if (claim.code === 'recover_only') {
     const search = await services.searchSubscriptions(intent.external_reference, accounts.buyerEmail);
     const recovered = decideTestCheckoutRecovery({
       intent, providerSnapshots:search.results, lookupComplete:search.complete
     });
+    console.info('cithela_mp_checkout_diagnostic',JSON.stringify({
+      phase:'recover_preapproval',category:recovered.code,
+      lookup_complete:search.complete===true,
+      candidate_count:Array.isArray(search.results)?search.results.length:0,
+      retry_allowed:false
+    }));
     if (!recovered.ok) return recovered;
     const match = search.results.find(item => item.id === recovered.provider_subscription_id);
     candidate = {...recovered, checkout_url:match?.init_point};

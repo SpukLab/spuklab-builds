@@ -48,8 +48,17 @@ export async function createTestPreapproval({intent,payerEmail,backUrl,token,fet
         'X-Idempotency-Key':intent.external_reference},
       body:JSON.stringify(built.body),signal:AbortSignal.timeout(12000)
     });
-    if(!response.ok)return fail(response.status===401?'credential_rejected':
-      response.status===429?'provider_rate_limited':'provider_rejected');
+    if(!response.ok){
+      // No raw response body: it can contain account identifiers or PII.
+      const category=response.status===401||response.status===403?'credential_rejected':
+        response.status===429?'provider_rate_limited':
+        response.status===400||response.status===422?'provider_validation_rejected':
+        response.status>=500?'provider_server_error':'provider_rejected';
+      console.warn('cithela_mp_provider_diagnostic',JSON.stringify({
+        operation:'create_preapproval',http_status:response.status,category
+      }));
+      return fail(category);
+    }
     const data=await response.json();
     if(!ID.test(data?.id||'')||data.external_reference!==intent.external_reference||
        data.status!=='pending'||typeof data.init_point!=='string')
@@ -60,7 +69,13 @@ export async function createTestPreapproval({intent,payerEmail,backUrl,token,fet
       return fail('invalid_checkout_origin');
     return {ok:true,code:'created_pending_payment_not_authorized',provider_subscription_id:data.id,
       checkout_url:checkout.toString()};
-  }catch{return fail('provider_unavailable');}
+  }catch(error){
+    console.warn('cithela_mp_provider_diagnostic',JSON.stringify({
+      operation:'create_preapproval',category:
+        error?.name==='TimeoutError'?'timeout':'network_or_parse_error'
+    }));
+    return fail('provider_unavailable');
+  }
 }
 export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}){
   if(!ID.test(subscriptionId||''))return fail('invalid_subscription_id');
