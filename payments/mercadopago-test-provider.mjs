@@ -6,6 +6,7 @@
  * NOTE: pending preapprovals are NOT automatic recurring charges; this is a
  * pending-payment flow only. Use authorized preapproval for automatic billing.
  */
+import {classifyPreapprovalValidation} from './mercadopago-error-classifier.mjs';
 const BASE='https://api.mercadopago.com';
 const REF=/^cithela_[A-Za-z0-9_-]{12,100}$/;
 const ID=/^[A-Za-z0-9_-]{1,120}$/;
@@ -54,8 +55,17 @@ export async function createTestPreapproval({intent,payerEmail,backUrl,token,fet
         response.status===429?'provider_rate_limited':
         response.status===400||response.status===422?'provider_validation_rejected':
         response.status>=500?'provider_server_error':'provider_rejected';
+      let validation_reason='not_applicable';
+      if((response.status===400||response.status===422) &&
+         response.headers?.get('content-type')?.includes('application/json')){
+        // The provider body is used only in memory to pick a fixed safe enum.
+        // Never log its raw contents, payer email, buyer/seller IDs or tokens.
+        const details=await response.json().catch(()=>null);
+        validation_reason=classifyPreapprovalValidation(details);
+      }
       console.warn('cithela_mp_provider_diagnostic',JSON.stringify({
-        operation:'create_preapproval',http_status:response.status,category
+        operation:'create_preapproval',http_status:response.status,category,
+        validation_reason
       }));
       return fail(category);
     }
