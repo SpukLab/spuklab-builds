@@ -1,4 +1,4 @@
--- DRAFT only: do not execute without the trusted Mercado Pago verification endpoint.
+-- Controlled internal-only recovery migration. Deploy the verified Edge endpoint and require authenticated explicit consent before calling the RPC.
 -- Read-only provider searches must cover payer ID, email and unfiltered seller inventory.
 BEGIN;
 ALTER TABLE cithela_private.cithela_mp_subscription_intents
