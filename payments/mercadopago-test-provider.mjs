@@ -95,7 +95,7 @@ export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}
       live_mode:d.live_mode,
       amount:(typeof d.auto_recurring?.transaction_amount==='number' ||
         (typeof d.auto_recurring?.transaction_amount==='string' &&
-         /^\\d+(?:\\.\\d{1,2})?$/.test(d.auto_recurring.transaction_amount)))
+         /^\d+(?:\.\d{1,2})?$/.test(d.auto_recurring.transaction_amount)))
         ? Number(d.auto_recurring.transaction_amount) : null,
       currency_id:d.auto_recurring?.currency_id};
   }catch{return fail('provider_unavailable');}
