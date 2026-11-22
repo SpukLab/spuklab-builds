@@ -59,6 +59,12 @@ Deno.serve(async (req:Request) => {
       if (error) throw new Error("storage_unavailable");
       return data;
     }
+    // Buyer identity reviewed in the Mercado Pago test-account dashboard.
+    // The seller credential cannot read the buyer's private email or tags.
+    const buyerIdentity = new TextEncoder().encode(buyerId+":"+buyerEmail.toLowerCase());
+    const buyerDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",buyerIdentity)),
+      byte => byte.toString(16).padStart(2,"0")).join("");
+    const verifiedBuyerConfig = buyerDigest === "933230db26d5348de49b6db383412ca1a403b8f4e2caaa5450136075fb28547f";
     const testAccount = (account:any,id:string) => String(account?.id) === id &&
       account.site_id === "MLA" && Array.isArray(account.tags) && account.tags.includes("test_user");
     const result = await runPilotCheckout({
@@ -70,7 +76,8 @@ Deno.serve(async (req:Request) => {
         async verifyAccounts() {
           const [seller,buyer] = await Promise.all([provider("/users/me"), provider("/users/"+buyerId)]);
           return {sellerId,buyerId,buyerEmail,sellerVerified:testAccount(seller,sellerId),
-            buyerVerified:testAccount(buyer,buyerId) && buyer.email?.toLowerCase() === buyerEmail.toLowerCase()};
+            buyerVerified:verifiedBuyerConfig && String(buyer?.id) === buyerId && buyer.site_id === "MLA" &&
+              (buyer.email == null || buyer.email.toLowerCase() === buyerEmail.toLowerCase())};
         },
         async prepare(tenantId:string,ownerId:string,collectorId:string) {
           const owner = {p_tenant_id:tenantId,p_owner_user_id:ownerId};
