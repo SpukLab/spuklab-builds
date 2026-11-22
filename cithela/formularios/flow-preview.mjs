@@ -1,5 +1,6 @@
 import { createDraft, addField, publishForm } from './form-model.mjs';
-import { createFormRequest, viewRequestForPerson, submitFormRequest, viewSubmittedForStaff } from './flow-model.mjs';
+import { createFormRequest, viewRequestForPerson, submitFormRequest } from './flow-model.mjs';
+import { buildUnifiedProfile } from './unified-profile-model.mjs';
 
 // Datos enteramente inventados, solo en memoria de esta pestaña.
 // No hay conexiones de red, sesiones, datos persistentes ni pagos.
@@ -170,23 +171,97 @@ $('form-cliente').addEventListener('submit',event => {
     status('estado-cliente',e.code || 'No se pudo validar el formulario.');
   }
 });
+function profileFixtures() {
+  const {tenantId,serviceId}=request ? {tenantId:request.tenantId,serviceId:request.serviceId} : active();
+  const label=catalog[tenantId].services.find(s=>s.id===serviceId)?.label || 'Servicio de prueba';
+  const appointment=(offsetDays)=>new Date(Date.now()+offsetDays*86400000).toISOString();
+  return {
+    tenantId,
+    person:{
+      tenantId,
+      id:personId,
+      displayName:'Persona de prueba',
+      phone:'Sin WhatsApp real',
+      email:'Sin correo real',
+      sharedNote:'Prefiere recibir avisos de turnos (dato ficticio).',
+      staffNotes:'Preparar el espacio antes de la visita (dato ficticio).'
+    },
+    appointments:[
+      {tenantId,personId,id:appointmentId,serviceId,startsAt:appointment(2),status:'confirmed',service:label,professional:'Profesional de prueba'},
+      {tenantId,personId,id:'turno-demo-historico',serviceId,startsAt:appointment(-14),status:'attended',service:label,professional:'Profesional de prueba'}
+    ],
+    requests:request?[request]:[],
+    actorRole:'owner',
+    now:clock()
+  };
+}
+const localWhen = iso=>new Intl.DateTimeFormat('es-AR',{
+  dateStyle:'medium',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'
+}).format(new Date(iso));
+
+function renderAppointments(id,items) {
+  const wrap=$(id);wrap.replaceChildren();
+  if(!items.length){
+    wrap.append(element('p','No hay turnos en esta sección.','muted'));
+    return;
+  }
+  for(const a of items){
+    const card=element('div',null,'profile-appointment');
+    card.append(element('strong',a.service+' · '+a.status));
+    card.append(element('div',localWhen(a.startsAt)+' · '+a.professional,'profile-meta'));
+    wrap.append(card);
+  }
+}
+function addDetail(list,key,value) {
+  list.append(element('dt',key),element('dd',value || '—'));
+}
 function drawStaff() {
   const summary=$('ficha-resumen');
-  const responses=$('ficha-respuestas');
-  responses.replaceChildren();
+  const forms=$('ficha-formularios');
+  const details=$('ficha-datos');
+  details.replaceChildren();
+  forms.replaceChildren();
   status('estado-ficha','');
-  if (!request) {summary.textContent='Todavía no se preparó una solicitud.';return;}
-  summary.textContent='Persona de prueba · '+request.template.title+
-    ' · Estado: '+request.status+
-    ' · Servicio: '+catalog[request.tenantId].services.find(s=>s.id===request.serviceId)?.label;
-  const data=viewSubmittedForStaff(request,{tenantId:request.tenantId,actorRole:'owner'});
-  if (!data) {status('estado-ficha','Todavía no hay respuestas.');return;}
-  for (const item of data.items) {
-    const box=element('div',null,'answer');
-    box.append(element('strong',item.label));
-    box.append(element('p', typeof item.value==='boolean'?(item.value?'Sí':'No'):(item.value||'—')));
-    responses.append(box);
+  let view;
+  try{
+    view=buildUnifiedProfile(profileFixtures());
+  }catch(error){
+    summary.textContent='No se pudo mostrar la ficha de ejemplo.';
+    status('estado-ficha',error.code || 'Error de ficha');
+    return;
   }
-  status('estado-ficha','Respuestas visibles solo en la simulación. Se borran al cerrar o recargar esta pestaña.');
+  summary.textContent=view.person.name+' · Ficha de demostración · Sin conexión con personas reales';
+  $('ficha-count-upcoming').textContent=String(view.upcoming.length);
+  $('ficha-count-history').textContent=String(view.history.length);
+  $('ficha-count-forms').textContent=String(view.forms.length);
+  addDetail(details,'Nombre',view.person.name);
+  addDetail(details,'Contacto',view.person.phone);
+  addDetail(details,'Correo',view.person.email);
+  addDetail(details,'Información compartida',view.person.sharedNote);
+  addDetail(details,'Notas internas',view.person.staffNotes);
+  renderAppointments('ficha-proximos',view.upcoming);
+  renderAppointments('ficha-historial',view.history);
+  if(!view.forms.length){
+    forms.append(element('p','Todavía no se prepararon formularios para esta persona.','muted'));
+  }else{
+    for(const form of view.forms){
+      const card=element('div',null,'profile-appointment');
+      card.append(element('strong',form.title));
+      card.append(element('div','Estado: '+form.status,'profile-meta'));
+      if(form.items.length && view.canSeeAnswers){
+        const answerWrap=element('div',null,'profile-answer');
+        for(const item of form.items){
+          const answer=element('div',null,'answer');
+          answer.append(element('strong',item.label));
+          const value=typeof item.value==='boolean'?(item.value?'Sí':'No'):(item.value||'—');
+          answer.append(element('p',String(value)));
+          answerWrap.append(answer);
+        }
+        card.append(answerWrap);
+      }
+      forms.append(card);
+    }
+  }
+  status('estado-ficha','Vista unificada ficticia. Contactos, turnos y respuestas desaparecen al recargar.');
 }
 services();
