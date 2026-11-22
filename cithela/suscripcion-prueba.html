@@ -13,6 +13,7 @@ a{color:#165c61}.warning{font-weight:600}
 <p id="identity">Comprobando sesión…</p>
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><button type="button" id="reconcile" disabled>Verificar y desbloquear intento pendiente</button></p>
 <fieldset id="pilot-checkout" hidden>
 <legend>Checkout de prueba</legend>
 <p><label><input type="checkbox" id="consent"> Confirmo que usaré datos de prueba.</label></p>
@@ -41,7 +42,7 @@ async function load(){
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
- tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
 }
@@ -72,6 +73,29 @@ $('check').addEventListener('click',async()=>{
    '';
  }catch{$('result').textContent='No se pudo consultar el estado. Verificá la sesión e intentá nuevamente.';}
  finally{$('check').disabled=false;}
+});
+$('reconcile').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA consultará Mercado Pago y, solo si no encuentra ninguna suscripción y pasa los controles, cerrará el intento interno bloqueado. No crea ni cobra una suscripción. ¿Continuar?'))return;
+ $('reconcile').disabled=true;$('result').textContent='Verificando el intento pendiente en Mercado Pago…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-recover',
+   {body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response?await error.context.json().catch(()=>null):data;
+  const label={
+   verified_absent_intent_abandoned:'Intento anterior cerrado y auditado. Todavía no se creó ninguna suscripción nueva.',
+   provider_subscription_found_requires_link:'Mercado Pago encontró una suscripción. No se cerró el intento; necesita vinculación.',
+   provider_lookup_incomplete:'No pudo completarse la búsqueda. El intento sigue bloqueado.',
+   recovery_disabled:'Recuperación no habilitada en el servidor.',
+   claim_too_recent:'El intento es demasiado reciente para cerrarlo.',
+   provider_event_requires_review:'Hay notificaciones de Mercado Pago pendientes de revisar.',
+   provider_evidence_required:'No se pudo verificar la ausencia de la suscripción.',
+   reconciliation_unavailable:'La conciliación no pudo completarse.'
+  };
+  $('result').textContent=(label[response?.code]||'El intento no fue desbloqueado.')+
+    '\\nCódigo: '+(response?.code||'sin_respuesta');
+ }catch{$('result').textContent='No se pudo consultar la recuperación. El intento conserva su estado.';}
+ finally{$('reconcile').disabled=false;}
 });
 $('consent').addEventListener('change',()=>{$('checkout').disabled=!$('consent').checked;});
 $('checkout').addEventListener('click',async()=>{

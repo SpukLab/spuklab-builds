@@ -92,7 +92,11 @@ export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}
     return {ok:true,code:'read_only',provider_subscription_id:d.id,
       external_reference:d.external_reference,status:d.status,
       payer_id:d.payer_id??null,collector_id:d.collector_id??null,
-      live_mode:d.live_mode,amount:d.auto_recurring?.transaction_amount,
+      live_mode:d.live_mode,
+      amount:(typeof d.auto_recurring?.transaction_amount==='number' ||
+        (typeof d.auto_recurring?.transaction_amount==='string' &&
+         /^\d+(?:\.\d{1,2})?$/.test(d.auto_recurring.transaction_amount)))
+        ? Number(d.auto_recurring.transaction_amount) : null,
       currency_id:d.auto_recurring?.currency_id};
   }catch{return fail('provider_unavailable');}
 }
