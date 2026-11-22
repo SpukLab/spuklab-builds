@@ -37,3 +37,21 @@ export function classifyPreapprovalValidation(response) {
     return 'reason_invalid';
   return 'validation_unknown';
 }
+
+/**
+ * Only structural details and code-shaped identifiers are retained.
+ * Never persist the free-form provider message/cause.description.
+ */
+export function safePreapprovalErrorMetadata(body) {
+  if(!body || typeof body!=='object' || Array.isArray(body))
+    return {response_shape:'non_object',provider_code:'unavailable'};
+  const keys=['error','message','code','cause','status','details'];
+  const response_shape=keys.filter(key=>Object.hasOwn(body,key)).join('_') || 'unknown_object';
+  const codes=[body.code,body.error,
+    ...(Array.isArray(body.cause) ? body.cause.slice(0,8).map(x=>x?.code) : [])];
+  const code=codes.find(x=>typeof x==='string' &&
+    /^[A-Za-z][A-Za-z0-9_\-]{1,60}$/.test(x) &&
+    !/^(?:app_usr|test_user|bearer|token|access_token)/i.test(x) &&
+    !/\d{7,}/.test(x));
+  return {response_shape,provider_code:code || 'unavailable'};
+}
