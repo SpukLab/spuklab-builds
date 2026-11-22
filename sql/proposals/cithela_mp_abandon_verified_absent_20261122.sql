@@ -230,7 +230,7 @@ BEGIN
  VALUES(v.intent_id,'verified_absent_from_provider',p_evidence_checked_at,true,true,0,0);
  UPDATE cithela_private.cithela_mp_subscription_intents SET stage='abandoned' WHERE intent_id=v.intent_id;
  RETURN jsonb_build_object('ok',true,'code','intent_abandoned','payment_created',false);
-END $recover$;
+END; $recover$;
 REVOKE ALL ON FUNCTION public.cithela_mp_abandon_verified_absent_test_intent(uuid,timestamptz,boolean,boolean,integer,integer)
  FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.cithela_mp_abandon_verified_absent_test_intent(uuid,timestamptz,boolean,boolean,integer,integer) TO service_role;
