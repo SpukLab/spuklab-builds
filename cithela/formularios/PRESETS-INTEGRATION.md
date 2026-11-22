@@ -30,6 +30,17 @@ Este PR está **apilado sobre el PR #186**. El PR #189 (solicitud → cliente �
 4. Conectar la solicitud al portal autenticado y mostrar respuestas desde `Clientes/Pacientes → Ver ficha`, con permisos propios, finalidad, retención y eliminación.
 5. Comprobar iPhone/iPad/escritorio con datos sintéticos. Habilitar gradualmente, sin dependencia del checkout de Mercado Pago.
 
+## Puntos concretos de conexión en la aplicación (comprobados en `main`)
+
+Los archivos de este PR no se montan todavía en la aplicación principal. Para su integración posterior, reutilizar estos puntos existentes de `cithela/index.html`:
+
+- `renderServicesConfig()`: ya presenta `cfg-service-list` y discrimina el modo Cloud / local. Aquí corresponde incorporar un acceso colapsable **Formularios** por servicio, solamente si el módulo está habilitado y el backend validado.
+- `canManageCloudServices()`: conservar controles de propietario/administrador en UX, pero **sin confiar en ellos para autorizar** escritura. El servidor debe verificar la membresía real.
+- `renderPacs()`: ya gestiona el listado y búsqueda de personas. No crear un directorio paralelo.
+- `cloudVerFicha(id)` y `CithelaCloud.personHistory(id)`: la ficha existente es el destino previsto del historial de formularios. Las respuestas requieren RPC específica, sin extender la consulta general de historial con datos sensibles.
+
+El editor debe funcionar **sin depender de Mercado Pago**, pero solo se publicará después de validar permisos, aislamiento por tenant, retención y el circuito de acceso del paciente.
+
 ## Verificación
 
 ```bash
