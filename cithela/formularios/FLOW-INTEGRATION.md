@@ -14,6 +14,25 @@ En el prototipo se representan: estado pendiente/enviado, vencimiento de 48 hora
 
 **No debe presentarse como un sistema ya seguro para pacientes**. Los controles JavaScript son ilustrativos; cualquier persona con acceso al navegador de demostración puede inspeccionar su estado en memoria.
 
+## Ficha unificada de demostración (nueva fase)
+
+La pantalla `flow-preview.html` ahora incluye una ficha compacta con **Datos y contacto**, **Turnos próximos**, **Historial de turnos** y **Formularios y respuestas**, además de indicadores de cantidad.
+
+- `unified-profile-model.mjs` crea una vista de solo lectura a partir de una persona, citas y solicitudes previamente autorizadas. **Solo se utiliza con registros sintéticos**.
+- Los datos ficticios del cliente y dos turnos ilustrativos se generan en `flow-preview.mjs`; no existe un segundo registro de personas, persistencia ni consulta a Supabase.
+- Se comprueba que los formularios correspondan al mismo establecimiento y persona, y cuando hay turno asociado, al mismo servicio.
+- La vista de respuestas y notas queda reservada a `owner/admin` **en el prototipo**. Operador y viewer no ven respuestas ni notas internas. Es una decisión conservadora pendiente de la matriz de permisos definitiva.
+- Las fechas se ordenan para destacar próximas atenciones; las demás se agrupan como historial, sin modificar el estado original del turno.
+- Se emplea `textContent` para cada campo y respuesta; no se introducen contenidos de la persona como HTML ejecutable.
+
+### Integración con la ficha cloud real (aún pendiente)
+
+El punto identificado en `cithela/index.html` es `cloudVerFicha(id)`, que hoy carga `CithelaCloud.personHistory(id)` y ya incluye nombre, WhatsApp, contacto, notas e historial de turnos. La integración final **reutilizará esa ficha y esa consulta**, no creará un directorio nuevo.
+
+`renderPacs()` lista las personas; `renderServicesConfig()` ofrece el catálogo de servicios. Se añadirá una lectura de formularios por RPC, exclusivamente cuando la base y los permisos por persona, rol y establecimiento estén auditados. Evitar cargar respuestas en `personHistory()` o en la consulta general de lista, porque aumentaría innecesariamente el acceso a datos sensibles.
+
+No se habilitó la ficha unificada en el panel publicado. La demostración no es una prueba de seguridad del servidor ni una historia clínica, y su estado se borra al recargar.
+
 ## Lo que ya existe en CITHELA
 
 - Directorio `public.cithela_people` con teléfono, email de contacto, notas y `patient_shared_note`.
