@@ -1,4 +1,5 @@
 -- DRAFT only: do not execute without the trusted Mercado Pago verification endpoint.
+-- Read-only provider searches must cover payer ID, email and unfiltered seller inventory.
 BEGIN;
 ALTER TABLE cithela_private.cithela_mp_subscription_intents
  DROP CONSTRAINT cithela_mp_subscription_intents_stage_check,
@@ -213,6 +214,8 @@ BEGIN
  AND stage='prepared' AND provider_subscription_id IS NULL AND live_mode=false
  AND terms_version='internal-test-only-v1' FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'code','intent_not_recoverable'); END IF;
+ IF v.created_at > statement_timestamp()-interval '10 minutes'
+ THEN RETURN jsonb_build_object('ok',false,'code','claim_too_recent'); END IF;
  IF NOT EXISTS(SELECT 1 FROM cithela_private.cithela_mp_checkout_claims c WHERE c.intent_id=v.intent_id)
  THEN RETURN jsonb_build_object('ok',false,'code','claim_missing'); END IF;
  IF EXISTS(SELECT 1 FROM cithela_private.cithela_mp_pilot_payments x WHERE x.intent_id=v.intent_id)
@@ -220,7 +223,7 @@ BEGIN
  THEN RETURN jsonb_build_object('ok',false,'code','payment_or_activation_exists'); END IF;
  IF EXISTS(SELECT 1 FROM cithela_private.cithela_mp_webhook_inbox e
  WHERE e.merchant_user_id=v.collector_id AND e.live_mode=false
- AND (e.resource_id=v.external_reference))
+ AND (e.resource_id=v.external_reference OR e.received_at >= v.created_at))
  THEN RETURN jsonb_build_object('ok',false,'code','provider_event_requires_review'); END IF;
  INSERT INTO cithela_private.cithela_mp_abandon_audit
  (intent_id,reason,evidence_checked_at,email_search_complete,payer_id_search_complete,email_match_count,payer_id_match_count)
