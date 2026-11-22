@@ -1,4 +1,5 @@
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
+import {assessProviderAbsence} from "../../payments/mercadopago-safe-abandon.mjs";
 
 // Internal-only recovery. Does not create, modify or cancel Mercado Pago subscriptions.
 const ORIGIN="https://spuklab.github.io";
@@ -106,9 +107,10 @@ Deno.serve(async(req:Request)=>{
       seller_complete:bySeller.complete,email_matches:emailMatches.length,
       id_matches:idMatches.length,seller_matches:sellerMatches.length
     }));
-    if(!complete)return out(409,"provider_lookup_incomplete");
-    if(emailMatches.length||idMatches.length||sellerMatches.length)
-      return out(409,"provider_subscription_found_requires_link");
+    const decision=assessProviderAbsence({
+      reference,email:byEmail,id:byId,seller:bySeller
+    });
+    if(!decision.ok)return out(409,decision.code);
 
     // No subscriber data, credentials, or provider IDs are submitted by the browser.
     // The database re-checks intent, claim, linked payment, and webhook state inside a transaction.
