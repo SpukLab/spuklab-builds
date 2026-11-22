@@ -89,7 +89,7 @@ Deno.serve(async(req:Request)=>{
           return {complete:false,items};
         total=page.paging.total;items.push(...page.results);
         if(items.length===total)return {complete:true,items};
-        if(items.length>total||page.results.length===0)return {complete:false,items};
+        if(total===null||items.length>total||page.results.length===0)return {complete:false,items};
       }
       return {complete:false,items};
     }
