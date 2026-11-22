@@ -189,7 +189,7 @@ begin
  and stage NOT IN ('canceled','abandoned') order by created_at desc limit 1;
  if not found then return jsonb_build_object('ok',true,'code','no_subscription'); end if;
  return jsonb_build_object('ok',true,'code','snapshot',
- 'stage',v.stage,'external_reference',v.external_reference,
+ 'stage',v.stage,'intent_id',v.intent_id,'external_reference',v.external_reference,
  'provider_subscription_id',v.provider_subscription_id,
  'live_mode',v.live_mode,'currency_id',v.currency_id,
  'amount_minor',v.amount_minor,'collector_id',v.collector_id);
