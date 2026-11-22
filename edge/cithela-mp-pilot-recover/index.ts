@@ -25,7 +25,7 @@ Deno.serve(async(req:Request)=>{
   if(req.method!=="POST")return out(405,"method_not_allowed");
   if(req.headers.get("origin")!==ORIGIN)return out(403,"origin_not_allowed");
   // Separate explicit recovery switch, disabled by default.
-  if(env("CITHELA_MP_PILOT_RECOVERY_ENABLED")!=="true")return out(503,"recovery_disabled");
+  if(env("CITHELA_MP_PILOT_CHECKOUT_ENABLED")!=="true")return out(503,"recovery_disabled");
   const jwt=/^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization")||"")?.[1];
   if(!jwt)return out(401,"unauthenticated");
   let body:any;
@@ -113,7 +113,7 @@ Deno.serve(async(req:Request)=>{
     // No subscriber data, credentials, or provider IDs are submitted by the browser.
     // The database re-checks intent, claim, linked payment, and webhook state inside a transaction.
     const intentRow=await db.rpc("cithela_mp_abandon_verified_absent_test_intent",{
-      p_intent_id:env("CITHELA_MP_PILOT_RECOVERY_INTENT_ID"),
+      p_intent_id:intent.intent_id,
       p_evidence_checked_at:new Date().toISOString(),
       p_email_complete:true,p_payer_id_complete:true,
       p_email_count:0,p_payer_id_count:0
