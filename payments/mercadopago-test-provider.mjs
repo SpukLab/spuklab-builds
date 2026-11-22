@@ -6,7 +6,7 @@
  * NOTE: pending preapprovals are NOT automatic recurring charges; this is a
  * pending-payment flow only. Use authorized preapproval for automatic billing.
  */
-import {classifyPreapprovalValidation} from './mercadopago-error-classifier.mjs';
+import {classifyPreapprovalValidation,safePreapprovalErrorMetadata} from './mercadopago-error-classifier.mjs';
 const BASE='https://api.mercadopago.com';
 const REF=/^cithela_[A-Za-z0-9_-]{12,100}$/;
 const ID=/^[A-Za-z0-9_-]{1,120}$/;
@@ -56,16 +56,20 @@ export async function createTestPreapproval({intent,payerEmail,backUrl,token,fet
         response.status===400||response.status===422?'provider_validation_rejected':
         response.status>=500?'provider_server_error':'provider_rejected';
       let validation_reason='not_applicable';
+      let response_shape='not_applicable',provider_code='unavailable';
+      const content_type=response.headers?.get('content-type')?.toLowerCase()||'';
       if((response.status===400||response.status===422) &&
-         response.headers?.get('content-type')?.includes('application/json')){
-        // The provider body is used only in memory to pick a fixed safe enum.
-        // Never log its raw contents, payer email, buyer/seller IDs or tokens.
+         (content_type.includes('application/json')||content_type.includes('+json'))){
+        // Read in memory only, never persist the raw provider payload.
         const details=await response.json().catch(()=>null);
         validation_reason=classifyPreapprovalValidation(details);
+        ({response_shape,provider_code}=safePreapprovalErrorMetadata(details));
+      }else if(response.status===400||response.status===422){
+        response_shape='non_json';
       }
       console.warn('cithela_mp_provider_diagnostic',JSON.stringify({
         operation:'create_preapproval',http_status:response.status,category,
-        validation_reason
+        validation_reason,response_shape,provider_code
       }));
       return fail(category);
     }
