@@ -9,11 +9,16 @@ button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;backg
 a{color:#165c61}.warning{font-weight:600}
 </style></head><body><main class="wrap"><section class="panel">
 <h1>CITHELA · Suscripción de prueba</h1>
-<p class="muted">Diagnóstico de solo lectura. No crea suscripciones, no solicita tarjetas ni modifica tu cuenta.</p>
+<p class="muted">Piloto interno de Alma y Pampa. Usá únicamente la cuenta compradora y una tarjeta de prueba de Mercado Pago.</p>
 <p id="identity">Comprobando sesión…</p>
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
-<p class="warning">Los pagos de prueba todavía no están habilitados.</p>
+<fieldset id="pilot-checkout" hidden>
+<legend>Checkout de prueba</legend>
+<p><label><input type="checkbox" id="consent"> Confirmo que usaré datos de prueba.</label></p>
+<button type="button" id="checkout" disabled>Preparar checkout de prueba</button>
+<p><a id="mp-link" hidden rel="noreferrer">Abrir Mercado Pago</a></p>
+</fieldset>
 <p><a href="./">Volver a CITHELA</a></p>
 </section></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
@@ -34,6 +39,8 @@ async function load(){
   .select('tenant_id,role').eq('user_id',user.id).eq('role','owner');
  if(membershipError||!Array.isArray(data)){ $('result').textContent='No se pudo comprobar la titularidad.';return;}
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
+ if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
+ $('pilot-checkout').hidden=false;
  tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
@@ -45,7 +52,7 @@ $('preflight').addEventListener('click',async()=>{
   const {data,error}=await client.functions.invoke('cithela-mp-test-preflight',{body:{tenantId}});
   if(error)throw error;
   $('result').textContent=data?.code==='eligible_no_payment_created'&&data?.checkout_enabled===false&&data?.subscription_created===false
-   ?'REQUISITOS CORRECTOS: propietario verificado, cuenta elegible.\nCheckout desactivado. Sin pago ni suscripción creada.'
+   ?'REQUISITOS CORRECTOS: propietario verificado, cuenta elegible.\nLa verificación no creó ningún pago.'
    :'La validación no fue aprobada: '+(data?.code||'respuesta inesperada');
  }catch{$('result').textContent='No se pudo validar. Revisá la sesión o intentá nuevamente.';}
  finally{$('preflight').disabled=false;}
@@ -62,9 +69,39 @@ $('check').addEventListener('click',async()=>{
    not_tenant_owner:'La cuenta no es propietaria del establecimiento.'};
   $('result').textContent=(messages[data?.code]||'Estado no reconocido.')+
    (data?.stage?'\nEtapa: '+data.stage:'')+
-   '\nPago verificado: NO. No se activó ningún cobro.';
+   '';
  }catch{$('result').textContent='No se pudo consultar el estado. Verificá la sesión e intentá nuevamente.';}
  finally{$('check').disabled=false;}
+});
+$('consent').addEventListener('change',()=>{$('checkout').disabled=!$('consent').checked;});
+$('checkout').addEventListener('click',async()=>{
+ if(!tenantId||!$('consent').checked)return;
+ $('checkout').disabled=true;
+ $('consent').disabled=true;
+ $('mp-link').hidden=true;
+ $('result').textContent='Preparando checkout de prueba…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-checkout',{body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response ? await error.context.json().catch(()=>null) : data;
+  if(!data?.ok||!data.checkout_url){
+   const messages={
+    checkout_disabled:'El checkout interno todavía está desactivado.',
+    test_configuration_missing:'Falta configurar la cuenta compradora de prueba en Supabase.',
+    test_accounts_unverified:'Mercado Pago no confirmó las cuentas configuradas para esta prueba.',
+    provider_outcome_pending:'Mercado Pago todavía no confirmó el resultado. Consultá el estado antes de repetir.',
+    subscription_already_linked:'Ya existe una suscripción de prueba vinculada.',
+    subscription_linked:'La suscripción ya está vinculada. Consultá su estado.'
+   };
+   $('result').textContent=messages[response?.code]||'El checkout de prueba no está disponible en este momento.';
+   return;
+  }
+  const url=new URL(data.checkout_url);
+  if(url.protocol!=='https:'||url.username||url.password||!/(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname))throw new Error('invalid_checkout_url');
+  $('mp-link').href=url.href;
+  $('mp-link').hidden=false;
+  $('result').textContent='Checkout preparado. Abrí Mercado Pago para continuar con los datos de prueba.';
+ }catch{$('result').textContent='No se pudo preparar el checkout. Consultá el estado e intentá nuevamente.';}
+ finally{$('consent').disabled=false;$('checkout').disabled=!$('consent').checked;}
 });
 load();
 </script></body></html>
