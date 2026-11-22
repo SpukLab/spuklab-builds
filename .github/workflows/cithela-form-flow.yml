@@ -1,0 +1,27 @@
+name: CITHELA formularios - flujo de respuestas ficticias
+on:
+  push:
+    paths:
+      - 'cithela/formularios/**'
+      - '.github/workflows/cithela-form-flow.yml'
+  pull_request:
+    paths:
+      - 'cithela/formularios/**'
+      - '.github/workflows/cithela-form-flow.yml'
+permissions:
+  contents: read
+jobs:
+  flow-and-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check cithela/formularios/flow-model.mjs
+      - run: node --check cithela/formularios/unified-profile-model.mjs
+      - run: node --check cithela/formularios/unified-profile.test.mjs
+      - run: node --check cithela/formularios/flow-preview.mjs
+      - run: node --check cithela/formularios/flow-model.test.mjs
+      - run: node --check cithela/formularios/flow-isolation.test.mjs
+      - run: node --test cithela/formularios/form-model.test.mjs cithela/formularios/isolation.test.mjs cithela/formularios/flow-model.test.mjs cithela/formularios/flow-isolation.test.mjs cithela/formularios/unified-profile.test.mjs
