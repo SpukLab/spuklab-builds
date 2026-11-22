@@ -94,10 +94,33 @@ Deno.serve(async (req:Request) => {
         claim:(id:string,owner:string) => rpc("cithela_mp_claim_test_checkout",
           {p_intent_id:id,p_owner_user_id:owner}),
         async searchSubscriptions(_reference:string,email:string) {
-          const query = new URLSearchParams({payer_email:email,limit:"100",offset:"0"});
-          const search = await provider("/preapproval/search?"+query);
-          return {results:search?.results,complete:Array.isArray(search?.results) &&
-            Number.isSafeInteger(search?.paging?.total) && search.paging.total === search.results.length};
+          // A pending subscription may be discoverable under payer ID even if
+          // its email search index has not populated. Both searches are read-only.
+          const searchAll = async (filter:Record<string,string>) => {
+            const results:any[] = [];
+            let total:number|null = null;
+            for (let offset=0;offset<1000;offset+=100) {
+              const query = new URLSearchParams({...filter,limit:"100",offset:String(offset)});
+              const page = await provider("/preapproval/search?"+query);
+              if (!Array.isArray(page?.results) ||
+                  !Number.isSafeInteger(page?.paging?.total) || page.paging.total < 0)
+                return {results,complete:false};
+              if (total===null) total=page.paging.total;
+              if (total!==page.paging.total) return {results,complete:false};
+              results.push(...page.results);
+              if (results.length>=total) return {results,complete:results.length===total};
+              if (page.results.length===0) return {results,complete:false};
+            }
+            return {results,complete:false};
+          };
+          const [byEmail,byId] = await Promise.all([
+            searchAll({payer_email:email}),searchAll({payer_id:buyerId})
+          ]);
+          const unique = new Map<string,any>();
+          for (const item of [...byEmail.results,...byId.results]) {
+            if (typeof item?.id==="string") unique.set(item.id,item);
+          }
+          return {results:[...unique.values()],complete:byEmail.complete && byId.complete};
         },
         link:(intent:{intent_id:string,external_reference:string},id:string) =>
           rpc("cithela_mp_link_verified_test_subscription",{
