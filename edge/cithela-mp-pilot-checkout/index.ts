@@ -120,6 +120,12 @@ Deno.serve(async (req:Request) => {
           for (const item of [...byEmail.results,...byId.results]) {
             if (typeof item?.id==="string") unique.set(item.id,item);
           }
+          console.info('cithela_mp_lookup_diagnostic',JSON.stringify({
+            phase:'recover_preapproval',email_complete:byEmail.complete,
+            id_complete:byId.complete,
+            email_count:byEmail.results.length,id_count:byId.results.length,
+            distinct_count:unique.size
+          }));
           return {results:[...unique.values()],complete:byEmail.complete && byId.complete};
         },
         link:(intent:{intent_id:string,external_reference:string},id:string) =>
