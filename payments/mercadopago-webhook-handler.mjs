@@ -85,8 +85,22 @@ export async function handleMercadoPagoWebhook(request, config) {
     Number.isFinite(Date.parse(body.date));
   const merchantUserId=simulated?config.merchantUserId:idString(body.user_id,30);
   const storedTopic=simulated?'subscription_preapproval':topic;
-  const eventId=simulated && requestId?.length<=115
+  // Mercado Pago may omit top-level event id in otherwise valid signed
+  // deliveries. HMAC authenticates the resource and request ID, not body.id.
+  // Use a stable digest of the signed resource, topic and merchant instead
+  // of rejecting legitimate notifications or trusting an arbitrary body ID.
+  // Explicit malformed non-numeric IDs still fail closed.
+  let eventId=simulated && requestId?.length<=115
     ?'sim_'+requestId:idString(body.id);
+  if(!simulated &&
+     (body.id===undefined ||
+      (typeof body.id==='number'&&Number.isFinite(body.id)&&body.id>=0&&!Number.isSafeInteger(body.id)))){
+    const identifier=new TextEncoder().encode(
+      'cithela-mp-event-v1:'+topic+':'+signedResource+':'+(merchantUserId||'')
+    );
+    const digest=new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',identifier));
+    eventId='signed_'+Array.from(digest).map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
   if(!eventId || !requestId || bodyResource!==signedResource ||
      (!simulated && (topic!==body.type || body.live_mode!==config.liveMode)) ||
      merchantUserId!==config.merchantUserId){
