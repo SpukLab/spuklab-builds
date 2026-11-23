@@ -559,11 +559,15 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
 <script src="./availability/ranges.js?v=20261123-fix1"></script>
 <style>
-.availability-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.availability-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;max-width:100%}
 .availability-date-grid[hidden]{display:none}
-.availability-date-grid>div{min-width:0}
-.availability-date-grid input,.availability-date-grid select{width:100%;max-width:100%;min-width:0}
-@media(max-width:650px){.availability-date-grid{grid-template-columns:1fr}}
+.availability-date-grid>div{min-width:0;max-width:100%;overflow:hidden}
+.availability-date-grid input,.availability-date-grid select{display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;min-inline-size:0;max-inline-size:100%;font-size:16px}
+.availability-date-grid input[type="date"]{overflow:hidden;-webkit-min-logical-width:0}
+#cfg-block-modo{display:block;min-width:0;max-width:100%;font-size:16px;text-overflow:ellipsis}
+#cfg-block-range-summary{padding:9px 12px;border-radius:9px;background:var(--surface-soft);overflow-wrap:anywhere}
+#cfg-block-range-summary[data-invalid="true"]{color:#9b334e}
+@media(max-width:650px){.availability-date-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -983,7 +987,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <label class="lbl" for="cfg-block-modo">Tipo de ausencia</label>
       <select class="inp" id="cfg-block-modo" onchange="syncAvailabilityBlockMode()">
         <option value="single">Un día o una franja horaria</option>
-        <option value="range">Varios días consecutivos (hasta 90 días)</option>
+        <option value="range">Varios días (vacaciones)</option>
       </select>
       <div id="cfg-block-single" class="availability-date-grid">
         <div>
@@ -998,14 +1002,15 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <div id="cfg-block-range" class="availability-date-grid" hidden>
         <div>
           <label class="lbl" for="cfg-block-desde">Desde (inclusive)</label>
-          <input class="inp" type="date" id="cfg-block-desde">
+          <input class="inp" type="date" id="cfg-block-desde" onchange="syncAvailabilityRangeDates('start')">
         </div>
         <div>
           <label class="lbl" for="cfg-block-hasta">Hasta (inclusive)</label>
-          <input class="inp" type="date" id="cfg-block-hasta">
+          <input class="inp" type="date" id="cfg-block-hasta" onchange="syncAvailabilityRangeDates('end')">
         </div>
       </div>
-      <p id="cfg-block-range-help" class="contact-note" hidden>Podés seleccionar períodos que crucen meses o años. Se guardan en tramos de hasta 6 días compatibles con CITHELA Cloud. Cada tramo se podrá quitar por separado.</p>
+      <p id="cfg-block-range-summary" class="contact-note" aria-live="polite" hidden></p>
+      <p id="cfg-block-range-help" class="contact-note" hidden>Elegí el año correcto en ambas fechas. Se admiten hasta 90 días consecutivos, incluso de un año al siguiente. Cada tramo se puede quitar por separado.</p>
       <label class="lbl">Motivo (opcional)</label>
       <input class="inp" id="cfg-block-motivo" maxlength="300" placeholder="Vacaciones, capacitación, consultorio cerrado...">
       <button class="btn-main" type="button" id="cfg-block-save" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
@@ -7169,8 +7174,11 @@ $('cfg-block-fecha').min=currentBlockDay;
 if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=currentBlockDay;
 $('cfg-block-desde').min=currentBlockDay;
 $('cfg-block-hasta').min=currentBlockDay;
-if(!$('cfg-block-desde').value)$('cfg-block-desde').value=currentBlockDay;
-if(!$('cfg-block-hasta').value)$('cfg-block-hasta').value=currentBlockDay;
+if(!$('cfg-block-desde').value||$('cfg-block-desde').value<currentBlockDay)
+  $('cfg-block-desde').value=currentBlockDay;
+if(!$('cfg-block-hasta').value||$('cfg-block-hasta').value<currentBlockDay)
+  $('cfg-block-hasta').value=currentBlockDay;
+syncAvailabilityRangeDates('refresh');
 const blockHours=professionalCloudReady()?Array.from({length:48},(_,i)=>minToHM(i*30)):HORAS;
 $('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+
   blockHours.map(h=>`<option value="${h}">${h}</option>`).join('');
@@ -7453,11 +7461,52 @@ function renderAvailabilityBlocks(){
     <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
   </div>`).join('');
 }
+function availabilityDisplayCivilDate(iso){
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(iso||'')))return '—';
+  return iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4);
+}
+// Control de ergonomía, no permisos: las RPC siguen validando días y conflictos.
+// Nunca adivinar el año de una fecha que el usuario acaba de seleccionar.
+function syncAvailabilityRangeDates(source='refresh'){
+  const start=$('cfg-block-desde'),end=$('cfg-block-hasta'),info=$('cfg-block-range-summary');
+  if(!start||!end||!info)return;
+  const from=start.value,through=end.value;
+  if(from)end.min=from;
+  if((source==='start'||source==='refresh')&&from&&(!through||through<from))
+    end.value=from; // Un valor antiguo/obsoleto de Safari nunca queda oculto.
+  const to=end.value;
+  info.hidden=false;
+  info.setAttribute('data-invalid','false');
+  if(!from||!to){
+    info.textContent='Elegí las dos fechas para bloquear la ausencia.';
+    return;
+  }
+  if(to<from){
+    info.textContent='La fecha final '+availabilityDisplayCivilDate(to)+
+      ' es anterior al inicio '+availabilityDisplayCivilDate(from)+
+      '. Revisá el año en «Hasta» (por ejemplo, 2027).';
+    info.setAttribute('data-invalid','true');
+    return;
+  }
+  try{
+    const plan=window.CithelaBlockRanges.planRange(from,to);
+    info.textContent='Período seleccionado: '+availabilityDisplayCivilDate(from)+
+      ' → '+availabilityDisplayCivilDate(to)+' · '+plan.days+
+      (plan.days===1?' día':' días')+'.';
+  }catch(err){
+    info.textContent=err?.code==='range_too_long'
+      ?'El período supera 90 días. Acortá la fecha final.'
+      :'Verificá que las dos fechas sean válidas.';
+    info.setAttribute('data-invalid','true');
+  }
+}
 function syncAvailabilityBlockMode(){
   const range=$('cfg-block-modo')?.value==='range';
   if($('cfg-block-single'))$('cfg-block-single').hidden=range;
   if($('cfg-block-range'))$('cfg-block-range').hidden=!range;
   if($('cfg-block-range-help'))$('cfg-block-range-help').hidden=!range;
+  if($('cfg-block-range-summary'))$('cfg-block-range-summary').hidden=!range;
+  if(range)syncAvailabilityRangeDates('refresh');
   if($('cfg-block-save'))$('cfg-block-save').textContent=range?'Bloquear período':'Agregar bloqueo';
   if($('cfg-block-range-status'))$('cfg-block-range-status').textContent='';
 }
@@ -7486,7 +7535,9 @@ async function addAvailabilityBlockRange(){
   try{plan=CithelaBlockRanges.planRange(from,through);}
   catch(err){
     availabilityRangeFeedback(err.code==='range_too_long'?'El período no puede superar 90 días.':
-      err.code==='invalid_order'?'La fecha final debe ser igual o posterior a la inicial.':
+      err.code==='invalid_order'?
+        '«Hasta» ('+availabilityDisplayCivilDate(through)+') es anterior a «Desde» ('+
+          availabilityDisplayCivilDate(from)+'). Revisá el año de la fecha final.':
       'Ingresá fechas de inicio y fin válidas.',true);
     return;
   }
