@@ -129,11 +129,15 @@ export function validateTestSubscriptionSnapshot(intent,snapshot){
 }
 
 /** Verify seller and financial identity before any server-side binding. */
-export function verifyTestProviderIdentity(intent,snapshot){
+export function verifyTestProviderIdentity(intent,snapshot,{verifiedTestSeller=false}={}){
+ // Mercado Pago does not always return live_mode on GET /preapproval/{id}.
+ // Missing is acceptable ONLY with an independently verified test-seller token.
  if(!validIntent(intent)||!snapshot?.ok||snapshot.code!=='read_only'||
    snapshot.external_reference!==intent.external_reference||
    String(snapshot.collector_id)!==intent.collector_id||
-   snapshot.live_mode!==false||snapshot.currency_id!=='ARS'||
+   (snapshot.live_mode===true||
+    (snapshot.live_mode!==false && !(snapshot.live_mode==null&&verifiedTestSeller===true)))||
+   snapshot.currency_id!=='ARS'||
    typeof snapshot.amount!=='number'||!Number.isFinite(snapshot.amount)||
    Math.round(snapshot.amount*100)!==intent.amount_minor||
    !ID.test(snapshot.provider_subscription_id||''))
