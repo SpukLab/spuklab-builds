@@ -7,10 +7,25 @@ body{margin:0;padding:24px}.wrap{max-width:600px;margin:30px auto}.panel{backgro
 h1{font-size:1.5rem}p{line-height:1.5}.muted{color:#52666a}.status{background:#edf5f4;border-radius:10px;padding:14px;white-space:pre-wrap}
 button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}button:disabled{opacity:.45;cursor:not-allowed}
 a{color:#165c61}.warning{font-weight:600}
+#auth-access[hidden]{display:none}#auth-access{margin:14px 0;border:1px solid #d2e3df;border-radius:12px;padding:16px;background:#f7faf9}
+#auth-access label{display:block;margin:10px 0 5px;font-weight:600}#auth-access input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #b7cbc7;border-radius:8px;font:inherit;min-height:44px}
+#auth-access button{margin:12px 8px 4px 0}#auth-access p{font-size:.92rem}
 </style></head><body><main class="wrap"><section class="panel">
 <h1>CITHELA · Suscripción de prueba</h1>
 <p class="muted">Piloto interno de Alma y Pampa. Usá únicamente la cuenta compradora y una tarjeta de prueba de Mercado Pago.</p>
 <p id="identity">Comprobando sesión…</p>
+<section id="auth-access" hidden aria-label="Ingreso al piloto de CITHELA">
+ <p class="muted">No hay una sesión de CITHELA disponible en este navegador. Podés ingresar aquí con tu cuenta propietaria de Alma y Pampa.</p>
+ <form id="pilot-login" autocomplete="on">
+  <label for="owner-email">Cuenta CITHELA (piloto interno)</label>
+  <input id="owner-email" type="email" autocomplete="username" value="alma.y.pampa@gmail.com" readonly>
+  <label for="owner-password">Contraseña de CITHELA</label>
+  <input id="owner-password" type="password" autocomplete="current-password" required>
+  <button type="submit" id="login-button">Ingresar a CITHELA</button>
+ </form>
+ <button type="button" id="retry-session">Volver a comprobar sesión</button>
+ <p class="muted">La contraseña se envía únicamente a Supabase Auth mediante el acceso protegido de CITHELA; no se guarda en esta página. Si preferís ingresar desde la agenda, <a href="./">abrí CITHELA en esta misma pestaña</a> y después regresá.</p>
+</section>
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
 <p><button type="button" id="get-link" disabled>Recuperar enlace de la suscripción ya vinculada</button></p>
@@ -26,19 +41,31 @@ a{color:#165c61}.warning{font-weight:600}
 <p><a href="./">Volver a CITHELA</a></p>
 </section></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
 const client=window.supabase?.createClient(
  'https://mcqknmqhtmihegmifuka.supabase.co',
  'sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc');
+if(client)window.CithelaAuthCaptcha?.wrap(client);
 const ALMA_TENANT='e680ebd3-a031-4968-905a-e829ab3b5dfe';
 let tenantId=null;
+let checkingSession=false;
+function showLogin(message){
+ $('identity').textContent=message||'Necesitás iniciar sesión en CITHELA en este navegador.';
+ $('auth-access').hidden=false;
+ $('result').textContent='Sin sesión de CITHELA. No se solicitó ningún cobro ni se modificó la suscripción.';
+}
 async function load(){
- if(!client){$('identity').textContent='No se pudo cargar la autenticación.';return;}
- const {data:{user},error}=await client.auth.getUser();
- if(error||!user){$('identity').textContent='Iniciá sesión en CITHELA antes de abrir esta página.';return;}
- $('identity').textContent='Sesión: '+(user.email||'cuenta profesional');
+ if(checkingSession)return;
+ checkingSession=true;
+ try{
+  if(!client){showLogin('No se pudo cargar la autenticación. Recargá la página.');return;}
+  const {data:{user},error}=await client.auth.getUser();
+  if(error||!user){showLogin('No hay sesión de CITHELA en este navegador.');return;}
+  $('auth-access').hidden=true;
+  $('identity').textContent='Sesión: '+(user.email||'cuenta profesional');
  const {data,error:membershipError}=await client.from('cithela_tenant_memberships')
   .select('tenant_id,role').eq('user_id',user.id).eq('role','owner');
  if(membershipError||!Array.isArray(data)){ $('result').textContent='No se pudo comprobar la titularidad.';return;}
@@ -49,7 +76,43 @@ async function load(){
  syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
+ }catch{
+  showLogin('No se pudo comprobar la sesión. Podés ingresar a CITHELA desde aquí.');
+ }finally{checkingSession=false;}
 }
+$('pilot-login').addEventListener('submit',async event=>{
+ event.preventDefault();
+ if(!client)return;
+ const password=$('owner-password').value;
+ if(!password)return;
+ $('login-button').disabled=true;
+ $('result').textContent='Comprobando credenciales de CITHELA…';
+ try{
+  if(!window.CithelaAuthCaptcha?.wrap){
+   $('result').textContent='No pudo cargarse la protección de acceso. Recargá la página o ingresá desde CITHELA.';
+   return;
+  }
+  const {error}=await client.auth.signInWithPassword({
+   email:'alma.y.pampa@gmail.com',password
+  });
+  if(error){
+   $('result').textContent=error.code==='captcha_required'?
+    'No se pudo completar la comprobación de seguridad. Verificá la conexión e intentá nuevamente.':
+    'No se pudo iniciar sesión. Verificá la contraseña y la comprobación de seguridad.';
+   return;
+  }
+  await load();
+ }catch{
+  $('result').textContent='No fue posible ingresar en CITHELA. Comprobá la conexión y volvé a intentar.';
+ }finally{
+  $('owner-password').value='';
+  $('login-button').disabled=false;
+ }
+});
+$('retry-session').addEventListener('click',async()=>{
+ $('retry-session').disabled=true;
+ try{await load();}finally{$('retry-session').disabled=false;}
+});
 $('preflight').addEventListener('click',async()=>{
  if(!tenantId)return;
  $('preflight').disabled=true;$('result').textContent='Validando requisitos del servidor…';
