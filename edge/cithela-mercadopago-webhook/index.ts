@@ -27,14 +27,21 @@ Deno.serve(async (request: Request) => {
     &&/^\d{1,30}$/.test(merchantUserId);
   return handleMercadoPagoWebhook(request,{
     enabled,secret:webhookSecret,merchantUserId,liveMode:false,
-    reportValidationFailure(code) {
+    reportValidationFailure(code: string) {
       // Security telemetry: do not include request IDs, payloads, headers,
       // cryptographic material, timestamps or user/merchant identifiers.
       if(code==='invalid_signature'||code==='signature_expired'){
         console.info('cithela_mp_webhook_hmac', code);
+      }else if([
+        'event_id_invalid','request_id_missing','resource_mismatch',
+        'topic_mismatch','provider_mode_true','provider_mode_false',
+        'provider_mode_unavailable','merchant_mismatch'
+      ].includes(code)){
+        // Enum only. Never dump a provider body, ID, user data or headers.
+        console.info('cithela_mp_webhook_notification_mismatch', code);
       }
     },
-    async storeSignedEvent(event) {
+    async storeSignedEvent(event: {eventId: string;topic: string;resourceId: string;requestId: string;merchantUserId: string;liveMode: boolean;occurredAt: string|null}) {
       if(!enabled||!privateKey)throw new Error("not_configured");
       const c=createClient(supabaseUrl,privateKey,{
         auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
