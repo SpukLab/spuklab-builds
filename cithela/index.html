@@ -7424,7 +7424,11 @@ function renderAvailabilityBlocks(){
     el.innerHTML=note+access+blocks.map(b=>{
       const start=cloudLocalParts(b.starts_at,tz),end=cloudLocalParts(b.ends_at,tz);
       const fullDay=start.hora==='00:00'&&end.hora==='00:00'&&start.fecha!==end.fecha;
-      const label=fullDay?'Día completo':`${start.hora}–${end.hora}${start.fecha!==end.fecha?' · hasta '+end.fecha:''}`;
+      const lastDay=fullDay?CithelaBlockRanges.addDays(end.fecha,-1):null;
+      const wholeDays=fullDay?CithelaBlockRanges.daysBetween(start.fecha,end.fecha):0;
+      const label=fullDay?(wholeDays===1?'Día completo':
+        'Hasta '+lastDay+' · '+wholeDays+' días'):
+        `${start.hora}–${end.hora}${start.fecha!==end.fecha?' · hasta '+end.fecha:''}`;
       const resource=b.resource_id?(cloudResourceById(b.resource_id)?.name||'Recurso'):'Todos los recursos';
       return`<div class="block-row">
         <div class="block-main">
@@ -7446,7 +7450,126 @@ function renderAvailabilityBlocks(){
     <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
   </div>`).join('');
 }
+function syncAvailabilityBlockMode(){
+  const range=$('cfg-block-modo')?.value==='range';
+  if($('cfg-block-single'))$('cfg-block-single').hidden=range;
+  if($('cfg-block-range'))$('cfg-block-range').hidden=!range;
+  if($('cfg-block-range-help'))$('cfg-block-range-help').hidden=!range;
+  if($('cfg-block-save'))$('cfg-block-save').textContent=range?'Bloquear período':'Agregar bloqueo';
+  if($('cfg-block-range-status'))$('cfg-block-range-status').textContent='';
+}
+
+let availabilityRangeBusy=false;
+async function addAvailabilityBlockRange(){
+  if(availabilityRangeBusy)return;
+  const from=$('cfg-block-desde').value,through=$('cfg-block-hasta').value;
+  const reason=$('cfg-block-motivo').value.trim();
+  const status=$('cfg-block-range-status');
+  let plan;
+  try{plan=CithelaBlockRanges.planRange(from,through);}
+  catch(err){
+    status.textContent=err.code==='range_too_long'?'El período no puede superar 90 días.':
+      err.code==='invalid_order'?'La fecha final debe ser igual o posterior a la inicial.':
+      'Ingresá fechas de inicio y fin válidas.';
+    return;
+  }
+  if(reason.length>300){status.textContent='El motivo no puede superar 300 caracteres.';return;}
+  const cloud=professionalCloudReady();
+  const current=cloud?CithelaCloud.state():null;
+  const tz=current?.tenant?.timezone||'America/Argentina/Buenos_Aires';
+  const todayTenant=cloud?cloudLocalParts(new Date().toISOString(),tz).fecha:today();
+  if(from<todayTenant){
+    status.textContent='La fecha inicial no puede ser anterior a hoy en el horario del establecimiento.';
+    return;
+  }
+  const loaded=cloud?cloudAppointmentViews():DB.t();
+  const active=loaded.filter(t=>t.fecha>=from&&t.fecha<=through&&
+    ['pendiente','confirmado'].includes(t.estado));
+  const warning='Vas a bloquear '+plan.days+' días en '+(cloud?plan.chunks.length+' tramos cloud':'la agenda local')+
+    '. Se detectaron '+active.length+' turnos activos en los datos cargados.'+
+    ' Los turnos existentes NO se cancelan; verificá también la agenda completa. ¿Continuar?';
+  if(cloud&&!canManageCloudBlocks()){status.textContent='Se requiere permiso de administrador.';return;}
+  // Servidor actual: máximo siete días corridos por RPC. Usamos seis días civiles
+  // por tramo para no superar 7x24 h ni cuando cambia el horario de verano.
+  let chunks=[];
+  if(cloud){
+    try{
+      chunks=plan.chunks.map((c,i)=>{
+        const starts_at=(i===0&&c.startDate===todayTenant)
+          ?new Date(Date.now()+120000).toISOString()
+          :zonedLocalToIso(c.startDate,'00:00',tz);
+        const ends_at=zonedLocalToIso(c.endExclusive,'00:00',tz);
+        if(Date.parse(ends_at)<=Date.parse(starts_at)||
+           Date.parse(ends_at)-Date.parse(starts_at)>7*86400000)
+          throw new Error('invalid_interval');
+        return {...c,starts_at,ends_at};
+      });
+      const existing=current.availabilityBlocks||[];
+      const conflict=chunks.some(c=>existing.some(b=>
+        (b.resource_id==null)&&
+        CithelaBlockRanges.spansOverlap(c.starts_at,c.ends_at,b.starts_at,b.ends_at)));
+      if(conflict){
+        status.textContent='Ya existe un bloqueo del establecimiento dentro del período. Ajustá las fechas o quitá primero el bloqueo anterior.';
+        return;
+      }
+    }catch(err){status.textContent='No se pudo interpretar el período en la zona horaria del establecimiento.';return;}
+  }else{
+    const taken=new Set(DB.b().map(b=>b.fecha));
+    for(let d=from;d<=through;d=CithelaBlockRanges.addDays(d,1)){
+      if(taken.has(d)){
+        status.textContent='Ya existe un bloqueo en '+d+'. Revisá la lista o elegí un período sin superposiciones.';
+        return;
+      }
+    }
+  }
+  if(!confirm(warning))return;
+  availabilityRangeBusy=true;
+  const save=$('cfg-block-save');
+  if(save)save.disabled=true;
+  let saved=0;
+  try{
+    if(cloud){
+      for(const c of chunks){
+        status.textContent='Guardando '+(saved+1)+' de '+chunks.length+' tramos…';
+        await CithelaCloud.blockCommand({
+          tenantId:current.tenant.id,
+          requestId:cloudRequestId('vacation-block-'+(saved+1)),
+          command:'availability_block.create',
+          payload:{starts_at:c.starts_at,ends_at:c.ends_at,reason}
+        });
+        saved++;
+      }
+      status.textContent='Período guardado: '+plan.days+' días en '+saved+' tramos. Para quitarlo, eliminá cada tramo de la lista.';
+      $('cfg-block-motivo').value='';
+      renderAvailabilityBlocks();
+      toast('Vacaciones / período bloqueado en CITHELA Cloud ✓');
+    }else{
+      const next=[];
+      for(let d=from;d<=through;d=CithelaBlockRanges.addDays(d,1)){
+        next.push({id:newId('B'),fecha:d,hora:'',motivo:reason,creado:new Date().toISOString()});
+      }
+      DB.sb([...DB.b(),...next]);
+      recordEvent('availability_block_range_added',{from,through,days:plan.days});
+      renderAvailabilityBlocks();renderCal('med');renderStats();renderAgenda();
+      status.textContent='Período de '+plan.days+' días bloqueado en esta demostración local.';
+      $('cfg-block-motivo').value='';
+    }
+  }catch(err){
+    if(cloud&&saved>0&&saved<chunks.length){
+      $('cfg-block-desde').value=chunks[saved].startDate;
+    }
+    renderAvailabilityBlocks();
+    status.textContent='Guardados '+saved+' de '+chunks.length+' tramos. '+
+      (saved>0?'El inicio se ajustó al próximo tramo sin guardar. ':'')+
+      'Revisá los bloqueos antes de intentar nuevamente. Error: '+(err?.message||'Desconocido');
+  }finally{
+    availabilityRangeBusy=false;
+    if(save)save.disabled=false;
+  }
+}
+
 async function addAvailabilityBlock(){
+  if($('cfg-block-modo')?.value==='range')return addAvailabilityBlockRange();
   const fecha=$('cfg-block-fecha').value,hora=$('cfg-block-hora').value;
   const motivo=$('cfg-block-motivo').value.trim();
   if(!fecha){toast('Elegí una fecha');return;}
