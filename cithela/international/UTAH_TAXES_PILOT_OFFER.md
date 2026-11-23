@@ -1,5 +1,8 @@
 # CITHELA · USA Taxes & Insurance — presentación del piloto / pilot briefing
 
+**Demo pública de datos ficticios:** https://cithela-usa-taxes-demo.vercel.app/  
+**Verificación HTTP independiente:** [GitHub Actions — HTML y 3 módulos sin autenticación](https://github.com/SpukLab/spuklab-builds/actions/runs/45238767233)  
+
 **Versión:** 23 de noviembre de 2026  
 **Condición:** demostración con datos ficticios, no habilitada todavía para casos reales. Se requiere revisión y publicación controlada antes de compartir un enlace público.
 
@@ -53,7 +56,7 @@ Antes de personalizar la versión real hay que confirmar si el profesional prepa
 - **PR #157:** capa inicial de inglés/español, SMS manual y catálogo Utah. Sigue como borrador.
 - **PR #211:** prototipo del recorrido USA Taxes, pruebas Node + navegador y capturas. Sigue como borrador, apilado sobre #157.
 - **Acceso optativo en Ajustes:** en la rama del piloto, agregar `?taxesPreview=1` a la URL de CITHELA y entrar como profesional cloud verificado. Allí se ofrece «Abrir demostración de Taxes». El botón únicamente abre `./international/taxes-preview.html`, que usa datos sintéticos.
-- **La demo standalone** no exige login porque no contiene datos reales. No publicar o prometer un enlace vivo hasta confirmar el despliegue estático.
+- **La demo standalone** se encuentra publicada en el proyecto Vercel independiente `cithela-usa-taxes-demo`, sin login y con datos ficticios. Es una **instantánea manual** de los archivos del PR #211, no una sincronización automática de despliegues futuros. No incluye acceso a CITHELA ni datos de personas.
 - Sin cambios en Supabase, sin configuración SMS adicional, sin pagos, sin migraciones y sin activación por establecimiento.
 - Falta prueba Safari en iPhone físico, evaluación de acceso/permisos y decidir cómo enlazar turnos reales con metadatos mínimos, sin fichas fiscales.
 
