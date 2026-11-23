@@ -12,7 +12,7 @@ function take(start,end){
 }
 const localPartsSource=take('function cloudLocalParts(', 'function cloudAppointmentViews()');
 const zonedSource=take('function zonedLocalToIso(', 'async function cloudProbeAvailability()');
-const rangeSource=take('let availabilityRangeBusy=false;', 'async function addAvailabilityBlock(){');
+const rangeSource=take('function availabilityRangeFeedback(', 'async function addAvailabilityBlock(){');
 const code=[localPartsSource,zonedSource,rangeSource].join('\n');
 
 function setup({from='2026-12-24',through='2027-01-04',
@@ -20,7 +20,7 @@ function setup({from='2026-12-24',through='2027-01-04',
   const elements={
     'cfg-block-desde':{value:from},'cfg-block-hasta':{value:through},
     'cfg-block-motivo':{value:'Vacaciones'},
-    'cfg-block-range-status':{textContent:''},
+    'cfg-block-range-status':{textContent:'',style:{},setAttribute(){}},
     'cfg-block-save':{disabled:false}
   };
   const records=[];
