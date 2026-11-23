@@ -13,6 +13,8 @@ a{color:#165c61}.warning{font-weight:600}
 <p id="identity">Comprobando sesión…</p>
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><button type="button" id="get-link" disabled>Recuperar enlace de la suscripción ya vinculada</button></p>
+<p><a id="mp-link" hidden target="_blank" rel="noopener noreferrer">Abrir checkout existente en Mercado Pago (solo comprador de prueba)</a></p>
 <p><button type="button" id="inspect" disabled>Diagnosticar suscripción existente (solo lectura)</button></p>
 <p><button type="button" id="link-existing" disabled>Vincular la suscripción de prueba encontrada (sin cobrar)</button></p>
 <p><button type="button" id="reconcile" disabled>Verificar y desbloquear intento pendiente</button></p>
@@ -20,7 +22,6 @@ a{color:#165c61}.warning{font-weight:600}
 <legend>Checkout de prueba</legend>
 <p><label><input type="checkbox" id="consent"> Confirmo que usaré datos de prueba.</label></p>
 <button type="button" id="checkout" disabled>Preparar checkout de prueba</button>
-<p><a id="mp-link" hidden rel="noreferrer">Abrir Mercado Pago</a></p>
 </fieldset>
 <p><a href="./">Volver a CITHELA</a></p>
 </section></main>
@@ -44,7 +45,7 @@ async function load(){
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
- tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;
  syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
@@ -73,9 +74,44 @@ $('check').addEventListener('click',async()=>{
    not_tenant_owner:'La cuenta no es propietaria del establecimiento.'};
   $('result').textContent=(messages[data?.code]||'Estado no reconocido.')+
    (data?.stage?'\nEtapa: '+data.stage:'')+
-   '';
+   (data?.stage==='linked'?'\nSuscripción ya vinculada. Usá «Recuperar enlace», no generes otra.':'');
+  if(data?.stage==='linked')markAlreadyLinked();
  }catch{$('result').textContent='No se pudo consultar el estado. Verificá la sesión e intentá nuevamente.';}
  finally{$('check').disabled=false;}
+});
+function markAlreadyLinked(){
+ $('link-existing').hidden=true;
+ $('reconcile').hidden=true;
+ $('pilot-checkout').hidden=true;
+ $('inspect').hidden=true;
+}
+$('get-link').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('get-link').disabled=true;$('mp-link').hidden=true;
+ $('result').textContent='Consultando el checkout ya vinculado en Mercado Pago (solo lectura)…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-get-link',{body:{tenantId}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.ok===true && response?.code==='linked_test_checkout_recovered' &&
+     typeof response.checkout_url==='string'){
+   const url=new URL(response.checkout_url);
+   if(url.protocol!=='https:'||url.username||url.password||
+      !/(^|\\.)mercadopago\\.(com|com\\.ar)$/.test(url.hostname)||
+      !url.pathname.startsWith('/subscriptions/checkout'))
+     throw new Error('invalid_url');
+   $('mp-link').href=url.href;
+   $('mp-link').hidden=false;
+   markAlreadyLinked();
+   $('result').textContent='Enlace recuperado. Corresponde a la suscripción de prueba ya vinculada (ARS 1.000). No se creó ninguna nueva. Abrilo solamente con el comprador y una tarjeta de prueba.';
+  }else{
+   $('result').textContent='No se pudo recuperar el enlace. Código: '+(response?.code||'sin_respuesta')+'. No crees otra suscripción.';
+  }
+ }catch{
+  $('result').textContent='Falló la consulta de solo lectura. La suscripción sigue vinculada. No generes otra.';
+ }finally{
+  $('get-link').disabled=false;
+ }
 });
 $('inspect').addEventListener('click',async()=>{
  if(!tenantId)return;
