@@ -14,6 +14,7 @@ a{color:#165c61}.warning{font-weight:600}
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
 <p><button type="button" id="inspect" disabled>Diagnosticar suscripción existente (solo lectura)</button></p>
+<p><button type="button" id="link-existing" disabled>Vincular la suscripción de prueba encontrada (sin cobrar)</button></p>
 <p><button type="button" id="reconcile" disabled>Verificar y desbloquear intento pendiente</button></p>
 <fieldset id="pilot-checkout" hidden>
 <legend>Checkout de prueba</legend>
@@ -43,7 +44,7 @@ async function load(){
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
- tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;
  syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
@@ -100,6 +101,41 @@ $('inspect').addEventListener('click',async()=>{
   }
  }catch{$('result').textContent='No fue posible consultar Mercado Pago. No se realizaron cambios.';}
  finally{$('inspect').disabled=false;}
+});
+$('link-existing').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA verificará nuevamente la suscripción de prueba ya creada en Mercado Pago y, si todo coincide, la vinculará sin crear otra ni realizar pagos. ¿Continuar?'))return;
+ $('link-existing').disabled=true;
+ $('mp-link').hidden=true;
+ $('result').textContent='Verificando y vinculando la suscripción existente, sin cobrar…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-link-existing',
+    {body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.ok===true && response?.code==='existing_test_subscription_linked_no_payment'){
+    $('result').textContent='Suscripción de prueba vinculada correctamente con CITHELA. No se generó ningún pago y no se activó ningún servicio. Código: '+response.code;
+    $('reconcile').disabled=true;$('checkout').disabled=true;
+    $('consent').disabled=true;$('inspect').disabled=true;
+    // El enlace se conserva para una prueba posterior, pero nunca se abre automáticamente.
+    if(typeof response.checkout_url==='string'){
+     const url=new URL(response.checkout_url);
+     if(url.protocol==='https:' && !url.username && !url.password &&
+       /(^|\\.)mercadopago\\.(com|com\\.ar)$/.test(url.hostname)){
+      $('mp-link').href=url.href;
+      $('mp-link').textContent='Checkout de prueba (no pagar todavía)';
+      $('mp-link').hidden=false;
+     }
+    }
+  }else{
+    $('result').textContent='No se vinculó la suscripción. No se creó ningún cobro. Código: '+
+      (response?.code||'sin_respuesta')+'. No intentes crear otra.';
+    $('link-existing').disabled=false;
+  }
+ }catch{
+  $('result').textContent='No se pudo completar la vinculación. No crees otra suscripción.';
+  $('link-existing').disabled=false;
+ }
 });
 $('reconcile').addEventListener('click',async()=>{
  if(!tenantId)return;
