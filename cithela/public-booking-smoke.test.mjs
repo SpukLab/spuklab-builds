@@ -93,7 +93,9 @@ test('public booking keeps an accessible, subtle language switch',()=>{
 
 test('professional agenda exposes compact copy/share/QR only for authorized enabled workspaces',()=>{
   const html=read('index.html');
-  assert.match(html,/id="professional-public-booking-shortcut" class="cithela-share-strip" hidden/);
+  assert.match(html,/id="professional-public-booking-shortcut" class="cithela-top-share" hidden/);
+  assert.ok(html.indexOf('id="professional-public-booking-shortcut"')<
+    html.indexOf('id="professional-tabs"'),'share controls are above professional navigation');
   assert.match(html,/class="cithela-booking-shortcut__link" href="\.\/compartir\.html"/);
   assert.match(html,/id="professional-share-copy"/);
   assert.match(html,/id="professional-share-native"/);
