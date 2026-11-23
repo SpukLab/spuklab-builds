@@ -37,12 +37,15 @@ test('appointments before weekly metrics; people search before collapsed add for
 test('configuration prioritizes daily use; nested details remain balanced',()=>{
  const cfg=slice('id="p-medico-config"','<div class="byline">');
  const order=[...cfg.matchAll(/id="cfg-section-([^"]+)"/g)].map(m=>m[1]);
- assert.deepEqual(order,['public-booking','hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
+ assert.deepEqual(order,['hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
  const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"');
  assert.ok(nav.includes('id="professional-public-booking-shortcut"'),'share shortcut moves to professional header');
  assert.ok(nav.indexOf('id="professional-public-booking-shortcut"')<nav.indexOf('id="professional-tabs"'));
  assert.equal(cfg.includes('id="professional-public-booking-shortcut"'),false,'do not repeat the share shortcut in settings');
- assert.ok(cfg.includes('id="professional-booking-language"'),'language remains in Ajustes');
+ assert.ok(nav.includes('id="professional-booking-language"'),'language is visible in professional header');
+ assert.equal(cfg.includes('id="professional-booking-language"'),false,'language must not be buried in settings');
+ assert.ok(cfg.indexOf('id="cfg-section-infrastructure"')>cfg.indexOf('id="cfg-section-cloud"'),'advanced diagnostics stays inside account section');
+ assert.match(cfg,/id="cfg-section-resources" hidden/);
  let depth=0;
  for(const token of (cfg.match(/<\/?details\b[^>]*>/g)||[])){
    depth+=token.startsWith('</')?-1:1;
