@@ -86,7 +86,7 @@ test('malformed provider response emits no raw message',()=>{
 });
 test('unknown response shape remains fail-closed',async()=>{
  const logs=[],old=console.warn;
- console.warn=(s)=>logs.push(s);
+ console.warn=(...args)=>logs.push(args.join(' '));
  try{
  const result=await createTestPreapproval({intent,payerEmail,backUrl,token,
   fetchImpl:async()=>Response.json({message:'Cannot operate between different countries',status:400},{status:400})});
