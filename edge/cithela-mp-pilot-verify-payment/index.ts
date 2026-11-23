@@ -1,5 +1,6 @@
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
 import {inspectExistingPilotPayment} from "../../payments/mercadopago-pilot-payment-audit.mjs";
+import {classifyProviderRead,classifyProviderTransport,safeProviderReadCode} from "../../payments/mercadopago-provider-diagnostics.mjs";
 
 /** No payment creation. No DB writes. Owner-only, internal pilot, test seller. */
 const ORIGIN="https://spuklab.github.io";
@@ -70,12 +71,22 @@ Deno.serve(async req=>{
    intent,buyerId,
    async getProvider(path:string){
     if(!path.startsWith("/")||path.includes(".."))throw Error("provider_path_invalid");
-    const response=await fetch("https://api.mercadopago.com"+path,{
-     method:"GET",headers:{Authorization:"Bearer "+token,Accept:"application/json"},
-     signal:AbortSignal.timeout(12000),redirect:"error"
-    });
-    if(!response.ok)throw Error("provider_get_failed");
-    return response.json();
+    let response:Response;
+    try{
+     response=await fetch("https://api.mercadopago.com"+path,{
+      method:"GET",headers:{Authorization:"Bearer "+token,Accept:"application/json"},
+      signal:AbortSignal.timeout(12000),redirect:"error"
+     });
+    }catch{
+     throw Error(classifyProviderTransport(path));
+    }
+    if(!response.ok)throw Error(classifyProviderRead(path,response.status));
+    try{
+     return await response.json();
+    }catch{
+     const stage=classifyProviderTransport(path).replace(/_transport$/,"_invalid_json");
+     throw Error(stage);
+    }
    }
   });
   if(!result.ok){
@@ -95,7 +106,11 @@ Deno.serve(async req=>{
    return out(503,"payment_read_only_unverified");
   console.info("cithela_mp_pilot_payment_audited_read_only",{verified:true,write:false});
   return out(200,"approved_test_payment_verified_read_only",result.verified_payments);
- }catch{
-  return out(503,"provider_read_only_unavailable");
+ }catch(error){
+  const code=safeProviderReadCode(error);
+  // Only a fixed enum goes to Edge logs and the authenticated owner.
+  // Never expose body, token, payment identifiers, headers or exception text.
+  console.info("cithela_mp_pilot_provider_read_diagnostic",code);
+  return out(503,code);
  }
 });
