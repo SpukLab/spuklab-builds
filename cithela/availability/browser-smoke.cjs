@@ -47,8 +47,37 @@ const server=http.createServer((req,res)=>{
       assert.equal(await page.locator('#cfg-block-single').isVisible(),false);
       assert.equal(await page.locator('#cfg-block-range').isVisible(),true);
       assert.match(await page.locator('#cfg-block-save').innerText(),/Bloquear período/);
+      // Safari puede restaurar una fecha pasada de otra sesión: la UX debe corregirla.
+      await page.evaluate(()=>{
+        const start=document.getElementById('cfg-block-desde');
+        const end=document.getElementById('cfg-block-hasta');
+        start.value='2026-11-23';
+        end.value='2026-01-15';
+        syncAvailabilityRangeDates('refresh');
+      });
+      assert.equal(await page.locator('#cfg-block-hasta').inputValue(),'2026-11-23');
+      assert.match(await page.locator('#cfg-block-range-summary').innerText(),/23\\/11\\/2026/);
+      // No adivinar el año si el usuario selecciona una fecha inválida.
+      await page.evaluate(()=>{
+        const end=document.getElementById('cfg-block-hasta');
+        end.value='2026-01-15';
+        syncAvailabilityRangeDates('end');
+      });
+      assert.match(await page.locator('#cfg-block-range-summary').innerText(),/Revisá el año/);
       await page.locator('#cfg-block-desde').fill('2026-12-24');
+      await page.locator('#cfg-block-desde').dispatchEvent('change');
       await page.locator('#cfg-block-hasta').fill('2027-01-04');
+      await page.locator('#cfg-block-hasta').dispatchEvent('change');
+      assert.match(await page.locator('#cfg-block-range-summary').innerText(),/12 días/);
+      // El control nativo no puede invadir el borde de la sección de Ajustes.
+      for(const selector of ['#cfg-block-desde','#cfg-block-hasta']){
+        const bounds=await page.locator(selector).evaluate(el=>{
+          const r=el.getBoundingClientRect(),parent=el.parentElement.getBoundingClientRect();
+          return {left:r.left,right:r.right,parentLeft:parent.left,parentRight:parent.right};
+        });
+        assert.ok(bounds.left>=bounds.parentLeft-2&&bounds.right<=bounds.parentRight+2,
+          'native date overflow at '+width+': '+JSON.stringify(bounds));
+      }
       await page.locator('#cfg-block-motivo').fill('Vacaciones de prueba');
       // In local demo mode, only synthetic records are generated.
       await page.locator('#cfg-block-save').click();
