@@ -69,10 +69,10 @@ test('professional UX has exactly one shared toolbar above tab bar and distinct 
     html.indexOf('id="professional-tabs"'));
   assert.match(html,/id="professional-share-copy"/);
   assert.match(html,/id="professional-share-native"/);
-  assert.match(html,/href="\.\/compartir\.html" aria-label="Ver código QR de la agenda"/);
+  assert.match(html,/id="professional-share-qr" href="\.\/compartir\.html"/);
   assert.match(html,/function updateProfessionalBookingShareVisibility\(\)/);
   assert.match(html,/professionalCloudReady\(\)&&\['owner','admin','operator'\]/);
-  assert.match(html,/professionalBookingShareState\.tenantId===s\.tenant\?\.id/);
+  assert.match(html,/const ready=allowed&&current\.tenantId===s\.tenant\?\.id/);
   assert.match(html,/function copyProfessionalBookingLink\(\)/);
   assert.match(html,/function shareProfessionalBookingLink\(\)/);
   assert.match(html,/const data=await CithelaCloud\.professionalBookingShare\(\)/);
