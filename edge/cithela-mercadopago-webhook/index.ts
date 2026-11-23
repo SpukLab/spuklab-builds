@@ -32,6 +32,13 @@ Deno.serve(async (request: Request) => {
       // cryptographic material, timestamps or user/merchant identifiers.
       if(code==='invalid_signature'||code==='signature_expired'){
         console.info('cithela_mp_webhook_hmac', code);
+      }else if([
+        'event_id_invalid','request_id_missing','resource_mismatch',
+        'topic_mismatch','provider_mode_true','provider_mode_false',
+        'provider_mode_unavailable','merchant_mismatch'
+      ].includes(code)){
+        // Enum only. Never dump a provider body, ID, user data or headers.
+        console.info('cithela_mp_webhook_notification_mismatch', code);
       }
     },
     async storeSignedEvent(event) {
