@@ -76,3 +76,39 @@ test('tampered signature is still rejected before mismatch classification',async
  assert.deepEqual(t.reasons,['invalid_signature']);
  assert.equal(t.stored.length,0);
 });
+
+test('signed payment event with missing top-level id is accepted with stable derived id',async()=>{
+ const t=setup();
+ const r=await handleMercadoPagoWebhook(makeRequest({id:undefined}),t.config);
+ assert.equal(r.status,200);
+ assert.equal(t.stored.length,1);
+ assert.match(t.stored[0].eventId,/^signed_[0-9a-f]{64}$/);
+ assert.deepEqual(t.reasons,[]);
+});
+test('repeated signed event without top-level id maps to same id for deduplication',async()=>{
+ const t=setup();
+ const a=await handleMercadoPagoWebhook(makeRequest({id:undefined}),t.config);
+ const b=await handleMercadoPagoWebhook(makeRequest({id:undefined}),t.config);
+ assert.equal(a.status,200);assert.equal(b.status,200);
+ assert.equal(t.stored[0].eventId,t.stored[1].eventId);
+});
+test('missing top-level id never bypasses merchant, mode or type validation',async()=>{
+ for(const [change,expected] of [
+  [{id:undefined,live_mode:true},'provider_mode_true'],
+  [{id:undefined,user_id:'1000'},'merchant_mismatch'],
+  [{id:undefined,type:'payment'},'topic_mismatch'],
+  [{id:undefined,data:{id:'9999'}},'resource_mismatch']
+ ]){
+  const t=setup();
+  const r=await handleMercadoPagoWebhook(makeRequest(change),t.config);
+  assert.equal(r.status,403);assert.deepEqual(t.reasons,[expected]);
+  assert.equal(t.stored.length,0);
+ }
+});
+test('explicit malicious top-level event id is still rejected',async()=>{
+ const t=setup();
+ const r=await handleMercadoPagoWebhook(makeRequest({id:{invalid:true}}),t.config);
+ assert.equal(r.status,403);
+ assert.deepEqual(t.reasons,['event_id_invalid']);
+ assert.equal(t.stored.length,0);
+});
