@@ -8,7 +8,7 @@ const start=html.indexOf('let professionalBookingLocale=');
 const end=html.indexOf('let healthShortcutTenant=null;',start);
 assert.ok(start>0&&end>start);
 const source=html.slice(start,end);
-function setup({role='owner',initial='es',failSave=false}={}){
+function setup({role='owner',initial='es',failSave=false,shareEnabled=false,shareUrl='',shareFails=false}={}){
   const user={tenant:{id:'tenant-one'},membership:{role}};
   let locale=initial;
   const saved=[];
@@ -24,12 +24,17 @@ function setup({role='owner',initial='es',failSave=false}={}){
     'professional-booking-language-en':buttons.en,
     'professional-booking-language-status':status,
     'professional-quick-actions':{hidden:true},
-    'professional-public-booking-shortcut':{hidden:true}
+    'professional-public-booking-shortcut':{hidden:true},
+    'professional-share-copy':{disabled:true},
+    'professional-share-native':{disabled:true},
+    'professional-share-qr':{href:'',textContent:''},
+    'professional-share-description':{textContent:''}
   };
   const env={
     $:name=>elements[name]||null,
     CithelaCloud:{
       state:()=>user,
+      professionalBookingShare:async()=>{if(shareFails)throw Error('offline');return {enabled:shareEnabled,url:shareUrl}},
       publicBookingConfig:async next=>{
         if(next===undefined)return {locale};
         if(failSave)throw Error('simulated_save_failure');
@@ -47,8 +52,9 @@ const flush=async()=>{await new Promise(resolve=>setImmediate(resolve))};
 
 test('owner sees ES/EN even without public share link and saves changed booking language',async()=>{
   const f=setup();
-  f.env.updateProfessionalQuickActions();
+  f.env.updateProfessionalBookingShareVisibility();
   assert.equal(f.elements['professional-quick-actions'].hidden,false);
+  assert.equal(f.elements['professional-public-booking-shortcut'].hidden,false);
   await f.env.loadProfessionalBookingLanguage('tenant-one');
   assert.equal(f.buttons.es.attributes['aria-pressed'],'true');
   assert.equal(f.buttons.en.attributes['aria-pressed'],'false');
@@ -70,8 +76,44 @@ test('operator cannot write booking language or use hidden language shortcuts',a
   await flush();
   assert.deepEqual(f.saved,[]);
   assert.equal(f.locale(),'es');
-  f.env.updateProfessionalQuickActions();
-  assert.equal(f.elements['professional-quick-actions'].hidden,true);
+  f.env.updateProfessionalBookingShareVisibility();
+  assert.equal(f.elements['professional-quick-actions'].hidden,false);
+  assert.equal(f.elements['professional-public-booking-shortcut'].hidden,false);
+  assert.equal(f.elements['professional-share-copy'].disabled,true);
+});
+
+test('share section is visible when public bookings are disabled; copy/share remain locked',async()=>{
+  const f=setup();
+  await f.env.loadProfessionalBookingShare('tenant-one');
+  assert.equal(f.elements['professional-public-booking-shortcut'].hidden,false);
+  assert.equal(f.elements['professional-share-copy'].disabled,true);
+  assert.equal(f.elements['professional-share-native'].disabled,true);
+  assert.match(f.elements['professional-share-description'].textContent,/Sin enlace activo/);
+  assert.equal(f.elements['professional-share-qr'].href,'./compartir.html?tenant=tenant-one');
+  assert.equal(f.elements['professional-share-qr'].textContent,'QR / configurar');
+});
+
+test('only server-confirmed active link enables copy/share',async()=>{
+  const url='https://spuklab.github.io/spuklab-builds/cithela/reservar.html?c=alma-pampa';
+  const enabled=setup({shareEnabled:true,shareUrl:url});
+  await enabled.env.loadProfessionalBookingShare('tenant-one');
+  assert.equal(enabled.elements['professional-share-copy'].disabled,false);
+  assert.equal(enabled.elements['professional-share-native'].disabled,false);
+  assert.equal(enabled.elements['professional-share-qr'].textContent,'Ver QR');
+  const notEnabled=setup({shareEnabled:false,shareUrl:url});
+  await notEnabled.env.loadProfessionalBookingShare('tenant-one');
+  assert.equal(notEnabled.elements['professional-share-copy'].disabled,true);
+});
+
+test('share lookup failure does not hide link/QR entry or invent a public URL',async()=>{
+  const f=setup({shareFails:true});
+  await f.env.loadProfessionalBookingShare('tenant-one');
+  assert.equal(f.elements['professional-public-booking-shortcut'].hidden,false);
+  assert.equal(f.elements['professional-share-copy'].disabled,true);
+  assert.match(f.elements['professional-share-description'].textContent,/No se pudo consultar/);
+  f.user.tenant=null;
+  f.env.updateProfessionalBookingShareVisibility();
+  assert.equal(f.elements['professional-public-booking-shortcut'].hidden,true);
 });
 
 test('failed save restores language without implying success',async()=>{
@@ -102,6 +144,13 @@ test('mobile layout and simplified settings preserve necessary links and technic
   assert.match(html,/id="professional-booking-language-es"/);
   assert.match(html,/id="professional-booking-language-en"/);
   assert.match(html,/Idioma reservas/);
+  const nav=html.slice(html.indexOf('id="screen-medico"'),html.indexOf('<div class="professional-tabbar">'));
+  assert.ok(nav.indexOf('id="professional-booking-language-settings"')<nav.indexOf('class="nav-out" onclick="logout()"'));
+  assert.ok(nav.indexOf('id="professional-public-booking-shortcut"')>nav.indexOf('</nav>'));
+  assert.match(nav,/id="professional-share-qr"/);
+  assert.match(nav,/QR \/ configurar/);
+  const sharePage=readFileSync(new URL('./compartir.html',import.meta.url),'utf8');
+  assert.match(sharePage,/requestedTenant&&memberRoles\.has\(requestedTenant\)/);
   assert.match(html,/function syncProfessionalBookingLanguageButtons/);
   assert.match(html,/id="cfg-section-resources" hidden/);
   assert.match(html,/resourceGroup\.hidden=cloud&&list\.length<=1/);
