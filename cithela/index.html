@@ -558,6 +558,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <link rel="manifest" href="./brand/cithela.webmanifest?v=20261110-final">
 <script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
 <script src="./availability/ranges.js?v=20261123-fix1"></script>
+<script src="./availability/block-groups.js?v=20261123"></script>
 <style>
 .availability-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;max-width:100%}
 .availability-date-grid[hidden]{display:none}
@@ -568,6 +569,31 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 #cfg-block-range-summary{padding:9px 12px;border-radius:9px;background:var(--surface-soft);overflow-wrap:anywhere}
 #cfg-block-range-summary[data-invalid="true"]{color:#9b334e}
 @media(max-width:650px){.availability-date-grid{grid-template-columns:minmax(0,1fr)}}
+</style>
+<style>
+/* Acceso superior a reservas, sin duplicar los enlaces ni exponer tokens privados. */
+.cithela-top-share[hidden]{display:none!important}
+.cithela-top-share{margin:10px 16px 9px;padding:12px 14px;border:var(--line);border-radius:12px;background:var(--white);display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.cithela-top-share__title{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cithela-top-share__title strong{font-size:.85rem;color:var(--ink)}
+.cithela-top-share__title span{font-size:.72rem;color:var(--ink2);line-height:1.3}
+.cithela-top-share__actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cithela-top-share__actions button,.cithela-top-share__actions a{font:inherit;font-size:.76rem;font-weight:650;min-height:40px;padding:9px 10px;white-space:nowrap;border-radius:8px;background:var(--teal-light);border:1px solid var(--border-color);color:var(--teal2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.cithela-top-share__actions button:focus-visible,.cithela-top-share__actions a:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.professional-whatsapp-login{display:block;margin:10px 0 0;padding:11px;border:1px solid var(--border-color);border-radius:9px;text-align:center;color:var(--teal2);text-decoration:none;font-size:.88rem;font-weight:650}
+.professional-whatsapp-login__hint{font-size:.72rem;line-height:1.45;color:var(--ink2);margin:5px 0 13px}
+@media(max-width:700px){.cithela-top-share{align-items:stretch;flex-direction:column;gap:8px}.cithela-top-share__title span{display:none}.cithela-top-share__actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:7px}.cithela-top-share__actions>*{min-width:0;width:100%;white-space:normal}}
+@media(max-width:370px){.cithela-top-share{margin:8px 10px;padding:10px}.cithela-top-share__actions button,.cithela-top-share__actions a{font-size:.72rem;padding:9px 5px}}
+</style>
+<style>
+.cithela-block-group{border:1px solid var(--border-color);border-radius:11px;padding:11px 12px;margin:10px 0;background:var(--surface-soft)}
+.cithela-block-group__head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.cithela-block-group__head .block-main{flex:1;min-width:0}
+.cithela-block-group__head button{flex:none;max-width:44%;white-space:normal;line-height:1.3}
+.cithela-block-group__details{border-top:1px solid var(--border-color);margin-top:10px;padding-top:9px}
+.cithela-block-group__details>summary{cursor:pointer;padding:6px 0;font-size:.75rem;font-weight:600;color:var(--teal2)}
+.cithela-block-group__details .block-row{padding:10px 0}
+@media(max-width:380px){.cithela-block-group__head{align-items:stretch;flex-direction:column}.cithela-block-group__head button{max-width:100%;width:100%}}
 </style>
 </head>
 <body>
@@ -593,7 +619,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <input class="inp" id="l-cloud-email" type="email" autocomplete="username" placeholder="tu@email.com">
         <label class="lbl" for="l-cloud-password">Contraseña</label>
         <input class="inp" id="l-cloud-password" type="password" autocomplete="current-password" placeholder="Tu contraseña">
-        <p><a href="./acceso-whatsapp.html">Ingresar con WhatsApp</a></p>
+        <a class="professional-whatsapp-login" href="./acceso-whatsapp.html">Ingresar con WhatsApp</a>
+        <p class="professional-whatsapp-login__hint">Acceso alternativo con código al número previamente vinculado a tu cuenta profesional.</p>
         <button class="btn-main" id="professional-login-button" type="button" onclick="professionalPasswordLogin()">Ingresar</button>
         <button class="mb ghost" type="button" style="width:100%;margin-top:10px;" onclick="requestProfessionalPasswordReset()">Olvidé mi contraseña</button>
         <button class="mb ghost" id="professional-signup-toggle" hidden type="button" style="width:100%;margin-top:10px;" onclick="professionalShowPilotSignUp()">Crear cuenta profesional (piloto)</button>
@@ -703,6 +730,17 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
+  <section id="professional-public-booking-shortcut" class="cithela-top-share" hidden aria-label="Acceso rápido al enlace de turnos">
+    <div class="cithela-top-share__title">
+      <strong>Enlace de turnos</strong>
+      <span>Copiá, compartí o mostrales el QR a tus clientes.</span>
+    </div>
+    <div class="cithela-top-share__actions">
+      <button type="button" id="professional-share-copy" onclick="copyProfessionalBookingLink()">Copiar</button>
+      <button type="button" id="professional-share-native" onclick="shareProfessionalBookingLink()">Compartir</button>
+      <a class="cithela-booking-shortcut__link" href="./compartir.html" aria-label="Ver código QR de la agenda">QR</a>
+    </div>
+  </section>
   <div class="professional-tabbar">
   <div class="tabs" id="professional-tabs" aria-label="Secciones profesionales">
     <button class="tab on" id="medico-tab-agenda" onclick="tab('medico','agenda',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3M8 18h7"/></svg>Agenda</button>
@@ -932,21 +970,14 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-config" class="pane">
-    <p class="settings-intro">Configurá enlaces de reservas, horarios, servicios y cobros desde secciones independientes. Los reportes y el mantenimiento están al final. <a href="./acceso-whatsapp.html">Vincular mi WhatsApp para ingresar</a></p>
+    <p class="settings-intro">Configurá la agenda, las reservas y los cobros. Tu enlace y el QR están disponibles arriba para copiar o compartir. Los reportes y el mantenimiento quedan al final.</p>
 
-    <h2 class="settings-group-title">Reservas y enlaces</h2>
+    <h2 class="settings-group-title">Reservas</h2>
 <details class="cithela-config-group" id="cfg-section-public-booking">
-  <summary>Reservas online, enlace e idioma<span aria-hidden="true">⌄</span></summary>
+  <summary>Idioma de las reservas y coberturas<span aria-hidden="true">⌄</span></summary>
   <div class="form-card" style="margin-bottom:14px;">
-    <p class="contact-note">Compartí tu enlace o QR con pacientes. Elegí el idioma de la reserva y configurá coberturas, si tu cuenta tiene ese módulo habilitado.</p>
-    <section id="professional-public-booking-shortcut" class="cithela-share-strip" hidden aria-label="Compartir reservas públicas">
-      <span class="cithela-share-strip__label">Reservas online</span>
-      <div class="cithela-share-strip__actions">
-        <button type="button" id="professional-share-copy" onclick="copyProfessionalBookingLink()">Copiar enlace</button>
-        <button type="button" id="professional-share-native" onclick="shareProfessionalBookingLink()">Compartir</button>
-        <a class="cithela-booking-shortcut__link" href="./compartir.html" aria-label="Mostrar código QR de reservas">Ver QR</a>
-      </div>
-    </section>
+    <p class="contact-note">Definí el idioma inicial de las reservas y, si corresponde, los precios y coberturas. El enlace y el QR se comparten desde el acceso superior.</p>
+
     <div id="professional-booking-language-settings" hidden>
       <label class="lbl" for="professional-booking-language">Idioma inicial para pacientes</label>
       <select class="inp" id="professional-booking-language" disabled aria-describedby="professional-booking-language-status"
@@ -957,9 +988,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <p id="professional-booking-language-status" class="contact-note" role="status" aria-live="polite" hidden></p>
       <p class="contact-note">Los pacientes pueden cambiar el idioma desde la página de reservas.</p>
     </div>
-    <a class="btn-main" href="./compartir.html" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Administrar enlace y QR</a>
     <a class="btn-main soft" id="professional-health-settings" href="./configurar-coberturas.html" hidden style="display:block;text-align:center;text-decoration:none;margin-top:10px;">Precios y coberturas de consultas</a>
-    <p class="contact-note">Propietarios y administradores configuran idioma y coberturas. El personal autorizado puede copiar o compartir el enlace desde esta misma sección.</p>
+    <p class="contact-note">Propietarios y administradores pueden editar estas opciones. El enlace público se comparte desde el acceso superior.</p>
   </div>
 </details>
 
@@ -2035,7 +2065,7 @@ const CithelaCloud=(()=>{
         c.from('cithela_people').select('id,display_name,phone_e164,contact_email,notes,alerts,patient_shared_note,updated_at').eq('tenant_id',tenantId).order('display_name'),
         c.from('cithela_working_hours').select('id,resource_id,weekday,starts_local,ends_local').eq('tenant_id',tenantId).order('weekday').order('starts_local'),
         c.from('cithela_appointments').select('id,person_id,resource_id,service_id,starts_at,ends_at,status,service_name,duration_min,resource_name,reason,row_version,created_at,updated_at,deposit_amount_minor,deposit_currency,deposit_status,deposit_paid_at,deposit_refunded_at,deposit_method').eq('tenant_id',tenantId).order('starts_at',{ascending:true}).limit(500),
-        c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason').eq('tenant_id',tenantId).order('starts_at',{ascending:true}),
+        c.from('cithela_availability_blocks').select('id,resource_id,starts_at,ends_at,reason,created_at').eq('tenant_id',tenantId).order('starts_at',{ascending:true}),
         commercialStatusQ
       ]);
       if(request!==refreshSerial)return snapshot();
@@ -7432,7 +7462,7 @@ function renderAvailabilityBlocks(){
     const note='<p class="contact-note">Bloqueos cloud. Impiden nuevas reservas, pero no cancelan los turnos existentes.</p>';
     const access=canManage?'':'<p class="ops-note">Solo el propietario o administrador puede modificar los bloqueos cloud.</p>';
     if(!blocks.length){el.innerHTML=note+access+'<p class="contact-note">Sin bloqueos cloud.</p>';return;}
-    el.innerHTML=note+access+blocks.map(b=>{
+    const renderOne=b=>{
       const start=cloudLocalParts(b.starts_at,tz),end=cloudLocalParts(b.ends_at,tz);
       const fullDay=start.hora==='00:00'&&end.hora==='00:00'&&start.fecha!==end.fecha;
       const lastDay=fullDay?CithelaBlockRanges.addDays(end.fecha,-1):null;
@@ -7446,8 +7476,34 @@ function renderAvailabilityBlocks(){
           <div class="block-title">${escHtml(start.fecha)} · ${escHtml(label)}</div>
           <div class="block-meta">${escHtml(resource)}${b.reason?' · '+escHtml(b.reason):''}</div>
         </div>
-        ${canManage?`<button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>`:''}
+        ${canManage?`<button class="mb cancel" type="button" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>`:''}
       </div>`;
+    };
+    const groups=window.CithelaBlockGroups?.groupBlocks(blocks)||
+      blocks.map(b=>({id:b.id,blocks:[b],grouped:false}));
+    el.innerHTML=note+access+groups.map(g=>{
+      if(!g.grouped||!g.blocks.every(b=>{
+        const a=cloudLocalParts(b.starts_at,tz),z=cloudLocalParts(b.ends_at,tz);
+        return a.hora==='00:00'&&z.hora==='00:00';
+      }))return g.blocks.map(renderOne).join('');
+      const first=cloudLocalParts(g.starts_at,tz).fecha;
+      const lastExclusive=cloudLocalParts(g.ends_at,tz).fecha;
+      const through=CithelaBlockRanges.addDays(lastExclusive,-1);
+      const count=CithelaBlockRanges.daysBetween(first,lastExclusive);
+      const resource=g.resource_id?(cloudResourceById(g.resource_id)?.name||'Recurso'):'Todos los recursos';
+      return`<section class="cithela-block-group" aria-label="Ausencia agrupada">
+        <div class="cithela-block-group__head">
+          <div class="block-main">
+            <strong class="block-title">${escHtml(g.reason)} · ${count} días</strong>
+            <div class="block-meta">${escHtml(availabilityDisplayCivilDate(first))} – ${escHtml(availabilityDisplayCivilDate(through))} · ${escHtml(resource)}</div>
+          </div>
+          ${canManage?`<button class="mb cancel cithela-block-group__remove" type="button" onclick="removeAvailabilityBlockGroup('${g.id}')">Quitar período</button>`:''}
+        </div>
+        <details class="cithela-block-group__details">
+          <summary>Ver ${g.blocks.length} tramos individuales</summary>
+          ${g.blocks.map(renderOne).join('')}
+        </details>
+      </section>`;
     }).join('');
     return;
   }
@@ -7709,6 +7765,61 @@ async function addAvailabilityBlock(){
   $('cfg-block-motivo').value='';renderAvailabilityBlocks();
   renderCal('med');renderStats();renderAgenda();toast('Bloqueo agregado ✓');
 }
+let availabilityBlockGroupBusy=false;
+async function removeAvailabilityBlockGroup(groupId){
+  if(availabilityBlockGroupBusy)return;
+  if(!canManageCloudBlocks()){toast('No tenés permisos para quitar bloqueos cloud');return;}
+  const original=CithelaCloud.state();
+  const tenantId=original.tenant?.id;
+  if(!tenantId)return;
+  const group=window.CithelaBlockGroups?.groupBlocks(original.availabilityBlocks||[])
+    .find(g=>g.id===groupId&&g.grouped);
+  if(!group)return toast('El período cambió. Actualizá la lista antes de eliminarlo.');
+  const tz=original.tenant.timezone;
+  const allFullDays=group.blocks.every(b=>{
+    const a=cloudLocalParts(b.starts_at,tz),z=cloudLocalParts(b.ends_at,tz);
+    return a.hora==='00:00'&&z.hora==='00:00';
+  });
+  if(!allFullDays)return toast('Este grupo no corresponde a días completos.');
+  const begin=cloudLocalParts(group.starts_at,tz).fecha;
+  const finish=CithelaBlockRanges.addDays(cloudLocalParts(group.ends_at,tz).fecha,-1);
+  const message='¿Quitar COMPLETAMENTE el período '+availabilityDisplayCivilDate(begin)+
+    ' al '+availabilityDisplayCivilDate(finish)+'? Se eliminarán '+group.blocks.length+
+    ' tramos y volverán a habilitarse horarios. Los turnos existentes no cambiarán.';
+  if(!confirm(message))return;
+  availabilityBlockGroupBusy=true;
+  document.querySelectorAll('.cithela-block-group__remove').forEach(b=>b.disabled=true);
+  let removed=0;
+  try{
+    for(const b of group.blocks){
+      const now=CithelaCloud.state();
+      if(now.tenant?.id!==tenantId||!canManageCloudBlocks())
+        throw Error('La cuenta o sus permisos cambiaron. No se eliminaron los tramos restantes.');
+      const current=now.availabilityBlocks.find(x=>x.id===b.id);
+      if(!current)throw Error('La lista cambió en otra sesión. Revisá el período restante.');
+      if(current.starts_at!==b.starts_at||current.ends_at!==b.ends_at)
+        throw Error('Un tramo fue modificado. Revisá antes de continuar.');
+      await CithelaCloud.blockCommand({
+        tenantId,requestId:cloudRequestId('vacation-delete-'+(removed+1)),
+        command:'availability_block.delete',payload:{id:b.id}
+      });
+      removed++;
+      availabilityRangeFeedback('Quitando '+removed+' de '+group.blocks.length+' tramos…');
+    }
+    renderAvailabilityBlocks();
+    availabilityRangeFeedback('Período eliminado. Se quitaron '+removed+' tramos.');
+    toast('Vacaciones eliminadas de la agenda ✓');
+  }catch(err){
+    renderAvailabilityBlocks();
+    availabilityRangeFeedback('Se quitaron '+removed+' de '+group.blocks.length+
+      ' tramos. Los restantes siguen bloqueados. Revisá la lista antes de continuar. '+
+      (err?.message||''),true);
+  }finally{
+    availabilityBlockGroupBusy=false;
+    document.querySelectorAll('.cithela-block-group__remove').forEach(b=>b.disabled=false);
+  }
+}
+
 async function removeAvailabilityBlock(id){
   if(professionalCloudReady()){
     if(!canManageCloudBlocks()){toast('No tenés permisos para quitar bloqueos cloud');return;}
