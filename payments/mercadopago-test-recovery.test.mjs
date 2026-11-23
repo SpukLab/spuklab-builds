@@ -35,3 +35,16 @@ test('rejects incorrect seller, amount, currency, mode or reference',()=>{
   assert.equal(result.may_create,false);
  }
 });
+
+test('missing mode in MP preapproval is accepted only with independently verified test seller',()=>{
+ const {live_mode,...missing}=match;
+ assert.equal(decide({intent,providerSnapshots:[missing],lookupComplete:true}).ok,false);
+ assert.equal(decide({intent,providerSnapshots:[missing],lookupComplete:true,verifiedTestSeller:true}).ok,true);
+ assert.equal(decide({intent,providerSnapshots:[{...missing,live_mode:true}],lookupComplete:true,verifiedTestSeller:true}).ok,false);
+});
+test('string monetary amount recovers without rounding mismatch',()=>{
+ const item={...match,live_mode:undefined,auto_recurring:{currency_id:'ARS',transaction_amount:'15000.00'}};
+ const res=decide({intent,providerSnapshots:[item],lookupComplete:true,verifiedTestSeller:true});
+ assert.equal(res.ok,true);
+ assert.equal(res.may_create,false);
+});

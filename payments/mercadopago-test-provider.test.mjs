@@ -86,3 +86,15 @@ test('checkout gate requires owner, preflight, explicit consent and test account
  assert.equal(authorizeInternalTestCheckout({...valid,ownerEmail:'dentrix.8m@gmail.com'}).ok,false);
  assert.equal(authorizeInternalTestCheckout({...valid,preflight:{ok:false,code:'not_eligible'}}).ok,false);
 });
+
+test('allows absent live_mode only with verified test seller',()=>{
+ const snapshot={ok:true,code:'read_only',provider_subscription_id:'abc123',
+   external_reference:intent.external_reference,collector_id:intent.collector_id,
+   currency_id:'ARS',amount:15000,status:'pending'};
+ assert.equal(verifyTestProviderIdentity(intent,snapshot).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,snapshot,{verifiedTestSeller:true}).ok,true);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,live_mode:true},{verifiedTestSeller:true}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,amount:14000},{verifiedTestSeller:true}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,collector_id:'other'},{verifiedTestSeller:true}).ok,false);
+ assert.equal(verifyTestProviderIdentity(intent,{...snapshot,currency_id:'USD'},{verifiedTestSeller:true}).ok,false);
+});

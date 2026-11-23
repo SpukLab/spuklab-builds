@@ -55,7 +55,8 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
   } else if (claim.code === 'recover_only') {
     const search = await services.searchSubscriptions(intent.external_reference, accounts.buyerEmail);
     const recovered = decideTestCheckoutRecovery({
-      intent, providerSnapshots:search.results, lookupComplete:search.complete
+      intent, providerSnapshots:search.results, lookupComplete:search.complete,
+      verifiedTestSeller:accounts.sellerVerified
     });
     console.info('cithela_mp_checkout_diagnostic',JSON.stringify({
       phase:'recover_preapproval',category:recovered.code,
@@ -73,7 +74,8 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
   const snapshot = await readTestPreapproval({
     subscriptionId:candidate.provider_subscription_id, token, fetchImpl
   });
-  const proof = verifyTestProviderIdentity(intent, snapshot);
+  const proof = verifyTestProviderIdentity(intent, snapshot,
+    {verifiedTestSeller:accounts.sellerVerified});
   if (!proof.ok || (snapshot.payer_id != null &&
       String(snapshot.payer_id) !== String(accounts.buyerId))) return failure('provider_identity_mismatch');
   const url = snapshot.status === 'pending' ? checkoutUrl(candidate.checkout_url) : null;

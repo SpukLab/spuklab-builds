@@ -55,3 +55,21 @@ test('production evidence and unverified accounts never yield checkout links',as
   assert.equal(live.calls.links,0);
   assert.equal(snapshot.live_mode,false);
 });
+
+test('existing pending test subscription without live_mode is recovered without provider POST',async()=>{
+ const {input,calls,snapshot}=fixture();
+ delete snapshot.live_mode;
+ input.services.claim=async()=>({ok:true,code:'recover_only',external_reference:snapshot.external_reference});
+ const result=await runPilotCheckout(input);
+ assert.equal(result.code,'checkout_ready');
+ assert.equal(result.checkout_url,snapshot.init_point);
+ assert.deepEqual(calls,{posts:0,links:1});
+});
+test('explicit production mode on existing subscription is not linked',async()=>{
+ const {input,calls,snapshot}=fixture();
+ snapshot.live_mode=true;
+ input.services.claim=async()=>({ok:true,code:'recover_only',external_reference:snapshot.external_reference});
+ const result=await runPilotCheckout(input);
+ assert.equal(result.code,'provider_identity_mismatch');
+ assert.deepEqual(calls,{posts:0,links:0});
+});
