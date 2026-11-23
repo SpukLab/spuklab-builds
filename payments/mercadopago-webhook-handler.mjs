@@ -89,8 +89,19 @@ export async function handleMercadoPagoWebhook(request, config) {
     ?'sim_'+requestId:idString(body.id);
   if(!eventId || !requestId || bodyResource!==signedResource ||
      (!simulated && (topic!==body.type || body.live_mode!==config.liveMode)) ||
-     merchantUserId!==config.merchantUserId)
+     merchantUserId!==config.merchantUserId){
+    // 403 means HMAC and freshness passed. Log ONLY the reason category,
+    // never IDs, timestamps, request fields, headers, secrets or payload.
+    const reason=!eventId?'event_id_invalid':!requestId?'request_id_missing':
+      bodyResource!==signedResource?'resource_mismatch':
+      (!simulated&&topic!==body.type)?'topic_mismatch':
+      (!simulated&&body.live_mode!==config.liveMode)?
+        (body.live_mode===true?'provider_mode_true':
+         body.live_mode===false?'provider_mode_false':'provider_mode_unavailable'):
+      'merchant_mismatch';
+    try{config.reportValidationFailure?.(reason);}catch{}
     return respond(403,'notification_mismatch');
+  }
   const occurredAt=!simulated && typeof body.date_created==='string' &&
        body.date_created.length<=50 && Number.isFinite(Date.parse(body.date_created))
        ?new Date(body.date_created).toISOString():null;
