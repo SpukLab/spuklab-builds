@@ -14,11 +14,14 @@ export async function reconcilePilotPayment({invoiceId, getProvider, getIntent, 
 
   const intent = await getIntent(subscriptionId);
   if (!intent || intent.provider_subscription_id !== subscriptionId) return fail('intent_mismatch');
-  const [subscription,payment] = await Promise.all([
+  const [seller,subscription,payment] = await Promise.all([
+    getProvider('/users/me'),
     getProvider('/preapproval/' + subscriptionId),
     getProvider('/v1/payments/' + paymentId)
   ]);
-  const proof = verifySubscriptionPayment({intent,subscription,authorizedPayment:invoice,payment});
+  const verifiedTestSeller = String(seller?.id)===String(intent.collector_id) &&
+    seller?.site_id==='MLA' && Array.isArray(seller?.tags) && seller.tags.includes('test_user');
+  const proof = verifySubscriptionPayment({intent,subscription,authorizedPayment:invoice,payment,verifiedTestSeller});
   if (!proof.ok) return proof;
   if (!Number.isFinite(Date.parse(payment.date_approved))) return fail('invalid_approval_date');
 
