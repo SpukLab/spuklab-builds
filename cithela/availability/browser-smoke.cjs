@@ -56,7 +56,7 @@ const server=http.createServer((req,res)=>{
         syncAvailabilityRangeDates('refresh');
       });
       assert.equal(await page.locator('#cfg-block-hasta').inputValue(),'2026-11-23');
-      assert.match(await page.locator('#cfg-block-range-summary').innerText(),/23\\/11\\/2026/);
+      assert.ok((await page.locator('#cfg-block-range-summary').innerText()).includes('23/11/2026'));
       // No adivinar el año si el usuario selecciona una fecha inválida.
       await page.evaluate(()=>{
         const end=document.getElementById('cfg-block-hasta');
