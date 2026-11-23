@@ -112,3 +112,28 @@ test('explicit malicious top-level event id is still rejected',async()=>{
  assert.deepEqual(t.reasons,['event_id_invalid']);
  assert.equal(t.stored.length,0);
 });
+
+test('provider event with noncanonical primitive top-level id still deduplicates by signed resource',async()=>{
+ const ids=[null,'abcdef/987','123.456.789',-4,12.25,Number.MAX_SAFE_INTEGER+12];
+ let previous=null;
+ for(const id of ids){
+  const scope=setup();
+  const response=await handleMercadoPagoWebhook(makeRequest({id}),scope.config);
+  assert.equal(response.status,200,'value '+String(id));
+  assert.equal(scope.stored.length,1);
+  assert.match(scope.stored[0].eventId,/^signed_[a-f0-9]{64}$/);
+  if(previous!==null)assert.equal(scope.stored[0].eventId,previous);
+  previous=scope.stored[0].eventId;
+ }
+});
+test('same authorized payment ID from real signed topic is not confused with a different topic',async()=>{
+ const scope=setup();
+ await handleMercadoPagoWebhook(makeRequest({id:null}),scope.config);
+ const allowed=scope.stored[0].eventId;
+ // Forged topic is still rejected and never persisted.
+ const t2=setup();
+ const result=await handleMercadoPagoWebhook(makeRequest({id:null,type:'payment'}),t2.config);
+ assert.equal(result.status,403);
+ assert.equal(t2.stored.length,0);
+ assert.equal(scope.stored[0].eventId,allowed);
+});

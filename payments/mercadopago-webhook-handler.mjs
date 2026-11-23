@@ -85,21 +85,25 @@ export async function handleMercadoPagoWebhook(request, config) {
     Number.isFinite(Date.parse(body.date));
   const merchantUserId=simulated?config.merchantUserId:idString(body.user_id,30);
   const storedTopic=simulated?'subscription_preapproval':topic;
-  // Mercado Pago may omit top-level event id in otherwise valid signed
-  // deliveries. HMAC authenticates the resource and request ID, not body.id.
-  // Use a stable digest of the signed resource, topic and merchant instead
-  // of rejecting legitimate notifications or trusting an arbitrary body ID.
-  // Explicit malformed non-numeric IDs still fail closed.
-  let eventId=simulated && requestId?.length<=115
-    ?'sim_'+requestId:idString(body.id);
-  if(!simulated &&
-     (body.id===undefined ||
-      (typeof body.id==='number'&&Number.isFinite(body.id)&&body.id>=0&&!Number.isSafeInteger(body.id)))){
-    const identifier=new TextEncoder().encode(
-      'cithela-mp-event-v1:'+topic+':'+signedResource+':'+(merchantUserId||'')
-    );
-    const digest=new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',identifier));
-    eventId='signed_'+Array.from(digest).map(x=>x.toString(16).padStart(2,'0')).join('');
+  // The top-level body.id is NOT part of Mercado Pago's HMAC manifest.
+  // Its representation varies across provider event types and versions.
+  // Derive a deterministic, bounded inbox identifier from the HMAC-verified
+  // resource plus topic and seller instead. The verified provider GET remains
+  // mandatory before payment reconciliation. A structured body.id is rejected.
+  const rawId=body.id;
+  const invalidStructuredId=rawId!==undefined&&rawId!==null&&
+    (typeof rawId!=='string'&&typeof rawId!=='number');
+  let eventId=null;
+  if(!invalidStructuredId&&requestId){
+    if(simulated && requestId.length<=115){
+      eventId='sim_'+requestId;
+    }else{
+      const identifier=new TextEncoder().encode(
+        'cithela-mp-event-v2:'+topic+':'+signedResource+':'+(merchantUserId||'')
+      );
+      const digest=new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',identifier));
+      eventId='signed_'+Array.from(digest).map(x=>x.toString(16).padStart(2,'0')).join('');
+    }
   }
   if(!eventId || !requestId || bodyResource!==signedResource ||
      (!simulated && (topic!==body.type || body.live_mode!==config.liveMode)) ||
