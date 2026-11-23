@@ -56,7 +56,7 @@ const { pathToFileURL } = require('node:url');
         'calendar arrows too small at '+width);
       assert.ok(geometry.statsAfterList, 'weekly stats should follow agenda tasks');
       assert.ok(geometry.hasMessages, 'WhatsApp Messages navigation must survive UX merge');
-      // The share and language controls belong in Ajustes, not in the agenda.
+      // Acceso rápido al enlace/QR en la cabecera, idioma de reservas en Ajustes.
       const structure=await page.evaluate(()=>{
         const agenda=document.getElementById('p-medico-agenda');
         const settings=document.getElementById('p-medico-config');
@@ -65,20 +65,22 @@ const { pathToFileURL } = require('node:url');
         const hours=document.getElementById('cfg-section-hours');
         return {
           shareInAgenda:agenda.contains(share),
-          shareInSettings:settings.contains(share)&&booking.contains(share),
+          shareInSettings:settings.contains(share),
+          shareBeforeTabs:!!(share.compareDocumentPosition(document.getElementById('professional-tabs'))&Node.DOCUMENT_POSITION_FOLLOWING),
           languageInSettings:booking.contains(document.getElementById('professional-booking-language')),
-          qrInSettings:booking.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
+          qrInHeader:share.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
           bookingBeforeHours:!!(booking.compareDocumentPosition(hours)&Node.DOCUMENT_POSITION_FOLLOWING),
           foldedWeek:document.getElementById('agenda-weekly-details')?.tagName,
           foldedOps:document.getElementById('agenda-ops-details')?.tagName,
           uniqueShare:document.querySelectorAll('#professional-public-booking-shortcut').length
         };
       });
-      assert.equal(structure.shareInAgenda,false,'booking share must not occupy Agenda');
-      assert.equal(structure.shareInSettings,true,'booking share must be in Ajustes / Reservas online');
-      assert.equal(structure.languageInSettings,true,'language is configured together with booking link');
-      assert.equal(structure.qrInSettings,'./compartir.html','operators retain QR/share access');
-      assert.equal(structure.bookingBeforeHours,true,'Reservas online must be reachable without scrolling through schedules');
+      assert.equal(structure.shareInAgenda,false,'sharing must not occupy Agenda');
+      assert.equal(structure.shareInSettings,false,'sharing belongs to the professional header');
+      assert.equal(structure.shareBeforeTabs,true,'share and QR must appear before professional tabs');
+      assert.equal(structure.languageInSettings,true,'booking language remains in settings');
+      assert.equal(structure.qrInHeader,'./compartir.html','authorized operators retain QR/share access');
+      assert.equal(structure.bookingBeforeHours,true,'booking locale settings remain easy to reach');
       assert.equal(structure.foldedWeek,'DETAILS','weekly agenda should be collapsible');
       assert.equal(structure.foldedOps,'DETAILS','operational notices should be collapsible');
       assert.equal(structure.uniqueShare,1,'do not duplicate sharing controls');
