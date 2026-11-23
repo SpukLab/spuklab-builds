@@ -7162,12 +7162,15 @@ $('cfg-tel').value=c.tel||'';
 $('cfg-reminder-days').value=String(c.reminderDays??1);
 $('cfg-reminder-template').value=c.reminderTemplate||DEFAULT_REMINDER_TEMPLATE;
 renderReminderSettingsMode();
-$('cfg-block-fecha').min=today();
-if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
-$('cfg-block-desde').min=today();
-$('cfg-block-hasta').min=today();
-if(!$('cfg-block-desde').value)$('cfg-block-desde').value=today();
-if(!$('cfg-block-hasta').value)$('cfg-block-hasta').value=today();
+const currentBlockDay=professionalCloudReady()
+  ?cloudLocalParts(new Date().toISOString(),CithelaCloud.state().tenant.timezone).fecha
+  :today();
+$('cfg-block-fecha').min=currentBlockDay;
+if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=currentBlockDay;
+$('cfg-block-desde').min=currentBlockDay;
+$('cfg-block-hasta').min=currentBlockDay;
+if(!$('cfg-block-desde').value)$('cfg-block-desde').value=currentBlockDay;
+if(!$('cfg-block-hasta').value)$('cfg-block-hasta').value=currentBlockDay;
 const blockHours=professionalCloudReady()?Array.from({length:48},(_,i)=>minToHM(i*30)):HORAS;
 $('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+
   blockHours.map(h=>`<option value="${h}">${h}</option>`).join('');
@@ -7572,7 +7575,10 @@ async function addAvailabilityBlock(){
   const fecha=$('cfg-block-fecha').value,hora=$('cfg-block-hora').value;
   const motivo=$('cfg-block-motivo').value.trim();
   if(!fecha){toast('Elegí una fecha');return;}
-  if(fecha<today()){toast('La fecha ya pasó');return;}
+  const blockToday=professionalCloudReady()
+    ?cloudLocalParts(new Date().toISOString(),CithelaCloud.state().tenant.timezone).fecha
+    :today();
+  if(fecha<blockToday){toast('La fecha ya pasó en el horario del establecimiento');return;}
   if(professionalCloudReady()){
     if(!canManageCloudBlocks()){toast('No tenés permisos para editar los bloqueos cloud');return;}
     const s=CithelaCloud.state(),tz=s.tenant.timezone;
@@ -7588,7 +7594,7 @@ async function addAvailabilityBlock(){
     try{
       const starts_at=hora
         ?zonedLocalToIso(fecha,hora,tz)
-        :fecha===today()?new Date(Date.now()+120000).toISOString()
+        :fecha===blockToday?new Date(Date.now()+120000).toISOString()
           :zonedLocalToIso(fecha,'00:00',tz);
       const ends_at=hora
         ?new Date(new Date(starts_at).getTime()+30*60000).toISOString()
