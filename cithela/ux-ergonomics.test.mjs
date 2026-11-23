@@ -38,8 +38,10 @@ test('configuration prioritizes daily use; nested details remain balanced',()=>{
  const cfg=slice('id="p-medico-config"','<div class="byline">');
  const order=[...cfg.matchAll(/id="cfg-section-([^"]+)"/g)].map(m=>m[1]);
  assert.deepEqual(order,['public-booking','hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
- assert.ok(cfg.indexOf('id="professional-public-booking-shortcut"')>cfg.indexOf('id="cfg-section-public-booking"'));
- assert.ok(cfg.indexOf('id="professional-public-booking-shortcut"')<cfg.indexOf('id="cfg-section-hours"'));
+ const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"');
+ assert.ok(nav.includes('id="professional-public-booking-shortcut"'),'share shortcut moves to professional header');
+ assert.ok(nav.indexOf('id="professional-public-booking-shortcut"')<nav.indexOf('id="professional-tabs"'));
+ assert.equal(cfg.includes('id="professional-public-booking-shortcut"'),false,'do not repeat the share shortcut in settings');
  assert.ok(cfg.includes('id="professional-booking-language"'),'language remains in Ajustes');
  let depth=0;
  for(const token of (cfg.match(/<\/?details\b[^>]*>/g)||[])){
