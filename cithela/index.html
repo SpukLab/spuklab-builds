@@ -595,6 +595,25 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 .cithela-block-group__details .block-row{padding:10px 0}
 @media(max-width:380px){.cithela-block-group__head{align-items:stretch;flex-direction:column}.cithela-block-group__head button{max-width:100%;width:100%}}
 </style>
+<style>
+/* Quick-action header: language controls are not tied to whether booking link is enabled. */
+.professional-quick-actions[hidden],.cithela-locale-quick[hidden],#cfg-section-resources[hidden]{display:none!important}
+.professional-quick-actions{display:flex;align-items:center;gap:10px;padding:9px 16px;min-width:0;flex-wrap:wrap}
+.professional-quick-actions .cithela-top-share{margin:0;flex:1;min-width:min(100%,270px)}
+.cithela-locale-quick{display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:0;margin-left:auto}
+.cithela-locale-quick__label{font-size:.72rem;font-weight:600;color:var(--ink2);white-space:nowrap}
+.cithela-locale-quick__buttons{display:inline-flex;border:1px solid var(--border-color);background:var(--white);border-radius:9px;padding:3px;gap:3px}
+.cithela-locale-quick__buttons button{min-width:42px;min-height:38px;padding:6px 8px;border:0;border-radius:7px;font-size:.78rem;font-weight:700;background:transparent;color:var(--ink2);cursor:pointer}
+.cithela-locale-quick__buttons button[aria-pressed="true"]{background:var(--teal2);color:#fff}
+.cithela-locale-quick__buttons button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.cithela-locale-quick__buttons button:disabled{opacity:.45;cursor:default}
+.cithela-locale-quick #professional-booking-language-status{flex-basis:100%;font-size:.7rem;margin:0}
+@media(max-width:700px){
+ .professional-quick-actions{padding:7px 12px;flex-direction:column;align-items:stretch;gap:6px}
+ .professional-quick-actions .cithela-top-share{width:100%;flex:auto;min-width:0}
+ .cithela-locale-quick{order:-1;align-self:flex-end}
+}
+</style>
 </head>
 <body>
 
@@ -730,6 +749,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     <span class="pill">Profesional</span>
     <button class="nav-out" onclick="logout()">Salir</button>
   </nav>
+  <div id="professional-quick-actions" class="professional-quick-actions" hidden>
   <section id="professional-public-booking-shortcut" class="cithela-top-share" hidden aria-label="Acceso rápido al enlace de turnos">
     <div class="cithela-top-share__title">
       <strong>Enlace de turnos</strong>
@@ -741,6 +761,19 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <a class="cithela-booking-shortcut__link" href="./compartir.html" aria-label="Ver código QR de la agenda">QR</a>
     </div>
   </section>
+  <div id="professional-booking-language-settings" class="cithela-locale-quick" hidden role="group" aria-label="Idioma inicial para pacientes en la página de reservas">
+    <span class="cithela-locale-quick__label">Idioma reservas</span>
+    <div class="cithela-locale-quick__buttons">
+      <button type="button" id="professional-booking-language-es" aria-label="Reservas en español" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('es')">ES</button>
+      <button type="button" id="professional-booking-language-en" aria-label="Reservas en inglés" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('en')">EN</button>
+    </div>
+    <select class="inp" id="professional-booking-language" disabled hidden aria-describedby="professional-booking-language-status"
+      onchange="changeProfessionalBookingLanguage(this)">
+      <option value="es">Español</option><option value="en">English</option>
+    </select>
+    <p id="professional-booking-language-status" class="contact-note" role="status" aria-live="polite" hidden></p>
+  </div>
+  </div>
   <div class="professional-tabbar">
   <div class="tabs" id="professional-tabs" aria-label="Secciones profesionales">
     <button class="tab on" id="medico-tab-agenda" onclick="tab('medico','agenda',this)"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3M8 18h7"/></svg>Agenda</button>
@@ -970,28 +1003,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
   </div>
 
   <div id="p-medico-config" class="pane">
-    <p class="settings-intro">Configurá la agenda, las reservas y los cobros. Tu enlace y el QR están disponibles arriba para copiar o compartir. Los reportes y el mantenimiento quedan al final.</p>
-
-    <h2 class="settings-group-title">Reservas</h2>
-<details class="cithela-config-group" id="cfg-section-public-booking">
-  <summary>Idioma de las reservas y coberturas<span aria-hidden="true">⌄</span></summary>
-  <div class="form-card" style="margin-bottom:14px;">
-    <p class="contact-note">Definí el idioma inicial de las reservas y, si corresponde, los precios y coberturas. El enlace y el QR se comparten desde el acceso superior.</p>
-
-    <div id="professional-booking-language-settings" hidden>
-      <label class="lbl" for="professional-booking-language">Idioma inicial para pacientes</label>
-      <select class="inp" id="professional-booking-language" disabled aria-describedby="professional-booking-language-status"
-        onchange="changeProfessionalBookingLanguage(this)">
-        <option value="es">Español</option>
-        <option value="en">English</option>
-      </select>
-      <p id="professional-booking-language-status" class="contact-note" role="status" aria-live="polite" hidden></p>
-      <p class="contact-note">Los pacientes pueden cambiar el idioma desde la página de reservas.</p>
-    </div>
-    <a class="btn-main soft" id="professional-health-settings" href="./configurar-coberturas.html" hidden style="display:block;text-align:center;text-decoration:none;margin-top:10px;">Precios y coberturas de consultas</a>
-    <p class="contact-note">Propietarios y administradores pueden editar estas opciones. El enlace público se comparte desde el acceso superior.</p>
-  </div>
-</details>
+    <p class="settings-intro">Configurá horarios, ausencias, servicios y cobros. El idioma de las reservas y las opciones para compartir están arriba.</p>
 
     <h2 class="settings-group-title">Agenda y atención</h2>
 <details class="cithela-config-group" id="cfg-section-hours">
@@ -1090,13 +1102,14 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <button class="btn-main" onclick="addService()">Agregar servicio</button>
       </div>
       <div id="cfg-service-list" style="margin-top:14px;"></div>
+      <a class="btn-main soft" id="professional-health-settings" href="./configurar-coberturas.html" hidden style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Precios y coberturas de consultas</a>
     </div>
 
     </details>
-<details class="cithela-config-group" id="cfg-section-resources">
-      <summary>Profesionales / recursos<span aria-hidden="true">⌄</span></summary>
+<details class="cithela-config-group" id="cfg-section-resources" hidden>
+      <summary>Agendas adicionales<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Cada recurso tiene su propia agenda. Puede ser un odontólogo, peluquero, tatuador, box, sillón o cualquier unidad que no deba recibir dos turnos al mismo tiempo.</p>
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Mostrá y organizá agendas separadas cuando haya varios profesionales o espacios de atención.</p>
       <div id="cfg-resource-local-editor">
       <label class="lbl">Nombre</label>
       <input class="inp" id="cfg-resource-name" placeholder="Profesional principal, Juan, Box 1...">
@@ -1212,7 +1225,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
       <div id="cloud-auth-form" style="margin-top:14px;">
         <label class="lbl">Correo del operador</label>
         <input class="inp" id="cloud-email" type="email" autocomplete="email" placeholder="nombre@correo.com">
-        <label class="lbl">Contraseña Supabase</label>
+        <label class="lbl">Contraseña de la cuenta</label>
         <input class="inp" id="cloud-password" type="password" autocomplete="current-password" placeholder="••••••••">
         <button class="btn-main" type="button" onclick="cloudSignIn()">Conectar cuenta</button>
         <button class="btn-main soft" style="margin-top:8px;" type="button" onclick="cloudMagicLink()">Enviar enlace mágico</button>
@@ -1250,14 +1263,11 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <div id="cloud-probe-summary" style="margin-top:10px;"></div>
         </div>
       </details>
-    </div>
-
-    </details>
-<details class="cithela-config-group" id="cfg-section-infrastructure">
-      <summary>Infraestructura<span aria-hidden="true">⌄</span></summary>
+<details class="cithela-diagnostic-details" id="cfg-section-infrastructure" style="margin-top:14px;">
+      <summary>Estado del sistema y soporte (avanzado)</summary>
     <div class="form-card" style="margin-bottom:14px;">
       <div id="infra-status"></div>
-      <p class="contact-note">Herramientas técnicas para soporte. No son necesarias para responder mensajes ni gestionar turnos.</p>
+      <p class="contact-note">Información de conexión para asistencia técnica. No necesitás esta sección para dar turnos.</p>
       <details class="cithela-config-group" style="margin-top:18px;">
         <summary>Diagnóstico de conexión Meta (avanzado) <span aria-hidden="true">⌄</span></summary>
         <div class="form-card">
@@ -1269,6 +1279,9 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         </div>
       </details>
 
+    </div>
+
+    </details>
     </div>
 
     </details>
@@ -4223,11 +4236,19 @@ async function loadProfessionalBookingShare(tenantId){
     }
   }
 }
+function updateProfessionalQuickActions(){
+  const outer=$('professional-quick-actions');
+  if(!outer)return;
+  const share=$('professional-public-booking-shortcut');
+  const locale=$('professional-booking-language-settings');
+  outer.hidden=(share?.hidden!==false)&&(locale?.hidden!==false);
+}
 function updateProfessionalBookingShareVisibility(){
   const section=$('professional-public-booking-shortcut');if(!section)return;
   const s=CithelaCloud.state();
   const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(s.membership?.role);
   section.hidden=!(allowed&&professionalBookingShareState.tenantId===s.tenant?.id&&professionalBookingShareState.url);
+  updateProfessionalQuickActions();
 }
 async function copyProfessionalBookingLink(){
   const url=professionalBookingShareState.url;
@@ -4254,6 +4275,30 @@ function professionalBookingLanguageMessage(message,error=false){
   status.hidden=!message;
   status.style.color=error?'var(--danger)':'var(--ink2)';
 }
+function syncProfessionalBookingLanguageButtons(){
+  const current=professionalBookingLocale;
+  const field=$('professional-booking-language');
+  const state=CithelaCloud.state();
+  const allowed=professionalCloudReady()&&['owner','admin'].includes(state.membership?.role)&&
+    current.tenantId===state.tenant?.id;
+  const locked=!allowed||current.loading||current.saving||!current.locale||field?.disabled;
+  for(const lang of ['es','en']){
+    const button=$('professional-booking-language-'+lang);
+    if(!button)continue;
+    button.disabled=!!locked;
+    button.setAttribute('aria-pressed',String(allowed&&current.locale===lang));
+  }
+}
+function chooseProfessionalBookingLanguage(locale){
+  const field=$('professional-booking-language');
+  if(!field||!['es','en'].includes(locale))return;
+  const state=CithelaCloud.state(),current=professionalBookingLocale;
+  if(!professionalCloudReady()||!['owner','admin'].includes(state.membership?.role)||
+     current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||
+     field.disabled)return;
+  field.value=locale;
+  void changeProfessionalBookingLanguage(field);
+}
 async function loadProfessionalBookingLanguage(tenantId){
   const field=$('professional-booking-language');
   if(!field)return;
@@ -4261,6 +4306,7 @@ async function loadProfessionalBookingLanguage(tenantId){
     professionalBookingLocale={tenantId,locale:null,loading:false,saving:false};
     field.disabled=true;
     professionalBookingLanguageMessage('Cargando idioma…');
+    syncProfessionalBookingLanguageButtons();
   }
   if(professionalBookingLocale.loading||professionalBookingLocale.saving||
       professionalBookingLocale.locale)return;
@@ -4272,13 +4318,15 @@ async function loadProfessionalBookingLanguage(tenantId){
     professionalBookingLocale.locale=locale;
     field.value=locale;
     professionalBookingLanguageMessage('');
+    syncProfessionalBookingLanguageButtons();
   }catch(err){
     if(professionalBookingLocale.tenantId===tenantId)
-      professionalBookingLanguageMessage('No se pudo cargar el idioma. Reintentá desde «Administrar enlace y QR».',true);
+      professionalBookingLanguageMessage('No se pudo cargar el idioma. Volvé a ingresar en CITHELA y reintentá.',true);
   }finally{
     if(professionalBookingLocale.tenantId===tenantId){
       professionalBookingLocale.loading=false;
       field.disabled=!professionalBookingLocale.locale;
+      syncProfessionalBookingLanguageButtons();
     }
   }
 }
@@ -4290,6 +4338,7 @@ async function changeProfessionalBookingLanguage(field){
      !['es','en'].includes(next))return;
   if(next===cache.locale)return;
   cache.saving=true;field.disabled=true;
+  syncProfessionalBookingLanguageButtons();
   professionalBookingLanguageMessage('Guardando idioma…');
   try{
     const updated=await CithelaCloud.publicBookingConfig(next);
@@ -4306,6 +4355,7 @@ async function changeProfessionalBookingLanguage(field){
     if(professionalBookingLocale===cache){
       cache.saving=false;
       field.disabled=!cache.locale;
+      syncProfessionalBookingLanguageButtons();
     }
   }
 }
@@ -4390,6 +4440,13 @@ function renderProfessionalMode(){
     professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
     const field=$('professional-booking-language');
     if(field)field.disabled=true;
+  }
+  syncProfessionalBookingLanguageButtons();
+  updateProfessionalQuickActions();
+  const resourceGroup=$('cfg-section-resources');
+  if(resourceGroup){
+    resourceGroup.hidden=active&&(s.resources||[]).length<=1;
+    if(resourceGroup.hidden)resourceGroup.open=false;
   }
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
@@ -6147,7 +6204,7 @@ el.innerHTML=`
     <span class="tag ${active?'c':'p'}">${active?'NUBE':'LOCAL'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Backend Supabase</div><div class="block-meta">RLS, reservas, horarios, directorio e idempotencia</div></div>
+    <div class="block-main"><div class="block-title">Conexión protegida</div><div class="block-meta">Acceso y disponibilidad del servicio de agenda</div></div>
     <span class="tag ${cap.backend==='provisioned'?'c':'x'}">${cap.backend==='provisioned'?'LISTO':'NO'}</span>
   </div>
   <div class="block-row">
@@ -6158,7 +6215,7 @@ el.innerHTML=`
     <div class="block-main"><div class="block-title">Sincronización en vivo</div><div class="block-meta">${cloud?.realtimeStatus==='SUBSCRIBED'?'Cambios cloud recibidos mientras la app está abierta':'Respaldo automático al volver y cada 45 segundos'}</div></div>
     <span class="tag ${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'c':'p'}">${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'EN VIVO':'RESPALDO'}</span>
   </div>
-  <p class="contact-note">La agenda profesional y el portal autenticado del paciente usan Supabase. El modo de demostración local no se sincroniza.</p>`;
+  <p class="contact-note">Los turnos y cambios de la cuenta online se comparten entre dispositivos. El modo de demostración local no se sincroniza.</p>`;
 }
 
 let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
@@ -7415,9 +7472,14 @@ renderServicesConfig();toast('Servicio quitado');
 function renderResourcesConfig(){
 const el=$('cfg-resource-list');if(!el)return;
 const cloud=professionalCloudReady();
+const resourceGroup=$('cfg-section-resources');
+const list=cloud?(CithelaCloud.state().resources||[]):resources();
+if(resourceGroup){
+  resourceGroup.hidden=cloud&&list.length<=1;
+  if(resourceGroup.hidden)resourceGroup.open=false;
+}
 const editor=$('cfg-resource-local-editor');if(editor)editor.style.display=cloud?'none':'block';
 if(cloud){
-  const list=CithelaCloud.state().resources||[];
   el.innerHTML='<p class="contact-note">Recursos disponibles en esta agenda. Durante el piloto se muestran en modo consulta; no se agregan recursos nuevos desde esta pantalla.</p>'+
     list.map(r=>`<div class="block-row"><div class="block-main">
       <div class="block-title">${escHtml(r.name)}</div>
@@ -7425,7 +7487,6 @@ if(cloud){
     </div></div>`).join('');
   return;
 }
-const list=resources();
 el.innerHTML=list.map(r=>`<div class="block-row">
   <div class="block-main"><div class="block-title">${escHtml(r.nombre)}</div><div class="block-meta">Agenda independiente</div></div>
   <button class="mb cancel" onclick="removeResource('${r.id}')">Quitar</button>

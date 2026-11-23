@@ -56,20 +56,28 @@ const { pathToFileURL } = require('node:url');
         'calendar arrows too small at '+width);
       assert.ok(geometry.statsAfterList, 'weekly stats should follow agenda tasks');
       assert.ok(geometry.hasMessages, 'WhatsApp Messages navigation must survive UX merge');
-      // Acceso rápido al enlace/QR en la cabecera, idioma de reservas en Ajustes.
+      // Idioma inicial de reservas (ES/EN) y compartir arriba; diagnósticos sin menú independiente.
       const structure=await page.evaluate(()=>{
         const agenda=document.getElementById('p-medico-agenda');
         const settings=document.getElementById('p-medico-config');
         const share=document.getElementById('professional-public-booking-shortcut');
-        const booking=document.getElementById('cfg-section-public-booking');
-        const hours=document.getElementById('cfg-section-hours');
+        const quick=document.getElementById('professional-quick-actions');
+        const lang=document.getElementById('professional-booking-language-settings');
+        const cloud=document.getElementById('cfg-section-cloud');
+        const infra=document.getElementById('cfg-section-infrastructure');
+        const services=document.getElementById('cfg-section-services');
+        const resources=document.getElementById('cfg-section-resources');
         return {
           shareInAgenda:agenda.contains(share),
           shareInSettings:settings.contains(share),
           shareBeforeTabs:!!(share.compareDocumentPosition(document.getElementById('professional-tabs'))&Node.DOCUMENT_POSITION_FOLLOWING),
-          languageInSettings:booking.contains(document.getElementById('professional-booking-language')),
+          languageInHeader:quick.contains(lang)&&!settings.contains(lang),
+          languageOptions:[...lang.querySelectorAll('button')].map(b=>b.textContent.trim()),
           qrInHeader:share.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
-          bookingBeforeHours:!!(booking.compareDocumentPosition(hours)&Node.DOCUMENT_POSITION_FOLLOWING),
+          bookingMenuGone:!document.getElementById('cfg-section-public-booking'),
+          healthInServices:services.contains(document.getElementById('professional-health-settings')),
+          diagnosticsInsideAccount:cloud.contains(infra),
+          resourcesInitiallyHidden:resources.hidden,
           foldedWeek:document.getElementById('agenda-weekly-details')?.tagName,
           foldedOps:document.getElementById('agenda-ops-details')?.tagName,
           uniqueShare:document.querySelectorAll('#professional-public-booking-shortcut').length
@@ -78,9 +86,12 @@ const { pathToFileURL } = require('node:url');
       assert.equal(structure.shareInAgenda,false,'sharing must not occupy Agenda');
       assert.equal(structure.shareInSettings,false,'sharing belongs to the professional header');
       assert.equal(structure.shareBeforeTabs,true,'share and QR must appear before professional tabs');
-      assert.equal(structure.languageInSettings,true,'booking language remains in settings');
+      assert.equal(structure.languageInHeader,true,'ES/EN must be in top shortcuts');
+      assert.deepEqual(structure.languageOptions,['ES','EN'],'use concise language controls');
       assert.equal(structure.qrInHeader,'./compartir.html','authorized operators retain QR/share access');
-      assert.equal(structure.bookingBeforeHours,true,'booking locale settings remain easy to reach');
+      assert.equal(structure.bookingMenuGone,true,'remove redundant booking menu');
+      assert.equal(structure.healthInServices,true,'coverage belongs under services');
+      assert.equal(structure.diagnosticsInsideAccount,true,'advanced diagnostics are nested under Account');
       assert.equal(structure.foldedWeek,'DETAILS','weekly agenda should be collapsible');
       assert.equal(structure.foldedOps,'DETAILS','operational notices should be collapsible');
       assert.equal(structure.uniqueShare,1,'do not duplicate sharing controls');

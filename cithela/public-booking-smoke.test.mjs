@@ -102,7 +102,11 @@ test('professional agenda exposes compact copy/share/QR only for authorized enab
   assert.match(html,/const shareAllowed=active&&\['owner','admin','operator'\]/);
   assert.match(html,/data\.enabled===true&&/);
   assert.match(html,/updateProfessionalBookingShareVisibility/);
-  assert.match(html,/id="cfg-section-public-booking"/);
+  assert.doesNotMatch(html,/id="cfg-section-public-booking"/);
+  assert.match(html,/id="professional-booking-language-es"/);
+  assert.match(html,/id="professional-booking-language-en"/);
+  assert.match(html,/function chooseProfessionalBookingLanguage\(locale\)/);
+  assert.match(html,/id="professional-quick-actions"/);
 });
 
 test('booking link name is generated from familiar business name and changing it is opt-in',()=>{
@@ -142,7 +146,7 @@ test('professional agenda lets authorized owners choose default booking-page lan
   assert.match(html,/onchange="changeProfessionalBookingLanguage\(this\)"/);
   assert.match(html,/id="professional-booking-language-status"/);
   assert.match(html,/publicBookingConfig,professionalBookingShare,(?:professionalPackages,)?signOut,bootstrap/);
-  assert.match(html,/id="professional-booking-language-settings" hidden/);
+  assert.match(html,/id="professional-booking-language-settings" class="cithela-locale-quick" hidden/);
   assert.match(html,/const manageAllowed=active&&\['owner','admin'\]/);
   assert.match(html,/if\(manageAllowed&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
   assert.match(html,/p_tenant_id:tenantId,\s*p_save:locale!==undefined,\s*p_locale:locale\?\?null/);
