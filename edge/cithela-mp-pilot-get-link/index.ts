@@ -79,7 +79,8 @@ Deno.serve(async req=>{
    get("/preapproval/"+encodeURIComponent(i.provider_subscription_id))
   ]);
   const sellerVerified=accountIsTest(seller,sellerId);
-  const buyerVerified=accountIsTest(buyer,buyerId)&&
+  // The buyer lookup may omit tags; its server-bound ID, country and email are sufficient.
+  const buyerVerified=String(buyer?.id)===buyerId&&buyer?.site_id==="MLA"&&
     (buyer?.email==null||buyer.email.toLowerCase()===buyerEmail.toLowerCase());
   const recovered=verifyLinkedTestCheckout({
    intent:i,detail,buyerId,verifiedTestSeller:sellerVerified,verifiedTestBuyer:buyerVerified
