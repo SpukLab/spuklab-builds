@@ -76,7 +76,10 @@ test('professional UX has exactly one shared toolbar above tab bar and distinct 
   assert.match(html,/function copyProfessionalBookingLink\(\)/);
   assert.match(html,/function shareProfessionalBookingLink\(\)/);
   assert.match(html,/const data=await CithelaCloud\.professionalBookingShare\(\)/);
-  assert.match(html,/Idioma de las reservas y coberturas/);
+  assert.match(html,/Idioma reservas/);
+  assert.match(html,/id="professional-booking-language-es"/);
+  assert.match(html,/id="professional-booking-language-en"/);
+  assert.doesNotMatch(html,/id="cfg-section-public-booking"/);
   assert.doesNotMatch(html,/Vincular mi WhatsApp para ingresar/);
   assert.match(html,/href="\.\/acceso-whatsapp\.html">Ingresar con WhatsApp/);
   assert.match(html,/id="patient-enroll-panel"/);
