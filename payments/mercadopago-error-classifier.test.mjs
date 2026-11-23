@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {classifyPreapprovalValidation,safePreapprovalErrorMetadata} from './mercadopago-error-classifier.mjs';
+import {classifyPreapprovalValidation,safePreapprovalErrorMetadata,safePreapprovalMessageHints} from './mercadopago-error-classifier.mjs';
 import {createTestPreapproval} from './mercadopago-test-provider.mjs';
 const intent={live_mode:false,currency_id:'ARS',external_reference:'cithela_abcdefgh12345678',amount_minor:1000,terms_version:'internal-test-only-v1',collector_id:'3813812326'};
 const payerEmail='test_buyer_123@testuser.com', backUrl='https://spuklab.github.io/spuklab-builds/cithela/suscripcion-prueba.html';
@@ -63,4 +63,37 @@ test('rejects malformed or sensitive-looking provider codes',()=>{
  assert.equal(safePreapprovalErrorMetadata({code:'payer@customer.test'}).provider_code,'unavailable');
  assert.equal(safePreapprovalErrorMetadata({code:123456}).provider_code,'unavailable');
  assert.equal(safePreapprovalErrorMetadata(null).response_shape,'non_object');
+});
+
+test('detects a country-specific 400 response reported by developers',()=>{
+ const error={message:'Cannot operate between different countries',status:400};
+ assert.equal(classifyPreapprovalValidation(error),'provider_country_mismatch');
+ assert.deepEqual(safePreapprovalMessageHints(error),
+  ['cannot','operate','between','different','countries']);
+});
+test('extracts only whitelisted hints for other unknown errors',()=>{
+ const error={message:'Cannot create subscription for user private.buyer@testuser.com 3813812328 secret_APP_USR-Z7x invalid'};
+ const hints=safePreapprovalMessageHints(error);
+ assert.ok(hints.includes('cannot')&&hints.includes('subscription')&&hints.includes('invalid'));
+ assert.doesNotMatch(JSON.stringify(hints),/private|buyer@test|3813812328|APP_USR|Z7x/);
+});
+test('malformed provider response emits no raw message',()=>{
+ for(const v of [null,42,[],{message:{payer_email:'private@test.com'}},{message:'x'.repeat(10000)}]){
+ const h=safePreapprovalMessageHints(v);
+ assert.ok(h.length<=16);
+ assert.doesNotMatch(JSON.stringify(h),/private@test/);
+ }
+});
+test('unknown response shape remains fail-closed',async()=>{
+ const logs=[],old=console.warn;
+ console.warn=(...args)=>logs.push(args.join(' '));
+ try{
+ const result=await createTestPreapproval({intent,payerEmail,backUrl,token,
+  fetchImpl:async()=>Response.json({message:'Cannot operate between different countries',status:400},{status:400})});
+ assert.equal(result.ok,false);
+ assert.equal(result.code,'provider_validation_rejected');
+ assert.match(logs.join(' '),/provider_country_mismatch/);
+ assert.match(logs.join(' '),/message_hints/);
+ assert.doesNotMatch(logs.join(' '),/Cannot operate between different countries/);
+ }finally{console.warn=old;}
 });

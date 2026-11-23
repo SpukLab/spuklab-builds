@@ -15,6 +15,9 @@ export function classifyPreapprovalValidation(response) {
     }
   }
   const detail=values.filter(x=>typeof x==='string').map(x=>x.slice(0,350)).join(' ').toLowerCase();
+  // Country restrictions sometimes arrive as {message,status:400} without error code.
+  if(/different countr|countries.*different|cross.?border|country.*mismatch|different region|paises distintos|distintos paises|entre paises|diferentes paises|pais.*diferent/.test(detail))
+    return 'provider_country_mismatch';
   if(/both payer and collector.*(real or test|test users)|payer.*collector.*(different.*type|real.*test|test.*real)/.test(detail))
     return 'payer_collector_mode_mismatch';
   if(/(payer_email|payer email|payer.*(not found|invalid|unknown))/.test(detail))
@@ -54,4 +57,35 @@ export function safePreapprovalErrorMetadata(body) {
     !/^(?:app_usr|test_user|bearer|token|access_token)/i.test(x) &&
     !/\d{7,}/.test(x));
   return {response_shape,provider_code:code || 'unavailable'};
+}
+
+// Only pre-approved vocabulary may reach logs; never log the raw provider message.
+// This gives us clues when Mercado Pago returns only {message,status:400}.
+const SAFE_HINTS = new Set((
+  'cannot cant unable operate operation between different countries country countries region regional location '+
+  'request create created subscription subscriptions preapproval payment payments payer collector seller buyer '+
+  'user users account accounts test real production application invalid unsupported blocked forbidden restricted '+
+  'not possible permission permissions parameter field value amount minimum maximum currency frequency status '+
+  'pending email url back reason already exists allowed available authorized identity mismatch configuration '+
+  'error required must merchant funds limit insufficient rejected expired disabled '+
+  'pais paises diferente diferentes distintos entre operar operacion puede suscripcion suscripciones '+
+  'usuario usuarios cuenta cuentas comprador vendedor invalido invalida no permitido permitida restringido '+
+  'requerido importe monto moneda region prueba datos acceso').split(' ')
+);
+export function safePreapprovalMessageHints(body) {
+  if(!body || typeof body !== 'object' || Array.isArray(body))
+    return [];
+  const messages=[body.message,
+    ...(Array.isArray(body.cause) ? body.cause.slice(0,8).map(x=>x?.description) : [])];
+  const out=[];
+  for (const message of messages) {
+    if(typeof message!=='string') continue;
+    const words=message.slice(0,900).normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().match(/[a-z]{2,24}/g)||[];
+    for(const word of words){
+      if(SAFE_HINTS.has(word) && !out.includes(word))out.push(word);
+      if(out.length>=16)return out;
+    }
+  }
+  return out;
 }
