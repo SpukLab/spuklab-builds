@@ -3,10 +3,10 @@
  * invoices from Mercado Pago and verifies the original charge through their API.
  * No payment creation, DB writes, entitlement activation or webhook bypass.
  */
-import {verifySubscriptionPayment} from './mercadopago-payment-proof.mjs';
+import {verifySubscriptionPayment,diagnosePaymentProofMismatch} from './mercadopago-payment-proof.mjs';
 const numeric=/^[0-9]{1,30}$/;
 const ref=/^[a-zA-Z0-9_-]{1,120}$/;
-const fail=code=>({ok:false,code});
+const fail=(code,checks=[])=>({ok:false,code,...(checks.length?{checks}: {})});
 const safeStr=x=>x==null?'':String(x);
 const sellerIsTest=(seller,expected)=>safeStr(seller?.id)===safeStr(expected)&&
  seller?.site_id==='MLA'&&Array.isArray(seller?.tags)&&seller.tags.includes('test_user');
@@ -65,6 +65,7 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId}={
 
  let verifiedCount=0;
  let firstFailure='no_approved_invoice';
+ const failedChecks=new Set();
  const seen=new Set();
  for(const summary of invoices){
   const invoiceId=safeStr(summary?.id);
@@ -92,9 +93,14 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId}={
    verifiedCount++;
   }else{
    firstFailure=proof.code;
+   if(proof.code==='payment_not_verified'){
+    for(const code of diagnosePaymentProofMismatch({intent,authorizedPayment:invoice,payment})){
+     failedChecks.add(code);
+    }
+   }
   }
  }
- if(verifiedCount===0)return fail(firstFailure);
+ if(verifiedCount===0)return fail(firstFailure,[...failedChecks]);
  return {ok:true,code:'approved_test_payment_verified_read_only',
    verified_payments:verifiedCount,
    entitlement_activation_allowed:false};

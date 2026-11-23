@@ -44,3 +44,28 @@ test('omitted subscription live_mode requires verified test seller and approved 
  assert.equal(verify({...base,subscription:missing,payment:{...payment,live_mode:undefined},verifiedTestSeller:true}).ok,false);
  assert.equal(verify({...base,subscription:missing,payment:{...payment,status:'pending'},verifiedTestSeller:true}).ok,false);
 });
+
+test('payment proof diagnostics preserve exact rejection without exposing values',async()=>{
+ const {diagnosePaymentProofMismatch}=await import('./mercadopago-payment-proof.mjs');
+ const cases=[
+  [{id:999},'payment_reference_mismatch'],
+  [{status:'pending'},'payment_status_not_approved'],
+  [{date_approved:null},'payment_approval_date_missing'],
+  [{currency_id:'USD'},'payment_currency_mismatch'],
+  [{transaction_amount:15001},'payment_amount_mismatch'],
+  [{collector_id:9999},'payment_seller_mismatch'],
+  [{live_mode:null},'payment_mode_missing'],
+  [{live_mode:true},'payment_mode_true'],
+  [{live_mode:'false'},'payment_mode_unexpected']
+ ];
+ for(const [patch,expected] of cases){
+  const updated={...payment,...patch};
+  const proof=verify({...base,payment:updated});
+  const reasons=diagnosePaymentProofMismatch({intent,authorizedPayment,payment:updated});
+  assert.equal(proof.ok,false);
+  assert.equal(proof.code,'payment_not_verified');
+  assert.ok(reasons.includes(expected),expected);
+  assert.ok(reasons.every(x=>/^payment_[a-z_]+$/.test(x)));
+  assert.ok(reasons.every(x=>!x.includes('9999')&&!x.includes('15001')));
+ }
+});

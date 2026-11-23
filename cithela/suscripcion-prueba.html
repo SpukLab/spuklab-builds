@@ -172,8 +172,23 @@ $('verify-paid').addEventListener('click',async()=>{
     subscription_identity_mismatch:'La suscripción no coincide con el comprador registrado.',
     provider_read_only_unavailable:'No se pudo consultar Mercado Pago en este momento.'
    };
+   const details={
+    payment_reference_mismatch:'La referencia de la factura y del pago no coincide.',
+    payment_status_not_approved:'La API no informa estado aprobado.',
+    payment_approval_date_missing:'No se informó fecha de aprobación.',
+    payment_currency_mismatch:'La moneda del pago no coincide.',
+    payment_amount_mismatch:'El importe bruto del pago no coincide.',
+    payment_seller_mismatch:'La cuenta receptora del pago no coincide.',
+    payment_mode_missing:'La API no informa el campo de entorno del pago.',
+    payment_mode_true:'La API indica un entorno productivo para este pago.',
+    payment_mode_unexpected:'El valor de entorno recibido no es válido.',
+    payment_evidence_missing:'El comprobante consultado está incompleto.'
+   };
+   const failed=Array.isArray(response?.failed_checks)?
+    response.failed_checks.filter(code=>Object.hasOwn(details,code)).slice(0,10):[];
    $('result').textContent=(labels[response?.code]||'El pago todavía no pudo verificarse.')+
     '\nCódigo: '+(response?.code||'sin_respuesta')+
+    (failed.length?'\nControles que fallaron:\n'+failed.map(code=>'• '+details[code]+' ('+code+')').join('\n'):'')+
     '\nNo generes otro cobro.';
   }
  }catch{

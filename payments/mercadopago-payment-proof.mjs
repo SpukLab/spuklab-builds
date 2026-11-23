@@ -31,3 +31,29 @@ export function verifySubscriptionPayment({intent,subscription,authorizedPayment
   payment_id:String(payment.id),subscription_id:intent.provider_subscription_id,
   entitlement_activation_allowed:false};
 }
+
+
+/**
+ * Safe, bounded diagnostic reasons for an already rejected payment proof.
+ * Used only by the internal read-only owner audit. Never returns amounts,
+ * identifiers, payer data or provider payload. Does NOT make a payment valid.
+ */
+export function diagnosePaymentProofMismatch({intent,authorizedPayment,payment}={}){
+ if(!intent||!authorizedPayment||!payment)return ['payment_evidence_missing'];
+ const reasons=[];
+ const invoicePaymentId=authorizedPayment.payment?.id??authorizedPayment.payment_id;
+ if(String(invoicePaymentId)!==String(payment.id))reasons.push('payment_reference_mismatch');
+ if(payment.status!=='approved')reasons.push('payment_status_not_approved');
+ if(!payment.date_approved)reasons.push('payment_approval_date_missing');
+ if(payment.currency_id!==intent.currency_id)reasons.push('payment_currency_mismatch');
+ if(!Number.isFinite(Number(payment.transaction_amount))||
+    Math.round(Number(payment.transaction_amount)*100)!==intent.amount_minor)
+  reasons.push('payment_amount_mismatch');
+ if(String(payment.collector_id)!==String(intent.collector_id))
+  reasons.push('payment_seller_mismatch');
+ if(payment.live_mode!==false){
+  reasons.push(payment.live_mode==null?'payment_mode_missing':
+    payment.live_mode===true?'payment_mode_true':'payment_mode_unexpected');
+ }
+ return reasons;
+}
