@@ -32,6 +32,8 @@ function setup({from='2026-12-24',through='2027-01-04',
   const scope={
     $:id=>elements[id]??{value:'',textContent:''},
     CithelaBlockRanges:ranges,
+    window:{CithelaBlockRanges:ranges},
+    toast:()=>{},
     CithelaCloud:{
       state:()=>state,
       blockCommand:async input=>{
@@ -51,7 +53,6 @@ function setup({from='2026-12-24',through='2027-01-04',
     confirm:()=>true,
     cloudRequestId:prefix=>prefix+'-'+(records.length+1),
     renderAvailabilityBlocks:()=>{refreshed++},
-    toast:()=>{}
   };
   vm.createContext(scope);
   vm.runInContext(code,scope,{filename:'CITHELA Cloud range'});
