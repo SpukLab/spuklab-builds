@@ -89,6 +89,10 @@ Deno.serve(async req=>{
    const code=expected.includes(result.code)?result.code:"payment_read_only_unverified";
    return out(409,code);
   }
+  if(!("verified_payments" in result)||
+     !Number.isSafeInteger(result.verified_payments)||
+     result.verified_payments<1)
+   return out(503,"payment_read_only_unverified");
   console.info("cithela_mp_pilot_payment_audited_read_only",{verified:true,write:false});
   return out(200,"approved_test_payment_verified_read_only",result.verified_payments);
  }catch{
