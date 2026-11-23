@@ -32,7 +32,7 @@ test('verifies approved original test payment using only provider GET calls',asy
   verified_payments:1,entitlement_activation_allowed:false});
  assert.deepEqual(t.calls,[
   '/users/me','/preapproval/'+subscriptionId,
-  '/authorized_payments/search?preapproval_id=sub_1234&limit=50&offset=0',
+  '/authorized_payments/search?preapproval_id=sub_1234',
   '/authorized_payments/123','/v1/payments/456'
  ]);
 });
@@ -56,4 +56,64 @@ test('fails closed on incomplete search and requires linked intent',async()=>{
  const t=fixture({searchOver:{paging:{total:501}}});
  assert.equal((await audit({intent,getProvider:t.getProvider,buyerId})).code,'invoice_search_incomplete');
  assert.equal((await audit({intent:{...intent,stage:'prepared'},getProvider:t.getProvider,buyerId})).code,'linked_test_intent_required');
+});
+
+test('on exactly HTTP 400 for primary search, retries documented payer ID with strict subscription match',async()=>{
+ const calls=[];
+ const t=fixture();
+ const reader=async path=>{
+  calls.push(path);
+  if(path.startsWith('/authorized_payments/search?preapproval_id=')){
+   throw new Error('mp_invoice_search_http_400');
+  }
+  return t.getProvider(path);
+ };
+ const r=await audit({intent,getProvider:reader,buyerId});
+ assert.equal(r.ok,true);
+ assert.equal(r.verified_payments,1);
+ assert.ok(calls.includes('/authorized_payments/search?payer_id='+buyerId));
+ assert.ok(calls.every(path=>!path.includes('limit=')&&!path.includes('offset=')));
+});
+test('payer fallback ignores invoices of other subscriptions and cannot verify unrelated payment',async()=>{
+ const t=fixture({searchOver:{
+   paging:{total:2},results:[
+    {id:222,preapproval_id:'another_subscription',payment:{id:789}},
+    invoice
+   ]
+ }});
+ const reader=async path=>{
+  if(path.startsWith('/authorized_payments/search?preapproval_id='))throw new Error('mp_invoice_search_http_400');
+  return t.getProvider(path);
+ };
+ const r=await audit({intent,getProvider:reader,buyerId});
+ assert.equal(r.ok,true);
+ assert.equal(r.verified_payments,1);
+ assert.equal(t.calls.includes('/authorized_payments/222'),false);
+});
+test('payer fallback with zero matching invoices stays unverified',async()=>{
+ const t=fixture({searchOver:{paging:{total:1},results:[{id:222,preapproval_id:'another_subscription',payment:{id:789}}]}});
+ const reader=async path=>{
+  if(path.startsWith('/authorized_payments/search?preapproval_id='))throw new Error('mp_invoice_search_http_400');
+  return t.getProvider(path);
+ };
+ const r=await audit({intent,getProvider:reader,buyerId});
+ assert.equal(r.ok,false);
+ assert.equal(r.code,'invoice_not_found');
+ assert.equal(t.calls.some(path=>path.startsWith('/authorized_payments/222')),false);
+});
+test('any authorization, network or non-400 search failure must never attempt fallback',async()=>{
+ for(const code of ['mp_invoice_search_http_403','mp_invoice_search_http_401','mp_invoice_search_transport','other_error']){
+  const calls=[],t=fixture();
+  const reader=async path=>{
+   calls.push(path);
+   if(path.startsWith('/authorized_payments/search?'))throw Error(code);
+   return t.getProvider(path);
+  };
+  await assert.rejects(audit({intent,getProvider:reader,buyerId}),/./);
+  assert.equal(calls.some(path=>path.includes('payer_id=')),false);
+ }
+});
+test('single-page pilot never silently accepts truncated invoices',async()=>{
+ const t=fixture({searchOver:{paging:{total:2}}});
+ assert.equal((await audit({intent,getProvider:t.getProvider,buyerId})).code,'invoice_search_incomplete');
 });
