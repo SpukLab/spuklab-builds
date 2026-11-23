@@ -1,5 +1,5 @@
 // CITHELA · calendario civil para bloqueos prolongados.
-// Biblioteca pura: no accede a Supabase, sesiones, ventanas ni almacenamiento.
+// Biblioteca pura: no accede a red, sesiones de usuario ni almacenamiento.
 (function(root,factory){
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
