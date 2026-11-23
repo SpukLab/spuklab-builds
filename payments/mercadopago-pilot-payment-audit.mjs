@@ -54,6 +54,7 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId}={
   return fail('invoice_search_incomplete');
  // One-time internal pilot: fail closed rather than silently accepting a
  // truncated history or paging through unknown provider request variants.
+ if(page.paging.total>500)return fail('invoice_search_incomplete');
  if(page.paging.total>20)return fail('too_many_invoices_for_pilot');
  if(page.results.length!==page.paging.total)
   return fail('invoice_search_incomplete');
