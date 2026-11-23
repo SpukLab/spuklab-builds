@@ -4236,11 +4236,19 @@ async function loadProfessionalBookingShare(tenantId){
     }
   }
 }
+function updateProfessionalQuickActions(){
+  const outer=$('professional-quick-actions');
+  if(!outer)return;
+  const share=$('professional-public-booking-shortcut');
+  const locale=$('professional-booking-language-settings');
+  outer.hidden=(share?.hidden!==false)&&(locale?.hidden!==false);
+}
 function updateProfessionalBookingShareVisibility(){
   const section=$('professional-public-booking-shortcut');if(!section)return;
   const s=CithelaCloud.state();
   const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(s.membership?.role);
   section.hidden=!(allowed&&professionalBookingShareState.tenantId===s.tenant?.id&&professionalBookingShareState.url);
+  updateProfessionalQuickActions();
 }
 async function copyProfessionalBookingLink(){
   const url=professionalBookingShareState.url;
@@ -4267,6 +4275,30 @@ function professionalBookingLanguageMessage(message,error=false){
   status.hidden=!message;
   status.style.color=error?'var(--danger)':'var(--ink2)';
 }
+function syncProfessionalBookingLanguageButtons(){
+  const current=professionalBookingLocale;
+  const field=$('professional-booking-language');
+  const state=CithelaCloud.state();
+  const allowed=professionalCloudReady()&&['owner','admin'].includes(state.membership?.role)&&
+    current.tenantId===state.tenant?.id;
+  const locked=!allowed||current.loading||current.saving||!current.locale||field?.disabled;
+  for(const lang of ['es','en']){
+    const button=$('professional-booking-language-'+lang);
+    if(!button)continue;
+    button.disabled=!!locked;
+    button.setAttribute('aria-pressed',String(allowed&&current.locale===lang));
+  }
+}
+function chooseProfessionalBookingLanguage(locale){
+  const field=$('professional-booking-language');
+  if(!field||!['es','en'].includes(locale))return;
+  const state=CithelaCloud.state(),current=professionalBookingLocale;
+  if(!professionalCloudReady()||!['owner','admin'].includes(state.membership?.role)||
+     current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||
+     field.disabled)return;
+  field.value=locale;
+  void changeProfessionalBookingLanguage(field);
+}
 async function loadProfessionalBookingLanguage(tenantId){
   const field=$('professional-booking-language');
   if(!field)return;
@@ -4274,6 +4306,7 @@ async function loadProfessionalBookingLanguage(tenantId){
     professionalBookingLocale={tenantId,locale:null,loading:false,saving:false};
     field.disabled=true;
     professionalBookingLanguageMessage('Cargando idioma…');
+    syncProfessionalBookingLanguageButtons();
   }
   if(professionalBookingLocale.loading||professionalBookingLocale.saving||
       professionalBookingLocale.locale)return;
@@ -4285,13 +4318,15 @@ async function loadProfessionalBookingLanguage(tenantId){
     professionalBookingLocale.locale=locale;
     field.value=locale;
     professionalBookingLanguageMessage('');
+    syncProfessionalBookingLanguageButtons();
   }catch(err){
     if(professionalBookingLocale.tenantId===tenantId)
-      professionalBookingLanguageMessage('No se pudo cargar el idioma. Reintentá desde «Administrar enlace y QR».',true);
+      professionalBookingLanguageMessage('No se pudo cargar el idioma. Volvé a ingresar en CITHELA y reintentá.',true);
   }finally{
     if(professionalBookingLocale.tenantId===tenantId){
       professionalBookingLocale.loading=false;
       field.disabled=!professionalBookingLocale.locale;
+      syncProfessionalBookingLanguageButtons();
     }
   }
 }
@@ -4303,6 +4338,7 @@ async function changeProfessionalBookingLanguage(field){
      !['es','en'].includes(next))return;
   if(next===cache.locale)return;
   cache.saving=true;field.disabled=true;
+  syncProfessionalBookingLanguageButtons();
   professionalBookingLanguageMessage('Guardando idioma…');
   try{
     const updated=await CithelaCloud.publicBookingConfig(next);
@@ -4319,6 +4355,7 @@ async function changeProfessionalBookingLanguage(field){
     if(professionalBookingLocale===cache){
       cache.saving=false;
       field.disabled=!cache.locale;
+      syncProfessionalBookingLanguageButtons();
     }
   }
 }
@@ -4403,6 +4440,13 @@ function renderProfessionalMode(){
     professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
     const field=$('professional-booking-language');
     if(field)field.disabled=true;
+  }
+  syncProfessionalBookingLanguageButtons();
+  updateProfessionalQuickActions();
+  const resourceGroup=$('cfg-section-resources');
+  if(resourceGroup){
+    resourceGroup.hidden=active&&(s.resources||[]).length<=1;
+    if(resourceGroup.hidden)resourceGroup.open=false;
   }
   renderCithelaFirstSteps(active?s:null);
   renderCithelaCommercialPanel(active?s:null);
@@ -6160,7 +6204,7 @@ el.innerHTML=`
     <span class="tag ${active?'c':'p'}">${active?'NUBE':'LOCAL'}</span>
   </div>
   <div class="block-row">
-    <div class="block-main"><div class="block-title">Backend Supabase</div><div class="block-meta">RLS, reservas, horarios, directorio e idempotencia</div></div>
+    <div class="block-main"><div class="block-title">Conexión protegida</div><div class="block-meta">Acceso y disponibilidad del servicio de agenda</div></div>
     <span class="tag ${cap.backend==='provisioned'?'c':'x'}">${cap.backend==='provisioned'?'LISTO':'NO'}</span>
   </div>
   <div class="block-row">
@@ -6171,7 +6215,7 @@ el.innerHTML=`
     <div class="block-main"><div class="block-title">Sincronización en vivo</div><div class="block-meta">${cloud?.realtimeStatus==='SUBSCRIBED'?'Cambios cloud recibidos mientras la app está abierta':'Respaldo automático al volver y cada 45 segundos'}</div></div>
     <span class="tag ${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'c':'p'}">${active&&cloud?.realtimeStatus==='SUBSCRIBED'?'EN VIVO':'RESPALDO'}</span>
   </div>
-  <p class="contact-note">La agenda profesional y el portal autenticado del paciente usan Supabase. El modo de demostración local no se sincroniza.</p>`;
+  <p class="contact-note">Los turnos y cambios de la cuenta online se comparten entre dispositivos. El modo de demostración local no se sincroniza.</p>`;
 }
 
 let cloudBrandTenantId=null,cloudBrandVersion=null,cloudBrandTheme='sage';
@@ -7428,9 +7472,14 @@ renderServicesConfig();toast('Servicio quitado');
 function renderResourcesConfig(){
 const el=$('cfg-resource-list');if(!el)return;
 const cloud=professionalCloudReady();
+const resourceGroup=$('cfg-section-resources');
+const list=cloud?(CithelaCloud.state().resources||[]):resources();
+if(resourceGroup){
+  resourceGroup.hidden=cloud&&list.length<=1;
+  if(resourceGroup.hidden)resourceGroup.open=false;
+}
 const editor=$('cfg-resource-local-editor');if(editor)editor.style.display=cloud?'none':'block';
 if(cloud){
-  const list=CithelaCloud.state().resources||[];
   el.innerHTML='<p class="contact-note">Recursos disponibles en esta agenda. Durante el piloto se muestran en modo consulta; no se agregan recursos nuevos desde esta pantalla.</p>'+
     list.map(r=>`<div class="block-row"><div class="block-main">
       <div class="block-title">${escHtml(r.name)}</div>
@@ -7438,7 +7487,6 @@ if(cloud){
     </div></div>`).join('');
   return;
 }
-const list=resources();
 el.innerHTML=list.map(r=>`<div class="block-row">
   <div class="block-main"><div class="block-title">${escHtml(r.nombre)}</div><div class="block-meta">Agenda independiente</div></div>
   <button class="mb cancel" onclick="removeResource('${r.id}')">Quitar</button>
