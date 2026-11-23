@@ -68,7 +68,8 @@ test('CITHELA UI adds inclusive range mode but preserves existing single-day con
     assert.match(html,new RegExp('id="'+id+'"'));
   }
   assert.match(html,/onchange="syncAvailabilityBlockMode\(\)"/);
-  assert.match(html,/if\(\$\('cfg-block-modo'\)\?\.value==='range'\)return addAvailabilityBlockRange\(\)/);
+  assert.match(html,/if\(\$\('cfg-block-modo'\)\?\.value==='range'\)\{/);
+  assert.match(html,/return await addAvailabilityBlockRange\(\)/);
   assert.match(html,/CithelaBlockRanges\.planRange\(from,through\)/);
   assert.match(html,/CithelaBlockRanges\.spansOverlap/);
   assert.match(html,/if\(!confirm\(warning\)\)return/);

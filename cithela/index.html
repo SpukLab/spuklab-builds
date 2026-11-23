@@ -557,7 +557,7 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <link rel="icon" type="image/png" sizes="32x32" href="./brand/cithela-favicon-32.png?v=20261110-final">
 <link rel="manifest" href="./brand/cithela.webmanifest?v=20261110-final">
 <script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
-<script src="./availability/ranges.js?v=20261123"></script>
+<script src="./availability/ranges.js?v=20261123-fix1"></script>
 <style>
 .availability-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .availability-date-grid[hidden]{display:none}
@@ -7462,36 +7462,57 @@ function syncAvailabilityBlockMode(){
   if($('cfg-block-range-status'))$('cfg-block-range-status').textContent='';
 }
 
+function availabilityRangeFeedback(message,showToast=false){
+  const el=$('cfg-block-range-status');
+  if(el){
+    el.textContent=message;
+    el.style.color=showToast?'#9b334e':'';
+    el.setAttribute('data-error',showToast?'true':'false');
+  }
+  if(showToast)toast(message,5000);
+}
+
 let availabilityRangeBusy=false;
 async function addAvailabilityBlockRange(){
   if(availabilityRangeBusy)return;
   const from=$('cfg-block-desde').value,through=$('cfg-block-hasta').value;
   const reason=$('cfg-block-motivo').value.trim();
   const status=$('cfg-block-range-status');
+  if(!window.CithelaBlockRanges?.planRange){
+    availabilityRangeFeedback('No se cargó el calendario de rangos. Recargá CITHELA e intentá nuevamente.',true);
+    return;
+  }
   let plan;
   try{plan=CithelaBlockRanges.planRange(from,through);}
   catch(err){
-    status.textContent=err.code==='range_too_long'?'El período no puede superar 90 días.':
+    availabilityRangeFeedback(err.code==='range_too_long'?'El período no puede superar 90 días.':
       err.code==='invalid_order'?'La fecha final debe ser igual o posterior a la inicial.':
-      'Ingresá fechas de inicio y fin válidas.';
+      'Ingresá fechas de inicio y fin válidas.',true);
     return;
   }
-  if(reason.length>300){status.textContent='El motivo no puede superar 300 caracteres.';return;}
+  if(reason.length>300){availabilityRangeFeedback('El motivo no puede superar 300 caracteres.',true);return;}
   const cloud=professionalCloudReady();
   const current=cloud?CithelaCloud.state():null;
   const tz=current?.tenant?.timezone||'America/Argentina/Buenos_Aires';
   const todayTenant=cloud?cloudLocalParts(new Date().toISOString(),tz).fecha:today();
   if(from<todayTenant){
-    status.textContent='La fecha inicial no puede ser anterior a hoy en el horario del establecimiento.';
+    availabilityRangeFeedback('La fecha inicial no puede ser anterior a hoy en el horario del establecimiento.',true);
     return;
   }
-  const loaded=cloud?cloudAppointmentViews():DB.t();
-  const active=loaded.filter(t=>t.fecha>=from&&t.fecha<=through&&
-    ['pendiente','confirmado'].includes(t.estado));
+  // Un registro incompleto de agenda no debe impedir crear bloqueos: el
+  // comando Cloud verifica la autorización y es independiente de esta advertencia.
+  let activeCount=null;
+  try{
+    const loaded=cloud?cloudAppointmentViews():DB.t();
+    if(Array.isArray(loaded))
+      activeCount=loaded.filter(t=>t?.fecha>=from&&t?.fecha<=through&&
+        ['pendiente','confirmado'].includes(t?.estado)).length;
+  }catch(e){activeCount=null;}
   const warning='Vas a bloquear '+plan.days+' días en '+(cloud?plan.chunks.length+' tramos cloud':'la agenda local')+
-    '. Se detectaron '+active.length+' turnos activos en los datos cargados.'+
+    '. '+(activeCount===null?'No fue posible contar los turnos cargados.':
+      'Se detectaron '+activeCount+' turnos activos en los datos cargados.')+
     ' Los turnos existentes NO se cancelan; verificá también la agenda completa. ¿Continuar?';
-  if(cloud&&!canManageCloudBlocks()){status.textContent='Se requiere permiso de administrador.';return;}
+  if(cloud&&!canManageCloudBlocks()){availabilityRangeFeedback('Se requiere permiso de administrador.',true);return;}
   // Servidor actual: máximo siete días corridos por RPC. Usamos seis días civiles
   // por tramo para no superar 7x24 h ni cuando cambia el horario de verano.
   let chunks=[];
@@ -7507,19 +7528,23 @@ async function addAvailabilityBlockRange(){
           throw new Error('invalid_interval');
         return {...c,starts_at,ends_at};
       });
-      const existing=current.availabilityBlocks||[];
+      const existing=Array.isArray(current.availabilityBlocks)?current.availabilityBlocks:[];
       const conflict=chunks.some(c=>existing.some(b=>
+        b&&Number.isFinite(Date.parse(b.starts_at))&&Number.isFinite(Date.parse(b.ends_at))&&
         CithelaBlockRanges.spansOverlap(c.starts_at,c.ends_at,b.starts_at,b.ends_at)));
       if(conflict){
-        status.textContent='Ya existe un bloqueo del establecimiento dentro del período. Ajustá las fechas o quitá primero el bloqueo anterior.';
+        availabilityRangeFeedback('El período coincide con un bloqueo existente. Revisá las fechas o quitá primero el bloqueo anterior.',true);
         return;
       }
-    }catch(err){status.textContent='No se pudo interpretar el período en la zona horaria del establecimiento.';return;}
+    }catch(err){
+      availabilityRangeFeedback('No se pudo calcular el rango en la zona horaria del establecimiento. Revisá las fechas y recargá CITHELA.',true);
+      return;
+    }
   }else{
     const taken=new Set(DB.b().map(b=>b.fecha));
     for(let d=from;d<=through;d=CithelaBlockRanges.addDays(d,1)){
       if(taken.has(d)){
-        status.textContent='Ya existe un bloqueo en '+d+'. Revisá la lista o elegí un período sin superposiciones.';
+        availabilityRangeFeedback('Ya existe un bloqueo en '+d+'. Revisá la lista o elegí un período sin superposiciones.',true);
         return;
       }
     }
@@ -7561,9 +7586,9 @@ async function addAvailabilityBlockRange(){
       $('cfg-block-desde').value=chunks[saved].startDate;
     }
     renderAvailabilityBlocks();
-    status.textContent='Guardados '+saved+' de '+chunks.length+' tramos. '+
+    availabilityRangeFeedback('Guardados '+saved+' de '+chunks.length+' tramos. '+
       (saved>0?'El inicio se ajustó al próximo tramo sin guardar. ':'')+
-      'Revisá los bloqueos antes de intentar nuevamente. Error: '+(err?.message||'Desconocido');
+      'Revisá los bloqueos antes de intentar nuevamente. Error: '+(err?.message||'Desconocido'),true);
   }finally{
     availabilityRangeBusy=false;
     if(save)save.disabled=false;
@@ -7571,7 +7596,15 @@ async function addAvailabilityBlockRange(){
 }
 
 async function addAvailabilityBlock(){
-  if($('cfg-block-modo')?.value==='range')return addAvailabilityBlockRange();
+  if($('cfg-block-modo')?.value==='range'){
+    try{return await addAvailabilityBlockRange();}
+    catch(err){
+      // Covers browser/preflight exceptions before the RPC try/catch.
+      availabilityRangeFeedback('No se inició el bloqueo. '+(err?.message||'Error de la interfaz')+
+        '. Recargá CITHELA y comprobá el período.',true);
+      return;
+    }
+  }
   const fecha=$('cfg-block-fecha').value,hora=$('cfg-block-hora').value;
   const motivo=$('cfg-block-motivo').value.trim();
   if(!fecha){toast('Elegí una fecha');return;}
