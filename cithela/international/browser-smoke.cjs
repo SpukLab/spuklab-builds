@@ -76,10 +76,19 @@ const server=http.createServer((req,res)=>{
       await page.locator("#cithela-sms-copy").click();
       assert.match(await page.locator("#cithela-sms-error").innerText(),/Confirm consent/);
       assert.equal(await page.locator("#cithela-sms-consent").isChecked(),false);
+      // La demostración de Taxes no aparece en la UI normal.
+      const entry=page.locator("#cithela-utah-taxes-preview-entry");
+      assert.equal(await entry.isVisible(),false);
+      assert.equal(await entry.locator("a").getAttribute("href"),"./international/taxes-preview.html");
       await page.screenshot({path:path.join(process.cwd(),"cithela-en-sms-"+width+".png"),fullPage:true});
       await page.locator("#cithela-sms-close").click();
       await page.waitForFunction(()=>document.getElementById("cithela-sms-body").value==="");
       assert.equal(await page.locator("#cithela-sms-recipient").textContent(),"");
+      // Aun con bandera QA, no habilitar el acceso profesional sin sesión cloud.
+      await page.goto(origin+"/index.html?lang=en&taxesPreview=1",{waitUntil:"domcontentloaded"});
+      await page.waitForFunction(()=>window.CithelaSMS&&window.CithelaLocale,{timeout:10000});
+      await page.evaluate(()=>updateCithelaTaxesPreviewEntry());
+      assert.equal(await page.locator("#cithela-utah-taxes-preview-entry").isVisible(),false);
       const dims=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       assert.ok(dims.scroll<=width+2,"horizontal overflow "+width+": "+JSON.stringify(dims));
       console.log("PASS EN/ES switch, consent before SMS, neutral portal link, "+width+"px");
