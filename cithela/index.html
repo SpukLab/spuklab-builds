@@ -910,6 +910,15 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
 
     </details>
+<div id="cithela-utah-taxes-preview-entry" hidden class="form-card" style="margin:12px 0 20px;">
+  <h3 style="margin:0 0 7px;">USA Taxes · Utah pilot</h3>
+  <p class="contact-note">Vista de prueba en inglés y español para organizar citas y etapas administrativas.
+    Trabaja únicamente con ejemplos ficticios; no consulta pacientes, documentos ni cobros.</p>
+  <a id="cithela-utah-taxes-preview-link" class="btn-main soft"
+     style="display:inline-block;text-decoration:none;margin:6px 0;"
+     href="./international/taxes-preview.html" target="_blank" rel="noopener noreferrer">Abrir demostración de Taxes</a>
+  <p class="contact-note">No ingreses información de contribuyentes. Esta vista no habilita el módulo en tu establecimiento.</p>
+</div>
 <details class="cithela-config-group" id="cfg-section-resources">
       <summary>Profesionales / recursos<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
@@ -1262,6 +1271,7 @@ const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams(location.search).get('pilotTenant')==='1';
 // Manual text composer QA only; no SMS API or automatic sending.
 const CITHELA_SMS_PREVIEW_ENABLED=new URLSearchParams(location.search).get('smsPreview')==='1';
+const CITHELA_TAXES_PREVIEW_ENABLED=new URLSearchParams(location.search).get('taxesPreview')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -2420,6 +2430,12 @@ window.CithelaCloud=CithelaCloud;
 function professionalCloudReady(){
   const s=window.CithelaCloud?CithelaCloud.state():null;
   return !!(me?.role==='medico'&&s?.signedIn&&s?.tenant&&s?.membership);
+}
+// Feature discovery only. Never a permission, enrollment or tax-data boundary.
+function updateCithelaTaxesPreviewEntry(){
+  const panel=$('cithela-utah-taxes-preview-entry');
+  if(!panel)return;
+  panel.hidden=!(CITHELA_TAXES_PREVIEW_ENABLED&&professionalCloudReady());
 }
 function professionalCloudWritable(){
   const s=window.CithelaCloud?CithelaCloud.state():null;
@@ -3920,7 +3936,10 @@ function tab(sc,id,btn){
     if(inbox&&cloudWaInboxTenant()){inbox.open=true;cloudLoadWhatsappInbox(null,true);}
   }
   if(sc==='medico'&&id==='reportes')renderReportSource();
-  if(sc==='medico'&&id==='config')cargarConfig();
+  if(sc==='medico'&&id==='config'){
+    cargarConfig();
+    updateCithelaTaxesPreviewEntry();
+  }
   if(sc==='paciente'&&id==='historial')renderHist();
   if(sc==='paciente'&&id==='miturno')renderMT();
   if(sc==='paciente'&&id==='sacar')renderCalPac();
