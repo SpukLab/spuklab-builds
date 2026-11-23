@@ -117,3 +117,24 @@ test('single-page pilot never silently accepts truncated invoices',async()=>{
  const t=fixture({searchOver:{paging:{total:2}}});
  assert.equal((await audit({intent,getProvider:t.getProvider,buyerId})).code,'invoice_search_incomplete');
 });
+
+test('read-only rejected payment includes all failed check categories but no provider data',async()=>{
+ const t=fixture({paymentOver:{
+  transaction_amount:900,collector_id:9999,live_mode:null
+ }});
+ const result=await audit({intent,getProvider:t.getProvider,buyerId});
+ assert.equal(result.ok,false);
+ assert.equal(result.code,'payment_not_verified');
+ assert.deepEqual(result.checks,[
+  'payment_amount_mismatch','payment_seller_mismatch','payment_mode_missing'
+ ]);
+ const serialized=JSON.stringify(result);
+ assert.doesNotMatch(serialized,/9999|900|sub_1234|3813812328/);
+});
+test('approved matched payment never leaks failed_checks or weakens enforcement',async()=>{
+ const t=fixture();
+ const result=await audit({intent,getProvider:t.getProvider,buyerId});
+ assert.equal(result.ok,true);
+ assert.equal(result.checks,undefined);
+ assert.equal(result.entitlement_activation_allowed,false);
+});
