@@ -61,7 +61,7 @@ export function safePreapprovalErrorMetadata(body) {
 
 // Only pre-approved vocabulary may reach logs; never log the raw provider message.
 // This gives us clues when Mercado Pago returns only {message,status:400}.
-const SAFE_HINTS = new Set(
+const SAFE_HINTS = new Set((
   'cannot cant unable operate operation between different countries country countries region regional location '+
   'request create created subscription subscriptions preapproval payment payments payer collector seller buyer '+
   'user users account accounts test real production application invalid unsupported blocked forbidden restricted '+
@@ -70,7 +70,7 @@ const SAFE_HINTS = new Set(
   'error required must merchant funds limit insufficient rejected expired disabled '+
   'pais paises diferente diferentes distintos entre operar operacion puede suscripcion suscripciones '+
   'usuario usuarios cuenta cuentas comprador vendedor invalido invalida no permitido permitida restringido '+
-  'requerido importe monto moneda region prueba datos acceso'.split(' ')
+  'requerido importe monto moneda region prueba datos acceso').split(' ')
 );
 export function safePreapprovalMessageHints(body) {
   if(!body || typeof body !== 'object' || Array.isArray(body))
