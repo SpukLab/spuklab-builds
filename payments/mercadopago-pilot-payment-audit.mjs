@@ -32,26 +32,35 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId}={
     subscription.live_mode===true)
    return fail('subscription_identity_mismatch');
 
- const invoices=[];
- let total=null;
- for(let offset=0;offset<500;offset+=50){
-  const q=new URLSearchParams({
-    preapproval_id:intent.provider_subscription_id,limit:'50',offset:String(offset)
-  });
-  const page=await getProvider('/authorized_payments/search?'+q);
-  if(!Array.isArray(page?.results)||!Number.isSafeInteger(page?.paging?.total)||
-     page.paging.total<0||page.paging.total>500||
-     (total!==null&&total!==page.paging.total))
-   return fail('invoice_search_incomplete');
-  total=page.paging.total;
-  invoices.push(...page.results);
-  if(invoices.length===total)break;
-  if(invoices.length>total||page.results.length===0)
-   return fail('invoice_search_incomplete');
+ // The API's documented primary filter is preapproval_id. Request the
+ // default page with no optional limit/offset (provider reported HTTP 400
+ // when our previous pilot sent both). If that exact search is rejected,
+ // try the documented payer_id filter, then keep ONLY invoices from the
+ // original linked subscription. No unfiltered search is permitted.
+ let page;
+ let usedPayerFallback=false;
+ try{
+  page=await getProvider('/authorized_payments/search?'+
+   new URLSearchParams({preapproval_id:intent.provider_subscription_id}));
+ }catch(error){
+  if(!(error instanceof Error)||error.message!=='mp_invoice_search_http_400')
+   throw error;
+  usedPayerFallback=true;
+  page=await getProvider('/authorized_payments/search?'+
+   new URLSearchParams({payer_id:String(buyerId)}));
  }
- if(invoices.length!==total)return fail('invoice_search_incomplete');
+ if(!Array.isArray(page?.results)||!Number.isSafeInteger(page?.paging?.total)||
+    page.paging.total<0)
+  return fail('invoice_search_incomplete');
+ // One-time internal pilot: fail closed rather than silently accepting a
+ // truncated history or paging through unknown provider request variants.
+ if(page.paging.total>20)return fail('too_many_invoices_for_pilot');
+ if(page.results.length!==page.paging.total)
+  return fail('invoice_search_incomplete');
+ const invoices=usedPayerFallback
+  ?page.results.filter(row=>row?.preapproval_id===intent.provider_subscription_id)
+  :page.results;
  if(invoices.length===0)return fail('invoice_not_found');
- if(invoices.length>20)return fail('too_many_invoices_for_pilot');
 
  let verifiedCount=0;
  let firstFailure='no_approved_invoice';
