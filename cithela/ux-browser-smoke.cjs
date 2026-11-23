@@ -33,6 +33,10 @@ const { pathToFileURL } = require('node:url');
       await page.evaluate(() => {
         document.getElementById('screen-login').classList.remove('active');
         document.getElementById('screen-medico').classList.add('active');
+         // Simulate authorized workspace tools to test compact headers at every width.
+         document.getElementById('professional-booking-language-settings').hidden=false;
+         document.getElementById('professional-public-booking-shortcut').hidden=false;
+         document.getElementById('professional-quick-actions').hidden=false;
         // Keep this smoke check independent from an authenticated cloud tenant.
         for (const [label, pane] of [['agenda','p-medico-agenda'],['pacientes','p-medico-pacientes']])
           if (!document.getElementById(pane)) throw Error('Missing ' + label + ' pane');
@@ -71,7 +75,7 @@ const { pathToFileURL } = require('node:url');
           shareInAgenda:agenda.contains(share),
           shareInSettings:settings.contains(share),
           shareBeforeTabs:!!(share.compareDocumentPosition(document.getElementById('professional-tabs'))&Node.DOCUMENT_POSITION_FOLLOWING),
-          languageInHeader:quick.contains(lang)&&!settings.contains(lang),
+          languageInHeader:document.querySelector('#screen-medico nav').contains(lang)&&!quick.contains(lang)&&!settings.contains(lang),
           languageOptions:[...lang.querySelectorAll('button')].map(b=>b.textContent.trim()),
           qrInHeader:share.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
           bookingMenuGone:!document.getElementById('cfg-section-public-booking'),
@@ -86,7 +90,7 @@ const { pathToFileURL } = require('node:url');
       assert.equal(structure.shareInAgenda,false,'sharing must not occupy Agenda');
       assert.equal(structure.shareInSettings,false,'sharing belongs to the professional header');
       assert.equal(structure.shareBeforeTabs,true,'share and QR must appear before professional tabs');
-      assert.equal(structure.languageInHeader,true,'ES/EN must be in top shortcuts');
+      assert.equal(structure.languageInHeader,true,'ES/EN must sit beside Salir in the main header');
       assert.deepEqual(structure.languageOptions,['ES','EN'],'use concise language controls');
       assert.equal(structure.qrInHeader,'./compartir.html','authorized operators retain QR/share access');
       assert.equal(structure.bookingMenuGone,true,'remove redundant booking menu');
