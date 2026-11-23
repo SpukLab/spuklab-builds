@@ -10,6 +10,10 @@ const parsedAmount=value=>{
  if(typeof value==='string'&&/^\d+(?:\.\d{1,2})?$/.test(value))return Number(value);
  return null;
 };
+/**
+ * @param {{intent?: any, detail?: any, buyerId?: string, verifiedTestSeller?: boolean, verifiedTestBuyer?: boolean}} args
+ * @returns {{ok: boolean, code: string, checkout_url?: string}}
+ */
 export function verifyLinkedTestCheckout({intent,detail,buyerId,verifiedTestSeller=false,verifiedTestBuyer=false}={}){
  if(intent?.stage!=='linked'||intent?.live_mode!==false||
     intent?.currency_id!=='ARS'||!ID.test(intent?.provider_subscription_id||''))
