@@ -557,6 +557,14 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <link rel="icon" type="image/png" sizes="32x32" href="./brand/cithela-favicon-32.png?v=20261110-final">
 <link rel="manifest" href="./brand/cithela.webmanifest?v=20261110-final">
 <script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
+<script src="./availability/ranges.js?v=20261123"></script>
+<style>
+.availability-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.availability-date-grid[hidden]{display:none}
+.availability-date-grid>div{min-width:0}
+.availability-date-grid input,.availability-date-grid select{width:100%;max-width:100%;min-width:0}
+@media(max-width:650px){.availability-date-grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 
@@ -971,22 +979,37 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <details class="cithela-config-group" id="cfg-section-availability">
       <summary>Ausencias y bloqueos<span aria-hidden="true">⌄</span></summary>
     <div class="form-card" style="margin-bottom:14px;">
-      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Bloqueá un día completo o un horario puntual. Los turnos existentes no se eliminan: el bloqueo solo impide nuevas reservas y reprogramaciones.</p>
-      <div class="inline-grid">
+      <p style="font-size:.77rem;color:var(--ink3);line-height:1.55;margin-bottom:14px;">Elegí una fecha, un horario puntual o varios días seguidos (vacaciones, feriados y cierres). Los turnos ya existentes no se cancelan.</p>
+      <label class="lbl" for="cfg-block-modo">Tipo de ausencia</label>
+      <select class="inp" id="cfg-block-modo" onchange="syncAvailabilityBlockMode()">
+        <option value="single">Un día o una franja horaria</option>
+        <option value="range">Varios días consecutivos (hasta 90 días)</option>
+      </select>
+      <div id="cfg-block-single" class="availability-date-grid">
         <div>
-          <label class="lbl">Fecha</label>
+          <label class="lbl" for="cfg-block-fecha">Fecha</label>
           <input class="inp" type="date" id="cfg-block-fecha">
         </div>
         <div>
-          <label class="lbl">Alcance</label>
-          <select class="inp" id="cfg-block-hora">
-            <option value="">Día completo</option>
-          </select>
+          <label class="lbl" for="cfg-block-hora">Alcance</label>
+          <select class="inp" id="cfg-block-hora"><option value="">Día completo</option></select>
         </div>
       </div>
+      <div id="cfg-block-range" class="availability-date-grid" hidden>
+        <div>
+          <label class="lbl" for="cfg-block-desde">Desde (inclusive)</label>
+          <input class="inp" type="date" id="cfg-block-desde">
+        </div>
+        <div>
+          <label class="lbl" for="cfg-block-hasta">Hasta (inclusive)</label>
+          <input class="inp" type="date" id="cfg-block-hasta">
+        </div>
+      </div>
+      <p id="cfg-block-range-help" class="contact-note" hidden>Podés seleccionar períodos que crucen meses o años. Se guardan en tramos de hasta 6 días compatibles con CITHELA Cloud. Cada tramo se podrá quitar por separado.</p>
       <label class="lbl">Motivo (opcional)</label>
       <input class="inp" id="cfg-block-motivo" placeholder="Vacaciones, capacitación, consultorio cerrado...">
-      <button class="btn-main" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
+      <button class="btn-main" type="button" id="cfg-block-save" onclick="addAvailabilityBlock()">Agregar bloqueo</button>
+      <p id="cfg-block-range-status" class="contact-note" aria-live="polite" role="status"></p>
       <div id="cfg-block-list" style="margin-top:14px;"></div>
     </div>
 
@@ -7141,10 +7164,15 @@ $('cfg-reminder-template').value=c.reminderTemplate||DEFAULT_REMINDER_TEMPLATE;
 renderReminderSettingsMode();
 $('cfg-block-fecha').min=today();
 if(!$('cfg-block-fecha').value)$('cfg-block-fecha').value=today();
+$('cfg-block-desde').min=today();
+$('cfg-block-hasta').min=today();
+if(!$('cfg-block-desde').value)$('cfg-block-desde').value=today();
+if(!$('cfg-block-hasta').value)$('cfg-block-hasta').value=today();
 const blockHours=professionalCloudReady()?Array.from({length:48},(_,i)=>minToHM(i*30)):HORAS;
 $('cfg-block-hora').innerHTML='<option value="">Día completo</option>'+
   blockHours.map(h=>`<option value="${h}">${h}</option>`).join('');
 renderAvailabilityBlocks();
+syncAvailabilityBlockMode();
 renderServicesConfig();
 renderResourcesConfig();
 renderInfrastructureStatus();
