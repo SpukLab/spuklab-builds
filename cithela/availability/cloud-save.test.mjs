@@ -16,7 +16,7 @@ const rangeSource=take('let availabilityRangeBusy=false;', 'async function addAv
 const code=[localPartsSource,zonedSource,rangeSource].join('\n');
 
 function setup({from='2026-12-24',through='2027-01-04',
-    existing=[],appointments=[],failAfter=-1,role='owner'}={}){
+    existing=[],appointments=[],appointmentsError=false,failAfter=-1,role='owner'}={}){
   const elements={
     'cfg-block-desde':{value:from},'cfg-block-hasta':{value:through},
     'cfg-block-motivo':{value:'Vacaciones'},
@@ -46,7 +46,7 @@ function setup({from='2026-12-24',through='2027-01-04',
     },
     Date,Intl,
     professionalCloudReady:()=>true,
-    cloudAppointmentViews:()=>appointments,
+    cloudAppointmentViews:()=>{if(appointmentsError)throw Error('stale_appointment_record');return appointments;},
     canManageCloudBlocks:()=>role==='owner'||role==='admin',
     today:()=> '2026-11-23',
     DB:{t:()=>[]},
@@ -98,4 +98,25 @@ test('an unprivileged operator is refused before any RPC',async()=>{
   await h.scope.addAvailabilityBlockRange();
   assert.equal(h.records.length,0);
   assert.match(h.elements['cfg-block-range-status'].textContent,/permiso/i);
+});
+
+test('an unreadable appointment summary does not prevent the server request',async()=>{
+  const h=setup({appointmentsError:true});
+  await h.scope.addAvailabilityBlockRange();
+  assert.equal(h.records.length,2);
+  assert.match(h.elements['cfg-block-range-status'].textContent,/12 días/);
+});
+
+test('an obsolete availability entry with invalid dates does not abort a valid range',async()=>{
+  const h=setup({existing:[{starts_at:'invalid',ends_at:null,resource_id:null}]});
+  await h.scope.addAvailabilityBlockRange();
+  assert.equal(h.records.length,2);
+});
+
+test('missing calendar script provides visible feedback and does not make RPCs',async()=>{
+  const h=setup();
+  h.scope.window.CithelaBlockRanges=null;
+  await h.scope.addAvailabilityBlockRange();
+  assert.equal(h.records.length,0);
+  assert.match(h.elements['cfg-block-range-status'].textContent,/No se cargó el calendario/);
 });
