@@ -5,7 +5,7 @@
 :root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;background:#f5f8f8;color:#172c31}
 body{margin:0;padding:24px}.wrap{max-width:600px;margin:30px auto}.panel{background:#fff;border:1px solid #dce5e4;border-radius:18px;padding:24px}
 h1{font-size:1.5rem}p{line-height:1.5}.muted{color:#52666a}.status{background:#edf5f4;border-radius:10px;padding:14px;white-space:pre-wrap}
-button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}
+button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}button:disabled{opacity:.45;cursor:not-allowed}
 a{color:#165c61}.warning{font-weight:600}
 </style></head><body><main class="wrap"><section class="panel">
 <h1>CITHELA · Suscripción de prueba</h1>
@@ -43,6 +43,7 @@ async function load(){
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
  tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;
+ syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
 }
@@ -97,7 +98,16 @@ $('reconcile').addEventListener('click',async()=>{
  }catch{$('result').textContent='No se pudo consultar la recuperación. El intento conserva su estado.';}
  finally{$('reconcile').disabled=false;}
 });
-$('consent').addEventListener('change',()=>{$('checkout').disabled=!$('consent').checked;});
+// Safari can restore a checked checkbox without firing "change".
+function syncCheckoutButton(){
+ $('checkout').disabled=!tenantId||!$('consent').checked;
+}
+$('consent').addEventListener('change',syncCheckoutButton);
+$('consent').addEventListener('input',syncCheckoutButton);
+window.addEventListener('pageshow',syncCheckoutButton);
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible')syncCheckoutButton();
+});
 $('checkout').addEventListener('click',async()=>{
  if(!tenantId||!$('consent').checked)return;
  $('checkout').disabled=true;
