@@ -12,8 +12,14 @@ const HEADERS={
  "Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info",
  "Cache-Control":"no-store","Vary":"Origin"
 };
-const out=(status:number,code:string,count?:number)=>
+const CHECKS=new Set([
+ "payment_evidence_missing","payment_reference_mismatch","payment_status_not_approved",
+ "payment_approval_date_missing","payment_currency_mismatch","payment_amount_mismatch",
+ "payment_seller_mismatch","payment_mode_missing","payment_mode_true","payment_mode_unexpected"
+]);
+const out=(status:number,code:string,count?:number,checks:string[]=[])=> 
  Response.json({ok:status===200,code,...(count===undefined?{}:{verified_payments:count}),
+  ...(status!==200&&checks.length?{failed_checks:checks.filter(c=>CHECKS.has(c)).slice(0,10)}:{}),
   modifies_payment:false,modifies_subscription:false,activates_service:false},
  {status,headers:HEADERS});
 const env=(name:string)=>Deno.env.get(name)?.trim()||"";
@@ -98,7 +104,8 @@ Deno.serve(async req=>{
     "test_seller_not_verified","subscription_identity_mismatch","invalid_approval_date"
    ];
    const code=expected.includes(result.code)?result.code:"payment_read_only_unverified";
-   return out(409,code);
+   return out(409,code,undefined,
+     "checks" in result && Array.isArray(result.checks)?result.checks:[]);
   }
   if(!("verified_payments" in result)||
      !Number.isSafeInteger(result.verified_payments)||
