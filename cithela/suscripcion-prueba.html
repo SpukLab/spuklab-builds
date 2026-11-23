@@ -28,6 +28,7 @@ a{color:#165c61}.warning{font-weight:600}
 </section>
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><button type="button" id="verify-paid" disabled>Verificar pago realizado en Mercado Pago (solo lectura)</button></p>
 <p><button type="button" id="get-link" disabled>Recuperar enlace de la suscripción ya vinculada</button></p>
 <p><a id="mp-link" hidden target="_blank" rel="noopener noreferrer">Abrir checkout existente en Mercado Pago (solo comprador de prueba)</a></p>
 <p><button type="button" id="inspect" disabled>Diagnosticar suscripción existente (solo lectura)</button></p>
@@ -72,7 +73,7 @@ async function load(){
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
- tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;$('verify-paid').disabled=false;
  syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
@@ -148,6 +149,37 @@ function markAlreadyLinked(){
  $('pilot-checkout').hidden=true;
  $('inspect').hidden=true;
 }
+$('verify-paid').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('verify-paid').disabled=true;
+ $('result').textContent='Consultando el pago ya efectuado directamente en Mercado Pago, sin crear cobros ni cambiar servicios…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-verify-payment',{body:{tenantId}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.code==='approved_test_payment_verified_read_only'&&response?.verified_payments>=1){
+   markAlreadyLinked();
+   $('result').textContent='PAGO DE PRUEBA VERIFICADO EN MERCADO PAGO.\n'+
+    'Facturas aprobadas comprobadas: '+response.verified_payments+
+    '\nImporte: ARS 1.000.\nEsta consulta no cobra ni activa servicios. La conciliación interna todavía requiere comprobar la notificación firmada.';
+  }else{
+   const labels={
+    invoice_not_found:'Mercado Pago todavía no devuelve facturas de esta suscripción.',
+    no_approved_invoice:'No se encontró una factura aprobada.',
+    payment_not_verified:'La prueba aún no cumple todos los controles del pago.',
+    invoice_search_incomplete:'No se pudo consultar todo el historial de facturas.',
+    test_seller_not_verified:'No se pudo comprobar la identidad del vendedor de prueba.',
+    subscription_identity_mismatch:'La suscripción no coincide con el comprador registrado.',
+    provider_read_only_unavailable:'No se pudo consultar Mercado Pago en este momento.'
+   };
+   $('result').textContent=(labels[response?.code]||'El pago todavía no pudo verificarse.')+
+    '\nCódigo: '+(response?.code||'sin_respuesta')+
+    '\nNo generes otro cobro.';
+  }
+ }catch{
+  $('result').textContent='No se pudo consultar el pago. No se generó ningún cobro y la suscripción sigue vinculada.';
+ }finally{$('verify-paid').disabled=false;}
+});
 $('get-link').addEventListener('click',async()=>{
  if(!tenantId)return;
  $('get-link').disabled=true;$('mp-link').hidden=true;
