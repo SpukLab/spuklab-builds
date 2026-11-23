@@ -34,3 +34,13 @@ test('rejects mismatched seller, amount, payment id, subscription, live mode',()
 test('a subscription alone is never payment evidence',()=>{
  assert.equal(verify({intent,subscription}).ok,false);
 });
+
+test('omitted subscription live_mode requires verified test seller and approved test payment',()=>{
+ const {live_mode,...missing}=subscription;
+ assert.equal(verify({...base,subscription:missing}).ok,false);
+ assert.equal(verify({...base,subscription:missing,verifiedTestSeller:true}).ok,true);
+ assert.equal(verify({...base,subscription:{...missing,live_mode:true},verifiedTestSeller:true}).ok,false);
+ assert.equal(verify({...base,subscription:{...missing,collector_id:9999},verifiedTestSeller:true}).ok,false);
+ assert.equal(verify({...base,subscription:missing,payment:{...payment,live_mode:undefined},verifiedTestSeller:true}).ok,false);
+ assert.equal(verify({...base,subscription:missing,payment:{...payment,status:'pending'},verifiedTestSeller:true}).ok,false);
+});
