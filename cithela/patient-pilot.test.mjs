@@ -308,3 +308,14 @@ test('reservation confirmation does not assert pending when authoritative status
  assert.match(script,/toast\('Turno registrado\. Revisá su estado actualizado en Mis turnos\.'/);
  assert.doesNotMatch(script,/toast\('Turno reservado; quedó pendiente de confirmación/);
 });
+
+test('patient portal hides unused self-linking WhatsApp panel without affecting email or existing sessions',()=>{
+ const portal=extract('const PATIENT_WHATSAPP_SELF_LINK_ENABLED=false;','function patientCloudIdentity(){');
+ assert.match(portal,/if\(!PATIENT_WHATSAPP_SELF_LINK_ENABLED\)\{panel\.hidden=true;return;\}/);
+ assert.match(portal,/async function patientEnrollStart\(\)\{\s*if\(!PATIENT_WHATSAPP_SELF_LINK_ENABLED\)return;/);
+ assert.match(portal,/async function patientEnrollConfirm\(\)\{\s*if\(!PATIENT_WHATSAPP_SELF_LINK_ENABLED\)return;/);
+ assert.match(html,/id="patient-cloud-list"/);
+ assert.match(html,/onclick="patientRefreshPortal\(\)"/);
+ assert.match(html,/onclick="logout\(\)"/);
+ assert.match(script,/async function patientRequestEmailLink\(/);
+});
