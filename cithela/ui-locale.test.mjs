@@ -202,3 +202,41 @@ test('prices and coverage standalone page inherits ES/EN and preserves original 
   assert.match(coverage,/top\.setAttribute\('data-no-translate',''\)/);
   assert.match(coverage,/cithela:ui-language/);
 });
+
+test('professional system status, connection details and badges translate completely',()=>{
+  const {ui}=setup('en');
+  const pairs=[
+    ['Turnos, personas y disponibilidad compartidos entre dispositivos','Appointments, contacts and availability shared across devices'],
+    ['Conexión protegida','Secure connection'],
+    ['Acceso y disponibilidad del servicio de agenda','Schedule access and service availability'],
+    ['Multi-dispositivo','Multiple devices'],
+    ['Actualiza al volver a la app y después de cada acción','Updates when you return to the app and after each action'],
+    ['Sincronización en vivo','Live synchronization'],
+    ['Cambios cloud recibidos mientras la app está abierta','Cloud changes received while the app is open'],
+    ['Los turnos y cambios de la cuenta online se comparten entre dispositivos. El modo de demostración local no se sincroniza.',
+     'Appointments and changes in your online account are shared across devices. The local demo does not sync.'],
+    ['LISTO','READY'],['ACTIVO','ACTIVE'],['EN VIVO','LIVE'],
+    ['RESPALDO','FALLBACK']
+  ];
+  for(const [es,en] of pairs)assert.equal(ui.translate(es),en,es);
+});
+
+test('complementary access expiry uses selected locale and retains date, without server writes',()=>{
+  const {ui}=setup('en');
+  assert.equal(ui.translate('Vigente hasta el'),'Valid until');
+  assert.equal(ui.translate('Prueba gratuita en curso'),'Free trial in progress');
+  assert.equal(ui.translate('Prueba gratuita finalizada'),'Free trial ended');
+  assert.match(html,/descriptions\[c\.status\]\.map\(localize\)/);
+  assert.match(html,/window\.CithelaUiLocale\?\.get\(\)==='en'\?' Valid until ':' Vigente hasta el '/);
+  assert.match(html,/renderCithelaCommercialPanel\(state\)/);
+});
+
+test('remote status counter translates both singular and plural without altering underlying values',()=>{
+  const {ui}=setup('en');
+  assert.equal(ui.translate('Estado remoto visible:'),'Visible remote status:');
+  assert.equal(ui.translate('turno cloud'),'Cloud appointment');
+  assert.equal(ui.translate('turnos cloud'),'Cloud appointments');
+  assert.equal(ui.translate('Abrí la misma cuenta en otro dispositivo y tocá “Probar conexión” para comparar este número.'),
+    'Open the same account on another device and select “Test connection” to compare the number.');
+  assert.match(html,/translateProfessionalUi\(count===1\?'turno cloud':'turnos cloud'\)/);
+});
