@@ -19,6 +19,12 @@ test('Hub: cards de CITHELA y DAHZEA conducen a páginas comerciales separadas',
   assert.match(html, /class="product cithela"[\s\S]*?href="productos\/cithela\/"/);
   assert.match(html, /class="product dahzea"[\s\S]*?href="productos\/dahzea\/"/);
   assert.match(html, /SURKARA/);
+  assert.match(html, /Operaciones y logística agro/);
+  assert.match(html, /campo y transporte/i);
+  assert.match(html, /id="enfoque"/);
+  assert.match(html, /id="asistente" data-dahzea-guide/);
+  assert.doesNotMatch(html, /orbit-frame|SPUKLAB HUB|multicliente|diagrama|id="plataforma"/i);
+
   assert.doesNotMatch(html, /href="https:\/\/dahzea\.dentrix-8m\.chatgpt\.site\/"/);
 });
 
@@ -55,7 +61,7 @@ for (const page of pages) {
 test('CITHELA comercial: separado del acceso profesional y con límites de piloto', () => {
   const html = read(pages[1]);
   assert.match(html, /href="\.\.\/\.\.\/\.\.\/cithela\/"/);
-  assert.match(html, /registro comercial automático todavía no está habilitado/i);
+  assert.match(html, /Incorporación al piloto mediante invitación/i);
   assert.match(html, /piloto supervisado/i);
   assert.doesNotMatch(html, /<script\b/i);
 });
@@ -81,4 +87,38 @@ test('Documentación: producto ≠ plataforma comercial ≠ datos de clientes', 
   assert.match(contract, /RLS/);
   assert.match(contract, /DAHZEA como asistente comercial/);
   assert.match(contract, /No poner claves de servicio/);
+});
+
+test('CITHELA: información comercial no exhibe arquitectura multitenant', () => {
+  const html = read(pages[1]);
+  assert.match(html, /Tu marca,/);
+  assert.match(html, /TU IDENTIDAD/);
+  assert.doesNotMatch(html, /cuentas organizacionales|pruebas multitenant|aislamiento entre establecimientos|Cada establecimiento necesita/);
+});
+test('Dominio: raíz redirige relativamente a la portada de SpukLab', () => {
+  const html = read('index.html');
+  assert.match(html, /url=\.\/hub\//);
+  assert.match(html, /href="\.\/hub\/"/);
+});
+
+test('DAHZEA comercial recibe al visitante y ofrece orientación real, sin checkout ficticio', () => {
+  const html = read('hub/index.html');
+  const script = read('hub/assets/dahzea-commercial.js');
+  const styles = read('hub/assets/dahzea-commercial.css');
+  assert.match(html, /id="asistente" data-dahzea-guide/);
+  assert.match(html, /DAHZEA<\/strong><small>Asistente comercial de SpukLab/);
+  assert.match(html, /href="assets\/dahzea-commercial.css"/);
+  assert.match(html, /src="assets\/dahzea-commercial.js"/);
+  assert.match(html, /Sin IA generativa ni pagos por ahora/);
+  assert.match(script, /Agenda y turnos/);
+  assert.match(script, /Ventas y pedidos/);
+  assert.match(script, /Campo y transporte/);
+  assert.match(script, /No sé qué producto necesito/);
+  assert.match(script, /Conocer /);
+  assert.match(script, /mailto:spuklab@gmail.com\?subject=/);
+  assert.match(styles, /@media\(max-width:760px\)/);
+  assert.doesNotMatch(script, /\bfetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|document\.cookie/);
+  assert.doesNotMatch(script, /\bservice_role\b|MERCADOLIBRE_CLIENT_SECRET|OPENAI_API_KEY/);
+  assert.doesNotMatch(html, /Pasar al pago|Comprar ahora|Contratar inmediatamente/);
+  assert.match(read('hub/DAHZEA-COMERCIAL.md'), /guía determinista/);
 });
