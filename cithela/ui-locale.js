@@ -13,6 +13,23 @@
  try{const stored=localStorage.getItem(key);hasPreference=stored==='en'||stored==='es';language=stored==='en'?'en':'es';}catch{}
  let busy=false,scheduled=false;
  const patterns=[
+  [/^(\d+) servicio\(s\) activo\(s\)\. La duración rige para nuevas reservas; los turnos ya creados conservan la original\.( Solo el propietario o administrador puede editar\.)?$/,
+   m=>m[1]+' active service'+(+m[1]===1?'':'s')+'. Duration applies to new bookings; existing appointments keep their original duration.'+(m[2]?' Only the owner or administrator can edit.':'')],
+  [/^(\d+) minutos · nube · Seña (.+)$/,m=>m[1]+' minutes · Cloud · Deposit '+m[2]],
+  [/^(\d+) minutos · nube · Sin seña$/,m=>m[1]+' minutes · Cloud · No deposit'],
+  [/^(\d+) minutos · nube · (.+)$/,m=>m[1]+' minutes · Cloud · '+m[2]],
+  [/^(\d+) minutos$/,m=>m[1]+' minutes'],
+  [/^Bloqueos cloud\. Impiden nuevas reservas, pero no cancelan los turnos existentes\.$/,m=>'Cloud blocks prevent new bookings but do not cancel existing appointments.'],
+  [/^Ver (\d+) tramos individuales$/,m=>'View '+m[1]+' individual blocks'],
+  [/^(\d{4}-\d{2}-\d{2}) · Día completo$/,m=>m[1]+' · Full day'],
+  [/^Hasta (\d{4}-\d{2}-\d{2}) · (\d+) días$/,m=>'Until '+m[1]+' · '+m[2]+' days'],
+  [/^(\d+) día(?:s)? · (.+)$/,m=>m[1]+' day'+(+m[1]===1?'':'s')+' · '+m[2]],
+  [/^Importe orientativo: (.+)$/,m=>'Estimated price: '+m[1]],
+  [/^Tarifa registrada en la cuenta profesional\. Revisión (\d+)\.$/,m=>'Rate saved to professional account. Revision '+m[1]+'.'],
+  [/^(.+) · revisión (\d+)( · hasta (.+))?$/,m=>m[1]+' · revision '+m[2]+(m[4]?' · until '+m[4]:'')],
+  [/^(\d+) minutos de atención$/,m=>m[1]+' minutes of service'],
+  [/^No se pudo consultar esta cuenta: (.+)$/,m=>'Could not load this account: '+m[1]],
+  [/^(\d+) turno(?:s)?$/,m=>m[1]+' appointment'+(+m[1]===1?'':'s')],
   [/^(.+ · )(\d+) turnos?$/,m=>m[1]+m[2]+' appointment'+(+m[2]===1?'':'s')],
   [/^(\d+) por confirmar · (\d+) señas pendientes · (\d+) turnos dentro del plazo de recordatorio$/,
    m=>m[1]+' awaiting confirmation · '+m[2]+' pending deposits · '+m[3]+' appointments due for reminder'],
