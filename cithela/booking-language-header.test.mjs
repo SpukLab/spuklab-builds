@@ -17,9 +17,11 @@ function setup({role='owner',initial='es',failSave=false,shareEnabled=false,shar
     buttons[lang]={disabled:true,attributes:{},setAttribute(k,v){this.attributes[k]=v}};
   }
   const status={hidden:true,textContent:'',style:{}};
+  let uiLocale='es';
+  const uiButtons=[];
   const elements={
     'professional-booking-language':{value:'',disabled:true},
-    'professional-booking-language-settings':{hidden:role==='operator'},
+    'professional-booking-language-settings':{hidden:false},
     'professional-booking-language-es':buttons.es,
     'professional-booking-language-en':buttons.en,
     'professional-booking-language-status':status,
@@ -32,6 +34,8 @@ function setup({role='owner',initial='es',failSave=false,shareEnabled=false,shar
   };
   const env={
     $:name=>elements[name]||null,
+    window:{CithelaUiLocale:{get:()=>uiLocale,set:lang=>{uiLocale=lang},hasPreference:()=>true}},
+    document:{querySelectorAll:()=>uiButtons},
     CithelaCloud:{
       state:()=>user,
       professionalBookingShare:async()=>{if(shareFails)throw Error('offline');return {enabled:shareEnabled,url:shareUrl}},
@@ -46,7 +50,7 @@ function setup({role='owner',initial='es',failSave=false,shareEnabled=false,shar
   };
   vm.createContext(env);
   vm.runInContext(source,env,{filename:'CITHELA professional locale'});
-  return {env,elements,buttons,status,user,saved,locale:()=>locale};
+  return {env,elements,buttons,status,user,saved,locale:()=>locale,uiLocale:()=>uiLocale};
 }
 const flush=async()=>{await new Promise(resolve=>setImmediate(resolve))};
 
@@ -68,14 +72,15 @@ test('owner sees ES/EN even without public share link and saves changed booking 
   assert.equal(f.buttons.en.disabled,false);
 });
 
-test('operator cannot write booking language or use hidden language shortcuts',async()=>{
+test('operator can translate own workspace without changing public booking default',async()=>{
   const f=setup({role:'operator'});
   await f.env.loadProfessionalBookingLanguage('tenant-one');
-  assert.equal(f.buttons.en.disabled,true);
+  assert.equal(f.buttons.en.disabled,false);
   f.env.chooseProfessionalBookingLanguage('en');
   await flush();
   assert.deepEqual(f.saved,[]);
   assert.equal(f.locale(),'es');
+  assert.equal(f.uiLocale(),'en');
   f.env.updateProfessionalBookingShareVisibility();
   assert.equal(f.elements['professional-quick-actions'].hidden,false);
   assert.equal(f.elements['professional-public-booking-shortcut'].hidden,false);
@@ -123,7 +128,8 @@ test('failed save restores language without implying success',async()=>{
   await flush();
   assert.deepEqual(f.saved,[]);
   assert.equal(f.elements['professional-booking-language'].value,'es');
-  assert.equal(f.buttons.es.attributes['aria-pressed'],'true');
+  assert.equal(f.buttons.en.attributes['aria-pressed'],'true');
+  assert.equal(f.uiLocale(),'en');
   assert.match(f.status.textContent,/No se pudo guardar el idioma/);
 });
 
@@ -143,7 +149,9 @@ test('mobile layout and simplified settings preserve necessary links and technic
   assert.match(html,/id="professional-booking-language-settings" class="cithela-locale-quick"/);
   assert.match(html,/id="professional-booking-language-es"/);
   assert.match(html,/id="professional-booking-language-en"/);
-  assert.match(html,/Idioma reservas/);
+  assert.match(html,/Idioma de la interfaz y reservas/);
+  assert.match(html,/ui-locale\.js/);
+  assert.match(html,/id="professional-booking-language-settings"[\s\S]*?Idioma<\/span>/);
   const nav=html.slice(html.indexOf('id="screen-medico"'),html.indexOf('<div class="professional-tabbar">'));
   assert.ok(nav.indexOf('id="professional-booking-language-settings"')<nav.indexOf('class="nav-out" onclick="logout()"'));
   assert.ok(nav.indexOf('id="professional-public-booking-shortcut"')>nav.indexOf('</nav>'));
