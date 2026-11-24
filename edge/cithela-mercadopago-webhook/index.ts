@@ -27,6 +27,20 @@ Deno.serve(async (request: Request) => {
     &&/^\d{1,30}$/.test(merchantUserId);
   return handleMercadoPagoWebhook(request,{
     enabled,secret:webhookSecret,merchantUserId,liveMode:false,
+    async verifyTestSellerMode() {
+      if(!enabled)return false;
+      const token=(Deno.env.get("CITHELA_MP_TEST_ACCESS_TOKEN")||"").trim();
+      if(!/^APP_USR-[A-Za-z0-9-]{16,}$/.test(token))return false;
+      const res=await fetch("https://api.mercadopago.com/users/me",{
+        method:"GET",
+        headers:{Authorization:"Bearer "+token,Accept:"application/json"},
+        redirect:"error",signal:AbortSignal.timeout(7000)
+      });
+      if(!res.ok)throw new Error("test_seller_lookup_unavailable");
+      const seller=await res.json();
+      return String(seller?.id)===merchantUserId&&seller?.site_id==="MLA"&&
+        Array.isArray(seller?.tags)&&seller.tags.includes("test_user");
+    },
     reportValidationFailure(code: string) {
       // Security telemetry: do not include request IDs, payloads, headers,
       // cryptographic material, timestamps or user/merchant identifiers.
