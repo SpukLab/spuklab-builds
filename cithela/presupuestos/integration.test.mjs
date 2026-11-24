@@ -14,9 +14,12 @@ test("patient history keeps async behavior",()=>{
   assert.match(main,/function openCithelaQuoteForPerson\(personId\)\{/);
 });
 test("the quote action is gated inside the patient record, without a sixth tab",()=>{
-  assert.match(main,/get\('quotesPreview'\)==='1'/);
-  assert.match(main,/CITHELA_QUOTES_PREVIEW_ENABLED&&professionalCloudWritable\(\)/);
-  assert.match(main,/Preparar presupuesto<\/button>/);
+  assert.doesNotMatch(main,/CITHELA_QUOTES_PREVIEW_ENABLED/);
+  assert.match(main,/hidden id="cloud-person-quote-action"/);
+  assert.match(main,/p_command:'settings.get'/);
+  assert.match(main,/state\.session\?\.user\?\.id===userId/);
+  assert.match(main,/if\(!await CithelaCloud\.professionalQuoteAccess\(\)\)/);
+  assert.match(main,/quoteButton\.hidden=false/);
   assert.doesNotMatch(main,/id="medico-tab-presupuestos"/);
 });
 test("patient handoff selects only a person in the currently-authorized tenant",()=>{

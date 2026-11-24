@@ -9,7 +9,7 @@ PR de trabajo: https://github.com/SpukLab/spuklab-builds/pull/155
 - `index.html`: prototipo visual con pacientes **ficticios**, sin ninguna conexión a la base.
 - `cloud.html`: interfaz profesional que reutiliza la sesión Supabase existente de CITHELA en **el mismo origen web**. Solo se podrá probar completamente cuando el backend de Presupuestos esté habilitado. No ofrece login independiente ni permite saltar el rol profesional.
 
-La navegación principal conserva sus **cinco pestañas**. Solo en modo QA `?quotesPreview=1`, la ficha del paciente profesional cloud ofrece **Preparar presupuesto**. El enlace abre `presupuestos/cloud.html#tenant=<UUID>&person=<UUID>` y usa la membresía del establecimiento activo; el módulo comprueba que ese paciente pertenece al establecimiento autenticado. Esta opción no aparece a usuarios normales y no reemplaza el control de acceso del backend.
+La navegación principal conserva sus **cinco pestañas**. La ficha del paciente profesional cloud ofrece **Preparar presupuesto** únicamente cuando el RPC `settings.get` confirma los permisos vigentes; por defecto permanece oculto. El enlace abre `presupuestos/cloud.html#tenant=<UUID>&person=<UUID>` y usa la membresía del establecimiento activo; el módulo comprueba que ese paciente pertenece al establecimiento autenticado. Esta opción no aparece a usuarios normales y no reemplaza el control de acceso del backend.
 
 ## Flujo desarrollado
 

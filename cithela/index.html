@@ -1484,8 +1484,6 @@ const PASS='1234'; // Local demo only; never authenticates a CITHELA Cloud sessi
 const CITHELA_DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 // Pilot-only UI gate; NOT an authorization boundary. RPC validates auth and membership.
 const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams(location.search).get('pilotTenant')==='1';
-// QA-only: server independently checks membership and both module gates.
-const CITHELA_QUOTES_PREVIEW_ENABLED=new URLSearchParams(location.search).get('quotesPreview')==='1';
 const SLOT_MINUTES=15;
 const HORAS=[
   ...Array.from({length:14},(_,i)=>8*60+30+i*SLOT_MINUTES),
@@ -2208,6 +2206,18 @@ const CithelaCloud=(()=>{
     if(state.tenant?.id!==tenantId)throw Error('El establecimiento activo cambió.');
     return data;
   }
+  async function professionalQuoteAccess(){
+    const tenantId=state.tenant?.id,userId=state.session?.user?.id;
+    if(!tenantId||!userId||!['owner','admin','operator'].includes(state.membership?.role))return false;
+    try{
+      const c=await getClient();
+      const {data,error}=await c.rpc('cithela_quote_command',{
+        p_tenant_id:tenantId,p_request_id:globalThis.crypto?.randomUUID?.()||'quote-access-'+Date.now(),
+        p_command:'settings.get',p_payload:{}
+      });
+      return !error&&data?.ok===true&&state.tenant?.id===tenantId&&state.session?.user?.id===userId;
+    }catch{return false;}
+  }
   async function professionalBookingShare(){
     const tenantId=state.tenant?.id;
     if(!tenantId)throw Error('No hay establecimiento activo.');
@@ -2675,7 +2685,7 @@ const CithelaCloud=(()=>{
     return snapshot();
   }
 
-  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,professionalBookingShare,professionalPackages,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
+  return Object.freeze({init,refresh,signIn,signUp,resetProfessionalPassword,updateProfessionalPassword,sendMagicLink,sendPatientMagicLink,sendPatientWhatsAppOtp,verifyPatientPhoneOtp,sendLinkedPatientPhoneOtp,verifyLinkedPatientPhoneOtp,enrollExistingPatientPhone,confirmExistingPatientPhone,issuePatientPhoneInvite,issuePatientInvite,redeemPatientInvite,patientPortal,patientCommand,patientRescheduleSlots,patientBookingCatalog,patientBookingSlots,patientBookingCreate,publicBookingConfig,professionalBookingShare,professionalPackages,professionalQuoteAccess,signOut,bootstrap,availability,serviceCatalogCommand,depositCommand,tenantPaymentConfigUpdate,uploadBrandLogo,removeBrandLogo,tenantBrandingUpdate,tenantNameUpdate,setWorkingHours,whatsappReview,whatsappSend,blockCommand,resolvePerson,reservation,personHistory,updatePersonProfile,patientUpdateSharedNote,exportSnapshot,state:snapshot});
 })();
 window.CithelaCloud=CithelaCloud;
 
@@ -5664,16 +5674,23 @@ function cloudGroupPersonAppointments(appointments,nowMs=Date.now()){
   const history=items.filter(t=>!ids.has(t.id)).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at));
   return {upcoming,history,shown:items.length,limitReached:items.length===50};
 }
-function openCithelaQuoteForPerson(personId){
-  if(!CITHELA_QUOTES_PREVIEW_ENABLED||!professionalCloudWritable())return;
+async function openCithelaQuoteForPerson(personId){
+  if(!professionalCloudWritable())return;
   if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(personId)))return;
   const tenant=CithelaCloud.state().tenant?.id;
+  const req=cloudFichaRequest;
   if(!tenant||(CithelaCloud.state().people||[]).every(p=>String(p.id)!==String(personId)))return;
+  if(!await CithelaCloud.professionalQuoteAccess()){
+    if(req===cloudFichaRequest)toast('Presupuestos no está disponible para esta cuenta.');
+    return;
+  }
+  if(req!==cloudFichaRequest||!professionalCloudWritable()||CithelaCloud.state().tenant?.id!==tenant||!$('m-ficha').classList.contains('on'))return;
   window.location.assign('./presupuestos/cloud.html#tenant='+encodeURIComponent(tenant)+'&person='+encodeURIComponent(personId));
 }
 async function cloudVerFicha(id){
   if(!professionalCloudReady())return;
   const req=++cloudFichaRequest;
+  const quoteTenant=CithelaCloud.state().tenant?.id;
   const body=$('m-ficha-body');
   body.innerHTML='<p class="contact-note">Cargando ficha desde CITHELA Cloud…</p>';
   openM('m-ficha');
@@ -5736,8 +5753,8 @@ async function cloudVerFicha(id){
         </div>
       </div>
       <button class="mb teal" type="button" style="margin-bottom:12px;" onclick="closeM('m-ficha');ntStartForPerson('${p.id}')">+ Crear turno</button>
-      ${CITHELA_QUOTES_PREVIEW_ENABLED&&professionalCloudWritable()
-        ?`<button class="mb ghost" type="button" style="margin-bottom:12px;" onclick="openCithelaQuoteForPerson('${p.id}')">Preparar presupuesto</button>`:''}
+      ${professionalCloudWritable()
+        ?`<button hidden id="cloud-person-quote-action" class="mb ghost" type="button" style="margin-bottom:12px;display:none" onclick="openCithelaQuoteForPerson('${p.id}')">${window.CithelaUiLocale?.get()==='en'?'Prepare estimate':'Preparar presupuesto'}</button>`:''}
       ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Enviar mensaje libre</button>`:''}
       <div role="group" aria-label="Resumen de turnos" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 16px;">
         <div style="padding:10px 6px;border:1px solid var(--line);border-radius:10px;text-align:center;"><strong style="display:block;font-size:1.18rem;">${grouped.upcoming.length}</strong><span style="font-size:.7rem;color:var(--ink3);">Próximos</span></div>
@@ -5790,6 +5807,11 @@ async function cloudVerFicha(id){
       </div></details>`:''}
       <p class="contact-note" style="margin-top:14px;">Los archivos adjuntos cloud todavía no están habilitados.</p>
       <button class="btn-main soft" style="margin-top:12px;" onclick="closeM('m-ficha')">Cerrar</button>`;
+    const quoteButton=$('cloud-person-quote-action');
+    if(quoteButton)CithelaCloud.professionalQuoteAccess().then(allowed=>{
+      if(!allowed||req!==cloudFichaRequest||!professionalCloudWritable()||CithelaCloud.state().tenant?.id!==quoteTenant||!quoteButton.isConnected||!$('m-ficha').classList.contains('on'))return;
+      quoteButton.hidden=false;quoteButton.style.display='';
+    }).catch(()=>{});
   }catch(err){
     if(req!==cloudFichaRequest)return;
     body.innerHTML=`<p class="ops-note">${escHtml(err?.message||'No se pudo consultar la ficha cloud')}</p>

@@ -95,3 +95,6 @@ No automatizar envíos de WhatsApp, cobros, facturas ni acciones clínicas en es
 - Se elimina el fragmento SQL duplicado fuera de la función. Validación PostgreSQL real todavía pendiente para esta revisión.
 - Pruebas adicionales: sin grant, grant vencido, cuenta vencida, catálogo indisponible y habilitación técnica apagada deben devolver `feature_disabled`; no se modifica el acceso comercial.
 - Moneda ARS únicamente por ahora; USD y traducción completa quedan pendientes. No activar módulos ni aplicar migraciones desde esta PR.
+
+## Aprobación visual y preparación de integración
+La demostración aislada #234 fue aprobada por el responsable. La ficha profesional ahora solicita `settings.get` al RPC real; el botón empieza oculto y solo aparece con permiso confirmado. La apertura vuelve a consultar el servidor. Sin esquema, paquete, grant vigente o habilitación técnica, el acceso queda oculto. La aprobación visual no sustituye backup/restore, pruebas JWT reales ni política de retención. Mantener el catálogo no disponible y no activar establecimientos mientras falten esos controles.
