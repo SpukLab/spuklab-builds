@@ -33,6 +33,10 @@ const { pathToFileURL } = require('node:url');
       await page.evaluate(() => {
         document.getElementById('screen-login').classList.remove('active');
         document.getElementById('screen-medico').classList.add('active');
+         // Simulate authorized workspace tools to test compact headers at every width.
+         document.getElementById('professional-booking-language-settings').hidden=false;
+         document.getElementById('professional-public-booking-shortcut').hidden=false;
+         document.getElementById('professional-quick-actions').hidden=false;
         // Keep this smoke check independent from an authenticated cloud tenant.
         for (const [label, pane] of [['agenda','p-medico-agenda'],['pacientes','p-medico-pacientes']])
           if (!document.getElementById(pane)) throw Error('Missing ' + label + ' pane');
@@ -56,6 +60,168 @@ const { pathToFileURL } = require('node:url');
         'calendar arrows too small at '+width);
       assert.ok(geometry.statsAfterList, 'weekly stats should follow agenda tasks');
       assert.ok(geometry.hasMessages, 'WhatsApp Messages navigation must survive UX merge');
+      // Idioma inicial de reservas (ES/EN) y compartir arriba; diagnósticos sin menú independiente.
+      const structure=await page.evaluate(()=>{
+        const agenda=document.getElementById('p-medico-agenda');
+        const settings=document.getElementById('p-medico-config');
+        const share=document.getElementById('professional-public-booking-shortcut');
+        const quick=document.getElementById('professional-quick-actions');
+        const lang=document.getElementById('professional-booking-language-settings');
+        const cloud=document.getElementById('cfg-section-cloud');
+        const infra=document.getElementById('cfg-section-infrastructure');
+        const services=document.getElementById('cfg-section-services');
+        const resources=document.getElementById('cfg-section-resources');
+        return {
+          shareInAgenda:agenda.contains(share),
+          shareInSettings:settings.contains(share),
+          shareBeforeTabs:!!(share.compareDocumentPosition(document.getElementById('professional-tabs'))&Node.DOCUMENT_POSITION_FOLLOWING),
+          languageInHeader:document.querySelector('#screen-medico nav').contains(lang)&&!quick.contains(lang)&&!settings.contains(lang),
+          languageOptions:[...lang.querySelectorAll('button')].map(b=>b.textContent.trim()),
+          qrInHeader:share.querySelector('.cithela-booking-shortcut__link')?.getAttribute('href'),
+          bookingMenuGone:!document.getElementById('cfg-section-public-booking'),
+          healthInServices:services.contains(document.getElementById('professional-health-settings')),
+          diagnosticsInsideAccount:cloud.contains(infra),
+          resourcesInitiallyHidden:resources.hidden,
+          foldedWeek:document.getElementById('agenda-weekly-details')?.tagName,
+          foldedOps:document.getElementById('agenda-ops-details')?.tagName,
+          uniqueShare:document.querySelectorAll('#professional-public-booking-shortcut').length
+        };
+      });
+      assert.equal(structure.shareInAgenda,false,'sharing must not occupy Agenda');
+      assert.equal(structure.shareInSettings,false,'sharing belongs to the professional header');
+      assert.equal(structure.shareBeforeTabs,true,'share and QR must appear before professional tabs');
+      assert.equal(structure.languageInHeader,true,'ES/EN must sit beside Salir in the main header');
+      assert.deepEqual(structure.languageOptions,['ES','EN'],'use concise language controls');
+      assert.equal(structure.qrInHeader,'./compartir.html','authorized operators retain QR/share access');
+      assert.equal(structure.bookingMenuGone,true,'remove redundant booking menu');
+      assert.equal(structure.healthInServices,true,'coverage belongs under services');
+      assert.equal(structure.diagnosticsInsideAccount,true,'advanced diagnostics are nested under Account');
+      assert.equal(structure.foldedWeek,'DETAILS','weekly agenda should be collapsible');
+      assert.equal(structure.foldedOps,'DETAILS','operational notices should be collapsible');
+      assert.equal(structure.uniqueShare,1,'do not duplicate sharing controls');
+      // ES/EN must translate the workspace and patient UI without changing customer names.
+      const langCheck=await page.evaluate(()=>{
+        const name=document.createElement('strong');
+        name.id='cithela-locale-name-sentinel';name.textContent='Juan Carlos';
+        document.getElementById('p-medico-agenda').append(name);
+        setCithelaUiLanguage('en');
+        return {
+          root:document.documentElement.lang,
+          agenda:document.getElementById('medico-tab-agenda').textContent.trim(),
+          patients:document.getElementById('medico-tab-personas').textContent.trim(),
+          settings:document.getElementById('medico-tab-config').textContent.trim(),
+          upcoming:document.getElementById('agenda-overview-title').textContent.trim(),
+          patientPortal:document.querySelector('#screen-patient-cloud h2').textContent.trim(),
+          login:document.getElementById('rb-med').textContent.trim(),
+          customerName:name.textContent.trim(),
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.equal(langCheck.root,'en');
+      assert.deepEqual([langCheck.agenda,langCheck.patients,langCheck.settings,langCheck.upcoming,langCheck.patientPortal,langCheck.login,langCheck.customerName],
+        ['Schedule','Patients','Settings','Upcoming appointments','My appointments','Professional','Juan Carlos']);
+      assert.ok(langCheck.width<=width+2,'English layout overflow at '+width);
+      await page.evaluate(()=>setCithelaUiLanguage('es'));
+      assert.equal((await page.locator('#medico-tab-agenda').textContent()).trim(),'Agenda');
+      assert.equal((await page.locator('#agenda-overview-title').textContent()).trim(),'Próximos turnos');
+      console.log('PASS bidirectional UI translation '+width+'px');
+      // Actual Settings cards from the reported screenshots, not isolated text fixtures.
+      const professionalStatus=await page.evaluate(async()=>{
+        const fixture={
+          signedIn:true,tenant:{id:'test-local-tenant'},
+          membership:{role:'owner'},appointmentCount:4,
+          services:[{id:'test-service',name:'Consulta',duration_min:30}],
+          resources:[{id:'test-resource',name:'Profesional principal'}],
+          commercialStatus:{ok:true,status:'complimentary',complimentary_until:'2027-01-14T12:00:00Z'}
+        };
+        setCithelaUiLanguage('en');
+        renderCloudProbe(fixture);
+        renderCithelaCommercialPanel(fixture);
+        await Promise.resolve();
+        const english={
+          infra:document.getElementById('infra-status').textContent,
+          summary:document.getElementById('cloud-probe-summary').textContent,
+          title:document.getElementById('cithela-commercial-status').textContent,
+          detail:document.getElementById('cithela-commercial-detail').textContent,
+          width:document.documentElement.scrollWidth
+        };
+        setCithelaUiLanguage('es');
+        renderCloudProbe(fixture);
+        renderCithelaCommercialPanel(fixture);
+        await Promise.resolve();
+        const spanish={
+          infra:document.getElementById('infra-status').textContent,
+          summary:document.getElementById('cloud-probe-summary').textContent,
+          title:document.getElementById('cithela-commercial-status').textContent,
+          detail:document.getElementById('cithela-commercial-detail').textContent
+        };
+        renderCloudProbe(null);
+        renderCithelaCommercialPanel(window.CithelaCloud?.state?.()||null);
+        return {english,spanish};
+      });
+      for(const term of ['Secure connection','Multiple devices','Live synchronization'])
+        assert.ok(professionalStatus.english.infra.includes(term),'missing translation: '+term);
+      for(const term of ['Conexión protegida','Multi-dispositivo','Sincronización en vivo'])
+        assert.ok(professionalStatus.spanish.infra.includes(term),'missing Spanish restoration: '+term);
+      assert.match(professionalStatus.english.summary,/Visible remote status: 4 Cloud appointments/);
+      assert.match(professionalStatus.spanish.summary,/Estado remoto visible: 4 turnos cloud/);
+      assert.equal(professionalStatus.english.title,'Complimentary access');
+      assert.match(professionalStatus.english.detail,/Valid until January 14, 2027\./);
+      assert.equal(professionalStatus.spanish.title,'Acceso de cortesía');
+      assert.match(professionalStatus.spanish.detail,/Vigente hasta el 14 de enero de 2027\./);
+      assert.ok(professionalStatus.english.width<=width+2,'Settings language overflow at '+width);
+      console.log('PASS professional system and subscription status ES/EN '+width+'px');
+      const dynamic=await page.evaluate(()=>{
+        const fixture=document.createElement('section');
+        fixture.id='cithela-dynamic-locale-regression';
+        fixture.innerHTML=
+          '<p class="pmeta">+5492215699377 · 1 turno</p>'+
+          '<button>Ver ficha</button>'+
+          '<p>2 por confirmar · 2 señas pendientes · 0 turnos dentro del plazo de recordatorio</p>'+
+          '<p>Mañana · 25/11/2026 · 10:15 hs</p>'+
+          '<p>Sin responder: 0 · Meta aceptó: 0 · Intentos sin confirmación: 0 (últimos 0 mensajes)</p>'+
+          '<p class="aitem-name">Adri gala</p>'+
+          '<p data-no-translate>Información compartida por la persona</p>';
+        document.getElementById('p-medico-pacientes').append(fixture);
+        setCithelaUiLanguage('en');
+        const translated=[...fixture.children].map(el=>el.textContent);
+        setCithelaUiLanguage('es');
+        const restored=[...fixture.children].map(el=>el.textContent);
+        fixture.remove();
+        return {translated,restored};
+      });
+      assert.deepEqual(dynamic.translated,[
+        '+5492215699377 · 1 appointment',
+        'View record',
+        '2 awaiting confirmation · 2 pending deposits · 0 appointments due for reminder',
+        'Tomorrow · 25/11/2026 · 10:15',
+        'Unanswered: 0 · Accepted by Meta: 0 · Unconfirmed attempts: 0 (last 0 messages)',
+        'Adri gala',
+        'Información compartida por la persona'
+      ]);
+      assert.deepEqual(dynamic.restored,[
+        '+5492215699377 · 1 turno',
+        'Ver ficha',
+        '2 por confirmar · 2 señas pendientes · 0 turnos dentro del plazo de recordatorio',
+        'Mañana · 25/11/2026 · 10:15 hs',
+        'Sin responder: 0 · Meta aceptó: 0 · Intentos sin confirmación: 0 (últimos 0 mensajes)',
+        'Adri gala',
+        'Información compartida por la persona'
+      ]);
+      console.log('PASS dynamic copy and private data '+width+'px');
+      await page.evaluate(()=>{
+        document.getElementById('ops-queue-wrap').style.display='block';
+        document.getElementById('ops-queue-summary').textContent='2 señas pendientes';
+      });
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),false);
+      assert.match(await page.locator('#agenda-ops-details > summary').textContent(),/2 señas pendientes/);
+      await page.locator('#agenda-ops-details > summary').click();
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),true);
+      await page.locator('#agenda-ops-details > summary').click();
+      assert.equal(await page.locator('#agenda-ops-details').evaluate(el=>el.open),false);
+      await page.evaluate(()=>document.getElementById('ops-queue-wrap').style.display='none');
+      console.log('PASS booking settings and collapsible operations '+width+'px');
+
       // Exercise the real tab handler and the reports round trip (no data writes).
       await page.locator('#medico-tab-config').click();
       assert.equal(await page.locator('#p-medico-config').evaluate(el => el.classList.contains('on')), true,
@@ -164,6 +330,79 @@ const { pathToFileURL } = require('node:url');
       assert.ok(expanded.documentWidth<=width+2,'Agenda buttons overflow at '+width);
       console.log('PASS cloud appointment actions '+width+'px');
 
+      // Two synthetic cloud appointments on different days: the new general agenda
+      // must display them regardless of which week/day is currently selected.
+      const overview=await page.evaluate(()=>{
+        const first=new Date(),later=new Date();
+        first.setDate(first.getDate()+1);
+        later.setDate(later.getDate()+23);
+        const firstKey=dk(first),laterKey=dk(later);
+        const bookings=[
+          {id:'11111111-1111-4111-8111-111111111111',pacienteId:'test-one',fecha:firstKey,
+           hora:'11:00',estado:'pendiente',servicioNombre:'Coloración ficticia',
+           duracionMin:90,resourceName:'Profesional de prueba',motivo:''},
+          {id:'22222222-2222-4222-8222-222222222222',pacienteId:'test-two',fecha:laterKey,
+           hora:'15:30',estado:'confirmado',servicioNombre:'Tattoo ficticio',
+           duracionMin:45,resourceName:'Profesional de prueba',motivo:''}
+        ];
+        cloudAppointmentViews=()=>bookings;
+        cloudPersonById=id=>({nombre:id==='test-one'?'Paciente de ejemplo A':'Paciente de ejemplo B'});
+        cloudAppointmentRaw=()=>({starts_at:new Date(Date.now()+86400000).toISOString(),
+          created_at:new Date().toISOString(),deposit_amount_minor:0,deposit_status:'none'});
+        selDate=dk(new Date());wkOff=0;
+        renderAgenda();
+        return {
+          firstKey,laterKey,
+          visible:!document.getElementById('agenda-overview').hidden,
+          summary:document.getElementById('agenda-overview-summary').textContent,
+          items:document.querySelectorAll('.agenda-overview-item').length,
+          text:document.getElementById('agenda-overview-list').textContent,
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.ok(overview.visible,'overview should be visible to professional cloud sessions');
+      assert.equal(overview.items,2,'both upcoming appointments must show independently of selected day');
+      assert.equal(await page.locator('.agenda-overview-item .agenda-overview-new').count(),1,
+        'recent badge applies only to a recently submitted pending appointment');
+      assert.match(await page.locator('.agenda-overview-pending .agenda-overview-status').textContent(),/Por confirmar/);
+      assert.match(await page.locator('.agenda-overview-item:not(.agenda-overview-pending) .agenda-overview-status').textContent(),/Confirmado/);
+      assert.equal(await page.locator('.agenda-overview-item:not(.agenda-overview-pending) .agenda-overview-new').count(),0,
+        'confirmed appointments are not wrongly marked new');
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),
+        'compact cards should not overflow mobile screens');
+      assert.match(overview.summary,/1 por confirmar/);
+      assert.match(overview.text,/Coloración ficticia/);
+      assert.match(overview.text,/Tattoo ficticio/);
+      assert.ok(overview.width<=width+2,'upcoming agenda overflow at '+width);
+      await page.evaluate(()=>applyAgendaFoldsMode(true));
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),false,
+        'cloud professional should see upcoming agenda before daily calendar');
+      // Re-rendering must not override a fold that the professional opened manually.
+      await page.locator('#agenda-weekly-details > summary').click();
+      await page.evaluate(()=>applyAgendaFoldsMode(true));
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),true,
+        'manual fold choice must survive normal refresh');
+      await page.locator('#agenda-weekly-details > summary').click();
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),false);
+      await page.locator('#agenda-overview-period').selectOption('7');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1,
+        '7-day period should exclude appointment 23 days ahead');
+      await page.locator('#agenda-overview-period').selectOption('30');
+      await page.locator('#agenda-overview-filter').selectOption('pending');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1);
+      assert.equal(await page.locator('.agenda-overview-item-actions button').count(),2,
+        'pending appointment needs jump and confirmation without weekly scanning');
+      await page.locator('.agenda-overview-item-actions button[data-agenda-action="day"]').click();
+      assert.equal(await page.locator('#agenda-weekly-details').evaluate(el=>el.open),true,
+        'Ver día opens the collapsed calendar before navigation');
+      assert.equal(await page.evaluate(()=>selDate),overview.firstKey,
+        'Ver día should select its real week and date in the calendar');
+      await page.locator('#agenda-overview-filter').selectOption('confirmed');
+      assert.equal(await page.locator('.agenda-overview-item').count(),1,
+        'confirmed appointment must remain discoverable with filter');
+      await page.locator('#agenda-overview-filter').selectOption('all');
+      console.log('PASS upcoming professional agenda '+width+'px');
+
       // Patient identity is generated from two distinct, synthetic fields.
       const patient=await page.evaluate(()=>{
         document.getElementById('screen-medico').classList.remove('active');
@@ -189,7 +428,64 @@ const { pathToFileURL } = require('node:url');
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
       if (errors.length) console.log('INFO page startup warnings at '+width+': '+errors.slice(0,3).join(' | '));
+      // Real iOS-native select <option> text: labels change, values must remain unchanged.
+      const selectors=await page.evaluate(()=>{
+        const select=document.getElementById('wa-draft-kind');
+        const options=cloudWhatsAppKinds('pendiente',null);
+        select.innerHTML='<option value="">Elegí el tipo de aviso…</option>'+
+          options.map(([value,label])=>'<option value="'+value+'">'+label+'</option>').join('');
+        window.CithelaUiLocale.set('en');
+        const translated=[...select.options].map(o=>[o.value,o.textContent]);
+        window.CithelaUiLocale.set('es');
+        const restored=[...select.options].map(o=>[o.value,o.textContent]);
+        return {translated,restored};
+      });
+      assert.deepEqual(selectors.translated,[
+        ['','Choose a notice type…'],
+        ['booking','New booking pending'],
+        ['rescheduled','Appointment rescheduled'],
+        ['reminder','Reminder']
+      ]);
+      assert.deepEqual(selectors.restored,[
+        ['','Elegí el tipo de aviso…'],
+        ['booking','Nueva reserva pendiente'],
+        ['rescheduled','Turno reprogramado'],
+        ['reminder','Recordatorio']
+      ]);
       await page.close();
+      // Prices and coverage is a separate page: UI locale must persist without live auth.
+      const rates=await browser.newPage({viewport:{width,height:900},deviceScaleFactor:1});
+      await rates.route('http**/*',route=>route.abort());
+      await rates.goto(pathToFileURL(path.join(__dirname,'configurar-coberturas.html')).href,
+        {waitUntil:'domcontentloaded'});
+      const localized=await rates.evaluate(()=>{
+        window.CithelaUiLocale.set('en');
+        return {
+          heading:document.querySelector('h1').textContent.trim(),
+          eyebrow:document.querySelector('.eyebrow').textContent.trim(),
+          back:document.querySelector('header a').textContent.trim(),
+          kind:document.querySelector('#kind option[value="obra_social"]').textContent.trim(),
+          save:document.getElementById('save').textContent.trim(),
+          banner:document.getElementById('feature-status').textContent.trim(),
+          selected:document.querySelector('[data-ui-locale="en"]').getAttribute('aria-pressed'),
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.equal(localized.heading,'Consultation prices and coverage');
+      assert.equal(localized.eyebrow,'SETTINGS / SERVICES / PRICES AND COVERAGE');
+      assert.equal(localized.back,'Back to my schedule');
+      assert.equal(localized.kind,'Health insurance');
+      assert.equal(localized.save,'Save rate');
+      assert.equal(localized.selected,'true');
+      assert.ok(localized.width<=width+2,'coverage-page horizontal overflow at '+width);
+      const restored=await rates.evaluate(()=>{
+        window.CithelaUiLocale.set('es');
+        return document.querySelector('#kind option[value="obra_social"]').textContent.trim();
+      });
+      assert.equal(restored,'Obra social');
+      await rates.screenshot({path:path.join(process.cwd(),'cithela-layout-rates-'+width+'.png'),fullPage:true});
+      console.log('PASS native select and rates ES/EN '+width+'px');
+      await rates.close();
     }
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exit(1); });

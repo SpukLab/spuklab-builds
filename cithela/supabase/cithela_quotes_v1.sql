@@ -112,6 +112,18 @@ begin
     return jsonb_build_object('ok',false,'code','feature_disabled');
   end if;
 
+  -- El paquete comercial debe estar disponible, concedido y vigente.
+  -- La habilitación técnica anterior sigue siendo un segundo control de piloto.
+  if not exists (
+    select 1 from cithela_private.cithela_package_catalog c
+    join cithela_private.cithela_tenant_package_access g on g.code=c.code
+    where c.code='presupuestos' and c.available=true
+      and g.tenant_id=p_tenant_id and g.state in ('pilot','active')
+      and (g.expires_at is null or g.expires_at>statement_timestamp())
+  ) or not coalesce((cithela_private.commercial_entitlement_snapshot(p_tenant_id)->>'can_book')::boolean,false) then
+    return jsonb_build_object('ok',false,'code','feature_disabled');
+  end if;
+
   if p_command='settings.get' then
     return jsonb_build_object('ok',true,'dental_enabled',coalesce(
       (select e.dental_enabled from cithela_private.cithela_quote_enablements e
@@ -332,122 +344,6 @@ begin
         if v_dental_status='autorizada' then
           if jsonb_typeof(v_dental->'covered_minor')<>'number' or
              (v_dental->>'covered_minor') !~ '^(0|[1-9][0-9]{0,11}) (concurrent requests may hit unique constraint).
-      select * into v_existing from public.cithela_quotes
-       where tenant_id=p_tenant_id and request_id=v_request;
-      if found then
-        if v_existing.person_id<>v_person or v_existing.items<>v_items
-           or v_existing.discount_minor<>v_discount or v_existing.validity_days<>v_validity
-           or v_existing.dental_coverage is distinct from v_dental then
-           return jsonb_build_object('ok',false,'code','idempotency_conflict');
-        end if;
-        return jsonb_build_object('ok',true,'code','replayed','id',v_existing.id,
-          'reference',v_existing.reference,'updated_at',v_existing.updated_at);
-      end if;
-      v_id:=gen_random_uuid();
-      insert into public.cithela_quotes(
-        id,tenant_id,person_id,created_by,request_id,reference,items,dental_coverage,
-        subtotal_minor,discount_minor,total_minor,validity_days)
-      values (v_id,p_tenant_id,v_person,v_actor,v_request,
-        'P-'||upper(substr(replace(v_id::text,'-',''),1,20)),
-        v_items,v_dental,v_subtotal,v_discount,v_subtotal-v_discount,v_validity)
-      returning * into v_existing;
-    else
-      if v_expected is null then return jsonb_build_object('ok',false,'code','missing_version'); end if;
-      select * into v_existing from public.cithela_quotes
-        where tenant_id=p_tenant_id and id=v_id for update;
-      if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
-      if v_existing.status<>'borrador' then
-        return jsonb_build_object('ok',false,'code','quote_immutable');
-      end if;
-      if v_existing.updated_at<>v_expected then
-        return jsonb_build_object('ok',false,'code','stale_write'); end if;
-      update public.cithela_quotes
-         set person_id=v_person,items=v_items,dental_coverage=v_dental,subtotal_minor=v_subtotal,
-          discount_minor=v_discount,total_minor=v_subtotal-v_discount,
-          validity_days=v_validity,updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
-       where tenant_id=p_tenant_id and id=v_id returning * into v_existing;
-    end if;
-    insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
-      values(p_tenant_id,v_actor,'quote_saved','quote',v_existing.id,
-        jsonb_build_object('person_id',v_existing.person_id,
-          'status',v_existing.status,'total_minor',v_existing.total_minor));
-    return jsonb_build_object('ok',true,'code','saved','id',v_existing.id,
-      'reference',v_existing.reference,'status',v_existing.status,
-      'updated_at',v_existing.updated_at,
-      'total_minor',v_existing.total_minor);
-  end if;
-
-  if p_command='quote.status' then
-    if (select count(*) from jsonb_object_keys(p_payload) as f(k)
-      where k not in ('id','status','expected_updated_at'))>0 or
-      jsonb_typeof(p_payload->'id') is distinct from 'string' or
-      jsonb_typeof(p_payload->'status') is distinct from 'string' or
-      jsonb_typeof(p_payload->'expected_updated_at') is distinct from 'string' then
-      return jsonb_build_object('ok',false,'code','invalid_payload');
-    end if;
-    begin
-      v_id:=(p_payload->>'id')::uuid;
-      v_expected:=(p_payload->>'expected_updated_at')::timestamptz;
-    exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
-      return jsonb_build_object('ok',false,'code','invalid_payload');
-    end;
-    v_status:=p_payload->>'status';
-    select * into v_existing from public.cithela_quotes
-      where tenant_id=p_tenant_id and id=v_id for update;
-    if not found then return jsonb_build_object('ok',false,'code','not_found'); end if;
-    if v_existing.updated_at<>v_expected then
-      return jsonb_build_object('ok',false,'code','stale_write'); end if;
-    v_previous_status:=v_existing.status;
-    if not (
-      (v_existing.status='borrador' and v_status in ('enviado','rechazado')) or
-      (v_existing.status='enviado' and v_status in ('aceptado','rechazado'))
-    ) then return jsonb_build_object('ok',false,'code','invalid_transition'); end if;
-    update public.cithela_quotes
-      set status=v_status,updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond'),
-          sent_at=case when v_status='enviado' then now() else sent_at end,
-          decided_at=case when v_status in ('aceptado','rechazado') then now() else decided_at end
-      where tenant_id=p_tenant_id and id=v_id returning * into v_existing;
-    insert into public.cithela_operational_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,payload)
-      values(p_tenant_id,v_actor,'quote_status_changed','quote',v_existing.id,
-        jsonb_build_object('previous',v_previous_status,'next',v_existing.status));
-    return jsonb_build_object('ok',true,'code','status_updated','id',v_existing.id,
-      'status',v_existing.status,'updated_at',v_existing.updated_at);
-  end if;
-  return jsonb_build_object('ok',false,'code','unsupported_command');
-exception when unique_violation then
-  return jsonb_build_object('ok',false,'code','conflict_retry');
-end $fn$;
-
-create or replace function public.cithela_quote_command(
-  p_tenant_id uuid,p_request_id text,p_command text,p_payload jsonb default '{}'::jsonb
-) returns jsonb language sql security invoker set search_path to ''
-as $fn$
-  select cithela_private.quote_command(p_tenant_id,p_request_id,p_command,p_payload);
-$fn$;
-revoke all on function cithela_private.quote_command(uuid,text,text,jsonb) from public,anon,authenticated;
-revoke all on function public.cithela_quote_command(uuid,text,text,jsonb) from public,anon,authenticated;
-grant execute on function cithela_private.quote_command(uuid,text,text,jsonb) to authenticated;
-grant execute on function public.cithela_quote_command(uuid,text,text,jsonb) to authenticated;
- then
-            return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
-          end if;
-          v_covered_minor:=(v_dental->>'covered_minor')::bigint;
-          if v_covered_minor>v_subtotal-v_discount then
-            return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
-          end if;
-        elsif jsonb_typeof(v_dental->'covered_minor')<>'null' then
-          return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
-        else
-          v_covered_minor:=null;
-        end if;
-        v_dental:=jsonb_build_object(
-          'kind',v_kind,'provider',v_provider,'plan',v_plan,
-          'status',v_dental_status,'covered_minor',v_covered_minor);
-      end if;
-    end if;
-
-    if v_id is null then
-      -- Request ID provides idempotency for retries (concurrent requests may hit unique constraint).
       select * into v_existing from public.cithela_quotes
        where tenant_id=p_tenant_id and request_id=v_request;
       if found then

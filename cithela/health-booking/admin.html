@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#173b3b">
+<link rel="icon" href="../brand/cithela-favicon.svg" type="image/svg+xml">
+<title>CITHELA · Servicios · Precios y coberturas (demo)</title>
+<style>
+:root{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;--bg:#f3f7f5;--ink:#1d3e37;--soft:#687f78;--line:#d5e6df;--accent:#247f72;background:var(--bg);color:var(--ink)}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}
+header{display:flex;align-items:center;justify-content:space-between;background:#193c3b;color:white;padding:19px max(18px,calc((100vw - 1150px)/2));gap:14px}
+header strong{letter-spacing:.18em}header a{color:#cde8df;text-decoration:none;font-size:13px}
+main{max-width:1150px;margin:auto;padding:28px 18px 65px}
+h1{font:normal clamp(26px,4vw,36px)/1.15 Georgia,serif;margin:8px 0 12px}
+h2{font:normal 21px/1.25 Georgia,serif;margin:0 0 14px}
+.subtitle{color:var(--soft);max-width:760px;margin-bottom:23px}
+.trail{font-size:12px;color:#36887c;letter-spacing:.06em;font-weight:800}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:17px}
+.card{background:white;border:1px solid var(--line);padding:22px;border-radius:17px;box-shadow:0 5px 25px #193c3b08;margin-bottom:15px}
+label{display:block;font-size:12px;font-weight:750;margin:13px 0 6px;color:#46665c}
+input,select{display:block;width:100%;padding:12px;min-height:45px;border-radius:10px;border:1px solid #c3d8cf;color:var(--ink);background:#fbfdfb}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #7ac4b3;outline-offset:2px}
+.rows{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+button{cursor:pointer;min-height:43px;border-radius:10px;padding:10px 13px;border:1px solid var(--line);background:white;color:var(--ink);font-weight:700}
+button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+button:disabled{cursor:not-allowed;opacity:.4}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:19px}
+.actions button{flex:1}
+.small{color:var(--soft);font-size:12px}
+.notice{padding:11px 13px;background:#f9f2e8;border-radius:10px;color:#765629;font-size:12px}
+.notice.bad{background:#fff0f2;color:#a02d4d}
+.notice.good{background:#ebf7f2;color:#226559}
+.notice[hidden]{display:none}
+.stats{font:normal 25px/1.2 Georgia,serif;margin:11px 0 14px}
+.rule{width:100%;text-align:left;margin:0 0 8px;background:#fafcfb;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.rule.current{border-color:var(--accent);background:#e6f3ee}
+.rule small{display:block;color:var(--soft);font-weight:450;font-size:11px}
+.tag{display:inline-block;font-size:10px;padding:4px 7px;border-radius:5px;background:#e7f3ed;color:#20685f;font-weight:700}
+.tag.off{background:#f1eee8;color:#87785c}
+#coverage-fields[hidden],#amount-row[hidden]{display:none!important}
+@media(max-width:770px){.grid,.rows{grid-template-columns:1fr}.card{padding:18px}main{padding:21px 13px}.actions button{flex-basis:100%}}
+</style>
+</head>
+<body>
+<header><strong>CITHELA</strong><a href="./index.html">Vista de reserva</a></header>
+<main>
+<div class="trail">CONFIGURACIÓN / SERVICIOS / PRECIOS Y COBERTURAS</div>
+<h1>Tarifas de consultas y convenios</h1>
+<p class="subtitle">Definí cuánto cuesta cada servicio según la modalidad de atención y el plan. Los datos son ficticios: esta simulación no guarda en la nube, no actualiza la agenda ni envía mensajes.</p>
+<div class="grid">
+<section>
+  <div class="card">
+    <h2>1. Establecimiento y servicio</h2>
+    <div class="rows">
+      <div><label for="tenant">Establecimiento de prueba</label><select id="tenant"></select></div>
+      <div><label for="role">Simular tipo de acceso</label><select id="role"><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="operator">Operador (lectura)</option></select></div>
+    </div>
+    <label for="service">Servicio</label><select id="service"></select>
+    <p class="small" id="duration"></p>
+  </div>
+  <div class="card">
+    <h2>2. Precio y cobertura</h2>
+    <label for="kind">Modalidad</label><select id="kind"><option value="particular">Particular</option><option value="obra_social">Obra social</option><option value="prepaga">Prepaga</option></select>
+    <div id="coverage-fields" hidden>
+      <div class="rows">
+        <div><label for="provider">Obra social o prepaga</label><select id="provider"></select></div>
+        <div><label for="plan">Plan</label><select id="plan"></select></div>
+      </div>
+    </div>
+    <div class="rows">
+      <div><label for="status">Estado del precio</label><select id="status"><option value="orientativo">Importe orientativo</option><option value="a_confirmar">A confirmar</option></select></div>
+      <div id="amount-row"><label for="amount">Importe orientativo (ARS)</label><input id="amount" inputmode="decimal" autocomplete="off" placeholder="Ej. 12000,50" value="0"></div>
+    </div>
+    <label for="valid-until">Vigencia hasta (opcional)</label><input type="date" id="valid-until">
+    <p class="small">El importe es una referencia configurada por el profesional, no una autorización de cobertura ni un cobro.</p>
+    <div class="actions">
+      <button type="button" class="primary" id="save">Guardar tarifa en esta simulación</button>
+      <button type="button" id="new">Nueva regla</button>
+      <button type="button" id="archive" disabled>Desactivar</button>
+      <button type="button" id="restore" disabled>Reactivar</button>
+    </div>
+    <p id="feedback" class="notice" role="status" aria-live="polite" hidden></p>
+  </div>
+</section>
+<aside>
+  <section class="card">
+    <h2>3. Vista previa de reserva</h2>
+    <p class="small">Así se informaría al paciente el valor del servicio y la cobertura seleccionada.</p>
+    <p class="stats" id="preview-price"></p>
+    <div id="preview-warning" class="notice"></div>
+    <p class="small" id="preview-service"></p>
+  </section>
+  <section class="card">
+    <h2>Tarifas del establecimiento</h2>
+    <p class="small">Seleccioná una tarifa para editarla. Los cambios duran únicamente mientras esta página permanezca abierta.</p>
+    <div id="list"></div>
+  </section>
+</aside>
+</div>
+</main>
+<script type="module">
+import {createDemoEditor,moneyToMinor} from "./catalog-editor.mjs";
+import {sampleTenants,sampleProviders,sampleRules} from "./sample-data.mjs";
+import {availableServices} from "./coverage-rules.mjs";
+const $=id=>document.getElementById(id);
+const add=(node,id,name)=>{const o=document.createElement("option");o.value=id;o.textContent=name;node.appendChild(o);};
+let store=null,selection=null;
+const tenant=()=>sampleTenants.find(x=>x.tenantId===$("tenant").value);
+const service=()=>availableServices(tenant()).find(s=>s.id===$("service").value);
+const provider=()=>sampleProviders.find(x=>x.id===$("provider").value);
+const kinds={particular:"Particular",obra_social:"Obra social",prepaga:"Prepaga"};
+const show=(value,bad=false)=>{$("feedback").hidden=!value;$("feedback").textContent=value;$("feedback").className="notice "+(bad?"bad":"good");};
+function storeForTenant(){
+  store=createDemoEditor({tenantId:tenant().tenantId,role:$("role").value,tenants:sampleTenants,
+    providers:sampleProviders,rules:sampleRules});
+  selection=null;
+  fillServices();
+  show("Los datos de esta simulación se reiniciaron.");
+}
+function fillServices(){
+  $("service").replaceChildren();
+  for(const item of availableServices(tenant()))add($("service"),item.id,item.name);
+  reset();
+}
+function fillProviders(){
+  $("coverage-fields").hidden=$("kind").value==="particular";
+  $("provider").replaceChildren();
+  for(const item of sampleProviders.filter(p=>p.kind===$("kind").value))add($("provider"),item.id,item.name);
+  fillPlans();
+}
+function fillPlans(){
+  $("plan").replaceChildren();
+  for(const p of provider()?.plans||[])add($("plan"),p.id,p.name);
+  preview();
+}
+function reset(){
+  selection=null;
+  $("kind").value="particular";
+  $("status").value="orientativo";
+  $("amount").value="0";$("valid-until").value="";
+  fillProviders();renderList();updateEditable();
+}
+function money(minor){return minor===null?"A confirmar":new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS"}).format(minor/100)}
+function priceRule(){
+  const kind=$("kind").value;
+  return {tenantId:tenant().tenantId,serviceId:$("service").value,kind,
+    providerId:kind==="particular"?null:$("provider").value,
+    planId:kind==="particular"?null:$("plan").value};
+}
+function preview(){
+  if(!store||!service())return;
+  try{
+    const r=store.preview(priceRule());
+    $("preview-price").textContent=r.label;
+    $("preview-warning").textContent=r.warning||"Se requiere elegir una cobertura válida.";
+  }catch{
+    $("preview-price").textContent="Importe a confirmar";
+    $("preview-warning").textContent="No hay una regla válida para esta combinación.";
+  }
+  $("preview-service").textContent=service().name+" · "+service().durationMin+" minutos";
+  $("duration").textContent="Duración: "+service().durationMin+" minutos";
+}
+function updateEditable(){
+  const editable=!!store?.canEdit;
+  for(const id of ["kind","provider","plan","status","amount","valid-until","save"]){
+    $(id).disabled=!editable;
+  }
+  $("archive").disabled=!editable||!selection||!store.list().find(x=>x.id===selection.id)?.active;
+  $("restore").disabled=!editable||!selection||store.list().find(x=>x.id===selection.id)?.active!==false;
+  $("amount-row").hidden=$("status").value==="a_confirmar";
+}
+function renderList(){
+  if(!store)return;
+  const node=$("list");node.replaceChildren();
+  const matches=store.list().filter(x=>x.serviceId===$("service").value);
+  if(!matches.length){
+    const p=document.createElement("p");p.className="small";p.textContent="Aún no hay tarifas para este servicio.";node.appendChild(p);
+  }
+  for(const rate of matches){
+    const p=sampleProviders.find(x=>x.id===rate.providerId),plan=p?.plans.find(x=>x.id===rate.planId);
+    const button=document.createElement("button");button.type="button";button.className="rule"+(selection?.id===rate.id?" current":"");
+    const content=document.createElement("span"), title=document.createElement("strong"),sub=document.createElement("small");
+    title.textContent=(rate.kind==="particular"?"Particular":p?.name||kinds[rate.kind])+" · "+(plan?.name||"Sin plan");
+    sub.textContent=(rate.status==="a_confirmar"?"A confirmar":money(rate.amountMinor))+" · v"+rate.version;
+    content.append(title,sub);
+    const tag=document.createElement("span");tag.className="tag"+(!rate.active?" off":"");tag.textContent=rate.active?"Activa":"Desactivada";
+    button.append(content,tag);
+    button.addEventListener("click",()=>loadRule(rate.id));
+    node.appendChild(button);
+  }
+}
+function loadRule(id){
+  const rule=store.list().find(x=>x.id===id);if(!rule)return;
+  selection=rule;$("service").value=rule.serviceId;
+  $("kind").value=rule.kind;fillProviders();
+  if(rule.providerId)$("provider").value=rule.providerId;fillPlans();
+  if(rule.planId)$("plan").value=rule.planId;
+  $("status").value=rule.status;
+  $("amount").value=rule.amountMinor===null?"0":String(rule.amountMinor/100);
+  $("valid-until").value=rule.validUntil||"";
+  updateEditable();renderList();preview();show("");
+}
+function save(){
+  try{
+    const form={...priceRule(),status:$("status").value,
+      amountMinor:$("status").value==="a_confirmar"?null:moneyToMinor($("amount").value),
+      validUntil:$("valid-until").value||null,active:selection?.active??true,
+      ...(selection?{id:selection.id,expectedVersion:selection.version}:{})};
+    const result=store.save(form);
+    selection=result;
+    renderList();preview();updateEditable();show("Tarifa actualizada en la simulación. No se guardó en CITHELA real.");
+  }catch(e){show(e.message,true);}
+}
+function archive(){
+  if(!selection)return;
+  try{
+    selection=store.archive(selection.id,selection.version);
+    renderList();preview();updateEditable();show("Tarifa desactivada en la simulación.");
+  }catch(e){show(e.message,true);}
+}
+function restore(){
+  if(!selection)return;
+  try{
+    selection=store.changeActivity(selection.id,selection.version,true);
+    renderList();preview();updateEditable();show("Tarifa reactivada en la simulación.");
+  }catch(e){show(e.message,true);}
+}
+for(const t of sampleTenants)add($("tenant"),t.tenantId,t.name);
+$("tenant").addEventListener("change",storeForTenant);
+$("role").addEventListener("change",storeForTenant);
+$("service").addEventListener("change",()=>{selection=null;renderList();preview();updateEditable();});
+$("kind").addEventListener("change",()=>{selection=null;fillProviders();renderList();updateEditable();});
+$("provider").addEventListener("change",()=>{selection=null;fillPlans();renderList();updateEditable();});
+$("plan").addEventListener("change",()=>{selection=null;preview();renderList();updateEditable();});
+$("status").addEventListener("change",updateEditable);
+$("save").addEventListener("click",save);
+$("new").addEventListener("click",reset);
+$("archive").addEventListener("click",archive);
+$("restore").addEventListener("click",restore);
+storeForTenant();
+</script>
+</body>
+</html>

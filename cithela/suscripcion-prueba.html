@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CITHELA · Diagnóstico de suscripción</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;background:#f5f8f8;color:#172c31}
+body{margin:0;padding:24px}.wrap{max-width:600px;margin:30px auto}.panel{background:#fff;border:1px solid #dce5e4;border-radius:18px;padding:24px}
+h1{font-size:1.5rem}p{line-height:1.5}.muted{color:#52666a}.status{background:#edf5f4;border-radius:10px;padding:14px;white-space:pre-wrap}
+button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}button:disabled{opacity:.45;cursor:not-allowed}
+a{color:#165c61}.warning{font-weight:600}
+#auth-access[hidden]{display:none}#auth-access{margin:14px 0;border:1px solid #d2e3df;border-radius:12px;padding:16px;background:#f7faf9}
+#auth-access label{display:block;margin:10px 0 5px;font-weight:600}#auth-access input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #b7cbc7;border-radius:8px;font:inherit;min-height:44px}
+#auth-access button{margin:12px 8px 4px 0}#auth-access p{font-size:.92rem}
+</style></head><body><main class="wrap"><section class="panel">
+<h1>CITHELA · Suscripción de prueba</h1>
+<p class="muted">Piloto interno de Alma y Pampa. Usá únicamente la cuenta compradora y una tarjeta de prueba de Mercado Pago.</p>
+<p id="identity">Comprobando sesión…</p>
+<section id="auth-access" hidden aria-label="Ingreso al piloto de CITHELA">
+ <p class="muted">No hay una sesión de CITHELA disponible en este navegador. Podés ingresar aquí con tu cuenta propietaria de Alma y Pampa.</p>
+ <form id="pilot-login" autocomplete="on">
+  <label for="owner-email">Cuenta CITHELA (piloto interno)</label>
+  <input id="owner-email" type="email" autocomplete="username" value="alma.y.pampa@gmail.com" readonly>
+  <label for="owner-password">Contraseña de CITHELA</label>
+  <input id="owner-password" type="password" autocomplete="current-password" required>
+  <button type="submit" id="login-button">Ingresar a CITHELA</button>
+ </form>
+ <button type="button" id="retry-session">Volver a comprobar sesión</button>
+ <p class="muted">La contraseña se envía únicamente a Supabase Auth mediante el acceso protegido de CITHELA; no se guarda en esta página. Si preferís ingresar desde la agenda, <a href="./">abrí CITHELA en esta misma pestaña</a> y después regresá.</p>
+</section>
+<p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
+<p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><button type="button" id="verify-paid" disabled>Verificar pago realizado en Mercado Pago (solo lectura)</button></p>
+<p><button type="button" id="record-paid" disabled>Registrar pago ficticio verificado (sin activar servicios)</button></p>
+<p><button type="button" id="get-link" disabled>Recuperar enlace de la suscripción ya vinculada</button></p>
+<p><a id="mp-link" hidden target="_blank" rel="noopener noreferrer">Abrir checkout existente en Mercado Pago (solo comprador de prueba)</a></p>
+<p><button type="button" id="inspect" disabled>Diagnosticar suscripción existente (solo lectura)</button></p>
+<p><button type="button" id="link-existing" disabled>Vincular la suscripción de prueba encontrada (sin cobrar)</button></p>
+<p><button type="button" id="reconcile" disabled>Verificar y desbloquear intento pendiente</button></p>
+<fieldset id="pilot-checkout" hidden>
+<legend>Checkout de prueba</legend>
+<p><label><input type="checkbox" id="consent"> Confirmo que usaré datos de prueba.</label></p>
+<button type="button" id="checkout" disabled>Preparar checkout de prueba</button>
+</fieldset>
+<p><a href="./">Volver a CITHELA</a></p>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const client=window.supabase?.createClient(
+ 'https://mcqknmqhtmihegmifuka.supabase.co',
+ 'sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc');
+if(client)window.CithelaAuthCaptcha?.wrap(client);
+const ALMA_TENANT='e680ebd3-a031-4968-905a-e829ab3b5dfe';
+let tenantId=null;
+let checkingSession=false;
+function showLogin(message){
+ $('identity').textContent=message||'Necesitás iniciar sesión en CITHELA en este navegador.';
+ $('auth-access').hidden=false;
+ $('result').textContent='Sin sesión de CITHELA. No se solicitó ningún cobro ni se modificó la suscripción.';
+}
+async function load(){
+ if(checkingSession)return;
+ checkingSession=true;
+ try{
+  if(!client){showLogin('No se pudo cargar la autenticación. Recargá la página.');return;}
+  const {data:{user},error}=await client.auth.getUser();
+  if(error||!user){showLogin('No hay sesión de CITHELA en este navegador.');return;}
+  $('auth-access').hidden=true;
+  $('identity').textContent='Sesión: '+(user.email||'cuenta profesional');
+ const {data,error:membershipError}=await client.from('cithela_tenant_memberships')
+  .select('tenant_id,role').eq('user_id',user.id).eq('role','owner');
+ if(membershipError||!Array.isArray(data)){ $('result').textContent='No se pudo comprobar la titularidad.';return;}
+ if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
+ if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
+ $('pilot-checkout').hidden=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;$('verify-paid').disabled=false;$('record-paid').disabled=false;
+ syncCheckoutButton();
+ $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
+ $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
+ }catch{
+  showLogin('No se pudo comprobar la sesión. Podés ingresar a CITHELA desde aquí.');
+ }finally{checkingSession=false;}
+}
+$('pilot-login').addEventListener('submit',async event=>{
+ event.preventDefault();
+ if(!client)return;
+ const password=$('owner-password').value;
+ if(!password)return;
+ $('login-button').disabled=true;
+ $('result').textContent='Comprobando credenciales de CITHELA…';
+ try{
+  if(!window.CithelaAuthCaptcha?.wrap){
+   $('result').textContent='No pudo cargarse la protección de acceso. Recargá la página o ingresá desde CITHELA.';
+   return;
+  }
+  const {error}=await client.auth.signInWithPassword({
+   email:'alma.y.pampa@gmail.com',password
+  });
+  if(error){
+   $('result').textContent=error.code==='captcha_required'?
+    'No se pudo completar la comprobación de seguridad. Verificá la conexión e intentá nuevamente.':
+    'No se pudo iniciar sesión. Verificá la contraseña y la comprobación de seguridad.';
+   return;
+  }
+  await load();
+ }catch{
+  $('result').textContent='No fue posible ingresar en CITHELA. Comprobá la conexión y volvé a intentar.';
+ }finally{
+  $('owner-password').value='';
+  $('login-button').disabled=false;
+ }
+});
+$('retry-session').addEventListener('click',async()=>{
+ $('retry-session').disabled=true;
+ try{await load();}finally{$('retry-session').disabled=false;}
+});
+$('preflight').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('preflight').disabled=true;$('result').textContent='Validando requisitos del servidor…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-test-preflight',{body:{tenantId}});
+  if(error)throw error;
+  $('result').textContent=data?.code==='eligible_no_payment_created'&&data?.checkout_enabled===false&&data?.subscription_created===false
+   ?'REQUISITOS CORRECTOS: propietario verificado, cuenta elegible.\nLa verificación no creó ningún pago.'
+   :'La validación no fue aprobada: '+(data?.code||'respuesta inesperada');
+ }catch{$('result').textContent='No se pudo validar. Revisá la sesión o intentá nuevamente.';}
+ finally{$('preflight').disabled=false;}
+});
+$('check').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('check').disabled=true;$('result').textContent='Consultando estado…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-test-preflight',
+   {body:{tenantId,action:'status'}});
+  if(error)throw error;
+  const messages={no_subscription:'Todavía no hay suscripción de prueba registrada.',
+   snapshot:'Existe una solicitud registrada.',
+   not_tenant_owner:'La cuenta no es propietaria del establecimiento.'};
+  $('result').textContent=(messages[data?.code]||'Estado no reconocido.')+
+   (data?.stage?'\nEtapa: '+data.stage:'')+
+   (data?.stage==='linked'?'\nSuscripción ya vinculada. Usá «Recuperar enlace», no generes otra.':'');
+  if(data?.stage==='linked')markAlreadyLinked();
+ }catch{$('result').textContent='No se pudo consultar el estado. Verificá la sesión e intentá nuevamente.';}
+ finally{$('check').disabled=false;}
+});
+function markAlreadyLinked(){
+ $('link-existing').hidden=true;
+ $('reconcile').hidden=true;
+ $('pilot-checkout').hidden=true;
+ $('inspect').hidden=true;
+}
+$('record-paid').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA consultará de nuevo el cobro aprobado directamente en Mercado Pago y guardará solamente el registro de prueba, sin generar otro cobro, sin modificar la suscripción y sin activar servicios. ¿Registrar el pago ficticio?'))return;
+ $('record-paid').disabled=true;
+ $('result').textContent='Verificando y registrando el pago ficticio existente, sin cobrar ni activar…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-record-test-payment',{
+   body:{tenantId,consent:true}
+  });
+  const response=error?.context instanceof Response?
+   await error.context.json().catch(()=>null):data;
+  if(response?.ok===true &&
+    ['test_payment_recorded_no_activation','already_recorded_no_activation'].includes(response.code)){
+   markAlreadyLinked();
+   $('result').textContent='PAGO FICTICIO REGISTRADO EN CITHELA.\n'+
+    'Pagos de prueba verificados: '+response.recorded_count+'\n'+
+    'Servicios activados por esta operación: ninguno.\n'+
+    'El registro es idempotente: repetir la consulta no genera otro pago.\n'+
+    'No se crearon suscripciones ni se cobraron fondos.';
+  }else{
+   $('result').textContent='No se registró el pago. Código: '+
+    (response?.code||'sin_respuesta')+
+    '\nNo repitas el checkout; la suscripción existente no se modificó.';
+  }
+ }catch{
+  $('result').textContent='No se pudo completar el registro. No se generó ningún cobro; conservá la suscripción actual.';
+ }finally{$('record-paid').disabled=false;}
+});
+$('verify-paid').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('verify-paid').disabled=true;
+ $('result').textContent='Consultando el pago ya efectuado directamente en Mercado Pago, sin crear cobros ni cambiar servicios…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-verify-payment',{body:{tenantId}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.code==='approved_test_payment_verified_read_only'&&response?.verified_payments>=1){
+   markAlreadyLinked();
+   $('result').textContent='PAGO DE PRUEBA VERIFICADO EN MERCADO PAGO.\n'+
+    'Facturas aprobadas comprobadas: '+response.verified_payments+
+    '\nImporte: ARS 1.000.'+
+    (response.provider_live_mode_true===true?
+    '\nObservación: Mercado Pago marcó live_mode=true, pero confirmó el cobro entre cuentas de prueba vinculadas. No autoriza activaciones ni conciliación comercial.':'')+
+    '\nEsta consulta no cobra ni activa servicios. La conciliación interna todavía requiere comprobar la notificación firmada.';
+  }else{
+   const labels={
+    invoice_not_found:'Mercado Pago todavía no devuelve facturas de esta suscripción.',
+    no_approved_invoice:'No se encontró una factura aprobada.',
+    payment_not_verified:'La prueba aún no cumple todos los controles del pago.',
+    invoice_search_incomplete:'No se pudo consultar todo el historial de facturas.',
+    test_seller_not_verified:'No se pudo comprobar la identidad del vendedor de prueba.',
+    subscription_identity_mismatch:'La suscripción no coincide con el comprador registrado.',
+    provider_read_only_unavailable:'No se pudo consultar Mercado Pago en este momento.'
+   };
+   const details={
+    payment_reference_mismatch:'La referencia de la factura y del pago no coincide.',
+    payment_status_not_approved:'La API no informa estado aprobado.',
+    payment_approval_date_missing:'No se informó fecha de aprobación.',
+    payment_currency_mismatch:'La moneda del pago no coincide.',
+    payment_amount_mismatch:'El importe bruto del pago no coincide.',
+    payment_seller_mismatch:'La cuenta receptora del pago no coincide.',
+    payment_mode_missing:'La API no informa el campo de entorno del pago.',
+    payment_mode_true:'La API indica un entorno productivo para este pago.',
+    payment_mode_unexpected:'El valor de entorno recibido no es válido.',
+    payment_evidence_missing:'El comprobante consultado está incompleto.'
+   };
+   const failed=Array.isArray(response?.failed_checks)?
+    response.failed_checks.filter(code=>Object.hasOwn(details,code)).slice(0,10):[];
+   $('result').textContent=(labels[response?.code]||'El pago todavía no pudo verificarse.')+
+    '\nCódigo: '+(response?.code||'sin_respuesta')+
+    (failed.length?'\nControles que fallaron:\n'+failed.map(code=>'• '+details[code]+' ('+code+')').join('\n'):'')+
+    '\nNo generes otro cobro.';
+  }
+ }catch{
+  $('result').textContent='No se pudo consultar el pago. No se generó ningún cobro y la suscripción sigue vinculada.';
+ }finally{$('verify-paid').disabled=false;}
+});
+$('get-link').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('get-link').disabled=true;$('mp-link').hidden=true;
+ $('result').textContent='Consultando el checkout ya vinculado en Mercado Pago (solo lectura)…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-get-link',{body:{tenantId}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.ok===true && response?.code==='linked_test_checkout_recovered' &&
+     typeof response.checkout_url==='string'){
+   const url=new URL(response.checkout_url);
+   if(url.protocol!=='https:'||url.username||url.password||
+      !/(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname)||
+      !url.pathname.startsWith('/subscriptions/checkout'))
+     throw new Error('invalid_url');
+   $('mp-link').href=url.href;
+   $('mp-link').hidden=false;
+   markAlreadyLinked();
+   $('result').textContent='Enlace recuperado. Corresponde a la suscripción de prueba ya vinculada (ARS 1.000). No se creó ninguna nueva. Abrilo solamente con el comprador y una tarjeta de prueba.';
+  }else{
+   $('result').textContent='No se pudo recuperar el enlace. Código: '+(response?.code||'sin_respuesta')+'. No crees otra suscripción.';
+  }
+ }catch{
+  $('result').textContent='Falló la consulta de solo lectura. La suscripción sigue vinculada. No generes otra.';
+ }finally{
+  $('get-link').disabled=false;
+ }
+});
+$('inspect').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ $('inspect').disabled=true;$('result').textContent='Consultando la suscripción existente en Mercado Pago (sin crear ni modificar nada)…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-inspect',{body:{tenantId}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.code==='provider_record_inspected'&&response.checks){
+   const c=response.checks;
+   $('result').textContent='Se encontró una suscripción en Mercado Pago. No se realizó ningún cobro ni cambio.\n'+
+    'Vendedor: '+(c.seller_matches?'coincide':'NO coincide')+'\n'+
+    'Referencia: '+(c.reference_matches?'coincide':'NO coincide')+'\n'+
+    'Importe: '+(c.amount_matches?'coincide':'NO coincide')+'\n'+
+    'Moneda: '+(c.currency_matches?'coincide':'NO coincide')+'\n'+
+    'live_mode: '+c.live_mode+'\n'+
+    'Comprador: '+c.payer_id_mode+'\n'+
+    'Estado: '+c.status+'\n'+
+    'Código: '+response.code;
+  }else{
+   $('result').textContent='Diagnóstico solo lectura: '+(response?.code||'sin_respuesta')+
+   '. No desbloquees ni crees otra suscripción.';
+  }
+ }catch{$('result').textContent='No fue posible consultar Mercado Pago. No se realizaron cambios.';}
+ finally{$('inspect').disabled=false;}
+});
+$('link-existing').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA verificará nuevamente la suscripción de prueba ya creada en Mercado Pago y, si todo coincide, la vinculará sin crear otra ni realizar pagos. ¿Continuar?'))return;
+ $('link-existing').disabled=true;
+ $('mp-link').hidden=true;
+ $('result').textContent='Verificando y vinculando la suscripción existente, sin cobrar…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-link-existing',
+    {body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response?
+    await error.context.json().catch(()=>null):data;
+  if(response?.ok===true && response?.code==='existing_test_subscription_linked_no_payment'){
+    $('result').textContent='Suscripción de prueba vinculada correctamente con CITHELA. No se generó ningún pago y no se activó ningún servicio. Código: '+response.code;
+    $('reconcile').disabled=true;$('checkout').disabled=true;
+    $('consent').disabled=true;$('inspect').disabled=true;
+    // El enlace se conserva para una prueba posterior, pero nunca se abre automáticamente.
+    if(typeof response.checkout_url==='string'){
+     const url=new URL(response.checkout_url);
+     if(url.protocol==='https:' && !url.username && !url.password &&
+       /(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname)){
+      $('mp-link').href=url.href;
+      $('mp-link').textContent='Checkout de prueba (no pagar todavía)';
+      $('mp-link').hidden=false;
+     }
+    }
+  }else{
+    $('result').textContent='No se vinculó la suscripción. No se creó ningún cobro. Código: '+
+      (response?.code||'sin_respuesta')+'. No intentes crear otra.';
+    $('link-existing').disabled=false;
+  }
+ }catch{
+  $('result').textContent='No se pudo completar la vinculación. No crees otra suscripción.';
+  $('link-existing').disabled=false;
+ }
+});
+$('reconcile').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA consultará Mercado Pago y, solo si no encuentra ninguna suscripción y pasa los controles, cerrará el intento interno bloqueado. No crea ni cobra una suscripción. ¿Continuar?'))return;
+ $('reconcile').disabled=true;$('result').textContent='Verificando el intento pendiente en Mercado Pago…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-recover',
+   {body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response?await error.context.json().catch(()=>null):data;
+  const label={
+   verified_absent_intent_abandoned:'Intento anterior cerrado y auditado. Todavía no se creó ninguna suscripción nueva.',
+   provider_subscription_found_requires_link:'Mercado Pago encontró una suscripción. No se cerró el intento; necesita vinculación.',
+   provider_lookup_incomplete:'No pudo completarse la búsqueda. El intento sigue bloqueado.',
+   recovery_disabled:'Recuperación no habilitada en el servidor.',
+   claim_too_recent:'El intento es demasiado reciente para cerrarlo.',
+   provider_event_requires_review:'Hay notificaciones de Mercado Pago pendientes de revisar.',
+   provider_evidence_required:'No se pudo verificar la ausencia de la suscripción.',
+   reconciliation_unavailable:'La conciliación no pudo completarse.'
+  };
+  $('result').textContent=(label[response?.code]||'El intento no fue desbloqueado.')+
+    '\nCódigo: '+(response?.code||'sin_respuesta');
+ }catch{$('result').textContent='No se pudo consultar la recuperación. El intento conserva su estado.';}
+ finally{$('reconcile').disabled=false;}
+});
+// Safari can restore a checked checkbox without firing "change".
+function syncCheckoutButton(){
+ $('checkout').disabled=!tenantId||!$('consent').checked;
+}
+$('consent').addEventListener('change',syncCheckoutButton);
+$('consent').addEventListener('input',syncCheckoutButton);
+window.addEventListener('pageshow',syncCheckoutButton);
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible')syncCheckoutButton();
+});
+$('checkout').addEventListener('click',async()=>{
+ if(!tenantId||!$('consent').checked)return;
+ $('checkout').disabled=true;
+ $('consent').disabled=true;
+ $('mp-link').hidden=true;
+ $('result').textContent='Preparando checkout de prueba…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-checkout',{body:{tenantId,consent:true}});
+  const response=error?.context instanceof Response ? await error.context.json().catch(()=>null) : data;
+  if(!data?.ok||!data.checkout_url){
+   const messages={
+    checkout_disabled:'El checkout interno todavía está desactivado.',
+    test_configuration_missing:'Falta configurar la cuenta compradora de prueba en Supabase.',
+    test_accounts_unverified:'Mercado Pago no confirmó las cuentas configuradas para esta prueba.',
+    provider_outcome_pending:'Resultado pendiente de Mercado Pago. No generes otro cobro: hay que recuperar la operación anterior.',
+    provider_lookup_incomplete:'La búsqueda en Mercado Pago fue incompleta. No se puede repetir el cobro con seguridad.',
+    unresolved_provider_outcome:'No se encontró una suscripción coincidente. La operación sigue bloqueada para evitar duplicados.',
+    ambiguous_provider_matches:'Se encontraron varias suscripciones posibles. Requiere conciliación manual.',
+    provider_identity_mismatch:'Los datos de Mercado Pago no coinciden con la solicitud de CITHELA.',
+    test_accounts_unverified:'Las cuentas de prueba de comprador o vendedor no pudieron verificarse.',
+    claim_unavailable:'Ya existe un intento reservado. Consultá el estado antes de reintentar.',
+    subscription_already_linked:'Ya existe una suscripción de prueba vinculada.',
+    subscription_linked:'La suscripción ya está vinculada. Consultá su estado.'
+   };
+   $('result').textContent=(messages[response?.code]||'No se completó el checkout de prueba.')+'\nCódigo de diagnóstico: '+(response?.code||'respuesta_no_disponible');
+   return;
+  }
+  const url=new URL(data.checkout_url);
+  if(url.protocol!=='https:'||url.username||url.password||!/(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname))throw new Error('invalid_checkout_url');
+  $('mp-link').href=url.href;
+  $('mp-link').hidden=false;
+  $('result').textContent='Checkout preparado. Abrí Mercado Pago para continuar con los datos de prueba.';
+ }catch{$('result').textContent='No se pudo preparar el checkout. Consultá el estado e intentá nuevamente.';}
+ finally{$('consent').disabled=false;$('checkout').disabled=!$('consent').checked;}
+});
+load();
+</script></body></html>

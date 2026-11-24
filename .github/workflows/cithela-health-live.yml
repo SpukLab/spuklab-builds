@@ -1,0 +1,39 @@
+name: CITHELA health booking live integration
+on:
+  pull_request:
+    paths:
+      - 'cithela/supabase/cithela_health_rates_live_20261117.sql'
+      - 'cithela/supabase/cithela_health_consent_20261117.sql'
+      - 'cithela/configurar-coberturas.html'
+      - 'cithela/reservar.html'
+      - 'cithela/index.html'
+      - 'cithela/health-booking/live-health-integration.test.mjs'
+      - 'cithela/health-booking/live-health-browser-smoke.cjs'
+      - '.github/workflows/cithela-health-live.yml'
+  push:
+    paths:
+      - 'cithela/supabase/cithela_health_rates_live_20261117.sql'
+      - 'cithela/supabase/cithela_health_consent_20261117.sql'
+      - 'cithela/configurar-coberturas.html'
+      - 'cithela/reservar.html'
+      - 'cithela/index.html'
+      - 'cithela/health-booking/live-health-integration.test.mjs'
+      - 'cithela/health-booking/live-health-browser-smoke.cjs'
+      - '.github/workflows/cithela-health-live.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check cithela/health-booking/live-health-integration.test.mjs
+      - run: node --test cithela/health-booking/live-health-integration.test.mjs
+      - name: Install test browser
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - run: node cithela/health-booking/live-health-browser-smoke.cjs

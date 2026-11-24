@@ -1,0 +1,49 @@
+name: CITHELA MP existing payment verification
+on:
+  pull_request:
+    paths:
+      - 'payments/mercadopago-pilot-payment-audit.mjs'
+      - 'payments/mercadopago-pilot-payment-audit.test.mjs'
+      - 'payments/mercadopago-provider-diagnostics.mjs'
+      - 'payments/mercadopago-provider-diagnostics.test.mjs'
+      - 'payments/mercadopago-payment-proof.mjs'
+      - 'payments/mercadopago-payment-proof.test.mjs'
+      - 'payments/mercadopago-webhook-handler.mjs'
+      - 'payments/mercadopago-webhook-diagnostics.test.mjs'
+      - 'edge/cithela-mp-pilot-verify-payment/index.ts'
+      - 'edge/cithela-mp-pilot-record-test-payment/index.ts'
+      - 'db/migrations/20261123_cithela_mp_test_account_provider_audit.sql'
+      - 'cithela/suscripcion-prueba.html'
+      - '.github/workflows/cithela-mp-readonly-payment.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'payments/mercadopago-pilot-payment-audit.mjs'
+      - 'payments/mercadopago-pilot-payment-audit.test.mjs'
+      - 'payments/mercadopago-provider-diagnostics.mjs'
+      - 'payments/mercadopago-provider-diagnostics.test.mjs'
+      - 'payments/mercadopago-payment-proof.mjs'
+      - 'payments/mercadopago-payment-proof.test.mjs'
+      - 'payments/mercadopago-webhook-handler.mjs'
+      - 'payments/mercadopago-webhook-diagnostics.test.mjs'
+      - 'edge/cithela-mp-pilot-verify-payment/index.ts'
+      - 'edge/cithela-mp-pilot-record-test-payment/index.ts'
+      - 'db/migrations/20261123_cithela_mp_test_account_provider_audit.sql'
+      - 'cithela/suscripcion-prueba.html'
+      - '.github/workflows/cithela-mp-readonly-payment.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test payments/mercadopago-payment-proof.test.mjs payments/mercadopago-pilot-payment-audit.test.mjs payments/mercadopago-webhook-diagnostics.test.mjs payments/mercadopago-provider-diagnostics.test.mjs
+      - uses: denoland/setup-deno@v2
+      - run: deno check edge/cithela-mp-pilot-verify-payment/index.ts
+      - run: deno check edge/cithela-mp-pilot-record-test-payment/index.ts
+      - run: deno check edge/cithela-mercadopago-webhook/index.ts

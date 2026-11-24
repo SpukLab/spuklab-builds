@@ -9,7 +9,7 @@
  const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
  const wrapped=new WeakSet();let cached=null,cacheAt=0,loading=null,pending=null;
  async function config(force=false){
-  if(!force&&cached&&Date.now()-cacheAt<60000)return cached;
+  if(!force&&cached&&cached.sitekey&&Date.now()-cacheAt<60000)return cached;
   try{
    const res=await root.fetch(ENDPOINT,{method:'POST',headers:{apikey:KEY,'content-type':'application/json'},body:JSON.stringify({action:'auth_config',payload:{}}),signal:AbortSignal.timeout(6000)});
    const data=await res.json();
@@ -21,6 +21,8 @@
   }catch{
    // Keep current sessions working. Auth remains authoritative; a missing
    // token is handled below and never confused with invalid credentials.
+   // Never cache a negative/unknown sitekey for a full minute: Supabase Auth
+   // can already require CAPTCHA while this separate Edge config is settling.
    return cached||{required:false,sitekey:null};
   }
  }
@@ -31,7 +33,7 @@
  }
  function captchaError(message){
   return {data:null,error:{name:'CithelaCaptchaError',code:'captcha_required',
-   message:message||'La verificación de seguridad no está disponible. Contactá al administrador de CITHELA; no es un problema de tu contraseña.'}};
+   message:message||'No pudimos obtener la verificación de seguridad. Volvé a intentar ingresar. Si persiste, contactá al administrador; no es un problema de tu contraseña.'}};
  }
  function load(){
   if(root.turnstile)return Promise.resolve();
@@ -77,7 +79,8 @@
    if(typeof client.auth[method]!=='function')continue;
    const original=client.auth[method].bind(client.auth);
    client.auth[method]=async(...args)=>{
-    const cfg=await getConfig();
+    let cfg;
+    try{cfg=await getConfig();}catch{return captchaError('No pudimos comprobar la seguridad. Intentá nuevamente.');}
     const runWithCaptcha=async sitekey=>{
      if(!sitekey)return captchaError();
      try{
@@ -88,12 +91,22 @@
       return original({...first,options:{...first.options,captchaToken:value}},...args.slice(1));
      }catch(e){return captchaError(e.message||'Repetí la comprobación de seguridad.')}
     };
-    if(cfg.required)return runWithCaptcha(cfg.sitekey);
+    if(cfg.required){
+      // A missing public sitekey means that the Edge config and Supabase Auth
+      // are out of sync. One fresh preflight is safe; sending an empty token isn't.
+      const ready=cfg.sitekey?cfg:await getConfig(true).catch(()=>cfg);
+      return runWithCaptcha(ready.sitekey);
+    }
     const result=await original(...args);
     if(!missingCaptcha(result?.error))return result;
     // The application and Auth settings can differ. Retry exactly once with a
     // fresh token; never retry invalid credentials or other Auth failures.
-    const fresh=await getConfig(true);
+    let fresh=await getConfig(true).catch(()=>({sitekey:null}));
+    if(!fresh.sitekey){
+      // Retry only the public configuration read, never the password/OTP
+      // request. Avoid repeated 400 errors (no captcha_token found).
+      fresh=await getConfig(true).catch(()=>({sitekey:null}));
+    }
     return runWithCaptcha(fresh.sitekey);
    };
   }

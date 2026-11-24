@@ -41,3 +41,12 @@ test("PDF and WhatsApp are prepared only from saved snapshots",()=>{
   assert.match(html,/id="print-quote"/);
   assert.match(html,/id="prepare-share"/);
 });
+
+test("SQL has one complete migration and checks current commercial package",()=>{
+  assert.equal((sql.match(/create or replace function public\.cithela_quote_command\(/g)||[]).length,1);
+  assert.match(sql,/to authenticated;\s*$/);
+  assert.match(sql,/c\.code='presupuestos' and c\.available=true/);
+  assert.match(sql,/g\.tenant_id=p_tenant_id and g\.state in \('pilot','active'\)/);
+  assert.match(sql,/g\.expires_at>statement_timestamp\(\)/);
+  assert.match(sql,/commercial_entitlement_snapshot\(p_tenant_id\)/);
+});

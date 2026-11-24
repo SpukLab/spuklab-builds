@@ -1,6 +1,6 @@
 # CITHELA · Presupuestos — activación controlada y salida a piloto
 
-**Estado: pendiente de lanzamiento.** Documento operativo para el equipo técnico, no un procedimiento que deba ejecutar el profesional. No activar para clientes mientras falte un control.
+**Estado: pendiente de lanzamiento.** Documento operativo para el equipo técnico, no un procedimiento que deba ejecutar el profesional. No activar para clientes mientras falte un control. Actualización 24/11: el RPC requiere también catálogo de paquetes disponible, grant individual `pilot`/`active` vigente y acceso comercial efectivo `can_book`. La habilitación técnica sola ya no alcanza.
 
 ## 1. Preparación
 
@@ -54,7 +54,7 @@ En GitHub Actions, `cithela/presupuestos/browser-smoke.cjs` ya automatiza Chromi
 
 ## 5. Activar exclusivamente el establecimiento piloto
 
-Sólo después de aprobar los pasos anteriores, ejecutar la activación como operación administrativa autorizada en Supabase. Identificar el **UUID exacto** del establecimiento que se validó; no usar nombre comercial como selector.
+Sólo después de aprobar los pasos anteriores, habilitar el catálogo y grant individual mediante el circuito administrativo existente (sin cobros), y ejecutar la activación como operación administrativa autorizada en Supabase. Identificar el **UUID exacto** del establecimiento que se validó; no usar nombre comercial como selector.
 
 ```sql
 -- Ejemplo orientativo. NO ejecutar sin sustituir el UUID y validar todo el checklist.
@@ -89,3 +89,9 @@ Esto revoca el acceso por RPC al módulo para ese establecimiento. No elimina re
 Exigir: backup probado, prueba JWT multi-tenant, Safari real, privacidad/retención definidas, soporte y procedimiento de desactivación, revisión de costo y precio. Separar la tarifa del módulo de Presupuestos del servicio base; **todavía no hay un precio comercial aprobado**.
 
 No automatizar envíos de WhatsApp, cobros, facturas ni acciones clínicas en este MVP.
+
+## Revisión 24/11/2026
+- Actualización sobre main preservando las mejoras de agenda, fichas, idioma y coberturas.
+- Se elimina el fragmento SQL duplicado fuera de la función. Validación PostgreSQL real todavía pendiente para esta revisión.
+- Pruebas adicionales: sin grant, grant vencido, cuenta vencida, catálogo indisponible y habilitación técnica apagada deben devolver `feature_disabled`; no se modifica el acceso comercial.
+- Moneda ARS únicamente por ahora; USD y traducción completa quedan pendientes. No activar módulos ni aplicar migraciones desde esta PR.

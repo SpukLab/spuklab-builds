@@ -21,10 +21,10 @@
   });
   $('code-form').addEventListener('submit',async event=>{
    event.preventDefault();if(busy)return;busy=true;$('verify').disabled=true;message('Comprobando código…');
-   try{await access.verify($('code').value);$('code-form').hidden=true;$('phone-form').hidden=true;message(mode==='link'?'WhatsApp vinculado a tu cuenta. Conservaste la misma agenda.':'Acceso verificado. Podés abrir tu agenda.');$('agenda').textContent='Abrir mi agenda profesional'}
-   catch(e){message(e.message||'No se pudo verificar el código.')}
+   try{await access.verify($('code').value);$('code-form').hidden=true;$('phone-form').hidden=true;message(mode==='link'?'WhatsApp vinculado a tu cuenta. Conservaste la misma agenda.':'Acceso verificado. Abriendo tu agenda…');$('agenda').textContent='Abrir mi agenda profesional';window.location.assign('./?returnTo=professional')}
+   catch(e){message((e.message==='Esta cuenta no tiene acceso profesional.'?'El código fue recibido, pero el usuario asociado a este número no tiene una agenda profesional asignada. Ingresá con correo y contraseña; no vincules otro número ni crees otra cuenta.':e.message)||'No se pudo verificar el código.')}
    finally{busy=false;$('verify').disabled=false;$('code').value=''}
   });
   $('reset').addEventListener('click',()=>{if(busy)return;access.reset();$('code').value='';$('code-form').hidden=true;$('phone-form').hidden=false;message('Si acabás de pedir un código, esperá un minuto antes de reenviar.')});
- }catch{message('No se pudo habilitar este acceso. Volvé a tu agenda e ingresá con tu cuenta profesional.');$('session-note').textContent='Acceso no disponible.'}
+ }catch(e){message(e?.message==='Esta cuenta no tiene acceso profesional.'?'La sesión actual no está asociada a una agenda profesional. Volvé al ingreso por correo y contraseña.':'No se pudo habilitar este acceso. Volvé a tu agenda e ingresá con tu cuenta profesional.');$('session-note').textContent='Acceso no disponible.'}
 })();

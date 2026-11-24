@@ -38,6 +38,14 @@ test('configuration prioritizes daily use; nested details remain balanced',()=>{
  const cfg=slice('id="p-medico-config"','<div class="byline">');
  const order=[...cfg.matchAll(/id="cfg-section-([^"]+)"/g)].map(m=>m[1]);
  assert.deepEqual(order,['hours','availability','services','resources','reminders','business','branding','payments','cloud','infrastructure','security']);
+ const nav=slice('<div id="screen-medico"','<div id="p-medico-agenda"');
+ assert.ok(nav.includes('id="professional-public-booking-shortcut"'),'share shortcut moves to professional header');
+ assert.ok(nav.indexOf('id="professional-public-booking-shortcut"')<nav.indexOf('id="professional-tabs"'));
+ assert.equal(cfg.includes('id="professional-public-booking-shortcut"'),false,'do not repeat the share shortcut in settings');
+ assert.ok(nav.includes('id="professional-booking-language"'),'language is visible in professional header');
+ assert.equal(cfg.includes('id="professional-booking-language"'),false,'language must not be buried in settings');
+ assert.ok(cfg.indexOf('id="cfg-section-infrastructure"')>cfg.indexOf('id="cfg-section-cloud"'),'advanced diagnostics stays inside account section');
+ assert.match(cfg,/id="cfg-section-resources" hidden/);
  let depth=0;
  for(const token of (cfg.match(/<\/?details\b[^>]*>/g)||[])){
    depth+=token.startsWith('</')?-1:1;
@@ -180,7 +188,7 @@ test('professional cloud status avoids developer-only SDK and AUTH labels',()=>{
 });
 
 
-test('second-tenant onboarding is hidden behind an explicit pilot mode and distinct Auth membership',()=>{
+test('professional onboarding remains accessible after invitation redirects, without URL flags',()=>{
   assert.match(html,/const CITHELA_SECOND_TENANT_PILOT=new URLSearchParams\(location.search\)\.get\('pilotTenant'\)==='1'/);
   const login=slice('id="professional-login-fields"','id="professional-password-recovery"');
   assert.match(login,/id="professional-workspace-setup" hidden/);
@@ -200,7 +208,8 @@ test('second-tenant onboarding is hidden behind an explicit pilot mode and disti
       enabled,{state:()=>state},id=>el[id]);
     return {result:fn(),el};
   }
-  assert.equal(attempt(false,{signedIn:true,email:'a@example.test',tenant:null,membership:null}).result,false);
+  // The private bootstrap grant, not a browser query parameter, decides authorization.
+  assert.equal(attempt(false,{signedIn:true,email:'a@example.test',tenant:null,membership:null}).result,true);
   assert.equal(attempt(true,{signedIn:false,email:'a@example.test',tenant:null,membership:null}).result,false);
   assert.equal(attempt(true,{signedIn:true,email:'a@example.test',tenant:{id:'tenantA'},membership:{role:'owner'}}).result,false);
   const eligible=attempt(true,{signedIn:true,email:'b@example.test',tenant:null,membership:null});
@@ -383,4 +392,16 @@ test('phone invite allows copying personal URL on iPad without WhatsApp installe
  assert.match(code,/Copiar enlace para enviarlo desde otro dispositivo/);
  assert.match(code,/navigator\.clipboard\?\.writeText/);
  assert.match(code,/document\.execCommand\('copy'\)/);
+});
+
+test('agenda keeps upcoming turn list prominent; secondary operations and calendar are collapsible',()=>{
+ const agenda=slice('id="p-medico-agenda"','id="p-medico-pacientes"');
+ assert.ok(agenda.indexOf('id="agenda-overview"')<agenda.indexOf('id="agenda-ops-details"'));
+ assert.ok(agenda.indexOf('id="agenda-ops-details"')<agenda.indexOf('id="agenda-weekly-details"'));
+ assert.match(agenda,/<details class="cithela-agenda-fold" id="agenda-ops-details">/);
+ assert.match(agenda,/<details class="cithela-agenda-fold" id="agenda-weekly-details" open>/);
+ assert.match(agenda,/id="agenda-list"/);
+ assert.doesNotMatch(agenda,/id="professional-public-booking-shortcut"/);
+ assert.match(html,/const calendar=\$\('agenda-weekly-details'\);if\(calendar\)calendar\.open=true/);
+ assert.match(html,/const shareAllowed=active&&\['owner','admin','operator'\]/);
 });
