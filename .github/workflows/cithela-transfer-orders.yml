@@ -1,0 +1,27 @@
+name: CITHELA bank transfer orders — fail closed
+on:
+  pull_request:
+    paths:
+      - 'cithela/payments/transfer-order-handler.mjs'
+      - 'cithela/edge/cithela-transfer-orders/**'
+      - 'cithela/supabase/cithela_transfer_orders_staged_20261110.sql'
+      - 'cithela/transfer-order.test.mjs'
+      - '.github/workflows/cithela-transfer-orders.yml'
+  push:
+    paths:
+      - 'cithela/payments/transfer-order-handler.mjs'
+      - 'cithela/edge/cithela-transfer-orders/**'
+      - 'cithela/supabase/cithela_transfer_orders_staged_20261110.sql'
+      - 'cithela/transfer-order.test.mjs'
+      - '.github/workflows/cithela-transfer-orders.yml'
+permissions:
+  contents: read
+jobs:
+  transfer-order-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test cithela/transfer-order.test.mjs
