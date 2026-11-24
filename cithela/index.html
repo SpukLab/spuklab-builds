@@ -5648,6 +5648,14 @@ async function cloudSavePersonProfile(personId,expectedUpdatedAt){
   }finally{cloudPersonSaveBusy=false;if(button)button.disabled=false;}
 }
 
+function cloudGroupPersonAppointments(appointments,nowMs=Date.now()){
+  const items=Array.isArray(appointments)?appointments:[];
+  const upcoming=items.filter(t=>['pending','confirmed'].includes(t.status)&&Number.isFinite(Date.parse(t.starts_at))&&Date.parse(t.starts_at)>=nowMs)
+    .sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
+  const ids=new Set(upcoming.map(t=>t.id));
+  const history=items.filter(t=>!ids.has(t.id)).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at));
+  return {upcoming,history,shown:items.length,limitReached:items.length===50};
+}
 async function cloudVerFicha(id){
   if(!professionalCloudReady())return;
   const req=++cloudFichaRequest;
@@ -5658,6 +5666,7 @@ async function cloudVerFicha(id){
     const result=await CithelaCloud.personHistory(id);
     if(req!==cloudFichaRequest||!professionalCloudReady())return;
     const p=result.person,appointments=result.appointments;
+    const grouped=cloudGroupPersonAppointments(appointments);
     const name=escHtml(p.display_name||'—');
     const phone=escHtml(p.phone_e164||'Sin WhatsApp');
     const initials=escHtml(ini(p.display_name||'—'));
@@ -5686,7 +5695,7 @@ async function cloudVerFicha(id){
           onclick="cloudSavePersonProfile('${p.id}','${p.updated_at}')">Guardar cambios</button>
       </div>
     </details>`:'';
-    const rows=appointments.map(t=>{
+    const renderRows=entries=>entries.map(t=>{
       const local=cloudLocalParts(t.starts_at,result.timezone);
       const label=statusMeta(cloudAppointmentStatus(t.status));
       return `<div style="padding:11px 0;border-bottom:var(--line);font-size:.79rem;">
@@ -5694,10 +5703,14 @@ async function cloudVerFicha(id){
           <span style="color:var(--ink2);">${local.fecha} · ${local.hora}</span>
           <span class="tag ${label.cls}">${escHtml(label.label)}</span>
         </div>
-        <div style="color:var(--ink2);margin-top:5px;">${escHtml(t.service_name||'Consulta')} · ${Number(t.duration_min)||30} min · ${escHtml(t.resource_name||'—')}</div>
-        ${t.reason?`<div style="color:var(--ink3);margin-top:4px;white-space:pre-wrap;">${escHtml(t.reason)}</div>`:''}
+        <div style="color:var(--ink2);margin-top:5px;"><span data-no-translate>${escHtml(t.service_name||'Consulta')}</span> · ${Number(t.duration_min)||30} min · <span data-no-translate>${escHtml(t.resource_name||'—')}</span></div>
+        ${t.reason?`<div data-no-translate style="color:var(--ink3);margin-top:4px;white-space:pre-wrap;">${escHtml(t.reason)}</div>`:''}
       </div>`;
     }).join('');
+    const upcomingRows=renderRows(grouped.upcoming);
+    const historyRows=renderRows(grouped.history);
+    const next=grouped.upcoming[0];
+    const nextDate=next?cloudLocalParts(next.starts_at,result.timezone):null;
     body.innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:16px;">
         <div data-no-translate class="ava" style="width:46px;height:46px;border-radius:12px;">${initials}</div>
@@ -5709,7 +5722,24 @@ async function cloudVerFicha(id){
       </div>
       <button class="mb teal" type="button" style="margin-bottom:12px;" onclick="closeM('m-ficha');ntStartForPerson('${p.id}')">+ Crear turno</button>
       ${wa?`<button class="mb wa" style="margin-bottom:12px;" onclick="openPatientWhatsApp('${p.id}')">Enviar mensaje libre</button>`:''}
-      <hr class="divider">
+      <div role="group" aria-label="Resumen de turnos" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 16px;">
+        <div style="padding:10px 6px;border:1px solid var(--line);border-radius:10px;text-align:center;"><strong style="display:block;font-size:1.18rem;">${grouped.upcoming.length}</strong><span style="font-size:.7rem;color:var(--ink3);">Próximos</span></div>
+        <div style="padding:10px 6px;border:1px solid var(--line);border-radius:10px;text-align:center;"><strong style="display:block;font-size:1.18rem;">${grouped.history.length}${grouped.limitReached?"+":""}</strong><span style="font-size:.7rem;color:var(--ink3);">En historial</span></div>
+        <div style="padding:10px 6px;border:1px solid var(--line);border-radius:10px;text-align:center;"><strong style="display:block;font-size:1.18rem;">${grouped.shown}${grouped.limitReached?"+":""}</strong><span style="font-size:.7rem;color:var(--ink3);">Consultados</span></div>
+      </div>
+      <p class="contact-note" style="margin:0 0 13px;">Próximo turno: ${nextDate?escHtml(nextDate.fecha)+" · "+escHtml(nextDate.hora)+" · "+'<span data-no-translate>'+escHtml(next.service_name||"Consulta")+'</span>':"Sin turnos próximos"}</p>
+      <details class="profile-edit" open style="border-top:var(--line);padding:13px 0;">
+        <summary style="cursor:pointer;font-weight:600;">Próximos turnos (${grouped.upcoming.length})</summary>
+        ${grouped.upcoming.length?upcomingRows:'<p class="contact-note">No hay turnos próximos pendientes o confirmados.</p>'}
+      </details>
+      <details class="profile-edit" style="border-top:var(--line);padding:13px 0;">
+        <summary style="cursor:pointer;font-weight:600;">Historial de turnos (${grouped.history.length}${grouped.limitReached?"+":""})</summary>
+        ${grouped.history.length?historyRows:'<p class="contact-note">No hay turnos anteriores o cancelados.</p>'}
+        ${grouped.limitReached?'<p class="contact-note">Se muestran como máximo los últimos 50 turnos consultados.</p>':""}
+      </details>
+      <details class="profile-edit" style="border-top:var(--line);padding:13px 0;">
+        <summary style="cursor:pointer;font-weight:600;">Información y notas</summary>
+        <div style="padding-top:14px;">
       <p class="sh" style="margin:0 0 7px;">Información compartida por la persona</p>
       <p style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84rem;margin-bottom:15px;">${shared}</p>
       <p class="sh" style="margin:0 0 7px;">Consideraciones del servicio · uso interno</p>
@@ -5717,8 +5747,9 @@ async function cloudVerFicha(id){
       <p class="sh" style="margin:0 0 7px;">Notas internas del profesional</p>
       <p style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84rem;margin-bottom:16px;">${notes}</p>
       ${editForm}
-      <hr class="divider">
-      ${professionalCloudWritable()?`<div style="margin:14px 0 18px;">
+        </div>
+      </details>
+      ${professionalCloudWritable()?`<details class="profile-edit" style="border-top:var(--line);padding:13px 0;"><summary style="cursor:pointer;font-weight:600;">Acceso de la persona · piloto</summary><div style="margin:14px 0 18px;">
         <p class="sh" style="margin:0 0 8px;">Acceso del paciente · piloto</p>
         <p class="contact-note" style="margin-bottom:12px;">
           Enviá una invitación personal por WhatsApp para que la persona verifique su número,
@@ -5739,9 +5770,7 @@ async function cloudVerFicha(id){
             <div id="cloud-invite-result" style="margin-top:10px;"></div>
           </div>
         </details>
-      </div><hr class="divider">`:''}
-      <p class="sh">Últimos turnos (${appointments.length}${appointments.length===50?'+':''})</p>
-      ${appointments.length?rows:'<p class="contact-note">Todavía no hay turnos registrados.</p>'}
+      </div></details>`:''}
       <p class="contact-note" style="margin-top:14px;">Los archivos adjuntos cloud todavía no están habilitados.</p>
       <button class="btn-main soft" style="margin-top:12px;" onclick="closeM('m-ficha')">Cerrar</button>`;
   }catch(err){
