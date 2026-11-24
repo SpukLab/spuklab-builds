@@ -5,7 +5,6 @@
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
 import {handleMercadoPagoWebhook} from "../../payments/mercadopago-webhook-handler.mjs";
 
-import {reconcilePilotPayment} from "../../payments/mercadopago-pilot-reconciliation.mjs";
 
 function secretKey(): string | null {
   // Follow the same secret-key preference as existing CITHELA WhatsApp functions.
@@ -70,34 +69,14 @@ Deno.serve(async (request: Request) => {
         p_occurred_at:event.occurredAt
       });
       if(error)throw new Error("storage_unavailable");
-      if (!data?.ok || !["recorded","duplicate"].includes(data.code) ||
-          event.topic !== "subscription_authorized_payment" || event.liveMode !== false) return data;
-
-      const token = (Deno.env.get("CITHELA_MP_TEST_ACCESS_TOKEN") || "").trim();
-      if (!/^APP_USR-[A-Za-z0-9-]{16,}$/.test(token)) throw new Error("test_credential_unavailable");
-      async function rpc(name: string, params: Record<string, unknown>) {
-        const {data, error} = await c.rpc(name, params);
-        if (error) throw new Error("reconciliation_unavailable");
-        return data;
-      }
-      const result = await reconcilePilotPayment({
-        invoiceId: event.resourceId,
-        async getProvider(path: string) {
-          const response = await fetch("https://api.mercadopago.com" + path, {
-            headers: {Authorization: "Bearer " + token, Accept: "application/json"},
-            signal: AbortSignal.timeout(3000),
-            redirect: "error"
-          });
-          if (!response.ok) throw new Error("provider_unavailable");
-          return response.json();
-        },
-        getIntent: (subscriptionId: string) => rpc("cithela_mp_pilot_reconciliation_intent",
-          {p_subscription_id: subscriptionId}),
-        record: (proof: Record<string, unknown>) => rpc("cithela_mp_reconcile_pilot_payment", proof)
-      });
-      if (!result?.ok) {
-        console.info("cithela_mp_pilot_reconciliation_pending", result?.code || "unknown");
-        throw new Error("reconciliation_pending");
+      // This endpoint is dedicated to the internal test seller.
+      // A signed notification proves delivery, never approval or entitlement.
+      // Payment recording takes place through a separate provider-verified
+      // owner-consented workflow; no legacy activation RPC is invoked.
+      if(data?.ok && ["recorded","duplicate"].includes(data.code)){
+        console.info("cithela_mp_signed_event_received",JSON.stringify({
+          verified_signature:true,stored:true,auto_activation:false
+        }));
       }
       return data;
     }
