@@ -11,11 +11,13 @@ const subscription={id:subscriptionId,collector_id:3813812326,payer_id:buyerId,
 const invoice={id:123,preapproval_id:subscriptionId,payment:{id:456}};
 const payment={id:456,status:'approved',date_approved:'2026-11-23T03:27:00Z',
  currency_id:'ARS',transaction_amount:1000,collector_id:3813812326,live_mode:false};
-function fixture({sellerOver={},subscriptionOver={},paymentOver={},invoiceOver={},searchOver={}}={}){
+const buyer={id:3813812328,site_id:'MLA',email:'test_user_buyer@testuser.com'};
+function fixture({sellerOver={},subscriptionOver={},paymentOver={},invoiceOver={},searchOver={},buyerOver={}}={}){
  const calls=[];
  const getProvider=async path=>{
   calls.push(path);
   if(path==='/users/me')return {...seller,...sellerOver};
+  if(path==='/users/'+buyerId)return {...buyer,...buyerOver};
   if(path==='/preapproval/'+subscriptionId)return {...subscription,...subscriptionOver};
   if(path.startsWith('/authorized_payments/search?'))
    return {paging:{total:1},results:[{...invoice,...invoiceOver}],...searchOver};
@@ -29,7 +31,7 @@ test('verifies approved original test payment using only provider GET calls',asy
  const t=fixture();
  const r=await audit({intent,getProvider:t.getProvider,buyerId});
  assert.deepEqual(r,{ok:true,code:'approved_test_payment_verified_read_only',
-  verified_payments:1,entitlement_activation_allowed:false});
+  verified_payments:1,provider_live_mode_true:false,entitlement_activation_allowed:false});
  assert.deepEqual(t.calls,[
   '/users/me','/preapproval/'+subscriptionId,
   '/authorized_payments/search?preapproval_id=sub_1234',
@@ -137,4 +139,46 @@ test('approved matched payment never leaks failed_checks or weakens enforcement'
  assert.equal(result.ok,true);
  assert.equal(result.checks,undefined);
  assert.equal(result.entitlement_activation_allowed,false);
+});
+
+test('real MP response live_mode=true is audited only with independent test buyer verification',async()=>{
+ const t=fixture({paymentOver:{live_mode:true,payer:{id:3813812328}}});
+ const r=await audit({intent,getProvider:t.getProvider,buyerId,
+   buyerEmail:'test_user_buyer@testuser.com'});
+ assert.deepEqual(r,{
+  ok:true,code:'approved_test_payment_verified_read_only',
+  verified_payments:1,provider_live_mode_true:true,
+  entitlement_activation_allowed:false
+ });
+ assert.ok(t.calls.includes('/users/'+buyerId));
+ assert.equal(t.calls.filter(x=>x.startsWith('/authorized_payments/')).length,2);
+ assert.equal(t.calls.every(x=>x.startsWith('/')),true);
+});
+test('provider live_mode=true never bypasses test account, buyer or payment controls',async()=>{
+ const situations=[
+  {sellerOver:{tags:[]}},
+  {sellerOver:{id:3813812327}},
+  {buyerOver:{id:999999}},
+  {buyerOver:{site_id:'MLB'}},
+  {buyerOver:{email:'wrong@testuser.com'}},
+  {buyerOver:{tags:[]}},
+  {paymentOver:{live_mode:true,status:'pending'}},
+  {paymentOver:{live_mode:true,transaction_amount:1001}},
+  {paymentOver:{live_mode:true,collector_id:12345}},
+  {paymentOver:{live_mode:true,payer:{id:999999}}},
+  {subscriptionOver:{payer_id:'different'}},
+  {subscriptionOver:{live_mode:true}}
+ ];
+ for(const scenario of situations){
+  const t=fixture({paymentOver:{live_mode:true},...scenario});
+  const r=await audit({intent,getProvider:t.getProvider,buyerId,
+    buyerEmail:'test_user_buyer@testuser.com'});
+  assert.equal(r.ok,false,JSON.stringify(scenario));
+  assert.notEqual(r.entitlement_activation_allowed,true);
+ }
+});
+test('missing bound test-buyer email cannot authorize a live_mode=true payment',async()=>{
+ const t=fixture({paymentOver:{live_mode:true}});
+ const r=await audit({intent,getProvider:t.getProvider,buyerId});
+ assert.equal(r.ok,false);
 });
