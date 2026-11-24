@@ -57,3 +57,36 @@ export function diagnosePaymentProofMismatch({intent,authorizedPayment,payment}=
  }
  return reasons;
 }
+
+/**
+ * Evidence-only exception for a historical payment between known test users
+ * that Mercado Pago reports with live_mode:true. This is NEVER used by
+ * reconcilePilotPayment, webhook processing, a commercial subscription, or
+ * entitlement activation. No provider value is silently rewritten.
+ */
+export function verifyInternalTestAccountPayment({
+ intent,subscription,authorizedPayment,payment,buyerId,
+ verifiedTestSeller=false,verifiedTestBuyer=false
+}={}){
+ const base=verifySubscriptionPayment({
+  intent,subscription,authorizedPayment,payment,verifiedTestSeller
+ });
+ if(base.ok||base.code!=='payment_not_verified'||payment?.live_mode!==true||
+    verifiedTestSeller!==true||verifiedTestBuyer!==true||
+    intent?.stage!=='linked'||intent?.live_mode!==false||
+    String(subscription?.payer_id)!==String(buyerId)||
+    !/^[0-9]{1,30}$/.test(String(buyerId||'')))
+  return base;
+ // Require a verified and bound buyer even if the payment API omits payer ID.
+ // When MP includes payer ID, it must also match.
+ const paymentPayer=payment?.payer?.id??payment?.payer_id;
+ if(paymentPayer!=null&&String(paymentPayer)!==String(buyerId))
+  return {ok:false,code:'test_buyer_payment_mismatch',entitlement_activation_allowed:false};
+ const failures=diagnosePaymentProofMismatch({intent,authorizedPayment,payment});
+ if(failures.length!==1||failures[0]!=='payment_mode_true')
+  return base;
+ // All other strict checks already passed to reach payment_not_verified,
+ // and the only remaining mismatch was live_mode. Do not credit the DB.
+ return {ok:true,code:'test_account_payment_audited_provider_live_mode_true',
+   entitlement_activation_allowed:false,provider_live_mode_true:true};
+}
