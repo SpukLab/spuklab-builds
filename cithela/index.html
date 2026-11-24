@@ -4980,8 +4980,8 @@ function cloudOpenDeposit(id){
   const t=cloudAppointmentViews().find(x=>String(x.id)===String(id));
   const p=t?cloudPersonById(t.pacienteId):null;
   $('deposit-appointment-label').textContent=
-    (p?.nombre||'Cliente')+' · '+(t?whatsappAppointmentDateTime(t):'Turno sin fecha');
-  $('deposit-status-label').textContent=depositLabel(a);
+    (p?.nombre||'Cliente')+' · '+(t?whatsappUiAppointmentDateTime(t):'Turno sin fecha');
+  $('deposit-status-label').textContent=depositARS(a.deposit_amount_minor)+' · '+(window.CithelaUiLocale?.get()==='en'?window.CithelaUiLocale.translate(depositStateNames[a.deposit_status]||'Seña solicitada'):(depositStateNames[a.deposit_status]||'Seña solicitada'));
   const owner=['owner','admin'].includes(s.membership?.role||'');
   const status=a.deposit_status,active=['pending','confirmed'].includes(a.status);
   let controls='';
@@ -5147,6 +5147,11 @@ function whatsappAppointmentDateTime(t){
   const [year,month,day]=String(t.fecha).split('-');
   return day+'/'+month+'/'+year+' a las '+t.hora+' hs';
 }
+// Only the administrative label is localized. Outgoing WhatsApp copy keeps its own language.
+function whatsappUiAppointmentDateTime(t){
+  const when=whatsappAppointmentDateTime(t);
+  return window.CithelaUiLocale?.get()==='en'?when.replace(' a las ',' at ').replace(/ hs$/,''):when;
+}
 function cloudWhatsAppContent(t,pac,kind){
   const s=CithelaCloud.state();
   const clinic=String(s.tenant?.display_name||'CITHELA').replace(/[\r\n\t]/g,' ').trim().slice(0,90);
@@ -5203,7 +5208,7 @@ function cloudOpenWhatsApp(id,preset){
     rowVersion:Number(raw.row_version),startsAt:raw.starts_at,
     phone:n,kind
   };
-  $('wa-draft-patient').textContent=pac.nombre+' · '+whatsappAppointmentDateTime(t)+' · '+n;
+  $('wa-draft-patient').innerHTML='<span data-no-translate>'+escHtml(pac.nombre)+'</span> · '+escHtml(whatsappUiAppointmentDateTime(t))+' · <span data-no-translate>'+escHtml(n)+'</span>';
   // iOS can skip disabled native <option> placeholders. Always keep a selectable
   // empty first option and explicitly select its index before the picker opens.
   $('wa-draft-kind').innerHTML='<option value="">Elegí el tipo de aviso…</option>'+
@@ -7508,7 +7513,7 @@ function renderServicesConfig(){
             onclick="toggleCloudService('${svc.id}')">${svc.active?'Desactivar':'Reactivar'}</button>
         </div>`:'';
       return `<div class="block-row" style="display:block;">
-        <div class="block-title">${escHtml(svc.name)} ${state}</div>
+        <div class="block-title"><span data-no-translate>${escHtml(svc.name)}</span> ${state}</div>
         <div class="block-meta">${Number(svc.duration_min)} minutos · nube · ${Number(svc.deposit_amount_minor)>0?'Seña '+depositARS(svc.deposit_amount_minor):'Sin seña'}</div>
         ${buttons}
       </div>`;
@@ -7606,7 +7611,7 @@ function renderAvailabilityBlocks(){
       return`<div class="block-row">
         <div class="block-main">
           <div class="block-title">${escHtml(start.fecha)} · ${escHtml(label)}</div>
-          <div class="block-meta">${escHtml(resource)}${b.reason?' · '+escHtml(b.reason):''}</div>
+          <div class="block-meta">${b.resource_id?'<span data-no-translate>'+escHtml(resource)+'</span>':escHtml(resource)}${b.reason?' · <span data-no-translate>'+escHtml(b.reason)+'</span>':''}</div>
         </div>
         ${canManage?`<button class="mb cancel" type="button" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>`:''}
       </div>`;
@@ -7626,8 +7631,8 @@ function renderAvailabilityBlocks(){
       return`<section class="cithela-block-group" aria-label="Ausencia agrupada">
         <div class="cithela-block-group__head">
           <div class="block-main">
-            <strong class="block-title">${escHtml(g.reason)} · ${count} días</strong>
-            <div class="block-meta">${escHtml(availabilityDisplayCivilDate(first))} – ${escHtml(availabilityDisplayCivilDate(through))} · ${escHtml(resource)}</div>
+            <strong class="block-title"><span data-no-translate>${escHtml(g.reason)}</span> · <span>${count} días</span></strong>
+            <div class="block-meta">${escHtml(availabilityDisplayCivilDate(first))} – ${escHtml(availabilityDisplayCivilDate(through))} · ${g.resource_id?'<span data-no-translate>'+escHtml(resource)+'</span>':escHtml(resource)}</div>
           </div>
           ${canManage?`<button class="mb cancel cithela-block-group__remove" type="button" onclick="removeAvailabilityBlockGroup('${g.id}')">Quitar período</button>`:''}
         </div>
@@ -7644,7 +7649,7 @@ function renderAvailabilityBlocks(){
   el.innerHTML=blocks.map(b=>`<div class="block-row">
     <div class="block-main">
       <div class="block-title">${fmtL(dp(b.fecha))} · ${b.hora?b.hora+' hs':'día completo'}</div>
-      ${b.motivo?`<div class="block-meta">${escHtml(b.motivo)}</div>`:''}
+      ${b.motivo?`<div class="block-meta" data-no-translate>${escHtml(b.motivo)}</div>`:''}
     </div>
     <button class="mb cancel" onclick="removeAvailabilityBlock('${b.id}')">Quitar</button>
   </div>`).join('');
