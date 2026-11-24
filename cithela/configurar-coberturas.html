@@ -21,15 +21,17 @@ button.primary{background:var(--teal);color:white;border-color:var(--teal)}
 .session-login{display:inline-flex;justify-content:center;align-items:center;text-align:center;
  border:1px solid #bdd5cb;border-radius:9px;padding:10px 13px;text-decoration:none;color:#24695e;font-weight:700;min-height:43px;flex:1}button:disabled{opacity:.45;cursor:default}.buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.buttons button{flex:1}
 .msg{border-radius:10px;background:#eef6f2;padding:13px;color:#325f55;font-size:13px;margin:15px 0}
+.ui-locale{display:inline-flex;gap:2px;margin-left:auto;padding:2px;border:1px solid #a6cbc1;border-radius:9px;background:#f6fbf9;color:#1b4240}.ui-locale button{min-width:36px;min-height:35px;border:0;background:transparent;padding:4px 7px;color:inherit;border-radius:7px;font-weight:800}.ui-locale button[aria-pressed="true"]{background:#246e62;color:#fff}.ui-locale button:focus-visible{outline:2px solid #7fcab8;outline-offset:1px}@media(max-width:480px){header{flex-wrap:wrap;padding:12px 16px}header a{margin-left:auto}.ui-locale{order:1}header a{order:2}}
 .msg.error{background:#fff1f1;color:#a0374d}.banner{background:#fcf6e9;color:#826028;padding:13px;border-radius:10px;font-size:13px;margin:12px 0}
 .rule{display:block;text-align:left;width:100%;margin:9px 0;padding:13px;background:#f9fcfa;border-radius:10px}.rule.selected{background:#e1f4ec;border-color:#24786e}
 .rule small{display:block}.rule strong{font-size:14px;color:#24493f}.tag{display:inline-block;font-size:10px;font-weight:800;border-radius:6px;background:#eee9d9;color:#876a29;padding:3px 8px;margin-top:4px}
 .empty{padding:22px;color:var(--sub)}.preview{font:normal 23px/1.28 Georgia,serif;margin:14px 0}
 [hidden]{display:none!important}@media(max-width:760px){.grid,.two{grid-template-columns:1fr}.card{padding:18px}main{padding:22px 13px}}
 </style>
+<script defer src="./ui-locale.js?v=20261124-rates"></script>
 </head>
 <body>
-<header><b>CITHELA</b><a href="./index.html">Volver a mi agenda</a></header>
+<header><b>CITHELA</b><div class="ui-locale" role="group" aria-label="Idioma de la aplicación"><button type="button" data-ui-locale="es" onclick="window.CithelaUiLocale?.set('es')" aria-label="Español" aria-pressed="true">ES</button><button type="button" data-ui-locale="en" onclick="window.CithelaUiLocale?.set('en')" aria-label="English" aria-pressed="false">EN</button></div><a href="./index.html">Volver a mi agenda</a></header>
 <main>
 <p class="eyebrow">CONFIGURACIÓN / SERVICIOS / PRECIOS Y COBERTURAS</p>
 <h1>Precios y coberturas de tus consultas</h1>
@@ -99,6 +101,8 @@ button.primary{background:var(--teal);color:white;border-color:var(--teal)}
 const CITHELA_SUPABASE_ENDPOINT='https://mcqknmqhtmihegmifuka.supabase.co';
 const KEY='sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc';
 const $=id=>document.getElementById(id);
+const ui=text=>window.CithelaUiLocale?.get()==='en'?window.CithelaUiLocale.translate(text):text;
+function syncUiLanguage(){document.querySelectorAll('[data-ui-locale]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.uiLocale===(window.CithelaUiLocale?.get()||'es'))));}
 let client=null;
 const sdkUrls=[
  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js',
@@ -151,7 +155,7 @@ const state={accounts:[],rates:[],services:[],selected:null,loadSerial:0,enabled
 const say=(message,error=false)=>{$('notice').textContent=message;$('notice').className='msg'+(error?' error':'')};
 const sel=(id,options)=>{
  const node=$(id);node.replaceChildren();
- for(const [value,label] of options){const item=document.createElement('option');item.value=value;item.textContent=label;node.append(item);}
+ for(const [value,label] of options){const item=document.createElement('option');item.value=value;item.textContent=label;item.setAttribute('data-no-translate','');node.append(item);}
 };
 const currentService=()=>state.services.find(x=>x.id===$('service').value);
 const kindNames={particular:'Particular',obra_social:'Obra social',prepaga:'Prepaga'};
@@ -181,30 +185,30 @@ function refreshFields(){
 }
 function renderPreview(){
  const s=currentService();
- $('duration').textContent=s?s.duration_min+' minutos de atención':'';
+ $('duration').textContent=s?s.duration_min+' '+ui('minutos de atención'):'';
  const kind=$('kind').value;
  if($('price-status').value==='a_confirmar'){
-   $('preview-price').textContent='Importe a confirmar con el profesional';
+   $('preview-price').textContent=ui('Importe a confirmar con el profesional');
  }else if(!$('amount').value.trim()){
-   $('preview-price').textContent='Todavía no definiste un importe';
+   $('preview-price').textContent=ui('Todavía no definiste un importe');
  }else{
-   try{$('preview-price').textContent='Importe orientativo: '+cash(moneyMinor($('amount').value));}
-   catch{$('preview-price').textContent='Revisá el formato del importe';}
+   try{$('preview-price').textContent=ui('Importe orientativo')+': '+cash(moneyMinor($('amount').value));}
+   catch{$('preview-price').textContent=ui('Revisá el formato del importe');}
  }
  $('preview-warning').textContent=kind==='particular'
-   ?'El establecimiento debe confirmar el precio de la consulta.'
-   :'El importe depende de afiliación, plan, prestación y autorización. La selección no garantiza cobertura.';
+   ?ui('El establecimiento debe confirmar el precio de la consulta.')
+   :ui('El importe depende de afiliación, plan, prestación y autorización. La selección no garantiza cobertura.');
 }
 function renderRules(){
  const node=$('rules-list');node.replaceChildren();
  const rows=state.rates.filter(x=>x.service_id===$('service').value);
- if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='Sin tarifas configuradas para este servicio.';node.append(p);}
+ if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent=ui('Sin tarifas configuradas para este servicio.');node.append(p);}
  for(const r of rows){
   const b=document.createElement('button');b.type='button';b.className='rule'+(state.selected?.id===r.id?' selected':'');
-  const top=document.createElement('strong');top.textContent=kindNames[r.kind]+' · '+(r.kind==='particular'?'Sin plan':r.provider+' · '+r.plan);
-  const bottom=document.createElement('small');bottom.textContent=(r.price_status==='a_confirmar'?'A confirmar':cash(Number(r.amount_minor)))+
-    ' · revisión '+r.version+(r.valid_until?' · hasta '+r.valid_until:'');
-  const badge=document.createElement('span');badge.className='tag';badge.textContent=r.active?'ACTIVA':'DESACTIVADA';
+  const top=document.createElement('strong');top.textContent=ui(kindNames[r.kind])+' · '+(r.kind==='particular'?ui('Sin plan'):r.provider+' · '+r.plan);top.setAttribute('data-no-translate','');
+  const bottom=document.createElement('small');bottom.textContent=(r.price_status==='a_confirmar'?ui('A confirmar'):cash(Number(r.amount_minor)))+
+    ' · '+ui('revisión')+' '+r.version+(r.valid_until?' · '+ui('hasta')+' '+r.valid_until:'');
+  const badge=document.createElement('span');badge.className='tag';badge.textContent=ui(r.active?'ACTIVA':'DESACTIVADA');
   b.append(top,bottom,badge);b.addEventListener('click',()=>loadRate(r.id));node.append(b);
  }
 }
@@ -307,6 +311,8 @@ async function startProfessional(){
  }
 }
 $('session-retry').addEventListener('click',startProfessional);
+document.addEventListener('cithela:ui-language',()=>{syncUiLanguage();renderPreview();renderRules();});
+document.addEventListener('DOMContentLoaded',syncUiLanguage,{once:true});
 startProfessional();
 </script>
 </body>

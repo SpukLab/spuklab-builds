@@ -138,3 +138,67 @@ test('multiline HTML explanatory text is translated without changing submitted c
     'Send a personal WhatsApp invitation so the person can verify their number, sign in to CITHELA and book appointments without an email. Before sending, check that the chat belongs to the correct recipient.');
   assert.equal(ui.translate('Adri gala'),'Adri gala');
 });
+
+test('native iOS notice/deposit options and their underlying values are distinct',()=>{
+  const {ui}=setup('en');
+  const cases=[
+    ['Nueva reserva pendiente','New booking pending'],
+    ['Turno confirmado','Appointment confirmed'],
+    ['Turno reprogramado','Appointment rescheduled'],
+    ['Recordatorio','Reminder'],
+    ['Elegí el medio comprobado…','Choose a verified payment method…'],
+    ['Transferencia acreditada','Bank transfer received'],
+    ['Efectivo recibido','Cash received'],
+    ['Otro medio comprobado','Other verified payment method'],
+    ['Registrar cobro verificado','Record verified payment'],
+    ['Eximir seña','Waive deposit'],
+    ['Medio de pago comprobado','Verified payment method'],
+    ['CITHELA solo registra acciones manuales. No realiza transferencias, cobros ni devoluciones.',
+     'CITHELA only records manual actions. It does not transfer, collect or refund money.']
+  ];
+  for(const [es,en] of cases)assert.equal(ui.translate(es),en,es);
+  assert.match(html,/value="transfer"/);
+  assert.match(html,/value="cash"/);
+  assert.match(html,/value="other"/);
+  assert.ok(html.includes("['deposit','Solicitar seña']"));
+  assert.match(html,/function whatsappUiAppointmentDateTime/);
+  // The outgoing draft function remains Spanish; never translate patient communication implicitly.
+  assert.match(html,/const hello='Hola'/);
+});
+
+test('complex service summaries and blocked periods translate but keep user-defined reasons',()=>{
+  const {ui}=setup('en');
+  assert.equal(ui.translate('4 servicio(s) activo(s). La duración rige para nuevas reservas; los turnos ya creados conservan la original.'),
+    '4 active services. Duration applies to new bookings; existing appointments keep their original duration.');
+  assert.equal(ui.translate('30 minutos · nube · Seña ARS $2.000'),
+    '30 minutes · Cloud · Deposit ARS $2.000');
+  assert.equal(ui.translate('Ver 7 tramos individuales'),'View 7 individual blocks');
+  assert.equal(ui.translate('2026-11-11 · Día completo'),'2026-11-11 · Full day');
+  assert.equal(ui.translate('Vacaciones'), 'Vacaciones');
+  assert.match(html,/data-no-translate>\$\{escHtml\(g.reason\)\}/);
+  assert.match(html,/data-no-translate>\$\{escHtml\(svc.name\)\}/);
+});
+
+test('prices and coverage standalone page inherits ES/EN and preserves original records',()=>{
+  const coverage=readFileSync(new URL('./configurar-coberturas.html',import.meta.url),'utf8');
+  const {ui}=setup('en');
+  const cases=[
+    ['Precios y coberturas de tus consultas','Consultation prices and coverage'],
+    ['Volver a mi agenda','Back to my schedule'],
+    ['2. Precio y cobertura','2. Price and coverage'],
+    ['Vigencia de la tarifa (opcional)','Rate validity (optional)'],
+    ['Guardar regla','Save rate'],
+    ['Vista previa para pacientes','Patient preview'],
+    ['Tarifas del servicio','Service rates'],
+    ['Módulo aún sin habilitación comercial. Podés preparar las tarifas, pero los pacientes no las verán todavía.',
+     'This module is not yet commercially enabled. You can prepare rates, but patients cannot see them yet.']
+  ];
+  for(const [es,en] of cases)assert.equal(ui.translate(es),en);
+  assert.match(coverage,/ui-locale\.js\?v=/);
+  assert.match(coverage,/data-ui-locale="en"/);
+  assert.match(coverage,/data-ui-locale="es"/);
+  assert.match(coverage,/const ui=text=>/);
+  assert.match(coverage,/item\.setAttribute\('data-no-translate',''\)/);
+  assert.match(coverage,/top\.setAttribute\('data-no-translate',''\)/);
+  assert.match(coverage,/cithela:ui-language/);
+});
