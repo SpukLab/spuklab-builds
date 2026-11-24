@@ -61,5 +61,5 @@ test('profile keeps all data sources and personal content unmodified by translat
  for(const text of ['data-no-translate','cloud-person-name','cloud-person-phone','cloud-person-alerts','cloud-person-notes','cloud-invite-email'])assert.ok(section.includes(text),text);
  assert.match(section,/p\.patient_shared_note\?'<span data-no-translate>'/);
  assert.match(section,/data-no-translate>\$\{name\}/);
- assert.match(section,/data-no-translate>\$\{escHtml\(t\.reason\)\}/);
+ assert.match(section,/<div data-no-translate[^>]*>\$\{escHtml\(t\.reason\)\}/);
 });
