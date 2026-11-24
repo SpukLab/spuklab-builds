@@ -63,6 +63,7 @@ async function installMock(page){
       rpc:async(name,{p_tenant_id,p_command,p_payload})=>{
         if(name!=="cithela_quote_command"||p_tenant_id!==tenant)return {data:{ok:false,code:"forbidden"},error:null};
         switch(p_command){
+          case "settings.get":return {data:{ok:true,dental_enabled:false},error:null};
           case "catalog.list":return {data:{ok:true,catalog},error:null};
           case "quote.list":
             if(window.__quoteQAFailNextList){
@@ -127,7 +128,7 @@ async function main(){
       await installMock(page);
       await page.goto(origin+"/presupuestos/cloud.html#tenant=a1000000-0000-4000-8000-000000000001&person=b1000000-0000-4000-8000-000000000001",
         {waitUntil:"domcontentloaded"});
-      await page.locator("#workspace:visible").waitFor({timeout:15000});
+      await page.locator("#workspace:visible").waitFor({timeout:15000}).catch(async error=>{ console.log("Quote bootstrap:",await page.locator("#bootstrap-message").textContent(),errors); throw error; });
       await page.waitForFunction(()=>
         document.getElementById("patient")?.value==="b1000000-0000-4000-8000-000000000001",
         null,{timeout:7000}).catch(async error=>{

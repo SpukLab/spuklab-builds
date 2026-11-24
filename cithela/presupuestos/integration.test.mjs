@@ -48,5 +48,5 @@ test("SQL has one complete migration and checks current commercial package",()=>
   assert.match(sql,/c\.code='presupuestos' and c\.available=true/);
   assert.match(sql,/g\.tenant_id=p_tenant_id and g\.state in \('pilot','active'\)/);
   assert.match(sql,/g\.expires_at>statement_timestamp\(\)/);
-  assert.match(sql,/commercial_entitlement_snapshot\(p_tenant_id\)/);
+  assert.match(sql,/commercial_entitlement_snapshot\(p_tenant_id,statement_timestamp\(\)\)/);
 });

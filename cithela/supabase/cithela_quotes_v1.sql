@@ -120,7 +120,7 @@ begin
     where c.code='presupuestos' and c.available=true
       and g.tenant_id=p_tenant_id and g.state in ('pilot','active')
       and (g.expires_at is null or g.expires_at>statement_timestamp())
-  ) or not coalesce((cithela_private.commercial_entitlement_snapshot(p_tenant_id)->>'can_book')::boolean,false) then
+  ) or not coalesce((cithela_private.commercial_entitlement_snapshot(p_tenant_id,statement_timestamp())->>'can_book')::boolean,false) then
     return jsonb_build_object('ok',false,'code','feature_disabled');
   end if;
 
@@ -343,7 +343,26 @@ begin
         end if;
         if v_dental_status='autorizada' then
           if jsonb_typeof(v_dental->'covered_minor')<>'number' or
-             (v_dental->>'covered_minor') !~ '^(0|[1-9][0-9]{0,11}) (concurrent requests may hit unique constraint).
+             (v_dental->>'covered_minor') !~ '^(0|[1-9][0-9]{0,11})$' then
+            return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
+          end if;
+          v_covered_minor:=(v_dental->>'covered_minor')::bigint;
+          if v_covered_minor>v_subtotal-v_discount then
+            return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
+          end if;
+        elsif jsonb_typeof(v_dental->'covered_minor')<>'null' then
+          return jsonb_build_object('ok',false,'code','invalid_dental_coverage');
+        else
+          v_covered_minor:=null;
+        end if;
+        v_dental:=jsonb_build_object(
+          'kind',v_kind,'provider',v_provider,'plan',v_plan,
+          'status',v_dental_status,'covered_minor',v_covered_minor);
+      end if;
+    end if;
+
+    if v_id is null then
+      -- Request ID provides idempotency for retries.
       select * into v_existing from public.cithela_quotes
        where tenant_id=p_tenant_id and request_id=v_request;
       if found then
