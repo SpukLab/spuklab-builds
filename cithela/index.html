@@ -4346,7 +4346,7 @@ function setCithelaUiLanguage(locale){
     renderCithelaCommercialPanel(state);
     renderCloudProbe(state);
   }
-  renderInfrastructureStatus();
+  if(typeof renderInfrastructureStatus==='function')renderInfrastructureStatus();
 }
 function syncProfessionalBookingLanguageButtons(){
   const current=professionalBookingLocale;
@@ -4564,19 +4564,21 @@ function renderCithelaCommercialPanel(s){
     detailEl.textContent='No pudimos consultar la vigencia de tu cuenta. Actualizá la página para reintentar.';
     return;
   }
-  const [title,description]=descriptions[c.status].map(translateProfessionalUi);
+  // The isolated commercial-status harness has no locale engine; default to original ES.
+  const localize=typeof translateProfessionalUi==='function'?translateProfessionalUi:(text=>text);
+  const [title,description]=descriptions[c.status].map(localize);
   if(c.status==='complimentary'&&c.complimentary_until){
     const day=formatCithelaComplimentaryExpiry(c.complimentary_until);
     if(day){
       statusEl.textContent=title;
-      detailEl.textContent=description+(window.CithelaUiLocale?.get()==='en'?' Valid until ':' Vigente hasta el ')+day+'.';
+      detailEl.textContent=description+(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en'?' Valid until ':' Vigente hasta el ')+day+'.';
       return;
     }
   }
   if(c.status==='trialing'&&Number.isInteger(c.days_remaining)){
     const days=c.days_remaining;
     const remaining=days===0?'Menos de un día restante':
-      window.CithelaUiLocale?.get()==='en'?
+      typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en'?
         days+' day'+(days===1?'':'s')+' remaining':
         days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s');
     statusEl.textContent=title+' · '+translateProfessionalUi(remaining);
