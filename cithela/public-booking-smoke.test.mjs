@@ -91,12 +91,14 @@ test('public booking keeps an accessible, subtle language switch',()=>{
   assert.match(html,/\$\('language'\)\.addEventListener\('click'/);
 });
 
-test('professional agenda exposes compact copy/share/QR only for authorized enabled workspaces',()=>{
+test('professional agenda keeps link/QR available and gates copy/share on a validated active URL',()=>{
   const html=read('index.html');
   assert.match(html,/id="professional-public-booking-shortcut" class="cithela-top-share" hidden/);
   assert.ok(html.indexOf('id="professional-public-booking-shortcut"')<
     html.indexOf('id="professional-tabs"'),'share controls are above professional navigation');
-  assert.match(html,/class="cithela-booking-shortcut__link" href="\.\/compartir\.html"/);
+  assert.match(html,/class="cithela-booking-shortcut__link" id="professional-share-qr" href="\.\/compartir\.html"/);
+   assert.match(html,/section\.hidden=!allowed/);
+   assert.match(html,/button\.disabled=!ready/);
   assert.match(html,/id="professional-share-copy"/);
   assert.match(html,/id="professional-share-native"/);
   assert.match(html,/const shareAllowed=active&&\['owner','admin','operator'\]/);

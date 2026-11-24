@@ -596,22 +596,32 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 @media(max-width:380px){.cithela-block-group__head{align-items:stretch;flex-direction:column}.cithela-block-group__head button{max-width:100%;width:100%}}
 </style>
 <style>
-/* Quick-action header: language controls are not tied to whether booking link is enabled. */
+/* Workspace tools: share link remains discoverable when public bookings are disabled. */
 .professional-quick-actions[hidden],.cithela-locale-quick[hidden],#cfg-section-resources[hidden]{display:none!important}
-.professional-quick-actions{display:flex;align-items:center;gap:10px;padding:9px 16px;min-width:0;flex-wrap:wrap}
-.professional-quick-actions .cithela-top-share{margin:0;flex:1;min-width:min(100%,270px)}
-.cithela-locale-quick{display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:0;margin-left:auto}
-.cithela-locale-quick__label{font-size:.72rem;font-weight:600;color:var(--ink2);white-space:nowrap}
-.cithela-locale-quick__buttons{display:inline-flex;border:1px solid var(--border-color);background:var(--white);border-radius:9px;padding:3px;gap:3px}
-.cithela-locale-quick__buttons button{min-width:42px;min-height:38px;padding:6px 8px;border:0;border-radius:7px;font-size:.78rem;font-weight:700;background:transparent;color:var(--ink2);cursor:pointer}
+.professional-nav-actions{display:flex;align-items:center;justify-content:flex-end;gap:11px;flex:none;min-width:0}
+.professional-quick-actions{display:block;padding:7px 16px;min-width:0}
+.professional-quick-actions .cithela-top-share{margin:0;min-width:0}
+.cithela-top-share__title p{margin:0;font-size:.71rem;color:var(--ink2);line-height:1.35}
+.cithela-top-share__actions button:disabled{opacity:.48;cursor:not-allowed}
+.cithela-locale-quick{display:flex;align-items:center;gap:7px;min-width:0;margin:0;flex-wrap:nowrap}
+.cithela-locale-quick__label{font-size:.7rem;font-weight:600;color:var(--ink2);white-space:nowrap}
+.cithela-locale-quick__buttons{display:inline-flex;border:1px solid var(--border-color);background:var(--white);border-radius:9px;padding:2px;gap:2px}
+.cithela-locale-quick__buttons button{min-width:35px;min-height:36px;padding:5px 6px;border:0;border-radius:7px;font-size:.73rem;font-weight:700;background:transparent;color:var(--ink2);cursor:pointer}
 .cithela-locale-quick__buttons button[aria-pressed="true"]{background:var(--teal2);color:#fff}
 .cithela-locale-quick__buttons button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .cithela-locale-quick__buttons button:disabled{opacity:.45;cursor:default}
-.cithela-locale-quick #professional-booking-language-status{flex-basis:100%;font-size:.7rem;margin:0}
+.professional-nav-actions #professional-booking-language-status{position:absolute;top:100%;right:12px;z-index:110;max-width:min(320px,90vw);padding:8px 10px;margin:3px 0 0;border:var(--line);border-radius:8px;background:var(--white);box-shadow:var(--sh);font-size:.7rem;line-height:1.35}
+.professional-nav-actions #professional-booking-language-status[hidden]{display:none!important}
 @media(max-width:700px){
- .professional-quick-actions{padding:7px 12px;flex-direction:column;align-items:stretch;gap:6px}
- .professional-quick-actions .cithela-top-share{width:100%;flex:auto;min-width:0}
- .cithela-locale-quick{order:-1;align-self:flex-end}
+ .professional-quick-actions{padding:7px 12px}
+ .professional-quick-actions .cithela-top-share{width:100%}
+ .professional-nav-actions{gap:5px}
+ .cithela-locale-quick__label{display:none}
+ .professional-nav-actions .nav-out{padding:8px 2px}
+}
+@media(max-width:380px){
+ .cithela-locale-quick__buttons button{min-width:31px;padding:5px 4px}
+ .professional-brand .nb2{font-size:.61rem}
 }
 </style>
 </head>
@@ -746,21 +756,8 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
         <span class="nb2">Agenda con CITHELA</span>
       </div>
     </div>
-    <span class="pill">Profesional</span>
-    <button class="nav-out" onclick="logout()">Salir</button>
-  </nav>
-  <div id="professional-quick-actions" class="professional-quick-actions" hidden>
-  <section id="professional-public-booking-shortcut" class="cithela-top-share" hidden aria-label="Acceso rápido al enlace de turnos">
-    <div class="cithela-top-share__title">
-      <strong>Enlace de turnos</strong>
-      <span>Copiá, compartí o mostrales el QR a tus clientes.</span>
-    </div>
-    <div class="cithela-top-share__actions">
-      <button type="button" id="professional-share-copy" onclick="copyProfessionalBookingLink()">Copiar</button>
-      <button type="button" id="professional-share-native" onclick="shareProfessionalBookingLink()">Compartir</button>
-      <a class="cithela-booking-shortcut__link" href="./compartir.html" aria-label="Ver código QR de la agenda">QR</a>
-    </div>
-  </section>
+    <div class="professional-nav-actions">
+      <span class="pill">Profesional</span>
   <div id="professional-booking-language-settings" class="cithela-locale-quick" hidden role="group" aria-label="Idioma inicial para pacientes en la página de reservas">
     <span class="cithela-locale-quick__label">Idioma reservas</span>
     <div class="cithela-locale-quick__buttons">
@@ -773,6 +770,21 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </select>
     <p id="professional-booking-language-status" class="contact-note" role="status" aria-live="polite" hidden></p>
   </div>
+      <button class="nav-out" onclick="logout()">Salir</button>
+    </div>
+  </nav>
+  <div id="professional-quick-actions" class="professional-quick-actions" hidden>
+    <section id="professional-public-booking-shortcut" class="cithela-top-share" hidden aria-label="Enlace público y QR de reservas">
+      <div class="cithela-top-share__title">
+        <strong>Enlace / QR</strong>
+        <p id="professional-share-description" role="status" aria-live="polite">Consultando enlace público…</p>
+      </div>
+      <div class="cithela-top-share__actions">
+        <button type="button" id="professional-share-copy" onclick="copyProfessionalBookingLink()" disabled>Copiar</button>
+        <button type="button" id="professional-share-native" onclick="shareProfessionalBookingLink()" disabled>Compartir</button>
+        <a class="cithela-booking-shortcut__link" id="professional-share-qr" href="./compartir.html" aria-label="Abrir enlace público, QR y configuración de reservas">QR / configurar</a>
+      </div>
+    </section>
   </div>
   <div class="professional-tabbar">
   <div class="tabs" id="professional-tabs" aria-label="Secciones profesionales">
@@ -4240,14 +4252,30 @@ function updateProfessionalQuickActions(){
   const outer=$('professional-quick-actions');
   if(!outer)return;
   const share=$('professional-public-booking-shortcut');
-  const locale=$('professional-booking-language-settings');
-  outer.hidden=(share?.hidden!==false)&&(locale?.hidden!==false);
+  outer.hidden=share?.hidden!==false;
 }
 function updateProfessionalBookingShareVisibility(){
   const section=$('professional-public-booking-shortcut');if(!section)return;
   const s=CithelaCloud.state();
   const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(s.membership?.role);
-  section.hidden=!(allowed&&professionalBookingShareState.tenantId===s.tenant?.id&&professionalBookingShareState.url);
+  const current=professionalBookingShareState;
+  const ready=allowed&&current.tenantId===s.tenant?.id&&!!current.url;
+  section.hidden=!allowed;
+  for(const id of ['professional-share-copy','professional-share-native']){
+    const button=$(id);if(button)button.disabled=!ready;
+  }
+  const qr=$('professional-share-qr');
+  if(qr){
+    qr.href='./compartir.html'+(allowed&&s.tenant?.id?'?tenant='+encodeURIComponent(s.tenant.id):'');
+    qr.textContent=ready?'Ver QR':'QR / configurar';
+  }
+  const note=$('professional-share-description');
+  if(note&&allowed){
+    note.textContent=ready?'Reservas públicas listas para compartir.'
+      :current.loading?'Consultando enlace público…'
+      :current.checked?'Sin enlace activo. Abrí QR para revisar la configuración.'
+      :'No se pudo consultar el enlace. Abrí QR para revisarlo.';
+  }
   updateProfessionalQuickActions();
 }
 async function copyProfessionalBookingLink(){
