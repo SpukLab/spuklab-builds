@@ -382,7 +382,64 @@ const { pathToFileURL } = require('node:url');
       await page.screenshot({ path: path.join(process.cwd(), 'cithela-layout-'+width+'.png'), fullPage: true });
       console.log('PASS layout '+width+'px '+JSON.stringify(geometry));
       if (errors.length) console.log('INFO page startup warnings at '+width+': '+errors.slice(0,3).join(' | '));
+      // Real iOS-native select <option> text: labels change, values must remain unchanged.
+      const selectors=await page.evaluate(()=>{
+        const select=document.getElementById('wa-draft-kind');
+        const options=cloudWhatsAppKinds('pendiente',null);
+        select.innerHTML='<option value="">Elegí el tipo de aviso…</option>'+
+          options.map(([value,label])=>'<option value="'+value+'">'+label+'</option>').join('');
+        window.CithelaUiLocale.set('en');
+        const translated=[...select.options].map(o=>[o.value,o.textContent]);
+        window.CithelaUiLocale.set('es');
+        const restored=[...select.options].map(o=>[o.value,o.textContent]);
+        return {translated,restored};
+      });
+      assert.deepEqual(selectors.translated,[
+        ['','Choose a notice type…'],
+        ['booking','New booking pending'],
+        ['rescheduled','Appointment rescheduled'],
+        ['reminder','Reminder']
+      ]);
+      assert.deepEqual(selectors.restored,[
+        ['','Elegí el tipo de aviso…'],
+        ['booking','Nueva reserva pendiente'],
+        ['rescheduled','Turno reprogramado'],
+        ['reminder','Recordatorio']
+      ]);
       await page.close();
+      // Prices and coverage is a separate page: UI locale must persist without live auth.
+      const rates=await browser.newPage({viewport:{width,height:900},deviceScaleFactor:1});
+      await rates.route('http**/*',route=>route.abort());
+      await rates.goto(pathToFileURL(path.join(__dirname,'configurar-coberturas.html')).href,
+        {waitUntil:'domcontentloaded'});
+      const localized=await rates.evaluate(()=>{
+        window.CithelaUiLocale.set('en');
+        return {
+          heading:document.querySelector('h1').textContent.trim(),
+          eyebrow:document.querySelector('.eyebrow').textContent.trim(),
+          back:document.querySelector('header a').textContent.trim(),
+          kind:document.querySelector('#kind option[value="obra_social"]').textContent.trim(),
+          save:document.getElementById('save').textContent.trim(),
+          banner:document.getElementById('feature-status').textContent.trim(),
+          selected:document.querySelector('[data-ui-locale="en"]').getAttribute('aria-pressed'),
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.equal(localized.heading,'Consultation prices and coverage');
+      assert.equal(localized.eyebrow,'SETTINGS / SERVICES / PRICES AND COVERAGE');
+      assert.equal(localized.back,'Back to my schedule');
+      assert.equal(localized.kind,'Health insurance');
+      assert.equal(localized.save,'Save rate');
+      assert.equal(localized.selected,'true');
+      assert.ok(localized.width<=width+2,'coverage-page horizontal overflow at '+width);
+      const restored=await rates.evaluate(()=>{
+        window.CithelaUiLocale.set('es');
+        return document.querySelector('#kind option[value="obra_social"]').textContent.trim();
+      });
+      assert.equal(restored,'Obra social');
+      await rates.screenshot({path:path.join(process.cwd(),'cithela-layout-rates-'+width+'.png'),fullPage:true});
+      console.log('PASS native select and rates ES/EN '+width+'px');
+      await rates.close();
     }
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exit(1); });
