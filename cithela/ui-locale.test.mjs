@@ -255,5 +255,5 @@ test('grouped Cloud patient record translates generated headings without changin
  for(const [es,en] of cases)assert.equal(ui.translate(es),en,es);
  assert.equal(ui.translate('Corte de pelo'),'Corte de pelo');
  assert.match(html,/function cloudGroupPersonAppointments\(/);
- assert.match(html,/data-no-translate>\$\{name\}/);
+ assert.match(html,/data-no-translate[^>]*>\$\{name\}/);
 });
