@@ -125,6 +125,44 @@ const { pathToFileURL } = require('node:url');
       assert.equal((await page.locator('#medico-tab-agenda').textContent()).trim(),'Agenda');
       assert.equal((await page.locator('#agenda-overview-title').textContent()).trim(),'Próximos turnos');
       console.log('PASS bidirectional UI translation '+width+'px');
+      const dynamic=await page.evaluate(()=>{
+        const fixture=document.createElement('section');
+        fixture.id='cithela-dynamic-locale-regression';
+        fixture.innerHTML=
+          '<p class="pmeta">+5492215699377 · 1 turno</p>'+
+          '<button>Ver ficha</button>'+
+          '<p>2 por confirmar · 2 señas pendientes · 0 turnos dentro del plazo de recordatorio</p>'+
+          '<p>Mañana · 25/11/2026 · 10:15 hs</p>'+
+          '<p>Sin responder: 0 · Meta aceptó: 0 · Intentos sin confirmación: 0 (últimos 0 mensajes)</p>'+
+          '<p class="aitem-name">Adri gala</p>'+
+          '<p data-no-translate>Información compartida por la persona</p>';
+        document.getElementById('p-medico-pacientes').append(fixture);
+        setCithelaUiLanguage('en');
+        const translated=[...fixture.children].map(el=>el.textContent);
+        setCithelaUiLanguage('es');
+        const restored=[...fixture.children].map(el=>el.textContent);
+        fixture.remove();
+        return {translated,restored};
+      });
+      assert.deepEqual(dynamic.translated,[
+        '+5492215699377 · 1 appointment',
+        'View record',
+        '2 awaiting confirmation · 2 pending deposits · 0 appointments due for reminder',
+        'Tomorrow · 25/11/2026 · 10:15',
+        'Unanswered: 0 · Accepted by Meta: 0 · Unconfirmed attempts: 0 (last 0 messages)',
+        'Adri gala',
+        'Información compartida por la persona'
+      ]);
+      assert.deepEqual(dynamic.restored,[
+        '+5492215699377 · 1 turno',
+        'Ver ficha',
+        '2 por confirmar · 2 señas pendientes · 0 turnos dentro del plazo de recordatorio',
+        'Mañana · 25/11/2026 · 10:15 hs',
+        'Sin responder: 0 · Meta aceptó: 0 · Intentos sin confirmación: 0 (últimos 0 mensajes)',
+        'Adri gala',
+        'Información compartida por la persona'
+      ]);
+      console.log('PASS dynamic copy and private data '+width+'px');
       await page.evaluate(()=>{
         document.getElementById('ops-queue-wrap').style.display='block';
         document.getElementById('ops-queue-summary').textContent='2 señas pendientes';
