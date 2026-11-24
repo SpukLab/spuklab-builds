@@ -59,10 +59,11 @@ function switchHarness(session){
   return {api,events,fields,get signouts(){return signouts;}};
 }
 
-test('patient portal offers a direct professional switch',()=>{
-  assert.match(html,/id="patient-open-professional"/);
-  assert.match(html,/onclick="patientSwitchToProfessional\(\)"/);
-  assert.match(html,/Ingresar como profesional/);
+test('patient portal shows only patient actions; professional login remains at the entry screen',()=>{
+  const portal=html.slice(html.indexOf('<div id="screen-patient-cloud"'),html.indexOf('<details id="patient-enroll-panel"'));
+  assert.doesNotMatch(portal,/id="patient-open-professional"|Ingresar como profesional|Si tu cuenta profesional es diferente/);
+  assert.match(html,/id="rb-med"[^>]*>Profesional<\/button>/);
+  assert.match(html,/id="professional-login-button"/);
 });
 
 test('switching to an existing professional membership does not sign out',async()=>{
