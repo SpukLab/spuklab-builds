@@ -11,7 +11,7 @@ const safeStr=x=>x==null?'':String(x);
 const sellerIsTest=(seller,expected)=>safeStr(seller?.id)===safeStr(expected)&&
  seller?.site_id==='MLA'&&Array.isArray(seller?.tags)&&seller.tags.includes('test_user');
 
-export async function inspectExistingPilotPayment({intent,getProvider,buyerId,buyerEmail}={}){
+export async function inspectExistingPilotPayment({intent,getProvider,buyerId,buyerEmail,includeEvidence=false}={}){
  if(!intent||intent.stage!=='linked'||intent.live_mode!==false||
    intent.currency_id!=='ARS'||intent.amount_minor!==100000||
    !numeric.test(safeStr(intent.collector_id))||!numeric.test(safeStr(buyerId))||
@@ -65,6 +65,7 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId,bu
 
  let verifiedCount=0;
  let trueModeTestCount=0;
+ const evidence=[];
  let firstFailure='no_approved_invoice';
  const failedChecks=new Set();
  const seen=new Set();
@@ -107,7 +108,15 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId,bu
    });
   }
   if(proof.ok){
-   if(proof.provider_live_mode_true===true)trueModeTestCount++;
+   if(proof.provider_live_mode_true===true){
+    trueModeTestCount++;
+    if(includeEvidence===true){
+     evidence.push({
+      invoice_id:invoiceId,payment_id:payId,
+      approved_at:payment.date_approved,provider_live_mode:true
+     });
+    }
+   }
    if(!Number.isFinite(Date.parse(payment.date_approved)))
      return fail('invalid_approval_date');
    verifiedCount++;
@@ -124,5 +133,6 @@ export async function inspectExistingPilotPayment({intent,getProvider,buyerId,bu
  return {ok:true,code:'approved_test_payment_verified_read_only',
    verified_payments:verifiedCount,
    provider_live_mode_true:trueModeTestCount>0,
-   entitlement_activation_allowed:false};
+   entitlement_activation_allowed:false,
+   ...(includeEvidence===true?{evidence}:{})};
 }
