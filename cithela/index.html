@@ -4320,27 +4320,40 @@ function professionalBookingLanguageMessage(message,error=false){
   status.hidden=!message;
   status.style.color=error?'var(--danger)':'var(--ink2)';
 }
+function syncCithelaUiLanguageButtons(){
+  const lang=window.CithelaUiLocale?.get()||'es';
+  document.querySelectorAll('[data-ui-locale]').forEach(button=>
+    button.setAttribute('aria-pressed',String(button.dataset.uiLocale===lang)));
+}
+function setCithelaUiLanguage(locale){
+  window.CithelaUiLocale?.set(locale);
+  syncCithelaUiLanguageButtons();
+  if(typeof renderUpcomingAgenda==='function'&&professionalCloudReady())renderUpcomingAgenda();
+}
 function syncProfessionalBookingLanguageButtons(){
   const current=professionalBookingLocale;
-  const field=$('professional-booking-language');
   const state=CithelaCloud.state();
-  const allowed=professionalCloudReady()&&['owner','admin'].includes(state.membership?.role)&&
-    current.tenantId===state.tenant?.id;
-  const locked=!allowed||current.loading||current.saving||!current.locale||field?.disabled;
+  const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(state.membership?.role);
+  const canWrite=['owner','admin'].includes(state.membership?.role);
+  const locked=!allowed||(canWrite&&(current.loading||current.saving));
   for(const lang of ['es','en']){
     const button=$('professional-booking-language-'+lang);
     if(!button)continue;
     button.disabled=!!locked;
-    button.setAttribute('aria-pressed',String(allowed&&current.locale===lang));
+    button.setAttribute('aria-pressed',String(allowed&&(window.CithelaUiLocale?.get()||'es')===lang));
   }
+  syncCithelaUiLanguageButtons();
 }
 function chooseProfessionalBookingLanguage(locale){
-  const field=$('professional-booking-language');
-  if(!field||!['es','en'].includes(locale))return;
+  if(!['es','en'].includes(locale))return;
   const state=CithelaCloud.state(),current=professionalBookingLocale;
-  if(!professionalCloudReady()||!['owner','admin'].includes(state.membership?.role)||
-     current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||
-     field.disabled)return;
+  if(!professionalCloudReady()||!['owner','admin','operator'].includes(state.membership?.role))return;
+  setCithelaUiLanguage(locale);
+  syncProfessionalBookingLanguageButtons();
+  // Operators can translate their own UI, but only owners/admins may change public booking defaults.
+  if(!['owner','admin'].includes(state.membership?.role))return;
+  const field=$('professional-booking-language');
+  if(!field||current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||field.disabled)return;
   field.value=locale;
   void changeProfessionalBookingLanguage(field);
 }
@@ -4360,6 +4373,7 @@ async function loadProfessionalBookingLanguage(tenantId){
     const config=await CithelaCloud.publicBookingConfig();
     if(professionalBookingLocale.tenantId!==tenantId)return;
     const locale=config.locale==='en'?'en':'es';
+    if(window.CithelaUiLocale&&!window.CithelaUiLocale.hasPreference())setCithelaUiLanguage(locale);
     professionalBookingLocale.locale=locale;
     field.value=locale;
     professionalBookingLanguageMessage('');
@@ -4479,7 +4493,7 @@ function renderProfessionalMode(){
   updateProfessionalBookingShareVisibility();
   const manageAllowed=active&&['owner','admin'].includes(s.membership?.role);
   const localeSettings=$('professional-booking-language-settings');
-  if(localeSettings)localeSettings.hidden=!manageAllowed;
+  if(localeSettings)localeSettings.hidden=!shareAllowed;
   if(manageAllowed&&s.tenant?.id)void loadProfessionalBookingLanguage(s.tenant.id);
   else{
     professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
@@ -8321,6 +8335,7 @@ if(cithelaTabs)cithelaTabs.addEventListener('scroll',updateProfessionalTabArrow,
 window.addEventListener('resize',updateProfessionalTabArrow);
 updateProfessionalTabArrow();
 applyBranding();
+syncCithelaUiLanguageButtons();
 setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
 CithelaCloud.init().then(resumeCloudSession).catch(()=>{
   // Keep the login form available when session recovery fails.
