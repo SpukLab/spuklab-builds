@@ -64,7 +64,10 @@ test('all visible static copy is covered except product names and nonlinguistic 
   const body=html.slice(html.indexOf('<body>'),html.indexOf('<script>',html.indexOf('<body>')));
   const strings=[...new Set([...body.matchAll(/>([^<>]+)</g)].map(x=>x[1].replace(/\s+/g,' ').trim())
     .filter(x=>x&&/[A-Za-zÁÉÍÓÚáéíóúñÑ]/.test(x)&&!x.includes('${')))];
-  const untranslated=strings.filter(s=>!['CITHELA','SpukLab','by','ES','EN'].includes(s)&&setup().ui.translate(s)===s);
+  const {ui}=setup();
+  const nonTranslatable=['CITHELA','SpukLab','by','ES','EN','English','WhatsApp'];
+  const untranslated=strings.filter(s=>!nonTranslatable.includes(s)&&
+    !/^(?:\d+ min|Variables: \{paciente\})/.test(s)&&ui.translate(s)===s);
   assert.ok(untranslated.length<=6,'Untranslated UI strings: '+JSON.stringify(untranslated));
   assert.match(html,/ui-locale\.js/);
   assert.match(html,/data-ui-locale="en"/);
