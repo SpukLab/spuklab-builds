@@ -69,3 +69,33 @@ test('payment proof diagnostics preserve exact rejection without exposing values
   assert.ok(reasons.every(x=>!x.includes('9999')&&!x.includes('15001')));
  }
 });
+
+test('scoped, read-only test-account proof accepts only live_mode mismatch plus verified test IDs',async()=>{
+ const {verifyInternalTestAccountPayment}=await import('./mercadopago-payment-proof.mjs');
+ const testPayment={...payment,live_mode:true,payer:{id:1234567}};
+ const special=verifyInternalTestAccountPayment({...base,
+  subscription:{...subscription,payer_id:'1234567'},
+  payment:testPayment,buyerId:'1234567',verifiedTestSeller:true,verifiedTestBuyer:true
+ });
+ assert.deepEqual(special,{
+  ok:true,code:'test_account_payment_audited_provider_live_mode_true',
+  entitlement_activation_allowed:false,provider_live_mode_true:true
+ });
+ assert.equal(verify({...base,subscription:{...subscription,payer_id:'1234567'},payment:testPayment}).ok,false);
+ for(const override of [
+  {verifiedTestSeller:false},{verifiedTestBuyer:false},{buyerId:'2345678'},
+  {payment:{...testPayment,payer:{id:9999999}}},
+  {payment:{...testPayment,transaction_amount:1000}},
+  {payment:{...testPayment,status:'pending'}},
+  {payment:{...testPayment,collector_id:9999}},
+  {subscription:{...subscription,payer_id:'1234567',live_mode:true}}
+ ]){
+  const r=verifyInternalTestAccountPayment({
+   ...base,subscription:{...subscription,payer_id:'1234567'},
+   payment:testPayment,buyerId:'1234567',
+   verifiedTestSeller:true,verifiedTestBuyer:true,...override
+  });
+  assert.equal(r.ok,false,JSON.stringify(override));
+  assert.notEqual(r.entitlement_activation_allowed,true);
+ }
+});
