@@ -125,6 +125,52 @@ const { pathToFileURL } = require('node:url');
       assert.equal((await page.locator('#medico-tab-agenda').textContent()).trim(),'Agenda');
       assert.equal((await page.locator('#agenda-overview-title').textContent()).trim(),'Próximos turnos');
       console.log('PASS bidirectional UI translation '+width+'px');
+      // Actual Settings cards from the reported screenshots, not isolated text fixtures.
+      const professionalStatus=await page.evaluate(async()=>{
+        const fixture={
+          signedIn:true,tenant:{id:'test-local-tenant'},
+          membership:{role:'owner'},appointmentCount:4,
+          services:[{id:'test-service',name:'Consulta',duration_min:30}],
+          resources:[{id:'test-resource',name:'Profesional principal'}],
+          commercialStatus:{ok:true,status:'complimentary',complimentary_until:'2027-01-14T12:00:00Z'}
+        };
+        setCithelaUiLanguage('en');
+        renderCloudProbe(fixture);
+        renderCithelaCommercialPanel(fixture);
+        await Promise.resolve();
+        const english={
+          infra:document.getElementById('infra-status').textContent,
+          summary:document.getElementById('cloud-probe-summary').textContent,
+          title:document.getElementById('cithela-commercial-status').textContent,
+          detail:document.getElementById('cithela-commercial-detail').textContent,
+          width:document.documentElement.scrollWidth
+        };
+        setCithelaUiLanguage('es');
+        renderCloudProbe(fixture);
+        renderCithelaCommercialPanel(fixture);
+        await Promise.resolve();
+        const spanish={
+          infra:document.getElementById('infra-status').textContent,
+          summary:document.getElementById('cloud-probe-summary').textContent,
+          title:document.getElementById('cithela-commercial-status').textContent,
+          detail:document.getElementById('cithela-commercial-detail').textContent
+        };
+        renderCloudProbe(null);
+        renderCithelaCommercialPanel(window.CithelaCloud?.state?.()||null);
+        return {english,spanish};
+      });
+      for(const term of ['Secure connection','Multiple devices','Live synchronization'])
+        assert.ok(professionalStatus.english.infra.includes(term),'missing translation: '+term);
+      for(const term of ['Conexión protegida','Multi-dispositivo','Sincronización en vivo'])
+        assert.ok(professionalStatus.spanish.infra.includes(term),'missing Spanish restoration: '+term);
+      assert.match(professionalStatus.english.summary,/Visible remote status: 4 Cloud appointments/);
+      assert.match(professionalStatus.spanish.summary,/Estado remoto visible: 4 turnos cloud/);
+      assert.equal(professionalStatus.english.title,'Complimentary access');
+      assert.match(professionalStatus.english.detail,/Valid until January 14, 2027\./);
+      assert.equal(professionalStatus.spanish.title,'Acceso de cortesía');
+      assert.match(professionalStatus.spanish.detail,/Vigente hasta el 14 de enero de 2027\./);
+      assert.ok(professionalStatus.english.width<=width+2,'Settings language overflow at '+width);
+      console.log('PASS professional system and subscription status ES/EN '+width+'px');
       const dynamic=await page.evaluate(()=>{
         const fixture=document.createElement('section');
         fixture.id='cithela-dynamic-locale-regression';
