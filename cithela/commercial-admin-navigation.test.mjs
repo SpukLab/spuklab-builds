@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 const html=readFileSync(new URL("./comercial-admin.html",import.meta.url),"utf8");
 
 test("administración ofrece navegación accesible a módulos existentes",()=>{
-  assert.match(html,/<nav class="console-nav" aria-label="Secciones de administración">/);
+  assert.match(html,/<nav class="console-nav" aria-label="Ir a sección de administración">/);
   for(const id of ["cuentas","selfservice-controls","package-controls","expiry-notices","pricing-controls","courtesy-controls","retention-controls","booking-admin"]){
     assert.match(html,new RegExp('href="#'+id+'"'));
     assert.match(html,new RegExp('id="'+id+'"'));
