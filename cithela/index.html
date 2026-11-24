@@ -3210,9 +3210,13 @@ function patientEnrollError(err){
     return 'No se pudo confirmar que el número se asociara a la misma identidad. Mantené el acceso por correo.';
   return msg||'No fue posible completar la vinculación.';
 }
+// While email remains the supported patient recovery path, do not expose the
+// optional WhatsApp linking flow. Existing phone sessions remain untouched.
+const PATIENT_WHATSAPP_SELF_LINK_ENABLED=false;
 function renderPatientEnroll(){
   const panel=$('patient-enroll-panel');
   if(!panel)return;
+  if(!PATIENT_WHATSAPP_SELF_LINK_ENABLED){panel.hidden=true;return;}
   const s=CithelaCloud.state();
   const allowed=!!(me?.cloud&&me.role==='paciente'&&s.signedIn&&s.email&&!s.phone&&patientPortalData?.profiles?.length);
   panel.hidden=!allowed;
@@ -3223,6 +3227,7 @@ function renderPatientEnroll(){
   $('patient-enroll-confirm').disabled=patientEnrollBusy;
 }
 async function patientEnrollStart(){
+  if(!PATIENT_WHATSAPP_SELF_LINK_ENABLED)return;
   if(patientEnrollBusy||patientEnrollPending||!patientPortalData?.profiles?.length)return;
   const state=CithelaCloud.state();
   if(!me?.cloud||me.role!=='paciente'||!state.email||state.phone||
@@ -3242,6 +3247,7 @@ async function patientEnrollStart(){
   finally{patientEnrollBusy=false;renderPatientEnroll();}
 }
 async function patientEnrollConfirm(){
+  if(!PATIENT_WHATSAPP_SELF_LINK_ENABLED)return;
   if(patientEnrollBusy||!patientEnrollPending)return;
   const code=String($('patient-enroll-code').value||'').trim();
   if(!/^\d{6}$/.test(code)){
