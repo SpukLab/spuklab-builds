@@ -6,7 +6,7 @@
  const sourceText=new WeakMap();
  const renderedText=new WeakMap();
  const sourceAttrs=new WeakMap();
- const skipSelector='script,style,textarea,pre,code,[contenteditable],[data-no-translate],.patient-appointment-card .aitem-name,.patient-cloud-identity,.agenda-overview-person-name,.person-name,.cloud-person-name';
+ const skipSelector='script,style,textarea,pre,code,[contenteditable],[data-no-translate],.patient-appointment-card .aitem-name,.patient-cloud-identity,.agenda-overview-person-name,.person-name,.cloud-person-name,.pname,.aitem-name,.cloud-wa-item-snippet,.cloud-wa-message-quote,.cloud-wa-reply-text,#patient-cloud-identity';
  const controlledAttrs=['placeholder','aria-label','title'];
  const key='cithela.ui.language.v1';
  let language='es',hasPreference=false;
