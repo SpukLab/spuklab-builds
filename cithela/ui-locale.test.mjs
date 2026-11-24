@@ -240,3 +240,20 @@ test('remote status counter translates both singular and plural without altering
     'Open the same account on another device and select “Test connection” to compare the number.');
   assert.match(html,/translateProfessionalUi\(count===1\?'turno cloud':'turnos cloud'\)/);
 });
+
+test('grouped Cloud patient record translates generated headings without changing service names',()=>{
+ const {ui}=setup('en');
+ const cases=[
+ ['Próximos turnos (2)','Upcoming appointments (2)'],
+ ['Historial de turnos (50+)','Appointment history (50+)'],
+ ['Historial de turnos (3)','Appointment history (3)'],
+ ['Información y notas','Information and notes'],
+ ['Acceso de la persona · piloto','Contact access · pilot'],
+ ['No hay turnos próximos pendientes o confirmados.','No upcoming pending or confirmed appointments.'],
+ ['Se muestran como máximo los últimos 50 turnos consultados.','Showing up to 50 retrieved appointments.']
+ ];
+ for(const [es,en] of cases)assert.equal(ui.translate(es),en,es);
+ assert.equal(ui.translate('Corte de pelo'),'Corte de pelo');
+ assert.match(html,/function cloudGroupPersonAppointments\(/);
+ assert.match(html,/data-no-translate[^>]*>\$\{name\}/);
+});
