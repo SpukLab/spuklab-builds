@@ -29,6 +29,7 @@ a{color:#165c61}.warning{font-weight:600}
 <p id="tenant"></p><button type="button" id="preflight" disabled>1. Validar requisitos</button> <button type="button" id="check" disabled>2. Consultar suscripción</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
 <p><button type="button" id="verify-paid" disabled>Verificar pago realizado en Mercado Pago (solo lectura)</button></p>
+<p><button type="button" id="record-paid" disabled>Registrar pago ficticio verificado (sin activar servicios)</button></p>
 <p><button type="button" id="get-link" disabled>Recuperar enlace de la suscripción ya vinculada</button></p>
 <p><a id="mp-link" hidden target="_blank" rel="noopener noreferrer">Abrir checkout existente en Mercado Pago (solo comprador de prueba)</a></p>
 <p><button type="button" id="inspect" disabled>Diagnosticar suscripción existente (solo lectura)</button></p>
@@ -73,7 +74,7 @@ async function load(){
  if(!data.some(item=>item.tenant_id===ALMA_TENANT)){$('result').textContent='Este diagnóstico está reservado a la cuenta propietaria de Alma y Pampa. No se ejecutó ninguna acción.';return;}
  if(!user.email_confirmed_at||user.email?.toLowerCase()!=='alma.y.pampa@gmail.com')return;
  $('pilot-checkout').hidden=false;
- tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;$('verify-paid').disabled=false;
+ tenantId=ALMA_TENANT;$('check').disabled=false;$('preflight').disabled=false;$('reconcile').disabled=false;$('inspect').disabled=false;$('link-existing').disabled=false;$('get-link').disabled=false;$('verify-paid').disabled=false;$('record-paid').disabled=false;
  syncCheckoutButton();
  $('tenant').textContent='Establecimiento: Alma y Pampa · modo interno';
  $('result').textContent='Cuenta propietaria identificada. Podés comprobar el estado de la prueba.';
@@ -149,6 +150,34 @@ function markAlreadyLinked(){
  $('pilot-checkout').hidden=true;
  $('inspect').hidden=true;
 }
+$('record-paid').addEventListener('click',async()=>{
+ if(!tenantId)return;
+ if(!window.confirm('CITHELA consultará de nuevo el cobro aprobado directamente en Mercado Pago y guardará solamente el registro de prueba, sin generar otro cobro, sin modificar la suscripción y sin activar servicios. ¿Registrar el pago ficticio?'))return;
+ $('record-paid').disabled=true;
+ $('result').textContent='Verificando y registrando el pago ficticio existente, sin cobrar ni activar…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-pilot-record-test-payment',{
+   body:{tenantId,consent:true}
+  });
+  const response=error?.context instanceof Response?
+   await error.context.json().catch(()=>null):data;
+  if(response?.ok===true &&
+    ['test_payment_recorded_no_activation','already_recorded_no_activation'].includes(response.code)){
+   markAlreadyLinked();
+   $('result').textContent='PAGO FICTICIO REGISTRADO EN CITHELA.\n'+
+    'Pagos de prueba verificados: '+response.recorded_count+'\n'+
+    'Servicios activados por esta operación: ninguno.\n'+
+    'El registro es idempotente: repetir la consulta no genera otro pago.\n'+
+    'No se crearon suscripciones ni se cobraron fondos.';
+  }else{
+   $('result').textContent='No se registró el pago. Código: '+
+    (response?.code||'sin_respuesta')+
+    '\nNo repitas el checkout; la suscripción existente no se modificó.';
+  }
+ }catch{
+  $('result').textContent='No se pudo completar el registro. No se generó ningún cobro; conservá la suscripción actual.';
+ }finally{$('record-paid').disabled=false;}
+});
 $('verify-paid').addEventListener('click',async()=>{
  if(!tenantId)return;
  $('verify-paid').disabled=true;
