@@ -1533,6 +1533,7 @@ function normalizePhone(v){return String(v||'').replace(/\D/g,'');}
 function validPhone(v){const n=normalizePhone(v);return n.length>=8&&n.length<=16;}
 function newPersonId(people){return Math.max(Date.now(),...people.map(p=>Number(p.id)||0))+1;}
 const DN=['L','M','M','J','V','S','D'];
+const DN_EN=['M','T','W','T','F','S','S'];
 const MO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const ML=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function fmt(d){if(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en')return new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric',month:'short'}).format(d);return`${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;}
@@ -4328,7 +4329,14 @@ function syncCithelaUiLanguageButtons(){
 function setCithelaUiLanguage(locale){
   window.CithelaUiLocale?.set(locale);
   syncCithelaUiLanguageButtons();
-  if(typeof renderUpcomingAgenda==='function'&&professionalCloudReady())renderUpcomingAgenda();
+  // Weekly day initials and relative dates require a fresh render, no data writes.
+  if(typeof me!=='undefined'&&me?.role==='medico'&&typeof renderCal==='function'){
+    renderCal('med');
+    renderStats();
+    renderAgenda();
+  }else if(typeof renderUpcomingAgenda==='function'&&professionalCloudReady()){
+    renderUpcomingAgenda();
+  }
 }
 function syncProfessionalBookingLanguageButtons(){
   const current=professionalBookingLocale;
@@ -4607,7 +4615,7 @@ function renderCal(who){
     return`<button type="button" class="cday${sel?' sel':''}${key===tod?' tod':''}"
       aria-pressed="${sel}" aria-label="${fmt(d)}${dayTurns.length?' · '+dayTurns.length+' turnos':''}${pendingCount?' · '+pendingCount+' pendientes':''}${closed?' · día sin disponibilidad':''}"
       style="${closed&&!sel?'opacity:.42;':''}" onclick="pickDay('${key}','${who}')">
-      <span class="dn">${DN[i]}</span><span class="dd">${d.getDate()}</span>
+      <span class="dn">${window.CithelaUiLocale?.get()==='en'?DN_EN[i]:DN[i]}</span><span class="dd">${d.getDate()}</span>
       ${dot?'<span class="cal-day-count" aria-hidden="true">'+dayTurns.length+' turno'+(dayTurns.length===1?'':'s')+'</span>':'<span style="height:7px"></span>'}
     </button>`;
   }).join('');
@@ -5426,7 +5434,7 @@ function renderPacs(){
       const wa=normalizePhone(p.phone_e164||'');
       return`<div class="prow cloud-person-row">
         <div class="ava">${escHtml(ini(p.display_name||'—'))}</div>
-        <div class="prow-info"><div class="pname">${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
+        <div class="prow-info"><div class="pname" data-no-translate>${escHtml(p.display_name||'—')}</div><div class="pmeta">${escHtml(p.phone_e164||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
         <div class="cloud-person-actions">
           <button class="mb teal" type="button" onclick="ntStartForPerson('${p.id}')">+ Turno</button>
           <button class="mb ghost" type="button" onclick="cloudVerFicha('${p.id}')">Ver ficha</button>
@@ -5442,7 +5450,7 @@ function renderPacs(){
     const n=DB.t().filter(t=>t.pacienteId===p.id).length;
     return`<div class="prow">
       <div class="ava">${ini(p.nombre)}</div>
-      <div class="prow-info"><div class="pname">${p.nombre}</div><div class="pmeta">${escHtml(p.tel||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
+      <div class="prow-info"><div class="pname" data-no-translate>${p.nombre}</div><div class="pmeta">${escHtml(p.tel||'—')}${p.contact_email?' · '+escHtml(p.contact_email):''} · ${n} turno${n!==1?'s':''}</div></div>
       <button class="mb teal" type="button" onclick="ntStartForPerson(${p.id})">+ Turno</button>
       <button class="mb ghost" type="button" onclick="verFicha(${p.id})">Ver</button>
     </div>`;
@@ -5631,10 +5639,10 @@ async function cloudVerFicha(id){
     const name=escHtml(p.display_name||'—');
     const phone=escHtml(p.phone_e164||'Sin WhatsApp');
     const initials=escHtml(ini(p.display_name||'—'));
-    const alerts=escHtml(p.alerts||'Sin consideraciones registradas');
-    const notes=escHtml(p.notes||'Sin notas internas');
-    const shared=escHtml(p.patient_shared_note||'Sin información compartida');
-    const contact=escHtml(p.contact_email||'Sin correo de contacto');
+    const alerts=p.alerts?'<span data-no-translate>'+escHtml(p.alerts)+'</span>':'Sin consideraciones registradas';
+    const notes=p.notes?'<span data-no-translate>'+escHtml(p.notes)+'</span>':'Sin notas internas';
+    const shared=p.patient_shared_note?'<span data-no-translate>'+escHtml(p.patient_shared_note)+'</span>':'Sin información compartida';
+    const contact=p.contact_email?'<span data-no-translate>'+escHtml(p.contact_email)+'</span>':'Sin correo de contacto';
     const wa=normalizePhone(p.phone_e164||'');
     const editForm=professionalCloudWritable()?`
     <details class="profile-edit" style="border-top:var(--line);padding:13px 0;">
@@ -5670,10 +5678,10 @@ async function cloudVerFicha(id){
     }).join('');
     body.innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:16px;">
-        <div class="ava" style="width:46px;height:46px;border-radius:12px;">${initials}</div>
+        <div data-no-translate class="ava" style="width:46px;height:46px;border-radius:12px;">${initials}</div>
         <div style="min-width:0;">
-          <div style="font-size:1rem;font-weight:600;color:var(--ink);overflow-wrap:anywhere;">${name}</div>
-          <div style="font-size:.8rem;color:var(--ink3);margin-top:3px;">${phone}</div>
+          <div data-no-translate style="font-size:1rem;font-weight:600;color:var(--ink);overflow-wrap:anywhere;">${name}</div>
+          <div style="font-size:.8rem;color:var(--ink3);margin-top:3px;">${p.phone_e164?'<span data-no-translate>'+phone+'</span>':phone}</div>
           <div style="font-size:.68rem;color:var(--ink3);margin-top:4px;">${contact}</div>
         </div>
       </div>
