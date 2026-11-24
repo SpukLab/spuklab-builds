@@ -60,7 +60,7 @@ function switchHarness(session){
 }
 
 test('patient portal shows only patient actions; professional login remains at the entry screen',()=>{
-  const portal=html.slice(html.indexOf('<div id="screen-patient-cloud"'),html.indexOf('</div>',html.indexOf('<div id="screen-patient-cloud"')+80));
+  const portal=html.slice(html.indexOf('<div id="screen-patient-cloud"'),html.indexOf('<details id="patient-enroll-panel"'));
   assert.doesNotMatch(portal,/id="patient-open-professional"|Ingresar como profesional|Si tu cuenta profesional es diferente/);
   assert.match(html,/id="rb-med"[^>]*>Profesional<\/button>/);
   assert.match(html,/id="professional-login-button"/);
