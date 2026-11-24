@@ -152,7 +152,7 @@ test('professional agenda lets authorized owners choose default booking-page lan
   assert.match(html,/const manageAllowed=active&&\['owner','admin'\]/);
   assert.match(html,/if\(manageAllowed&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
   assert.match(html,/p_tenant_id:tenantId,\s*p_save:locale!==undefined,\s*p_locale:locale\?\?null/);
-  assert.match(html,/professionalBookingLanguageMessage\('Idioma guardado/);
+  assert.match(html,/toast\('Idioma guardado\.'/);
   assert.match(html,/field\.value=cache\.locale\|\|'es'/);
   const js=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
     .map(m=>m[1]).filter(s=>s.trim());
