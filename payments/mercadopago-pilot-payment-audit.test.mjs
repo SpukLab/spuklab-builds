@@ -182,3 +182,36 @@ test('missing bound test-buyer email cannot authorize a live_mode=true payment',
  const r=await audit({intent,getProvider:t.getProvider,buyerId});
  assert.equal(r.ok,false);
 });
+
+test('trusted server caller can receive evidence for the one confirmed TEST payer invoice',async()=>{
+ const t=fixture({paymentOver:{live_mode:true}});
+ const result=await audit({
+  intent,buyerId,buyerEmail:'test_user_buyer@testuser.com',
+  includeEvidence:true,getProvider:t.getProvider
+ });
+ assert.equal(result.ok,true);
+ assert.equal(result.provider_live_mode_true,true);
+ assert.deepEqual(result.evidence,[{
+  invoice_id:'123',payment_id:'456',
+  approved_at:'2026-11-23T03:27:00Z',provider_live_mode:true
+ }]);
+ assert.equal(result.entitlement_activation_allowed,false);
+});
+test('evidence details are never included in regular read-only audit response',async()=>{
+ const t=fixture({paymentOver:{live_mode:true}});
+ const result=await audit({
+  intent,buyerId,buyerEmail:'test_user_buyer@testuser.com',
+  getProvider:t.getProvider
+ });
+ assert.equal(result.ok,true);
+ assert.equal(result.evidence,undefined);
+});
+test('payment with actual test live_mode false cannot use mode-true-only recording path',async()=>{
+ const t=fixture();
+ const result=await audit({intent,buyerId,
+  includeEvidence:true,getProvider:t.getProvider
+ });
+ assert.equal(result.ok,true);
+ assert.deepEqual(result.evidence,[]);
+ assert.equal(result.provider_live_mode_true,false);
+});
