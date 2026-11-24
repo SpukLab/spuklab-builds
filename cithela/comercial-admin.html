@@ -27,6 +27,11 @@ textarea{resize:vertical;min-height:86px}textarea[aria-invalid=true]{border:2px 
 table{width:100%;border-collapse:collapse;font-size:.81rem}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #dfebe4}th{color:#4d6d62;font-size:.75rem}td{overflow-wrap:anywhere}
 .scroll{overflow-x:auto}.hint{color:#785c44;background:#f7eee4;padding:10px 13px;border-radius:8px;font-size:.79rem}
 [hidden]{display:none!important}
+.console-nav{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 20px}
+.console-nav a{display:inline-flex;min-height:42px;align-items:center;padding:7px 11px;border-radius:9px;border:1px solid var(--edge);background:var(--paper);text-decoration:none;font-size:.78rem;font-weight:700}
+.console-nav a:focus-visible{outline:3px solid #6cbfb0}
+html{scroll-behavior:smooth}
+section[id]{scroll-margin-top:14px}
 footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
 @media(max-width:760px){.cards{grid-template-columns:1fr}.card.wide{grid-column:auto}h1{margin-top:25px}.wrap{padding:0 16px}button{width:100%}.actions{display:grid;grid-template-columns:1fr}th,td{padding:10px 6px}}
 </style>
@@ -55,6 +60,16 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
  <div id="console" hidden>
  <div class="actions"><button class="secondary" type="button" id="reload">Actualizar información</button><a href="./invitar-profesionales.html">Invitar profesional al piloto</a></div>
  <p class="message" id="message" role="status" aria-live="polite"></p>
+ <nav class="console-nav" aria-label="Ir a sección de administración">
+  <a href="#cuentas">Cuentas</a>
+  <a href="#selfservice-controls">Altas</a>
+  <a href="#package-controls">Módulos</a>
+  <a href="#expiry-notices">Vencimientos</a>
+  <a href="#pricing-controls">Tarifas</a>
+  <a href="#courtesy-controls">Cortesías</a>
+  <a href="#retention-controls">Conservación</a>
+  <a href="#booking-admin">Enlaces</a>
+ </nav>
  <section class="card" id="cuentas" aria-labelledby="accounts-title">
   <h2 id="accounts-title">Cuentas y agendas</h2>
   <p id="account-count" class="muted"></p>
@@ -67,6 +82,29 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   <p id="account-empty" hidden>No hay agendas registradas.</p>
   <p class="muted">Para consultar invitaciones pendientes o canjeadas, abrí <a href="./invitar-profesionales.html">Invitar profesionales</a>.</p>
  </section>
+ <section class="card wide" id="selfservice-controls">
+<h2>Altas autoservicio · cupos</h2>
+<p>Una prueba por profesional, con correo verificado y comprobación de seguridad. Las invitaciones existentes se conservan.</p>
+<p role="status" aria-live="polite">Comprobando disponibilidad del control de cupos…</p>
+<form hidden>
+<label><input type="checkbox" name="enabled" style="width:auto;min-height:auto"> Admitir solicitudes automáticas (requiere habilitación técnica)</label>
+<label>Altas por 24 horas (1–20)<input type="number" name="daily_limit" min="1" max="20" required></label>
+<label>Pruebas activas y autorizaciones pendientes (1–100)<input type="number" name="active_limit" min="1" max="100" required></label>
+<label>Vencimiento de la autorización, en horas (1–48)<input type="number" name="invitation_hours" min="1" max="48" required></label>
+<button type="submit">Guardar cupos</button>
+</form>
+<div id="selfservice-test" hidden>
+<h3>Prueba controlada del registro</h3>
+<p>Autorizá hasta dos correos de prueba durante 48 horas. Deben pertenecer a personas que puedan verificar el correo y no tener un establecimiento existente. Esto no abre el registro al público ni envía mensajes.</p>
+<form id="selfservice-test-form">
+<label for="selfservice-test-email">Correo de prueba</label><input id="selfservice-test-email" type="email" autocomplete="off" maxlength="254" required>
+<button type="submit">Autorizar correo de prueba</button>
+</form>
+<p id="selfservice-test-status" role="status" aria-live="polite"></p>
+<a id="selfservice-test-link" href="./alta-autoservicio.html?prueba=1" hidden>Abrir registro de prueba</a>
+</div>
+</section>
+
  <section class="card" id="package-controls" aria-labelledby="package-controls-title" style="margin-top:18px">
   <p class="eyebrow">PAQUETES POR ESTABLECIMIENTO · PILOTO CONTROLADO</p>
   <h2 id="package-controls-title">Funciones y precio por cuenta</h2>
@@ -102,7 +140,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
  <section class="card" id="booking-admin" aria-labelledby="booking-admin-title" style="margin-top:18px">
   <p class="eyebrow">ENLACES PÚBLICOS · ADMINISTRACIÓN SPUKLAB</p>
   <h2 id="booking-admin-title">Reservas públicas de establecimientos</h2>
-  <p>Configurá el enlace de un profesional sin ingresar en su cuenta. No cambia sus turnos ni la prueba comercial. El QR solo aparece cuando el enlace está habilitado.</p>
+  <p>Uso excepcional de soporte. Cada profesional administra su enlace y QR desde su propia agenda. Este panel permite asistirlo sin ingresar en su sesión ni cambiar sus turnos.</p>
   <label for="booking-tenant">Establecimiento</label>
   <select id="booking-tenant"></select>
   <p class="message" id="booking-admin-status" role="status" aria-live="polite"></p>
@@ -137,7 +175,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
   </div>
  </section>
  <div class="cards">
-  <section class="card" aria-labelledby="price-title">
+  <section class="card" id="pricing-controls" aria-labelledby="price-title">
    <p class="eyebrow">01 / VALORES COMERCIALES</p>
    <h2 id="price-title">Selector de tarifas</h2>
    <p>Elegí una tarifa general de referencia para futuras contrataciones. Los importes existentes son borradores: todavía no se publican ni cobran. Los precios especiales para un cliente requieren un acuerdo individual que aún no está habilitado.</p>
@@ -153,7 +191,7 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
     <div class="actions"><button class="secondary" type="submit">Agregar precio borrador</button></div>
    </form>
   </section>
-  <section class="card" aria-labelledby="grants-title">
+  <section class="card" id="courtesy-controls" aria-labelledby="grants-title">
    <p class="eyebrow">02 / CORTESÍAS E INVITACIONES</p>
    <h2 id="grants-title">Cortesías y días de gracia</h2>
    <p>Sumá días gratuitos a un establecimiento autorizado, incluso si sigue en su prueba o suscripción. El tiempo adicional se agrega después de la fecha de vencimiento más lejana; nunca reduce los días existentes ni modifica el cobro de SpukLab. Los pilotos protegidos ya tienen acceso.</p>
@@ -182,29 +220,8 @@ footer{padding:27px 0 50px;color:#607970;font-size:.75rem}
    <p class="message" id="courtesy-message" role="status" aria-live="polite"></p>
    <p class="hint">La revocación tiene efecto sobre las nuevas reservas. Los turnos y datos existentes no se borran.</p>
   </section>
-<section class="card wide" id="selfservice-controls">
-<h2>Altas autoservicio · cupos</h2>
-<p>Una prueba por profesional, con correo verificado y comprobación de seguridad. Las invitaciones existentes se conservan.</p>
-<p role="status" aria-live="polite">Comprobando disponibilidad del control de cupos…</p>
-<form hidden>
-<label><input type="checkbox" name="enabled" style="width:auto;min-height:auto"> Admitir solicitudes automáticas (requiere habilitación técnica)</label>
-<label>Altas por 24 horas (1–20)<input type="number" name="daily_limit" min="1" max="20" required></label>
-<label>Pruebas activas y autorizaciones pendientes (1–100)<input type="number" name="active_limit" min="1" max="100" required></label>
-<label>Vencimiento de la autorización, en horas (1–48)<input type="number" name="invitation_hours" min="1" max="48" required></label>
-<button type="submit">Guardar cupos</button>
-</form>
-<div id="selfservice-test" hidden>
-<h3>Prueba controlada del registro</h3>
-<p>Autorizá hasta dos correos de prueba durante 48 horas. Deben pertenecer a personas que puedan verificar el correo y no tener un establecimiento existente. Esto no abre el registro al público ni envía mensajes.</p>
-<form id="selfservice-test-form">
-<label for="selfservice-test-email">Correo de prueba</label><input id="selfservice-test-email" type="email" autocomplete="off" maxlength="254" required>
-<button type="submit">Autorizar correo de prueba</button>
-</form>
-<p id="selfservice-test-status" role="status" aria-live="polite"></p>
-<a id="selfservice-test-link" href="./alta-autoservicio.html?prueba=1" hidden>Abrir registro de prueba</a>
-</div>
-</section>
-  <section class="card wide" aria-labelledby="retention-title">
+
+  <section class="card wide" id="retention-controls" aria-labelledby="retention-title">
    <p class="eyebrow">03 / CONSERVACIÓN Y LIMPIEZA</p>
    <h2 id="retention-title">Pruebas vencidas</h2>
    <p>Definí cuándo revisar una cuenta que nunca contrató. Las cuentas pagas, pilotos y cortesías vigentes quedan excluidas; también las que tienen turnos futuros o una conservación pendiente.</p>
