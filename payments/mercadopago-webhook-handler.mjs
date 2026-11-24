@@ -105,8 +105,20 @@ export async function handleMercadoPagoWebhook(request, config) {
       eventId='signed_'+Array.from(digest).map(x=>x.toString(16).padStart(2,'0')).join('');
     }
   }
+  // A production-mode notification may originate from a TEST SELLER using
+  // production credentials. Authorize only via an independent server-side
+  // GET /users/me credential check after validating the notification HMAC.
+  // This permits inbox storage; it never activates a service or proves payment.
+  let verifiedTestSellerMode=false;
+  if(!simulated && body.live_mode===true && config.liveMode===false &&
+     topic===body.type && merchantUserId===config.merchantUserId &&
+     typeof config.verifyTestSellerMode==='function'){
+    try { verifiedTestSellerMode=(await config.verifyTestSellerMode())===true; }
+    catch {return respond(503,'test_seller_verification_unavailable');}
+  }
+  const modeMatches=body.live_mode===config.liveMode || verifiedTestSellerMode;
   if(!eventId || !requestId || bodyResource!==signedResource ||
-     (!simulated && (topic!==body.type || body.live_mode!==config.liveMode)) ||
+     (!simulated && (topic!==body.type || !modeMatches)) ||
      merchantUserId!==config.merchantUserId){
     // 403 means HMAC and freshness passed. Log ONLY the reason category,
     // never IDs, timestamps, request fields, headers, secrets or payload.

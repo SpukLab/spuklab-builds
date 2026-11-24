@@ -137,3 +137,57 @@ test('same authorized payment ID from real signed topic is not confused with a d
  assert.equal(t2.stored.length,0);
  assert.equal(scope.stored[0].eventId,allowed);
 });
+
+test('accepts signed live_mode=true event ONLY for independently verified TEST seller and does not activate',async()=>{
+ const t=setup();
+ let checks=0;
+ t.config.verifyTestSellerMode=async()=>{checks++;return true;};
+ const r=await handleMercadoPagoWebhook(makeRequest({live_mode:true}),t.config);
+ assert.equal(r.status,200);
+ assert.equal(checks,1);
+ assert.equal(t.stored.length,1);
+ assert.equal(t.stored[0].liveMode,true);
+ assert.equal(t.stored[0].topic,'subscription_authorized_payment');
+ assert.deepEqual(t.reasons,[]);
+});
+test('rejects live_mode=true when seller TEST credential verification failed',async()=>{
+ const t=setup();
+ t.config.verifyTestSellerMode=async()=>false;
+ const r=await handleMercadoPagoWebhook(makeRequest({live_mode:true}),t.config);
+ assert.equal(r.status,403);
+ assert.deepEqual(t.reasons,['provider_mode_true']);
+ assert.equal(t.stored.length,0);
+});
+test('test seller GET failure returns retryable error, never persists event',async()=>{
+ const t=setup();
+ t.config.verifyTestSellerMode=async()=>{throw Error('transport');};
+ const r=await handleMercadoPagoWebhook(makeRequest({live_mode:true}),t.config);
+ assert.equal(r.status,503);
+ assert.equal(t.stored.length,0);
+});
+test('TEST seller callback cannot bypass signed merchant, topic, or resource',async()=>{
+ for(const sample of [
+  {live_mode:true,user_id:'999999999'},
+  {live_mode:true,data:{id:'other'}},
+  {live_mode:true,type:'payment'}
+ ]){
+  const t=setup();
+  t.config.verifyTestSellerMode=async()=>true;
+  const r=await handleMercadoPagoWebhook(makeRequest(sample),t.config);
+  assert.equal(r.status,403);
+  assert.equal(t.stored.length,0);
+ }
+});
+test('invalid HMAC with live mode never calls independent seller GET',async()=>{
+ const t=setup();let called=0;
+ t.config.verifyTestSellerMode=async()=>{called++;return true;};
+ const original=makeRequest({live_mode:true});
+ const invalid=new Request(original,{
+  headers:{...Object.fromEntries(original.headers),
+   'x-signature':'ts=1111111111,v1='+'0'.repeat(64)}
+ });
+ const r=await handleMercadoPagoWebhook(invalid,t.config);
+ assert.equal(r.status,401);
+ assert.equal(called,0);
+ assert.equal(t.stored.length,0);
+});
