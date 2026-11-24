@@ -73,3 +73,59 @@ test('all visible static copy is covered except product names and nonlinguistic 
   assert.match(html,/data-ui-locale="en"/);
   assert.match(html,/data-ui-locale="es"/);
 });
+
+test('patient record and appointment composer are translated without touching names or service values',()=>{
+  const {ui}=setup('en');
+  const expected=[
+    ['Ver ficha','View record'],['+ Crear turno','+ Create appointment'],
+    ['Enviar mensaje libre','Send free-form message'],
+    ['Información compartida por la persona','Information shared by the person'],
+    ['Sin información compartida','No information shared'],
+    ['Consideraciones del servicio · uso interno','Service considerations · internal use'],
+    ['Sin consideraciones registradas','No service considerations recorded'],
+    ['Sin notas internas','No internal notes'],
+    ['Acceso del paciente · piloto','Patient access · pilot'],
+    ['Preparar invitación por WhatsApp','Prepare WhatsApp invitation'],
+    ['Buscar por nombre, teléfono o correo','Search by name, phone or email'],
+    ['— Elegí una persona —','— Select a person —'],
+    ['Elegí una persona registrada o agregá una nueva.','Select an existing contact or add a new one.'],
+    ['Sin turnos activos este día','No active appointments today'],
+    ['Agenda sincronizada con CITHELA Cloud','Schedule synchronized with CITHELA Cloud']
+  ];
+  for(const [es,en] of expected)assert.equal(ui.translate(es),en,es);
+  assert.equal(ui.translate('Adri gala'),'Adri gala');
+  assert.equal(ui.translate('Corte de pelo'),'Corte de pelo');
+  assert.equal(ui.translate('Consulta'),'Consulta');
+  assert.equal(ui.translate('Juan Carlos'),'Juan Carlos');
+});
+
+test('dynamic counters, deposits, WhatsApp inbox and relative dates are localized',()=>{
+  const {ui}=setup('en');
+  const cases=[
+    ['+5492215699377 · 1 turno','+5492215699377 · 1 appointment'],
+    ['+5492215254478 · 3 turnos','+5492215254478 · 3 appointments'],
+    ['2 por confirmar · 2 señas pendientes · 0 turnos dentro del plazo de recordatorio',
+     '2 awaiting confirmation · 2 pending deposits · 0 appointments due for reminder'],
+    ['Pendientes (0)','Pending (0)'],
+    ['Revisar envíos (0)','Review outgoing (0)'],
+    ['Todos (0)','All (0)'],
+    ['Consultas sin responder de los últimos 0 mensajes.','Unanswered inquiries among the last 0 messages.'],
+    ['Sin responder: 0 · Meta aceptó: 0 · Intentos sin confirmación: 0 (últimos 0 mensajes)',
+     'Unanswered: 0 · Accepted by Meta: 0 · Unconfirmed attempts: 0 (last 0 messages)'],
+    ['Mañana · 25/11/2026 · 10:15 hs','Tomorrow · 25/11/2026 · 10:15'],
+    ['En 28 días · 22/12/2026 · 09:00 hs','In 28 days · 22/12/2026 · 09:00'],
+    ['Pendiente de confirmación · Corte de pelo','Awaiting confirmation · Corte de pelo'],
+    ['Seña pendiente: ARS $2.000','Deposit pending: ARS $2.000'],
+    ['Últimos turnos (3)','Recent appointments (3)']
+  ];
+  for(const [es,en] of cases)assert.equal(ui.translate(es),en,es);
+});
+
+test('calendar weekdays and personal-data fields remain protected',()=>{
+  assert.match(html,/const DN_EN=\['M','T','W','T','F','S','S'\]/);
+  assert.match(html,/window\.CithelaUiLocale\?\.get\(\)==='en'\?DN_EN\[i\]:DN\[i\]/);
+  assert.match(html,/data-no-translate[^>]*>\$\{name\}/);
+  assert.match(html,/p\.patient_shared_note\?'<span data-no-translate>'/);
+  assert.match(source,/\.cloud-wa-message-quote/);
+  assert.match(source,/\.agenda-overview-person-name/);
+});
