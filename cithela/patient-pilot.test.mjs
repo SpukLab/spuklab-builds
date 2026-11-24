@@ -317,5 +317,5 @@ test('patient portal hides unused self-linking WhatsApp panel without affecting 
  assert.match(html,/id="patient-cloud-list"/);
  assert.match(html,/onclick="patientRefreshPortal\(\)"/);
  assert.match(html,/onclick="logout\(\)"/);
- assert.match(script,/async function patientRequestEmailLink\(/);
+ assert.match(login,/Continuar por correo/);
 });
