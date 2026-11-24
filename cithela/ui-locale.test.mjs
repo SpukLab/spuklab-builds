@@ -226,7 +226,7 @@ test('complementary access expiry uses selected locale and retains date, without
   assert.equal(ui.translate('Vigente hasta el'),'Valid until');
   assert.equal(ui.translate('Prueba gratuita en curso'),'Free trial in progress');
   assert.equal(ui.translate('Prueba gratuita finalizada'),'Free trial ended');
-  assert.match(html,/descriptions\[c\.status\]\.map\(translateProfessionalUi\)/);
+  assert.match(html,/descriptions\[c\.status\]\.map\(localize\)/);
   assert.match(html,/window\.CithelaUiLocale\?\.get\(\)==='en'\?' Valid until ':' Vigente hasta el '/);
   assert.match(html,/renderCithelaCommercialPanel\(state\)/);
 });
