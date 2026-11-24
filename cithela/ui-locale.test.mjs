@@ -160,7 +160,7 @@ test('native iOS notice/deposit options and their underlying values are distinct
   assert.match(html,/value="transfer"/);
   assert.match(html,/value="cash"/);
   assert.match(html,/value="other"/);
-  assert.match(html,/value="deposit"/);
+  assert.ok(html.includes("['deposit','Solicitar seña']"));
   assert.match(html,/function whatsappUiAppointmentDateTime/);
   // The outgoing draft function remains Spanish; never translate patient communication implicitly.
   assert.match(html,/const hello='Hola'/);
