@@ -11,6 +11,11 @@ const safeStr=x=>x==null?'':String(x);
 const sellerIsTest=(seller,expected)=>safeStr(seller?.id)===safeStr(expected)&&
  seller?.site_id==='MLA'&&Array.isArray(seller?.tags)&&seller.tags.includes('test_user');
 
+/**
+ * @param {{intent?: any, getProvider?: (path:string)=>Promise<any>,
+ * buyerId?: string, buyerEmail?: string, includeEvidence?: boolean}} args
+ * @returns {Promise<any>}
+ */
 export async function inspectExistingPilotPayment({intent,getProvider,buyerId,buyerEmail,includeEvidence=false}={}){
  if(!intent||intent.stage!=='linked'||intent.live_mode!==false||
    intent.currency_id!=='ARS'||intent.amount_minor!==100000||
