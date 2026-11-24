@@ -4326,6 +4326,9 @@ function syncCithelaUiLanguageButtons(){
   document.querySelectorAll('[data-ui-locale]').forEach(button=>
     button.setAttribute('aria-pressed',String(button.dataset.uiLocale===lang)));
 }
+function translateProfessionalUi(text){
+  return window.CithelaUiLocale?.get()==='en'?window.CithelaUiLocale.translate(text):text;
+}
 function setCithelaUiLanguage(locale){
   window.CithelaUiLocale?.set(locale);
   syncCithelaUiLanguageButtons();
@@ -4337,6 +4340,13 @@ function setCithelaUiLanguage(locale){
   }else if(typeof renderUpcomingAgenda==='function'&&professionalCloudReady()){
     renderUpcomingAgenda();
   }
+  // Settings summaries are generated after page load, so rebuild their localized text.
+  const state=window.CithelaCloud?.state?.();
+  if(state?.tenant){
+    renderCithelaCommercialPanel(state);
+    renderCloudProbe(state);
+  }
+  renderInfrastructureStatus();
 }
 function syncProfessionalBookingLanguageButtons(){
   const current=professionalBookingLocale;
@@ -4554,18 +4564,22 @@ function renderCithelaCommercialPanel(s){
     detailEl.textContent='No pudimos consultar la vigencia de tu cuenta. Actualizá la página para reintentar.';
     return;
   }
-  const [title,description]=descriptions[c.status];
+  const [title,description]=descriptions[c.status].map(translateProfessionalUi);
   if(c.status==='complimentary'&&c.complimentary_until){
     const day=formatCithelaComplimentaryExpiry(c.complimentary_until);
     if(day){
       statusEl.textContent=title;
-      detailEl.textContent=description+' Vigente hasta el '+day+'.';
+      detailEl.textContent=description+(window.CithelaUiLocale?.get()==='en'?' Valid until ':' Vigente hasta el ')+day+'.';
       return;
     }
   }
   if(c.status==='trialing'&&Number.isInteger(c.days_remaining)){
     const days=c.days_remaining;
-    statusEl.textContent=title+' · '+(days===0?'Menos de un día restante':days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s'));
+    const remaining=days===0?'Menos de un día restante':
+      window.CithelaUiLocale?.get()==='en'?
+        days+' day'+(days===1?'':'s')+' remaining':
+        days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s');
+    statusEl.textContent=title+' · '+translateProfessionalUi(remaining);
   }else{
     statusEl.textContent=title;
   }
@@ -7024,7 +7038,8 @@ function renderCloudProbe(s){
   date.min=today();
   if(!date.value||date.value<today())date.value=cloudProbeDateDefault();
 
-  summary.innerHTML=`<p class="contact-note">Estado remoto visible: <strong>${s.appointmentCount||0}</strong> turno${s.appointmentCount===1?'':'s'} cloud. Abrí la misma cuenta en otro dispositivo y tocá “Probar conexión” para comparar este número.</p>`;
+  const count=Number(s.appointmentCount)||0;
+  summary.innerHTML=`<p class="contact-note">${translateProfessionalUi('Estado remoto visible:')} <strong>${count}</strong> ${translateProfessionalUi(count===1?'turno cloud':'turnos cloud')}. ${translateProfessionalUi('Abrí la misma cuenta en otro dispositivo y tocá “Probar conexión” para comparar este número.')}</p>`;
 }
 
 function zonedLocalToIso(dateStr,timeStr,timeZone){
