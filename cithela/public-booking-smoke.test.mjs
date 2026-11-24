@@ -144,7 +144,7 @@ test('old booking link slug routes stay bound to same tenant across catalog, slo
 test('professional agenda lets authorized owners choose default booking-page language',()=>{
   const html=read('index.html');
   assert.match(html,/id="professional-booking-language" disabled/);
-  assert.match(html,/Idioma inicial para pacientes/);
+  assert.match(html,/Idioma de la interfaz y reservas/);
   assert.match(html,/onchange="changeProfessionalBookingLanguage\(this\)"/);
   assert.match(html,/id="professional-booking-language-status"/);
   assert.match(html,/publicBookingConfig,professionalBookingShare,(?:professionalPackages,)?signOut,bootstrap/);
@@ -152,7 +152,7 @@ test('professional agenda lets authorized owners choose default booking-page lan
   assert.match(html,/const manageAllowed=active&&\['owner','admin'\]/);
   assert.match(html,/if\(manageAllowed&&s\.tenant\?\.id\)void loadProfessionalBookingLanguage/);
   assert.match(html,/p_tenant_id:tenantId,\s*p_save:locale!==undefined,\s*p_locale:locale\?\?null/);
-  assert.match(html,/professionalBookingLanguageMessage\('Idioma guardado/);
+  assert.match(html,/toast\('Idioma guardado\.'/);
   assert.match(html,/field\.value=cache\.locale\|\|'es'/);
   const js=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
     .map(m=>m[1]).filter(s=>s.trim());

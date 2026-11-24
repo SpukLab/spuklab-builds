@@ -99,6 +99,32 @@ const { pathToFileURL } = require('node:url');
       assert.equal(structure.foldedWeek,'DETAILS','weekly agenda should be collapsible');
       assert.equal(structure.foldedOps,'DETAILS','operational notices should be collapsible');
       assert.equal(structure.uniqueShare,1,'do not duplicate sharing controls');
+      // ES/EN must translate the workspace and patient UI without changing customer names.
+      const langCheck=await page.evaluate(()=>{
+        const name=document.createElement('strong');
+        name.id='cithela-locale-name-sentinel';name.textContent='Juan Carlos';
+        document.getElementById('p-medico-agenda').append(name);
+        setCithelaUiLanguage('en');
+        return {
+          root:document.documentElement.lang,
+          agenda:document.getElementById('medico-tab-agenda').textContent.trim(),
+          patients:document.getElementById('medico-tab-personas').textContent.trim(),
+          settings:document.getElementById('medico-tab-config').textContent.trim(),
+          upcoming:document.getElementById('agenda-overview-title').textContent.trim(),
+          patientPortal:document.querySelector('#screen-patient-cloud h2').textContent.trim(),
+          login:document.getElementById('rb-med').textContent.trim(),
+          customerName:name.textContent.trim(),
+          width:document.documentElement.scrollWidth
+        };
+      });
+      assert.equal(langCheck.root,'en');
+      assert.deepEqual([langCheck.agenda,langCheck.patients,langCheck.settings,langCheck.upcoming,langCheck.patientPortal,langCheck.login,langCheck.customerName],
+        ['Schedule','Patients','Settings','Upcoming appointments','My appointments','Professional','Juan Carlos']);
+      assert.ok(langCheck.width<=width+2,'English layout overflow at '+width);
+      await page.evaluate(()=>setCithelaUiLanguage('es'));
+      assert.equal((await page.locator('#medico-tab-agenda').textContent()).trim(),'Agenda');
+      assert.equal((await page.locator('#agenda-overview-title').textContent()).trim(),'Próximos turnos');
+      console.log('PASS bidirectional UI translation '+width+'px');
       await page.evaluate(()=>{
         document.getElementById('ops-queue-wrap').style.display='block';
         document.getElementById('ops-queue-summary').textContent='2 señas pendientes';

@@ -624,6 +624,16 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
  .professional-brand .nb2{font-size:.61rem}
 }
 </style>
+<style>
+.cithela-login-locale,.cithela-patient-locale{display:inline-flex;border:1px solid var(--border-color);border-radius:9px;padding:2px;gap:2px;background:var(--white)}
+.cithela-login-locale{display:flex;width:max-content;margin:0 0 14px auto}
+.cithela-login-locale button,.cithela-patient-locale button{font:inherit;font-size:.72rem;font-weight:700;color:var(--ink2);background:transparent;border:0;border-radius:7px;min-width:35px;min-height:36px;cursor:pointer}
+.cithela-login-locale button[aria-pressed=true],.cithela-patient-locale button[aria-pressed=true]{background:var(--teal2);color:var(--white)}
+.cithela-login-locale button:focus-visible,.cithela-patient-locale button:focus-visible{outline:2px solid var(--teal2);outline-offset:1px}
+.patient-header-actions{display:flex;align-items:center;gap:9px;flex:none}
+@media(max-width:420px){#screen-patient-cloud nav .pill{display:none}.patient-header-actions{gap:5px}.cithela-patient-locale button{min-width:31px}}
+</style>
+<script src="./ui-locale.js?v=20261123-v1"></script>
 </head>
 <body>
 
@@ -631,6 +641,10 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 
 <div id="screen-login" class="screen active">
   <div class="login-inner">
+    <div class="cithela-login-locale" role="group" aria-label="Idioma de la aplicación">
+      <button type="button" onclick="setCithelaUiLanguage('es')" data-ui-locale="es" aria-label="Español">ES</button>
+      <button type="button" onclick="setCithelaUiLanguage('en')" data-ui-locale="en" aria-label="English">EN</button>
+    </div>
     <div class="login-mark" role="img" aria-label="Símbolo CITHELA"></div>
     <h1 id="login-brand">CITHELA</h1>
     <p class="address" id="login-meta">Agenda · Organiza · Conecta</p>
@@ -758,11 +772,11 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
     </div>
     <div class="professional-nav-actions">
       <span class="pill">Profesional</span>
-  <div id="professional-booking-language-settings" class="cithela-locale-quick" hidden role="group" aria-label="Idioma inicial para pacientes en la página de reservas">
-    <span class="cithela-locale-quick__label">Idioma reservas</span>
+  <div id="professional-booking-language-settings" class="cithela-locale-quick" hidden role="group" aria-label="Idioma de la interfaz y reservas">
+    <span class="cithela-locale-quick__label">Idioma</span>
     <div class="cithela-locale-quick__buttons">
-      <button type="button" id="professional-booking-language-es" aria-label="Reservas en español" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('es')">ES</button>
-      <button type="button" id="professional-booking-language-en" aria-label="Reservas en inglés" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('en')">EN</button>
+      <button type="button" id="professional-booking-language-es" aria-label="Cambiar interfaz y reservas a español" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('es')">ES</button>
+      <button type="button" id="professional-booking-language-en" aria-label="Switch interface and booking to English" aria-pressed="false" onclick="chooseProfessionalBookingLanguage('en')">EN</button>
     </div>
     <select class="inp" id="professional-booking-language" disabled hidden aria-describedby="professional-booking-language-status"
       onchange="changeProfessionalBookingLanguage(this)">
@@ -1363,8 +1377,13 @@ textarea.inp[id^="cloud-wa-note-"]{min-height:112px;line-height:1.5;padding:12px
 <div id="screen-patient-cloud" class="screen">
   <nav>
     <div class="nav-brand"><span class="nb1 js-app-brand">CITHELA</span><span class="nb2">Mis turnos</span></div>
-    <span class="pill">Paciente · Nube</span>
-    <button class="nav-out" onclick="logout()">Salir</button>
+    <div class="patient-header-actions">
+      <div class="cithela-patient-locale" role="group" aria-label="Idioma de la aplicación">
+        <button type="button" onclick="setCithelaUiLanguage('es')" data-ui-locale="es" aria-label="Español">ES</button>
+        <button type="button" onclick="setCithelaUiLanguage('en')" data-ui-locale="en" aria-label="English">EN</button>
+      </div>
+      <button class="nav-out" onclick="logout()">Salir</button>
+    </div>
   </nav>
   <div class="patient-portal-content">
     <h2 style="font-size:1.35rem;margin-bottom:5px;">Mis turnos</h2>
@@ -1516,8 +1535,8 @@ function newPersonId(people){return Math.max(Date.now(),...people.map(p=>Number(
 const DN=['L','M','M','J','V','S','D'];
 const MO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const ML=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-function fmt(d){return`${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;}
-function fmtL(d){return`${d.getDate()} de ${ML[d.getMonth()]} ${d.getFullYear()}`;}
+function fmt(d){if(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en')return new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric',month:'short'}).format(d);return`${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;}
+function fmtL(d){if(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en')return new Intl.DateTimeFormat('en-US',{day:'numeric',month:'long',year:'numeric'}).format(d);return`${d.getDate()} de ${ML[d.getMonth()]} ${d.getFullYear()}`;}
 function ini(n){return n.split(' ').slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('');}
 function weekDays(off=0){const t=new Date();const dow=t.getDay();const mon=new Date(t);mon.setDate(t.getDate()-(dow===0?6:dow-1)+off*7);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});}
 function openM(id){$(id).classList.add('on');}
@@ -3399,7 +3418,7 @@ function patientReadableDate(date){
   const d=new Date(Date.UTC(year,month-1,day,12));
   if(d.getUTCFullYear()!==year||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)
     return String(date||'');
-  return new Intl.DateTimeFormat('es-AR',{
+  return new Intl.DateTimeFormat(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en'?'en-US':'es-AR',{
     weekday:'long',day:'numeric',month:'long',timeZone:'UTC'
   }).format(d);
 }
@@ -4301,27 +4320,40 @@ function professionalBookingLanguageMessage(message,error=false){
   status.hidden=!message;
   status.style.color=error?'var(--danger)':'var(--ink2)';
 }
+function syncCithelaUiLanguageButtons(){
+  const lang=window.CithelaUiLocale?.get()||'es';
+  document.querySelectorAll('[data-ui-locale]').forEach(button=>
+    button.setAttribute('aria-pressed',String(button.dataset.uiLocale===lang)));
+}
+function setCithelaUiLanguage(locale){
+  window.CithelaUiLocale?.set(locale);
+  syncCithelaUiLanguageButtons();
+  if(typeof renderUpcomingAgenda==='function'&&professionalCloudReady())renderUpcomingAgenda();
+}
 function syncProfessionalBookingLanguageButtons(){
   const current=professionalBookingLocale;
-  const field=$('professional-booking-language');
   const state=CithelaCloud.state();
-  const allowed=professionalCloudReady()&&['owner','admin'].includes(state.membership?.role)&&
-    current.tenantId===state.tenant?.id;
-  const locked=!allowed||current.loading||current.saving||!current.locale||field?.disabled;
+  const allowed=professionalCloudReady()&&['owner','admin','operator'].includes(state.membership?.role);
+  const canWrite=['owner','admin'].includes(state.membership?.role);
+  const locked=!allowed||(canWrite&&(current.loading||current.saving));
   for(const lang of ['es','en']){
     const button=$('professional-booking-language-'+lang);
     if(!button)continue;
     button.disabled=!!locked;
-    button.setAttribute('aria-pressed',String(allowed&&current.locale===lang));
+    button.setAttribute('aria-pressed',String(allowed&&(window.CithelaUiLocale?.get()||'es')===lang));
   }
+  syncCithelaUiLanguageButtons();
 }
 function chooseProfessionalBookingLanguage(locale){
-  const field=$('professional-booking-language');
-  if(!field||!['es','en'].includes(locale))return;
+  if(!['es','en'].includes(locale))return;
   const state=CithelaCloud.state(),current=professionalBookingLocale;
-  if(!professionalCloudReady()||!['owner','admin'].includes(state.membership?.role)||
-     current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||
-     field.disabled)return;
+  if(!professionalCloudReady()||!['owner','admin','operator'].includes(state.membership?.role))return;
+  setCithelaUiLanguage(locale);
+  syncProfessionalBookingLanguageButtons();
+  // Operators can translate their own UI, but only owners/admins may change public booking defaults.
+  if(!['owner','admin'].includes(state.membership?.role))return;
+  const field=$('professional-booking-language');
+  if(!field||current.tenantId!==state.tenant?.id||!current.locale||current.loading||current.saving||field.disabled)return;
   field.value=locale;
   void changeProfessionalBookingLanguage(field);
 }
@@ -4341,6 +4373,7 @@ async function loadProfessionalBookingLanguage(tenantId){
     const config=await CithelaCloud.publicBookingConfig();
     if(professionalBookingLocale.tenantId!==tenantId)return;
     const locale=config.locale==='en'?'en':'es';
+    if(window.CithelaUiLocale&&!window.CithelaUiLocale.hasPreference())setCithelaUiLanguage(locale);
     professionalBookingLocale.locale=locale;
     field.value=locale;
     professionalBookingLanguageMessage('');
@@ -4371,7 +4404,8 @@ async function changeProfessionalBookingLanguage(field){
     if(professionalBookingLocale!==cache||cache.tenantId!==tenantId)return;
     cache.locale=updated.locale==='en'?'en':'es';
     field.value=cache.locale;
-    professionalBookingLanguageMessage('Idioma guardado. Tus pacientes podrán cambiarlo desde la página de reservas.');
+    professionalBookingLanguageMessage('');
+    toast('Idioma guardado.',2200);
   }catch(err){
     if(professionalBookingLocale===cache){
       field.value=cache.locale||'es';
@@ -4460,7 +4494,7 @@ function renderProfessionalMode(){
   updateProfessionalBookingShareVisibility();
   const manageAllowed=active&&['owner','admin'].includes(s.membership?.role);
   const localeSettings=$('professional-booking-language-settings');
-  if(localeSettings)localeSettings.hidden=!manageAllowed;
+  if(localeSettings)localeSettings.hidden=!shareAllowed;
   if(manageAllowed&&s.tenant?.id)void loadProfessionalBookingLanguage(s.tenant.id);
   else{
     professionalBookingLocale={tenantId:null,locale:null,loading:false,saving:false};
@@ -4479,7 +4513,7 @@ function renderProfessionalMode(){
 }
 function formatCithelaComplimentaryExpiry(value){
   const date=new Date(value);
-  return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat('es-AR',{
+  return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en'?'en-US':'es-AR',{
     day:'numeric',month:'long',year:'numeric'
   }).format(date);
 }
@@ -4610,7 +4644,7 @@ function agendaOverviewDateText(key){
   if(dayDistance(key)===0)return 'Hoy';
   if(dayDistance(key)===1)return 'Mañana';
   const d=dp(key);
-  return new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'long'}).format(d);
+  return new Intl.DateTimeFormat(typeof window!=='undefined'&&window.CithelaUiLocale?.get()==='en'?'en-US':'es-AR',{weekday:'long',day:'numeric',month:'long'}).format(d);
 }
 function renderUpcomingAgenda(){
   const wrap=$('agenda-overview'),list=$('agenda-overview-list');
@@ -4665,7 +4699,10 @@ function renderUpcomingAgenda(){
     const headline=document.createElement('strong');
     const hour=document.createElement('span');hour.className='agenda-overview-time';
     hour.textContent=t.hora+' · ';
-    headline.append(hour,document.createTextNode(person?.nombre||'Persona sin nombre'));
+    const patientName=document.createElement('span');
+    patientName.className='agenda-overview-person-name';
+    patientName.textContent=person?.nombre||'Persona sin nombre';
+    headline.append(hour,patientName);
     if(recent){
       const badge=document.createElement('span');
       badge.className='agenda-overview-new';badge.textContent='Reciente';
@@ -8302,6 +8339,7 @@ if(cithelaTabs)cithelaTabs.addEventListener('scroll',updateProfessionalTabArrow,
 window.addEventListener('resize',updateProfessionalTabArrow);
 updateProfessionalTabArrow();
 applyBranding();
+syncCithelaUiLanguageButtons();
 setRole(pendingPatientInvite()||CITHELA_INVITE_FROM_LINK?'paciente':'medico');
 CithelaCloud.init().then(resumeCloudSession).catch(()=>{
   // Keep the login form available when session recovery fails.
