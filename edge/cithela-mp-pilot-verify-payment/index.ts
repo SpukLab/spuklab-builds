@@ -17,9 +17,10 @@ const CHECKS=new Set([
  "payment_approval_date_missing","payment_currency_mismatch","payment_amount_mismatch",
  "payment_seller_mismatch","payment_mode_missing","payment_mode_true","payment_mode_unexpected"
 ]);
-const out=(status:number,code:string,count?:number,checks:string[]=[])=> 
+const out=(status:number,code:string,count?:number,checks:string[]=[],providerModeTrue=false)=> 
  Response.json({ok:status===200,code,...(count===undefined?{}:{verified_payments:count}),
   ...(status!==200&&checks.length?{failed_checks:checks.filter(c=>CHECKS.has(c)).slice(0,10)}:{}),
+  ...(status===200&&providerModeTrue?{provider_live_mode_true:true}:{}),
   modifies_payment:false,modifies_subscription:false,activates_service:false},
  {status,headers:HEADERS});
 const env=(name:string)=>Deno.env.get(name)?.trim()||"";
@@ -74,7 +75,7 @@ Deno.serve(async req=>{
    return out(503,"test_credentials_unverified");
 
   const result=await inspectExistingPilotPayment({
-   intent,buyerId,
+   intent,buyerId,buyerEmail,
    async getProvider(path:string){
     if(!path.startsWith("/")||path.includes(".."))throw Error("provider_path_invalid");
     let response:Response;
@@ -112,7 +113,8 @@ Deno.serve(async req=>{
      result.verified_payments<1)
    return out(503,"payment_read_only_unverified");
   console.info("cithela_mp_pilot_payment_audited_read_only",{verified:true,write:false});
-  return out(200,"approved_test_payment_verified_read_only",result.verified_payments);
+  return out(200,"approved_test_payment_verified_read_only",
+   result.verified_payments,[],result.provider_live_mode_true===true);
  }catch(error){
   const code=safeProviderReadCode(error);
   // Only a fixed enum goes to Edge logs and the authenticated owner.
