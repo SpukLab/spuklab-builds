@@ -89,6 +89,7 @@ test('patient record and appointment composer are translated without touching na
     ['Buscar por nombre, teléfono o correo','Search by name, phone or email'],
     ['— Elegí una persona —','— Select a person —'],
     ['Elegí una persona registrada o agregá una nueva.','Select an existing contact or add a new one.'],
+    ['Enviá una invitación personal por WhatsApp para que la persona verifique su número, ingrese a CITHELA y reserve sus turnos, sin necesitar correo. Antes de enviarla, comprobá que el chat corresponda al destinatario correcto.','Send a personal WhatsApp invitation so the person can verify their number, sign in to CITHELA and book appointments without an email. Before sending, check that the chat belongs to the correct recipient.'],
     ['Sin turnos activos este día','No active appointments today'],
     ['Agenda sincronizada con CITHELA Cloud','Schedule synchronized with CITHELA Cloud']
   ];
@@ -128,4 +129,12 @@ test('calendar weekdays and personal-data fields remain protected',()=>{
   assert.match(html,/p\.patient_shared_note\?'<span data-no-translate>'/);
   assert.match(source,/\.cloud-wa-message-quote/);
   assert.match(source,/\.agenda-overview-person-name/);
+});
+
+test('multiline HTML explanatory text is translated without changing submitted content',()=>{
+  const {ui}=setup('en');
+  const multi='Enviá una invitación personal por WhatsApp para que la persona verifique su número,\n          ingrese a CITHELA y reserve sus turnos, sin necesitar correo.\n          Antes de enviarla, comprobá que el chat corresponda al destinatario correcto.';
+  assert.equal(ui.translate(multi),
+    'Send a personal WhatsApp invitation so the person can verify their number, sign in to CITHELA and book appointments without an email. Before sending, check that the chat belongs to the correct recipient.');
+  assert.equal(ui.translate('Adri gala'),'Adri gala');
 });
