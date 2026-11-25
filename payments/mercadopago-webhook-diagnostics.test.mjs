@@ -7,17 +7,17 @@ const SECRET='test-secret-value-123456789000';
 const MERCHANT='3813812326';
 const REQUEST_ID='req-test-1234';
 const RESOURCE_ID='123456789';
-function makeRequest(changes={}){
+function makeRequest(changes={},requestId=REQUEST_ID){
  const body={
   id:222444666,type:'subscription_authorized_payment',
   data:{id:RESOURCE_ID},user_id:MERCHANT,live_mode:false,
   date_created:'2026-11-23T03:27:00Z',...changes
  };
  const ts=String(Math.floor(Date.now()/1000));
- const message=`id:${RESOURCE_ID};request-id:${REQUEST_ID};ts:${ts};`;
+ const message=`id:${RESOURCE_ID};request-id:${requestId};ts:${ts};`;
  const mac=createHmac('sha256',SECRET).update(message).digest('hex');
  const url='https://example.supabase.co/functions/v1/cithela-mercadopago-webhook?data.id='+RESOURCE_ID+'&type=subscription_authorized_payment';
- return new Request(url,{method:'POST',headers:{'x-request-id':REQUEST_ID,'x-signature':`ts=${ts},v1=${mac}`,'content-type':'application/json'},body:JSON.stringify(body)});
+ return new Request(url,{method:'POST',headers:{'x-request-id':requestId,'x-signature':`ts=${ts},v1=${mac}`,'content-type':'application/json'},body:JSON.stringify(body)});
 }
 function setup(){
  const reasons=[],stored=[];
@@ -190,4 +190,26 @@ test('invalid HMAC with live mode never calls independent seller GET',async()=>{
  assert.equal(r.status,401);
  assert.equal(called,0);
  assert.equal(t.stored.length,0);
+});
+
+test('a simulated delivery cannot collide with a verified TEST-seller live-mode delivery for the same resource',async()=>{
+ const t=setup(),inbox=new Map();
+ t.config.verifyTestSellerMode=async()=>true;
+ t.config.storeSignedEvent=async(event)=>{
+  const previous=inbox.get(event.eventId);
+  if(previous)return previous.liveMode===event.liveMode
+    ?{ok:true,code:'duplicate'}:{ok:false,code:'event_id_conflict'};
+  inbox.set(event.eventId,event);
+  return {ok:true,code:'recorded'};
+ };
+ const simulated=await handleMercadoPagoWebhook(makeRequest({date_created:'2021-11-01T02:02:02Z'},'simulation-1'),t.config);
+ assert.equal(simulated.status,200);
+ const real=await handleMercadoPagoWebhook(makeRequest({live_mode:true},'provider-1'),t.config);
+ assert.equal(real.status,200);
+ assert.equal((await real.json()).code,'recorded');
+ const retry=await handleMercadoPagoWebhook(makeRequest({live_mode:true},'provider-2'),t.config);
+ assert.equal(retry.status,200);
+ assert.equal((await retry.json()).code,'duplicate');
+ assert.equal(inbox.size,2);
+ assert.deepEqual([...inbox.values()].map(e=>e.liveMode),[false,true]);
 });
