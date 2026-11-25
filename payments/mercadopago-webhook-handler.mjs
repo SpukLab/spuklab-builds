@@ -99,7 +99,12 @@ export async function handleMercadoPagoWebhook(request, config) {
       eventId='sim_'+requestId;
     }else{
       const identifier=new TextEncoder().encode(
-        'cithela-mp-event-v2:'+topic+':'+signedResource+':'+(merchantUserId||'')
+        // Keep historical TEST/simulator keys stable. Independently verified
+        // TEST-seller deliveries reporting live_mode:true use a distinct
+        // namespace; otherwise an earlier simulated delivery can block them.
+        // The claimed mode cannot bypass the authorization checks below.
+        (body.live_mode===true?'cithela-mp-event-v3-live:':'cithela-mp-event-v2:')+
+        topic+':'+signedResource+':'+(merchantUserId||'')
       );
       const digest=new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',identifier));
       eventId='signed_'+Array.from(digest).map(x=>x.toString(16).padStart(2,'0')).join('');
