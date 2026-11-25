@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f7d73">
+<title>CITHELA · Presupuestos (prototipo)</title>
+<link rel="icon" href="../brand/cithela-favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f7f4;--white:#fff;--teal:#2f7d73;--dark:#23665e;--soft:#e6f2ee;--ink:#243733;--muted:#536961;--line:#dce8e3;--warn:#795b27;--warn-bg:#fff8e5}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "DM Sans",sans-serif}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #90cabe;outline-offset:2px}
+.top{height:64px;background:var(--white);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 max(18px,calc((100vw - 1080px)/2))}
+.logo{width:36px;height:36px;object-fit:contain}
+.brand{font-weight:700;letter-spacing:.12em;font-size:16px}
+.brand small{display:block;color:var(--muted);letter-spacing:0;font-size:11px;font-weight:500}
+main{max-width:1080px;margin:auto;padding:24px 16px 80px}
+h1{font:normal 32px/1.2 "DM Serif Display",serif;margin:4px 0 8px}
+h2{font:normal 22px/1.25 "DM Serif Display",serif;margin:0 0 12px}
+p{margin:0 0 12px}
+.eyebrow{text-transform:uppercase;color:var(--teal);letter-spacing:.1em;font-size:11px;font-weight:700}
+.lead{color:var(--muted);max-width:690px}
+.banner{background:var(--warn-bg);border:1px solid #e6d6a5;border-radius:12px;color:var(--warn);padding:13px 16px;margin:18px 0;font-size:13px}
+.layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:18px;align-items:start}
+.panel{border:1px solid var(--line);border-radius:16px;background:var(--white);padding:22px;box-shadow:0 2px 10px #24373307}
+.panel+ .panel{margin-top:16px}
+.field{display:block;margin:0 0 15px;color:var(--muted);font-size:12px;font-weight:700}
+.field input,.field select,.field textarea{display:block;width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;background:#f8fbf9;color:var(--ink);padding:11px 12px;margin-top:6px;font-weight:500;min-height:44px}
+.row{display:flex;gap:10px;align-items:end}
+.row>*{flex:1;min-width:0}
+.row .small{flex:0 0 100px}
+.btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:10px 14px;font-weight:700;background:var(--white);color:var(--dark);text-decoration:none}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:white}
+.btn.soft{background:var(--soft);border-color:var(--soft)}
+.btn:disabled{cursor:default;opacity:.44}
+.btn.full{width:100%}
+.btn.small-btn{min-height:36px;font-size:12px}
+.pill{font-size:11px;border-radius:999px;padding:5px 10px;background:var(--soft);color:var(--dark);font-weight:700;display:inline-block}
+.item{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.item strong{display:block;font-size:14px}
+.item small{color:var(--muted)}
+.item .price{white-space:nowrap;font-weight:700}
+.remove{border:none;background:none;color:#954758;padding:5px;font-size:12px;text-decoration:underline}
+.totals{display:flex;justify-content:space-between;margin:9px 0;gap:12px}
+.totals.total{border-top:1px solid var(--line);padding-top:15px;margin-top:16px;font-size:19px;font-weight:700}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.muted{color:var(--muted);font-size:12px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions button{flex:1}
+#feedback{margin:12px 0 0;min-height:22px;color:#8e3548;font-size:13px}
+#message-dialog{border:1px solid var(--line);border-radius:16px;box-shadow:0 15px 55px #24373333;width:min(92vw,560px);padding:24px}
+#message-dialog::backdrop{background:#24373399}
+#message-dialog textarea{width:100%;height:260px;resize:vertical;background:#f7faf7;border:1px solid var(--line);border-radius:10px;padding:12px}
+#print-area{display:none}
+@media(max-width:750px){.layout{grid-template-columns:1fr}.panel{padding:16px}main{padding-top:18px}h1{font-size:28px}.top{padding:0 16px}.row .small{flex:0 0 78px}}
+@media print{
+  @page{size:A4;margin:20mm}
+  body{background:white;color:#222;font:11pt/1.4 Arial,sans-serif}
+  .top,main,#message-dialog{display:none!important}
+  #print-area{display:block!important}
+  #print-area h1{font:24pt Georgia,serif;color:#23665e}
+  #print-area table{width:100%;border-collapse:collapse;margin:20px 0}
+  #print-area td,#print-area th{text-align:left;padding:10px;border-bottom:1px solid #ccc}
+  #print-area td:last-child,#print-area th:last-child{text-align:right}
+  #print-area .print-total{font-size:18pt;font-weight:700;text-align:right;margin:16px 0}
+  #print-area .print-footer{margin-top:35px;font-size:10pt;color:#444}
+}
+</style>
+</head>
+<body>
+<header class="top"><img class="logo" src="../brand/cithela-icon-512.png" alt=""><div class="brand">CITHELA<small>Presupuestos · espacio de diseño</small></div></header>
+<main>
+  <div class="eyebrow">Módulo opcional · propuesta v0.1</div>
+  <h1>Presupuestos para tus pacientes</h1>
+  <p class="lead">Elegí servicios, ajustá valores y prepará un presupuesto legible. Más adelante se vinculará al historial de cada paciente y a su agenda.</p>
+  <div class="banner" role="note"><strong>Prototipo con datos ficticios.</strong> No está conectado a CITHELA, no guarda información ni envía mensajes. No cargar datos de pacientes reales.</div>
+  <div class="layout">
+    <section>
+      <div class="panel">
+        <h2>1. Datos del presupuesto</h2>
+        <label class="field">Establecimiento
+          <input id="professional" maxlength="100" value="Consultorio de demostración" autocomplete="off">
+        </label>
+        <label class="field">Paciente ficticio
+          <select id="patient"><option>Paciente de ejemplo A</option><option>Paciente de ejemplo B</option><option>Paciente de ejemplo C</option></select>
+        </label>
+        <div class="row">
+          <label class="field">Referencia
+            <input id="reference" value="DEMO-001" maxlength="40" autocomplete="off">
+          </label>
+          <label class="field">Validez
+            <select id="validity"><option>7 días</option><option>15 días</option><option>30 días</option></select>
+          </label>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>2. Tratamientos o servicios</h2>
+        <label class="field">Concepto
+          <select id="service">
+            <option value="Limpieza dental" data-price="35000">Limpieza dental · ejemplo</option>
+            <option value="Restauración" data-price="60000">Restauración · ejemplo</option>
+            <option value="Consulta" data-price="25000">Consulta · ejemplo</option>
+            <option value="Otro">Otro (personalizado)</option>
+          </select>
+        </label>
+        <label class="field" id="custom-wrap" hidden>Nombre del servicio
+          <input id="custom-service" maxlength="160" placeholder="Ej. Tratamiento">
+        </label>
+        <div class="row">
+          <label class="field">Precio unitario (ARS)
+            <input id="price" inputmode="decimal" placeholder="35000" value="35000">
+          </label>
+          <label class="field small">Cantidad
+            <input id="quantity" type="number" min="1" max="99" value="1">
+          </label>
+        </div>
+        <button class="btn soft full" id="add" type="button">+ Agregar concepto</button>
+        <p class="muted" style="margin-top:11px">Los precios son editables y se conservan en cada línea del presupuesto, aunque luego cambie la tarifa.</p>
+        <hr class="sep">
+        <div id="items" aria-live="polite"></div>
+      </div>
+      <div class="panel" id="odontologia-coverage">
+        <h2>3. Obra social o prepaga</h2>
+        <p class="muted">Opcional para odontología · datos ficticios. No verifica afiliación, autorización ni cobertura.</p>
+        <label class="field">Modalidad de atención
+          <select id="coverage-kind">
+            <option value="particular">Particular</option>
+            <option value="obra_social">Obra social</option>
+            <option value="prepaga">Prepaga</option>
+          </select>
+        </label>
+        <div id="coverage-fields" hidden>
+          <label class="field">Nombre de la entidad
+            <input id="coverage-provider" maxlength="100" placeholder="Ej. Obra social de prueba">
+          </label>
+          <label class="field">Plan (opcional)
+            <input id="coverage-plan" maxlength="80" placeholder="Ej. Plan A">
+          </label>
+          <label class="field">Autorización informada por el profesional
+            <select id="coverage-status">
+              <option value="sin_verificar">Sin verificar</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="autorizada">Autorizada (carga manual)</option>
+              <option value="rechazada">No autorizada</option>
+            </select>
+          </label>
+          <div id="coverage-authorized" hidden>
+            <label class="field">Monto reconocido informado (ARS)
+              <input id="coverage-approved" inputmode="decimal" placeholder="0">
+            </label>
+          </div>
+        </div>
+        <p class="muted" id="coverage-preview" aria-live="polite">Atención particular.</p>
+        <p class="muted">No ingresar números de afiliación, diagnósticos ni documentación médica.</p>
+      </div>
+    </section>
+    <aside>
+      <div class="panel">
+        <div class="row" style="align-items:center;justify-content:space-between">
+          <h2 style="margin:0">4. Resumen</h2><span class="pill" id="status">Borrador</span>
+        </div>
+        <p class="muted">Estimación en pesos argentinos · sin cobro asociado</p>
+        <hr class="sep">
+        <div class="totals"><span>Subtotal</span><strong id="subtotal">—</strong></div>
+        <label class="field">Descuento (ARS)
+          <input id="discount" inputmode="decimal" value="0">
+        </label>
+        <div class="totals total"><span>Total</span><span id="total">—</span></div>
+        <p class="muted">Importes orientativos. Se requiere evaluación y confirmación profesional.</p>
+        <hr class="sep">
+        <div class="actions">
+          <button class="btn primary" type="button" id="pdf">Imprimir / guardar PDF</button>
+          <button class="btn soft" type="button" id="whatsapp">Preparar WhatsApp</button>
+        </div>
+        <p class="muted" style="margin-top:12px">El envío por WhatsApp será siempre una acción explícita del profesional.</p>
+        <hr class="sep">
+        <div class="eyebrow" style="margin-bottom:8px">Seguimiento de estado · simulación</div>
+        <div class="actions">
+          <button class="btn small-btn" id="mark-sent" type="button">Marcar enviado</button>
+          <button class="btn small-btn" id="mark-accepted" type="button">Aceptado</button>
+          <button class="btn small-btn" id="mark-rejected" type="button">Rechazado</button>
+        </div>
+        <p id="feedback" role="status" aria-live="polite"></p>
+      </div>
+    </aside>
+  </div>
+</main>
+<section id="print-area" aria-hidden="true">
+  <h1>Presupuesto estimado</h1>
+  <p id="print-professional"></p>
+  <p id="print-meta"></p>
+  <table><thead><tr><th>Concepto</th><th>Importe</th></tr></thead><tbody id="print-rows"></tbody></table>
+  <p id="print-subtotal"></p><p id="print-discount"></p>
+  <div class="print-total" id="print-total"></div>
+  <p id="print-coverage"></p>
+  <p class="print-footer">Estimación orientativa sujeta a evaluación y confirmación profesional. Documento de prueba sin validez comercial.</p>
+</section>
+<dialog id="message-dialog" aria-labelledby="dialog-title">
+  <h2 id="dialog-title">Mensaje preparado</h2>
+  <p class="muted">Revisá el texto antes de copiarlo. Esta prueba no envía mensajes.</p>
+  <textarea id="message" readonly aria-label="Vista previa del mensaje"></textarea>
+  <div class="actions" style="margin-top:12px">
+    <button class="btn primary" type="button" id="copy">Copiar texto</button>
+    <button class="btn" type="button" id="close">Cerrar</button>
+  </div>
+  <p class="muted" id="copy-feedback" role="status"></p>
+</dialog>
+<script type="module">
+import {pesosToMinor,moneyARS,makeLine,calculateQuote,whatsappSummary,transitionStatus} from "./core.mjs";
+import {dentalPaymentBreakdown,dentalCoverageNote} from "./odontologia.mjs";
+const $ = id => document.getElementById(id);
+const presets = {"Limpieza dental":"35000","Restauración":"60000","Consulta":"25000"};
+const lines = [makeLine({name:"Limpieza dental",unitMinor:pesosToMinor("35000")})];
+let currentStatus = "borrador";
+const escapeHtml = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function snapshot(){return calculateQuote(lines,pesosToMinor($("discount").value));}
+function coverageSnapshot(totalMinor){
+  const kind=$("coverage-kind").value;
+  const status=$("coverage-status").value;
+  return dentalPaymentBreakdown(totalMinor,{
+    kind,provider:$("coverage-provider").value,plan:$("coverage-plan").value,status,
+    coveredMinor:kind!=="particular"&&status==="autorizada"
+      ? pesosToMinor($("coverage-approved").value) : null
+  });
+}
+function notice(message, isError=false){$("feedback").textContent=message;$("feedback").style.color=isError?"#8e3548":"#23665e";}
+function getFields(){
+  return {professional:$("professional").value.trim() || "Profesional",patient:$("patient").value,
+    reference:$("reference").value.trim() || "Sin referencia",validity:$("validity").value};
+}
+function render(){
+  $("items").innerHTML=lines.map((l,i)=>'<div class="item"><div><strong>'+escapeHtml(l.name)+'</strong><small>'+l.quantity+' × '+escapeHtml(moneyARS(l.unitMinor))+'</small><div><button class="remove" data-remove="'+i+'" type="button" aria-label="Quitar '+escapeHtml(l.name)+'">Quitar</button></div></div><span class="price">'+escapeHtml(moneyARS(l.totalMinor))+'</span></div>').join("");
+  $("items").querySelectorAll("[data-remove]").forEach(el=>el.addEventListener("click",()=>{
+    if(currentStatus!=="borrador"){notice("Solo se edita un borrador.",true);return;}
+    lines.splice(Number(el.dataset.remove),1);render();
+  }));
+  $("status").textContent=currentStatus[0].toUpperCase()+currentStatus.slice(1);
+  $("mark-sent").disabled=currentStatus!=="borrador";
+  $("mark-accepted").disabled=currentStatus!=="enviado";
+  $("mark-rejected").disabled=!["borrador","enviado"].includes(currentStatus);
+  for(const id of ["professional","patient","reference","validity","service","custom-service","price","quantity"]){$(id).disabled=currentStatus!=="borrador";}
+  const covered=$("coverage-kind").value!=="particular";
+  $("coverage-fields").hidden=!covered;
+  $("coverage-authorized").hidden=!covered||$("coverage-status").value!=="autorizada";
+  for(const id of ["coverage-kind","coverage-provider","coverage-plan","coverage-status","coverage-approved"]){
+    $(id).disabled=currentStatus!=="borrador";
+  }
+  $("add").disabled=currentStatus!=="borrador";
+  $("discount").disabled=currentStatus!=="borrador";
+  $("pdf").disabled=!lines.length;
+  $("whatsapp").disabled=!lines.length;
+  try{
+    const q=snapshot();
+    $("subtotal").textContent=moneyARS(q.subtotalMinor);
+    $("total").textContent=moneyARS(q.totalMinor);
+    $("coverage-preview").textContent=dentalCoverageNote(q.totalMinor,coverageSnapshot(q.totalMinor).coverage,moneyARS);
+    if(q.lines.length)notice("");
+  }
+  catch(e){$("subtotal").textContent="—";$("total").textContent="—";notice(e.message,true);}
+}
+$("service").addEventListener("change",()=>{
+  const name=$("service").value;
+  $("custom-wrap").hidden=name!=="Otro";
+  $("price").value=presets[name] || "";
+});
+$("add").addEventListener("click",()=>{
+  try{
+    if(currentStatus!=="borrador") throw new RangeError("Solo se edita un borrador.");
+    const name=$("service").value==="Otro"?$("custom-service").value:$("service").value;
+    const line=makeLine({name,unitMinor:pesosToMinor($("price").value),quantity:Number($("quantity").value)});
+    if(lines.length>=50)throw new RangeError("Máximo 50 conceptos.");
+    lines.push(line);render();notice("Concepto agregado.");
+  }catch(e){notice(e.message,true);}
+});
+$("discount").addEventListener("input",render);
+for(const id of ["coverage-kind","coverage-provider","coverage-plan","coverage-status","coverage-approved"]){
+  $(id).addEventListener(id==="coverage-provider"||id==="coverage-plan"||id==="coverage-approved"?"input":"change",render);
+}
+function fillPrint(quote,fields){
+  $("print-professional").textContent="Profesional: "+fields.professional;
+  $("print-meta").textContent="Paciente: "+fields.patient+" · Referencia: "+fields.reference+" · Validez: "+fields.validity;
+  $("print-rows").innerHTML=quote.lines.map(l=>"<tr><td>"+escapeHtml(l.name)+" × "+l.quantity+"</td><td>"+escapeHtml(moneyARS(l.totalMinor))+"</td></tr>").join("");
+  $("print-subtotal").textContent="Subtotal: "+moneyARS(quote.subtotalMinor);
+  $("print-discount").textContent=quote.discountMinor?"Descuento: −"+moneyARS(quote.discountMinor):"";
+  $("print-total").textContent="Total: "+moneyARS(quote.totalMinor);
+  $("print-coverage").textContent=dentalCoverageNote(quote.totalMinor,coverageSnapshot(quote.totalMinor).coverage,moneyARS);
+}
+$("pdf").addEventListener("click",()=>{
+  try{fillPrint(snapshot(),getFields());window.print();}
+  catch(e){notice(e.message,true);}
+});
+$("whatsapp").addEventListener("click",()=>{
+  try{
+    const quote=snapshot();
+    const note=dentalCoverageNote(quote.totalMinor,coverageSnapshot(quote.totalMinor).coverage,moneyARS);
+    $("message").value=whatsappSummary({...getFields(),quote})+"\n\n"+note;
+    $("copy-feedback").textContent="";
+    $("message-dialog").showModal();
+  }
+  catch(e){notice(e.message,true);}
+});
+$("copy").addEventListener("click",async()=>{
+  try{await navigator.clipboard.writeText($("message").value);$("copy-feedback").textContent="Texto copiado. Revisá el destinatario antes de enviarlo.";}
+  catch{$("message").focus();$("message").select();$("copy-feedback").textContent="Seleccioná el texto y usá Copiar.";}
+});
+$("close").addEventListener("click",()=>$("message-dialog").close());
+for(const [id,next] of [["mark-sent","enviado"],["mark-accepted","aceptado"],["mark-rejected","rechazado"]]){
+  $(id).addEventListener("click",()=>{try{snapshot();currentStatus=transitionStatus(currentStatus,next);render();notice("Estado modificado solo en esta demostración.");}catch(e){notice(e.message,true);}});
+}
+render();
+</script>
+</body>
+</html>
