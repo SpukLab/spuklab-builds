@@ -12,7 +12,7 @@ a{color:#165c61}.warning{font-weight:600}
 #auth-access button{margin:12px 8px 4px 0}#auth-access p{font-size:.92rem}
 </style></head><body><main class="wrap"><section class="panel">
 <h1>CITHELA · Verificación Mercado Pago</h1>
-<p class="muted">Diagnóstico interno de Dentrix. Esta pantalla no crea suscripciones ni genera cobros.</p>
+<p class="muted">Piloto interno de Dentrix. Solo cuentas y tarjetas ficticias de Mercado Pago. No habilita servicios comerciales.</p>
 <p id="identity">Comprobando sesión…</p>
 <section id="auth-access" hidden aria-label="Ingreso al piloto de CITHELA">
  <p class="muted">No hay una sesión de CITHELA disponible en este navegador. Podés ingresar aquí con tu cuenta propietaria de Dentrix.</p>
@@ -28,6 +28,7 @@ a{color:#165c61}.warning{font-weight:600}
 </section>
 <button type="button" id="check" disabled>Comprobar Mercado Pago</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<section id="pilot-action" hidden><label><input type="checkbox" id="consent"> Confirmo que usaré exclusivamente comprador y tarjeta de prueba, por ARS 1.000.</label><p><button id="prepare" type="button" disabled>Preparar o recuperar checkout de prueba</button></p><p><a id="checkout-link" hidden rel="noopener noreferrer" target="_blank">Abrir checkout de Mercado Pago</a></p></section>
 <p><a href="./">Volver a CITHELA</a></p></section></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
@@ -41,10 +42,13 @@ if(client)window.CithelaAuthCaptcha?.wrap(client);
 
 const owner='dentrix.8m@gmail.com';
 let running=false;
+let ready=false;
+function updateAction(){ $('pilot-action').hidden=!ready; $('prepare').disabled=running||!ready||!$('consent').checked; }
+$('consent').addEventListener('change',updateAction);
 function showLogin(message){
  $('identity').textContent=message;
  $('auth-access').hidden=false;
- $('check').disabled=true;
+ $('check').disabled=true;ready=false;updateAction();
  $('result').textContent='Ingresá con la cuenta de CITHELA, no con la de Mercado Pago.';
 }
 const yn=value=>value===true?'Correcto':value===false?'No coincide':'No comprobado';
@@ -55,7 +59,7 @@ const errors={
  application_unknown:'Mercado Pago no informó la aplicación de la suscripción anterior.',
  application_mismatch:'La suscripción anterior pertenece a otra aplicación de Mercado Pago.',
  previous_subscription_not_closed:'La suscripción anterior todavía no está cancelada.',
- preflight_checks_passed:'Controles superados. El checkout aún está bloqueado hasta la siguiente implementación.',
+ preflight_checks_passed:'Controles superados. Podés preparar o recuperar la suscripción de prueba.',
  provider_or_storage_unavailable:'No se pudo completar la consulta al proveedor o a la base de datos.',
  test_configuration_missing:'Falta verificar la configuración de prueba.',
  internal_owner_only:'Cuenta no autorizada.',
@@ -63,25 +67,26 @@ const errors={
 };
 async function check(){
  if(running||$('check').disabled)return;
- running=true;$('check').disabled=true;
+ running=true;ready=false;updateAction();$('checkout-link').hidden=true;$('check').disabled=true;
  $('result').textContent='Comprobando Mercado Pago (solo lectura)…';
  try{
   const {data,error}=await client.functions.invoke('cithela-mp-dentrix-preflight',{body:{action:'check'}});
   const result=error?.context instanceof Response?await error.context.json().catch(()=>null):data;
   if(!result)throw Error('unavailable');
   const code=String(result.code||'sin_respuesta');
+  ready=result.ok===true&&code==='preflight_checks_passed';updateAction();
   const status={authorized:'Autorizada',pending:'Pendiente',paused:'Pausada',cancelled:'Cancelada',canceled:'Cancelada',unknown:'No comprobado'};
   $('result').textContent=[
    'Vendedor de prueba: '+yn(result.seller_ok),
    'Comprador de prueba: '+yn(result.buyer_ok),
    'Aplicación del pago anterior: '+(result.previous_application||'No comprobada'),
-   'Coincidencia con CITHELA: '+yn(result.application_matches),
+   'Coincidencia con aplicación de prueba: '+yn(result.application_matches),
    'Suscripción anterior: '+(status[result.previous_status]||'No comprobada'),
    '',errors[code]||'Consulta no completada: '+code,
    'No se realizó ningún cobro.'
   ].join('\n');
  }catch{$('result').textContent='No se pudo consultar Mercado Pago. No se realizó ningún cobro.';}
- finally{running=false;$('check').disabled=false;}
+ finally{running=false;$('check').disabled=false;updateAction();}
 }
 async function load(){
  $('check').disabled=true;
@@ -129,5 +134,23 @@ $('pilot-login').addEventListener('submit',async event=>{
 
 $('retry-session').addEventListener('click',load);
 $('check').addEventListener('click',check);
+$('prepare').addEventListener('click',async()=>{
+ if(running||!ready||!$('consent').checked)return;
+ running=true;updateAction();$('check').disabled=true;$('checkout-link').hidden=true;
+ $('result').textContent='Comprobando y preparando únicamente el checkout ficticio…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-dentrix-checkout',{body:{tenantId:'50b3e3eb-77a5-413d-af3b-9aa5b56e833e',consent:true}});
+  const result=error?.context instanceof Response?await error.context.json().catch(()=>null):data;
+  if(result?.ok===true&&result.checkout_url){
+   const u=new URL(result.checkout_url);
+   if(u.protocol!=='https:'||u.username||u.password||!/(^|\.)mercadopago\.(com|com\.ar)$/.test(u.hostname))throw Error('invalid_checkout_url');
+   $('checkout-link').href=u.href;$('checkout-link').hidden=false;
+   $('result').textContent='Checkout ficticio preparado. Abrilo únicamente con el comprador de prueba. No se ha comprobado ningún cobro nuevo.';
+  }else if(result?.ok===true&&result.code==='subscription_linked'){
+   $('result').textContent='Suscripción ya autorizada. No prepares otro pago. Falta conciliar el cobro.';
+  }else $('result').textContent='Checkout no disponible: '+(result?.code||'sin_respuesta')+'. No repitas el pago.';
+ }catch{$('result').textContent='No se pudo comprobar el checkout. No realices otro pago.';}
+ finally{running=false;$('check').disabled=false;updateAction();}
+});
 load();
 </script></body></html>
