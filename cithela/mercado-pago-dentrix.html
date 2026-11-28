@@ -28,6 +28,7 @@ a{color:#165c61}.warning{font-weight:600}
 </section>
 <button type="button" id="check" disabled>Comprobar Mercado Pago</button>
 <p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><button type="button" id="verify-payment" disabled>Comprobar pago realizado</button></p>
 <section id="pilot-action" hidden><label><input type="checkbox" id="consent"> Confirmo que usaré exclusivamente comprador y tarjeta de prueba, por ARS 1.000.</label><p><button id="prepare" type="button" disabled>Preparar o recuperar checkout de prueba</button></p><p><a id="checkout-link" hidden rel="noopener noreferrer" target="_blank">Abrir checkout de Mercado Pago</a></p></section>
 <p><a href="./">Volver a CITHELA</a></p></section></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
@@ -75,6 +76,7 @@ async function check(){
   if(!result)throw Error('unavailable');
   const code=String(result.code||'sin_respuesta');
   ready=result.ok===true&&code==='preflight_checks_passed';updateAction();
+  $('verify-payment').disabled=result.dentrix_intent_open!==true;
   const status={authorized:'Autorizada',pending:'Pendiente',paused:'Pausada',cancelled:'Cancelada',canceled:'Cancelada',unknown:'No comprobado'};
   $('result').textContent=[
    'Vendedor de prueba: '+yn(result.seller_ok),
@@ -134,6 +136,20 @@ $('pilot-login').addEventListener('submit',async event=>{
 
 $('retry-session').addEventListener('click',load);
 $('check').addEventListener('click',check);
+$('verify-payment').addEventListener('click',async()=>{
+ if(running||$('verify-payment').disabled)return;
+ running=true;$('check').disabled=true;$('verify-payment').disabled=true;updateAction();
+ $('result').textContent='Comprobando el pago existente y su notificación automática. No se genera otro cobro…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-dentrix-reconcile',{body:{action:'reconcile'}});
+  const result=error?.context instanceof Response?await error.context.json().catch(()=>null):data;
+  if(result?.ok===true&&result.signed_event===true){
+   ready=false;$('checkout-link').hidden=true;
+   $('result').textContent='PAGO DE PRUEBA CONCILIADO.\nImporte: ARS 1.000.\nPago aprobado en la API y notificación firmada coincidente.\n'+(result.code==='already_reconciled'?'Registro existente, sin duplicados.':'Registrado correctamente.')+'\nSin activar servicios comerciales.';
+  }else $('result').textContent='Pago aún no conciliado: '+(result?.code||'sin_respuesta')+'. No realices otro pago.';
+ }catch{$('result').textContent='No se pudo comprobar el pago. No realices otro cobro.';}
+ finally{running=false;$('check').disabled=false;$('verify-payment').disabled=false;updateAction();}
+});
 $('prepare').addEventListener('click',async()=>{
  if(running||!ready||!$('consent').checked)return;
  running=true;updateAction();$('check').disabled=true;$('checkout-link').hidden=true;
