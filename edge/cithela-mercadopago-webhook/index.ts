@@ -4,6 +4,7 @@
 // Use verify_jwt=false for the webhook only, guarded by provider HMAC.
 import {createClient} from "npm:@supabase/supabase-js@2.117.2";
 import {handleMercadoPagoWebhook} from "../../payments/mercadopago-webhook-handler.mjs";
+import {processDentrix} from "../shared/cithela-mp-dentrix-reconcile.ts";
 
 
 function secretKey(): string | null {
@@ -74,6 +75,16 @@ Deno.serve(async (request: Request) => {
       // Payment recording takes place through a separate provider-verified
       // owner-consented workflow; no legacy activation RPC is invoked.
       if(data?.ok && ["recorded","duplicate"].includes(data.code)){
+        if(event.topic==='payment'&&event.liveMode===true&&event.merchantUserId==='3813812326'){
+          // Durable inbox was committed above. Recovery can replay the same event
+          // if provider invoices are not ready or the worker is interrupted.
+          const runtime=(globalThis as unknown as {EdgeRuntime?:{waitUntil:(promise:Promise<unknown>)=>void}}).EdgeRuntime;
+          if(runtime?.waitUntil){
+            runtime.waitUntil(processDentrix(c,event.resourceId).then(result=>{
+              console.info('cithela_mp_dentrix_processing',result.ok?'reconciled':'pending');
+            }).catch(()=>{console.info('cithela_mp_dentrix_processing','pending');}));
+          }
+        }
         console.info("cithela_mp_signed_event_received",JSON.stringify({
           verified_signature:true,stored:true,auto_activation:false
         }));
