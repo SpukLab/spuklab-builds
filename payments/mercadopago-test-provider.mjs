@@ -106,7 +106,7 @@ export async function readTestPreapproval({subscriptionId,token,fetchImpl=fetch}
       return fail('unexpected_provider_response');
     return {ok:true,code:'read_only',provider_subscription_id:d.id,
       external_reference:d.external_reference,status:d.status,
-      payer_id:d.payer_id??null,collector_id:d.collector_id??null,
+      payer_id:d.payer_id??null,collector_id:d.collector_id??null,application_id:d.application_id??null,
       live_mode:d.live_mode,
       amount:(typeof d.auto_recurring?.transaction_amount==='number' ||
         (typeof d.auto_recurring?.transaction_amount==='string' &&
@@ -156,9 +156,10 @@ export function authorizeInternalTestCheckout({
   tenantId,ownerEmail,confirmedOwner,preflight,explicitConsent,
   serverFeatureEnabled,verifiedTestSeller,verifiedTestBuyer
 }={}){
-  if(tenantId!=='e680ebd3-a031-4968-905a-e829ab3b5dfe'||
-     String(ownerEmail||'').toLowerCase()!=='alma.y.pampa@gmail.com'||
-     confirmedOwner!==true)return fail('internal_owner_only');
+  const email=String(ownerEmail||'').toLowerCase();
+  const internalPair=(tenantId==='e680ebd3-a031-4968-905a-e829ab3b5dfe'&&email==='alma.y.pampa@gmail.com')||
+    (tenantId==='50b3e3eb-77a5-413d-af3b-9aa5b56e833e'&&email==='dentrix.8m@gmail.com');
+  if(!internalPair||confirmedOwner!==true)return fail('internal_owner_only');
   if(preflight?.ok!==true||preflight.code!=='eligible')
     return fail('preflight_required');
   if(explicitConsent!==true)return fail('explicit_consent_required');
