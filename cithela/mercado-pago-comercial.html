@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>CITHELA · Preparación comercial</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;background:#f5f8f8;color:#172c31}
+body{margin:0;padding:24px}.wrap{max-width:600px;margin:30px auto}.panel{background:#fff;border:1px solid #dce5e4;border-radius:18px;padding:24px}
+h1{font-size:1.5rem}p{line-height:1.5}.muted{color:#52666a}.status{background:#edf5f4;border-radius:10px;padding:14px;white-space:pre-wrap}
+button,a{font:inherit}button{padding:12px 18px;border:0;border-radius:10px;background:#165c61;color:white}button:disabled{opacity:.45;cursor:not-allowed}
+a{color:#165c61}.warning{font-weight:600}
+#auth-access[hidden]{display:none}#auth-access{margin:14px 0;border:1px solid #d2e3df;border-radius:12px;padding:16px;background:#f7faf9}
+#auth-access label{display:block;margin:10px 0 5px;font-weight:600}#auth-access input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #b7cbc7;border-radius:8px;font:inherit;min-height:44px}
+#auth-access button{margin:12px 8px 4px 0}#auth-access p{font-size:.92rem}
+</style></head><body><main class="wrap"><section class="panel">
+<h1>CITHELA · Mercado Pago real</h1>
+<p class="muted">Verificación de credenciales comerciales. Esta pantalla no realiza cobros ni habilita suscripciones.</p>
+<p id="identity">Comprobando sesión…</p>
+<section id="auth-access" hidden aria-label="Ingreso al piloto de CITHELA">
+ <p class="muted">No hay una sesión de CITHELA disponible en este navegador. Podés ingresar aquí con tu cuenta propietaria de Dentrix.</p>
+ <form id="pilot-login" autocomplete="on">
+  <label for="owner-email">Cuenta CITHELA (piloto interno)</label>
+  <input id="owner-email" type="email" autocomplete="username" value="dentrix.8m@gmail.com" readonly>
+  <label for="owner-password">Contraseña de CITHELA</label>
+  <input id="owner-password" type="password" autocomplete="current-password" required>
+  <button type="submit" id="login-button">Ingresar a CITHELA</button>
+ </form>
+ <button type="button" id="retry-session">Volver a comprobar sesión</button>
+ <p class="muted">La contraseña se envía únicamente a Supabase Auth mediante el acceso protegido de CITHELA; no se guarda en esta página. Si preferís ingresar desde la agenda, <a href="./">abrí CITHELA en esta misma pestaña</a> y después regresá.</p>
+</section>
+<button type="button" id="check" disabled>Comprobar configuración comercial</button>
+<p id="result" class="status" role="status" aria-live="polite">Esperando sesión.</p>
+<p><a href="./">Volver a CITHELA</a></p></section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="./commercial/auth-captcha.js?v=20261116-captcha-retry"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const client=window.supabase?.createClient(
+ 'https://mcqknmqhtmihegmifuka.supabase.co',
+ 'sb_publishable__QKhInQSZjLyncQsQoRJzw_dQuwf5jc');
+if(client)window.CithelaAuthCaptcha?.wrap(client);
+
+const owner='dentrix.8m@gmail.com';
+
+let running=false;
+function showLogin(message){
+ $('identity').textContent=message;
+ $('auth-access').hidden=false;
+ $('check').disabled=true;
+ $('result').textContent='Ingresá con la cuenta de CITHELA.';
+}
+const yn=value=>value===true?'Correcto':'Pendiente';
+async function check(){
+ if(running||$('check').disabled)return;
+ running=true;$('check').disabled=true;
+ $('result').textContent='Comprobando configuración comercial…';
+ try{
+  const {data,error}=await client.functions.invoke('cithela-mp-production-readiness',{body:{action:'check'}});
+  if(error||data?.ok!==true)throw Error('unavailable');
+  $('result').textContent=[
+   'Access Token comercial: '+yn(data.tokenConfigured),
+   'Clave de webhook independiente: '+yn(data.secretConfigured),
+   'ID de vendedor comercial: '+yn(data.merchantConfigured),
+   'Identidad de vendedor real: '+yn(data.sellerVerified),
+   'Aplicación comercial: pendiente de comprobar',
+   'Webhook comercial: pendiente de comprobar',
+   data.configurationReady?'Credenciales básicas verificadas.':'Falta completar la configuración comercial.',
+   'No se realizó ningún cobro. El checkout real continúa bloqueado.'
+  ].join('\n');
+ }catch{$('result').textContent='No se pudo comprobar la configuración. No se realizó ningún cobro.';}
+ finally{running=false;$('check').disabled=false;}
+}
+async function load(){
+ $('check').disabled=true;
+ try{
+  if(!client){showLogin('No pudo cargarse la autenticación.');return;}
+  const {data:{user},error}=await client.auth.getUser();
+  if(error||!user||user.email?.toLowerCase()!==owner||!user.email_confirmed_at){showLogin('Ingresá con Dentrix.');return;}
+  $('auth-access').hidden=true;$('identity').textContent='Sesión Dentrix verificada.';$('check').disabled=false;await check();
+ }catch{showLogin('No se pudo verificar la sesión.');}
+}
+$('pilot-login').addEventListener('submit',async event=>{
+ event.preventDefault();
+ if(!client)return;
+ const password=$('owner-password').value;
+ if(!password)return;
+ $('login-button').disabled=true;
+ $('result').textContent='Comprobando credenciales de CITHELA…';
+ try{
+  if(!window.CithelaAuthCaptcha?.wrap){
+   $('result').textContent='No pudo cargarse la protección de acceso. Recargá la página o ingresá desde CITHELA.';
+   return;
+  }
+  const {error}=await client.auth.signInWithPassword({
+   email:'dentrix.8m@gmail.com',password
+  });
+  if(error){
+   $('result').textContent=error.code==='captcha_required'?
+    'No se pudo completar la comprobación de seguridad. Verificá la conexión e intentá nuevamente.':
+    'No se pudo iniciar sesión. Verificá la contraseña y la comprobación de seguridad.';
+   return;
+  }
+  await load();
+ }catch{
+  $('result').textContent='No fue posible ingresar en CITHELA. Comprobá la conexión y volvé a intentar.';
+ }finally{
+  $('owner-password').value='';
+  $('login-button').disabled=false;
+ }
+});
+
+
+$('retry-session').addEventListener('click',load);
+$('check').addEventListener('click',check);
+load();
+</script></body></html>
