@@ -73,3 +73,28 @@ test('explicit production mode on existing subscription is not linked',async()=>
  assert.equal(result.code,'provider_identity_mismatch');
  assert.deepEqual(calls,{posts:0,links:0});
 });
+
+test('Dentrix is explicitly scoped to its confirmed owner and verified provider application',async()=>{
+ const {input,calls,snapshot}=fixture();
+ input.request.tenantId='50b3e3eb-77a5-413d-af3b-9aa5b56e833e';
+ input.actor.email='dentrix.8m@gmail.com';
+ input.services.expectedApplicationId='8696856635112318';
+ snapshot.application_id='8696856635112318';
+ assert.equal((await runPilotCheckout(input)).code,'checkout_ready');
+ assert.deepEqual(calls,{posts:1,links:1});
+});
+test('Dentrix cannot bind a checkout from the parent commercial application',async()=>{
+ const {input,calls,snapshot}=fixture();
+ input.request.tenantId='50b3e3eb-77a5-413d-af3b-9aa5b56e833e';
+ input.actor.email='dentrix.8m@gmail.com';
+ input.services.expectedApplicationId='8696856635112318';
+ snapshot.application_id='1991128674423369';
+ assert.equal((await runPilotCheckout(input)).code,'provider_identity_mismatch');
+ assert.equal(calls.links,0);
+});
+test('Dentrix tenant cannot be accessed by the Alma owner',async()=>{
+ const {input,calls}=fixture();
+ input.request.tenantId='50b3e3eb-77a5-413d-af3b-9aa5b56e833e';
+ assert.equal((await runPilotCheckout(input)).code,'internal_owner_only');
+ assert.deepEqual(calls,{posts:0,links:0});
+});
