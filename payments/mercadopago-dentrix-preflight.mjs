@@ -2,7 +2,8 @@
 export const DENTRIX_TENANT='50b3e3eb-77a5-413d-af3b-9aa5b56e833e';
 export const DENTRIX_OWNER='dentrix.8m@gmail.com';
 export const ALMA_TENANT='e680ebd3-a031-4968-905a-e829ab3b5dfe';
-export const PANEL_APP='1991128674423369';
+export const COMMERCIAL_APP='1991128674423369';
+export const PANEL_APP='8696856635112318'; // actual application of the fictitious seller, validated 27 Nov
 export const TEST_SELLER='3813812326';
 export const TEST_BUYER='3813812328';
 const same=(a,b)=>a!=null&&String(a)===b;
