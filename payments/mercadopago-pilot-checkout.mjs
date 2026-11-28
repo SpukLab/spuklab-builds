@@ -16,7 +16,7 @@ function checkoutUrl(value) {
   return null;
 }
 
-export async function runPilotCheckout({request, actor, services, token, fetchImpl = fetch}) {
+export async function runPilotCheckout({request, actor, services, token, fetchImpl = fetch, backUrl=returnUrl}) {
   const {tenantId, consent} = request;
   const preflight = await services.preflight(tenantId, actor.id);
   const accounts = await services.verifyAccounts();
@@ -29,7 +29,7 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
 
   const intent = await services.prepare(tenantId, actor.id, accounts.sellerId);
   if (!intent?.ok) return failure(intent?.code || 'intent_unavailable');
-  const built = buildTestPreapproval(intent, accounts.buyerEmail, returnUrl);
+  const built = buildTestPreapproval(intent, accounts.buyerEmail, backUrl);
   if (!built.ok) return built;
   if (intent.stage === 'linked') return failure('subscription_already_linked');
 
@@ -40,7 +40,7 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
   let candidate;
   if (claim.code === 'claimed') {
     const created = await createTestPreapproval({
-      intent, payerEmail:accounts.buyerEmail, backUrl:returnUrl, token, fetchImpl
+      intent, payerEmail:accounts.buyerEmail, backUrl, token, fetchImpl
     });
     if (!created.ok) {
       // A failed POST can have an ambiguous provider outcome; never retry creation automatically.
@@ -76,7 +76,7 @@ export async function runPilotCheckout({request, actor, services, token, fetchIm
   });
   const proof = verifyTestProviderIdentity(intent, snapshot,
     {verifiedTestSeller:accounts.sellerVerified});
-  if (!proof.ok || (snapshot.payer_id != null &&
+  if (!proof.ok || (services.expectedApplicationId && String(snapshot.application_id)!==services.expectedApplicationId) || (snapshot.payer_id != null &&
       String(snapshot.payer_id) !== String(accounts.buyerId))) return failure('provider_identity_mismatch');
   const url = snapshot.status === 'pending' ? checkoutUrl(candidate.checkout_url) : null;
   if (snapshot.status === 'pending' && !url) return failure('checkout_url_unavailable');
