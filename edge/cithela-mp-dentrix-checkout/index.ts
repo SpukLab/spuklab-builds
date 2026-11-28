@@ -126,8 +126,9 @@ Deno.serve(async (req:Request) => {
               if (!Array.isArray(page?.results) ||
                   !Number.isSafeInteger(page?.paging?.total) || page.paging.total < 0)
                 return {results,complete:false};
-              if (total===null) total=page.paging.total;
-              if (total!==page.paging.total) return {results,complete:false};
+              const pageTotal=Number(page.paging.total);
+              if (total===null) total=pageTotal;
+              if (total!==pageTotal) return {results,complete:false};
               results.push(...page.results);
               if (results.length>=total) return {results,complete:results.length===total};
               if (page.results.length===0) return {results,complete:false};
